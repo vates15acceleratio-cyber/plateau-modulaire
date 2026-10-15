@@ -38,7 +38,7 @@
 ## Ordre de réalisation
 1. Règles de la version 2 sur le **4×4** (points ci-dessus).
 2. Format **5×5**.
-3. Format **hexagonal** à la fin.
+3. Format **hexagonal** : **en attente du feu vert de l'utilisateur. Aucun travail dessus, pas même de préparation** (la section D6 / F de `20-avis-geometrie-v2.md` est mise de côté).
 
 ## Réponses de l'utilisateur à l'avis design v2 (`19-avis-design-v2.md`)
 - **5×5, « 4 contre 3 » structurel** : accepté, compensé par les distances (pas d'alerte) ; le générateur cherche à rendre la 7e ville équidistante.
