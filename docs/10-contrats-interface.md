@@ -42,7 +42,7 @@ Chaque sous-agent écrit **seulement** : son `src/<module>.js`, sa feuille `styl
 1. `node --test tests/<module>.test.js` (seulement son fichier : les autres modules sont en cours d'écriture et peuvent être rouges).
 2. Logique testable séparée du DOM (fonctions pures exportées et testées sous Node).
 3. Page d'essai chargée sans erreur dans Edge sans fenêtre, puis contrôle du DOM produit :
-   `"/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" --headless=new --disable-gpu --virtual-time-budget=3000 --dump-dom "file:///C:/Users/EQC/Documents/Claude/PlateauModulaire/outils/essai-<module>.html"`
+   `"/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" --headless=new --disable-gpu --virtual-time-budget=3000 --dump-dom "file:///<dossier du projet>/outils/essai-<module>.html"`
    (pour capter les erreurs JavaScript, la page d'essai écrit `window.onerror` dans un élément `#erreurs`).
 4. Les tests n'utilisent pas les identifiants ni les coordonnées du catalogue (il peut changer) : utiliser `PM.modele.copieExemples()` ou des données propres au test.
 

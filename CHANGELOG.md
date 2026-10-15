@@ -1,5 +1,41 @@
 # Journal des modifications
 
+## [1.00.0] - 2026-10-15
+
+Majeure
+
+Export pour impression, rapport d'équilibre et générateur de plateau aléatoire : trois capacités nouvelles ajoutées ensemble. Le niveau majeure vient de cette addition (règle « plusieurs capacités liées d'un coup »). Ouvrir `README.md` pour la marche à suivre.
+
+### Ajouté
+- Export pour impression : planches A3 et A4 avec jetons et aperçu, en PDF vectoriel (écrit sans bibliothèque externe), en SVG et en PNG 300 dpi (`src/export.js`, `styles/export.css`).
+- Graphe et rapport d'équilibre (`src/graphe.js`, `src/equilibre.js`) : score S, écart entre joueurs sur 7 rangs, alerte « 5 contre 2 » (villes non traversables par défaut).
+- Générateur de plateau aléatoire (`src/generateur.js`) : graine reproductible, option « carrefours variés ». Plafond de 200 tuiles pour l'export et le générateur.
+- Mesures d'équilibre et du générateur (`outils/mesures-equilibre.js`, `outils/mesures-generateur.js`) ; documentation dans `docs/12-mesures-equilibre.md` et `docs/15-mesures-generateur.md`.
+- Boîte de dialogue commune pour les trois nouveaux outils.
+- Recette `outils/recette-p2.html` et `tests/recette-p2.test.js`.
+- `README.md` : présentation, lancement et tests de la version.
+
+### Modifié
+- Critère d'équilibre de l'advisor (`docs/16-avis-mesures-equilibre.md`) appliqué au rapport, aux contrôles et au générateur.
+- Règle des camps de carrefours unique (`PM.modele.campJonction`), au lieu de trois copies dans les contrôles, l'assemblage et le générateur.
+- Tests du catalogue (`tests/catalogue.test.js`) reposent sur `PM.graphe`.
+
+### Corrigé
+- Fichier de plus de 5 Mo refusé à l'ouverture ; nombres, tableaux et textes bornés (correctif de sécurité, voir ci-dessous).
+- Serveur de test (`outils/serveur.js`) durci : URL mal encodée refusée au lieu de planter, dossiers `.git` et `.claude` non servis.
+- Marqueur de découpe PDF : un identifiant piégé ne peut plus casser l'export ni s'imprimer mal.
+- URL d'aperçu libérée après usage (fuite de mémoire).
+- Page de recette : ne touche plus à la sauvegarde automatique de l'utilisateur.
+- Fonctions pures robustes aux entrées nulles, au lieu de lever une erreur native.
+- Sécurité : l'audit de l'agent sécurité (`docs/13-audit-securite.md`) couvrait la version 0.03.0. Les nouveaux modules (export, équilibre, générateur) ont été vérifiés par la relecture (`docs/17-revue-p2.md`, point 3) : injection dans les SVG et PDF, échappement PDF, absence de métadonnées et de ressources externes. Un audit dédié reste à faire.
+
+### Limites connues
+- Impression réelle et mesure de la barre de 100 mm à la règle non faites.
+- PNG A3 au-delà de la limite de canvas de Safari iOS.
+- Politique CSP non encore ajoutée.
+- Tolérance du générateur à trancher.
+- Règle « villes traversables » à décider en parties réelles.
+
 ## [0.03.0] - 2026-10-15
 
 Mineure
