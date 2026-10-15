@@ -45,7 +45,7 @@ PlateauModulaire/
 ## État des modules
 | Module | État | Tests |
 |---|---|---|
-| `geometrie.js`, `modele.js` (sous-agent 1) | livré le 2026-10-15, corrigé après revue et recette le 2026-10-16 | 225 / 225 (dont recette du testeur) |
+| `geometrie.js`, `modele.js` (sous-agent 1) | livré le 2026-10-15, corrigé après revue et recette le 2026-10-15 | 225 / 225 (dont recette du testeur) |
 
 ## Référence fonctionnelle
 `docs/3-synthese.md`, puis `docs/2-avis-geometrie.md` (conventions de côtés / coins, masques, cas de test T1 à T4).

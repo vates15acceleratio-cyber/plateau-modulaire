@@ -1,4 +1,4 @@
-# Revue du module 1 par le relecteur (Opus 5.5), 2026-10-16
+# Revue du module 1 par le relecteur (Opus 5.5), 2026-10-15
 
 Verdict : cœur géométrique juste (D3, D4, D5, D8, D9, T1 à T4 recalculés). Pas encore prêt pour les sous-agents 2 à 5 : ajouts d'API et de robustesse, sans refonte.
 
@@ -27,7 +27,7 @@ Case `null`, pureté de `validerModele`, `raccordsMorts` face à une cellule ret
 - Point 11 : **règle conservée** (un coin n'a que 2 côtés intérieurs ; les exiger tous deux garantit son raccordement) ; inscrite dans la synthèse.
 - Point 17 : camp d'apparition déduit de la position ; inscrit dans la synthèse.
 
-# Recette du testeur (Sonnet 5.5), 2026-10-16
+# Recette du testeur (Sonnet 5.5), 2026-10-15
 
 `tests/recette-modele.test.js` : 195 tests au total, 189 réussis, 0 échec, 6 `todo` (bugs). Oracles recalculés depuis la doc (15 formes valides, 17 invalides, stock, pureté sur document gelé, rotations, jetons, `raccordsMorts` sur 375 plateaux aléatoires, cas limites de `validerModele`, sérialisation). **Aucun bug fonctionnel** ; 6 bugs de robustesse :
 1. (moyen) `tournerTuile` avec `quarts` non entier : `rot` corrompu (0.5, null après JSON, concaténation `'1'`).
@@ -43,6 +43,6 @@ Case `null`, pureté de `validerModele`, `raccordsMorts` face à une cellule ret
 - **Cellule active vide** : distinguer « voisin absent (pas encore posé) » de « face au vide définitif » (point 8 du relecteur).
 - **Quota 7 villes / 2 carrefours et règle « jamais les 2 carrefours du même côté »** : contrôle (alerte) dans le module de contrôles (sous-agent 4) et contrainte dans le générateur (sous-agent 8) ; pas dans le module 1.
 
-# Corrections (sous-agent 1), 2026-10-16
+# Corrections (sous-agent 1), 2026-10-15
 Tous les points de la revue et les 6 bugs de la recette sont traités (détail des signatures dans `src/modele.js`). Écarts acceptés : `exemples` reste un tableau gelé (+ `copieExemples()`), `changerForme` garde en place les tuiles dont le rôle ne correspond plus (signalées par `validerPlateau`, code `role_incorrect`).
 Trois assertions de la recette contredisaient les arbitrages (ref structuré, ids chaînes, code `cellule_interieure`) : alignées par l'orchestrateur. Résultat : `node --test` → 225 / 225.

@@ -1,6 +1,6 @@
 # Journal des modifications
 
-## [0.01.0] - 2026-10-16
+## [0.01.0] - 2026-10-15
 
 Première version
 
