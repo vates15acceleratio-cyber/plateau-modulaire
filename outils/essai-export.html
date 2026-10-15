@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Essai : export impression</title>
+  <link rel="stylesheet" href="../styles/base.css">
+  <link rel="stylesheet" href="../styles/export.css">
+  <style>
+    /* Mise en page de l'essai seulement */
+    body { display: block; height: auto; padding: 12px; }
+    #erreurs { color: #c0261a; font-weight: 600; white-space: pre-wrap; }
+    #resultats { font-family: monospace; white-space: pre-wrap; }
+    #planche svg { width: 420px; height: auto; border: 1px solid #999; }
+  </style>
+  <!-- Capture des erreurs JavaScript dans #erreurs (avant tout autre script). -->
+  <script>
+    window.onerror = function (message, source, ligne) {
+      var zone = document.getElementById('erreurs');
+      if (zone) zone.textContent += (zone.textContent ? '\n' : '') + 'Erreur : ' + message + ' (ligne ' + ligne + ')';
+    };
+  </script>
+</head>
+<body>
+  <p>Essai du module « export impression » seul.</p>
+  <p id="erreurs"></p>
+  <p><button type="button" id="ouvrir">Ouvrir la boîte d'export</button></p>
+  <pre id="resultats"></pre>
+  <div id="planche"></div>
+
+  <!-- Boîte de dialogue : même balisage que index.html, PM.dialogue minimal (app.js démarre toute l'application). -->
+  <dialog id="dialogue" class="pm-dialogue" aria-labelledby="dialogue-titre">
+    <header class="pm-dialogue-entete"><h2 id="dialogue-titre"></h2><button type="button" id="dialogue-fermer" aria-label="Fermer">✕</button></header>
+    <div id="dialogue-contenu" class="pm-dialogue-contenu"></div>
+  </dialog>
+
+  <script src="../src/geometrie.js"></script>
+  <script src="../src/modele.js"></script>
+  <script src="../src/catalogue.js"></script>
+  <script src="../src/rendu.js"></script>
+  <script src="../src/export.js"></script>
+  <script>
+    (function () {
+      var P = globalThis.PM, M = P.modele, E = P.exportation;
+      var sortie = document.getElementById('resultats');
+      function noter(t) { sortie.textContent += t + '\n'; }
+
+      P.dialogue = {
+        ouvrir: function (titre) {
+          var d = document.getElementById('dialogue'), c = document.getElementById('dialogue-contenu');
+          document.getElementById('dialogue-titre').textContent = titre;
+          c.innerHTML = '';
+          if (!d.open) { if (d.showModal) d.showModal(); else d.setAttribute('open', ''); }
+          return c;
+        },
+        fermer: function () { var d = document.getElementById('dialogue'); if (d.open) d.close(); }
+      };
+      document.getElementById('dialogue-fermer').addEventListener('click', function () { P.dialogue.fermer(); });
+
+      // Plateau 4x4 du catalogue : un modèle par cellule, selon son rôle
+      var doc = P.catalogue.nouveauDocument();
+      for (var lig = 0; lig < 4; lig++) {
+        for (var col = 0; col < 4; col++) {
+          var role = M.roleCellule(col, lig, doc.plateau.forme);
+          var modeles = doc.modeles.filter(function (m) { return m.role === role; });
+          for (var k = 0; k < modeles.length; k++) {
+            try { doc = M.poserTuile(doc, modeles[k].id, col, lig); break; } catch (e) { /* modèle épuisé : suivant */ }
+          }
+        }
+      }
+      var etat = { doc: function () { return doc; }, signaler: function (t) { noter('état : ' + t); } };
+
+      // 1) Calepinage et SVG de la première planche, affichée dans la page
+      var planches = E.calepiner(doc, { format: 'A3' });
+      noter('planches A3 : ' + planches.length + ' (' + planches.map(function (p) { return p.tuiles.length; }).join(', ') + ' tuiles)');
+      document.getElementById('planche').innerHTML = E.svgPlanche(doc, planches[0]);
+      noter('SVG de planche présent : ' + !!document.querySelector('#planche svg[viewBox="0 0 297 420"]'));
+
+      // 2) PDF multipage (tuiles A3 + jetons + aperçu)
+      var feuilles = E.preparerSorties(doc, { format: 'A3', jetons: true, apercu: true }).feuilles;
+      var pdf = E.pdfDepuisPlanches(feuilles);
+      var entete = String.fromCharCode.apply(null, Array.prototype.slice.call(pdf, 0, 8));
+      noter('PDF : ' + pdf.length + ' octets, en-tête ' + entete + ', ' + feuilles.length + ' pages');
+      var texte = ''; for (var i = 0; i < pdf.length; i++) texte += String.fromCharCode(pdf[i]);
+      noter('PDF fin : ' + JSON.stringify(texte.slice(-6)) + ', MediaBox A3 : ' + (texte.indexOf('/MediaBox [0 0 841.89 1190.55]') >= 0));
+
+      // 3) Boîte de dialogue
+      E.ouvrir(etat);
+      noter('boîte ouverte : ' + !!document.querySelector('#dialogue-contenu .pm-export-telecharger') +
+        ', aperçu : ' + !!document.querySelector('#dialogue-contenu .pm-export-apercu[src]'));
+      document.getElementById('ouvrir').addEventListener('click', function () { E.ouvrir(etat); });
+
+      // 4) PNG : rastérisation réelle dans un canvas, dimensions et chunk pHYs
+      E.rasteriser(feuilles[0]).then(function (blob) {
+        return blob.arrayBuffer();
+      }).then(function (buf) {
+        var b = new Uint8Array(buf), v = new DataView(buf), pos = 8, types = [], phys = null;
+        while (pos + 12 <= b.length) {
+          var len = v.getUint32(pos), type = String.fromCharCode(b[pos + 4], b[pos + 5], b[pos + 6], b[pos + 7]);
+          types.push(type);
+          if (type === 'pHYs') phys = v.getUint32(pos + 8);
+          pos += 12 + len;
+        }
+        noter('PNG : ' + b.length + ' octets, ' + v.getUint32(16) + ' x ' + v.getUint32(20) + ' px, chunks ' + types.join(',') + ', pHYs ' + phys);
+      }).catch(function (e) { noter('PNG : échec ' + e.message); });
+    })();
+  </script>
+</body>
+</html>
