@@ -26,7 +26,6 @@
 .pm-equilibre-tableau th, .pm-equilibre-tableau td { border: 1px solid var(--pm-bord); padding: 4px 10px; text-align: center; }
 .pm-equilibre-tableau thead th { background: #eef0ec; }
 .pm-equilibre-tableau tbody th { text-align: left; font-weight: 600; background: #f8f9f7; }
-.pm-equilibre-rang-libre { color: var(--pm-discret); }
 .pm-equilibre-ecart-fort td, .pm-equilibre-ecart-fort th { background: #fde8e6; color: var(--pm-erreur); font-weight: 700; }
 .pm-equilibre-goulet td, .pm-equilibre-goulet th { background: #fff3e0; }
 .pm-equilibre-articulations { margin: 8px 0 0; padding-left: 20px; }

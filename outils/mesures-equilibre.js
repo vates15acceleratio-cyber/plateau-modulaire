@@ -70,8 +70,8 @@ function tirerPlateaux(nb, graine) {
 
 const JONCTIONS = [];
 for (let j = 1; j <= 3; j++) for (let i = 1; i <= 3; i++) JONCTIONS.push({ i, j });
-/** Règle de src/controles.js : pas les deux sur la rangée nord (j = 1), ni les deux sur la rangée sud (j = 3). */
-const memeCamp = (a, b) => (a.j === 1 && b.j === 1) || (a.j === 3 && b.j === 3);
+/** Règle unique PM.modele.campJonction : pas les deux sur la rangée nord (j = 1), ni les deux sur la rangée sud (j = 3). */
+const memeCamp = (a, b) => M.campJonction(a.i, a.j) !== null && M.campJonction(a.i, a.j) === M.campJonction(b.i, b.j);
 const cleJonction = (c) => `(${c.i},${c.j})`;
 
 function jetons9(carrefours) {

@@ -439,3 +439,43 @@ test('le catalogue réel (comptes globaux) : 20 tuiles, 4 planches A3, 10 planch
   assert.equal(j.filter(t => t.joueur === 1).length, 2);
   assert.equal(j.filter(t => t.joueur === 2).length, 2);
 });
+
+test('découpe : un texte contenant %%CLIP:zz%% est imprimé tel quel (aucun remplacement dans les textes)', () => {
+  // conversion directe : le texte piège ne doit ni échouer ni être remplacé
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" viewBox="0 0 100 100">' +
+    '<g clip-path="url(#c1)"><clipPath id="c1"><rect x="0" y="0" width="10" height="10"/></clipPath>' +
+    '<text x="1" y="5" font-size="3">%%CLIP:zz%% et %%CLIP:c1%%</text></g></svg>';
+  const f = E.svgVersFlux(svg);
+  assert.ok(f.flux.includes('(%%CLIP:zz%% et %%CLIP:c1%%) Tj'));
+  assert.equal((f.flux.match(/ W n/g) || []).length, 1);
+  // identifiant de modèle piégé, imprimé dans la marge d'une planche
+  const doc = doc20();
+  doc.modeles[0].id = 'X%%CLIP:zz%%';
+  assert.ok(M.validerModele(doc.modeles[0]).complet, 'le modèle piégé reste exportable');
+  const planches = E.calepiner(doc, {});
+  const pdf = texte(E.pdfDepuisPlanches(planches, doc));
+  assert.ok(pdf.includes('(X%%CLIP:zz%%-1) Tj'));
+  // une découpe absente reste une erreur
+  assert.throws(() => E.svgVersFlux(svg.replace('id="c1"', 'id="c2"')), /clipPath introuvable : c1/);
+});
+
+test('plafond : plus de 200 tuiles au total dans le stock, export refusé avec un message clair ; « posées » non concerné', () => {
+  const trop = docAvec([50, 50, 50, 51]); // 201
+  assert.throws(() => E.listeTuiles(trop, {}), /201 tuiles.*200 au plus/);
+  assert.throws(() => E.preparerSorties(trop, {}), /200 au plus/);
+  assert.equal(E.listeTuiles(docAvec([50, 50, 50, 50]), {}).tuiles.length, 200);
+  assert.doesNotThrow(() => E.listeTuiles(trop, { portee: 'posees' }));
+  // exemplaires invalides lus comme 0 (lecture commune PM.modele.exemplairesValides)
+  assert.equal(E.listeTuiles(docAvec([2.5, -1, '3', 2]), {}).tuiles.length, 2);
+});
+
+test('export « posées » : une tuile au modèle introuvable est signalée dans exclus', () => {
+  let doc = doc20();
+  doc = M.poserTuile(doc, doc.modeles[0].id, 1, 1);
+  doc = M.poserTuile(doc, doc.modeles[0].id, 2, 1);
+  doc.plateau.tuiles[1].modeleId = 'fantome';
+  const r = E.listeTuiles(doc, { portee: 'posees' });
+  assert.equal(r.tuiles.length, 1);
+  assert.deepEqual(r.exclus, [{ id: 'fantome', nom: 'fantome', raison: 'introuvable' }]);
+  assert.deepEqual(E.listeTuiles(doc, {}).exclus, []); // portée « stock » : rien à signaler
+});

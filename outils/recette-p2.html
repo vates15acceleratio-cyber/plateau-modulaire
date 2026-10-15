@@ -405,6 +405,10 @@
       ctrl('carrefours : paire par défaut cochée, « variés » décoché', rd && rd.checked && rv && !rv.checked);
       champ.value = 'recette';
       cliquer(bGenerer);
+      // génération lancée au tour suivant (setTimeout 0) : bouton désactivé et « Génération… » en attendant
+      ctrl('pendant le calcul : Générer désactivé, texte « Génération… »', bGenerer.disabled && bGenerer.textContent === 'Génération…', bGenerer.textContent);
+      return attendre(50).then(function () {
+      ctrl('fin du calcul : Générer réactivé', !bGenerer.disabled && bGenerer.textContent === 'Générer', bGenerer.textContent);
       ctrl('aperçu SVG présent après Générer', !!contenu().querySelector('.pm-generateur-apercu svg'));
       ctrl('résumé en plusieurs lignes (graine, S, carrefours)', contenu().querySelectorAll('.pm-generateur-resume li').length >= 5 && /Graine « recette »/.test(texteDialogue()));
       ctrl('Appliquer actif après Générer', !bAppliquer.disabled);
@@ -413,12 +417,14 @@
       ctrl('plateau généré = GEN.generer(doc, {graine}) (reproductible)', attendu.ok);
       var svg1 = contenu().querySelector('.pm-generateur-apercu').innerHTML;
       cliquer(bGenerer);
+      return attendre(50).then(function () {
       ctrl('même graine : même aperçu', contenu().querySelector('.pm-generateur-apercu').innerHTML === svg1);
       cliquer(bAppliquer);
       ctrl('Appliquer : boîte fermée', !dialogueOuvert());
       ctrl('plateau appliqué = plateau attendu (graine « recette »)', CJ(etat.doc().plateau) === CJ(attendu.doc.plateau));
       ctrl('16 tuiles posées et 9 jetons dans le document', etat.doc().plateau.tuiles.length === 16 && etat.doc().plateau.jetons.length === 9);
-      return attendre(100).then(function () {
+      return attendre(100);
+      }).then(function () {
         ctrl('plateau affiché : 16 tuiles et 9 jetons', $('assemblage').querySelectorAll('.pm-assemblage-occupee').length === 16 && $('assemblage').querySelectorAll('.pm-assemblage-jeton').length === 9,
           $('assemblage').querySelectorAll('.pm-assemblage-occupee').length + ' / ' + $('assemblage').querySelectorAll('.pm-assemblage-jeton').length);
         ctrl('barre d\'état : plateau appliqué avec la graine', /Plateau aléatoire appliqué \(graine recette/.test($('barre-etat').textContent), $('barre-etat').textContent);
@@ -438,6 +444,8 @@
         rVaries.checked = true; rVaries.dispatchEvent(new Event('change', { bubbles: true }));
         champ2.value = 'recette';
         cliquer(boutonParTexte(contenu(), 'Générer'));
+        return attendre(50);
+      }).then(function () {
         var attVar = GEN.generer(docAvant, { graine: 'recette', paireCarrefours: 'varies' });
         ctrl('carrefours variés : résumé annonce la paire', texteDialogue().indexOf('Carrefours ' + attVar.paire) >= 0 && /carrefours variés/.test(texteDialogue()), attVar.paire);
         cliquer(boutonParTexte(contenu(), 'Appliquer au plateau'));
@@ -451,11 +459,15 @@
         var av = docJ(), hist = etat.peutAnnuler();
         cliquer(boutonParTexte($('controles'), 'Plateau aléatoire'));
         cliquer(boutonParTexte(contenu(), 'Générer'));
+        return attendre(50).then(function () { return { av: av, hist: hist }; });
+      }).then(function (o) {
+        var av = o.av, hist = o.hist;
         var err = contenu().querySelector('.pm-generateur-erreur');
         ctrl('bibliothèque insuffisante : raison claire dans la boîte', err && /Bibliothèque insuffisante/.test(err.textContent) && /coin/.test(err.textContent), err && err.textContent);
         ctrl('bibliothèque insuffisante : Appliquer inactif, pas d\'aperçu', boutonParTexte(contenu(), 'Appliquer au plateau').disabled && !contenu().querySelector('.pm-generateur-apercu'));
         ctrl('bibliothèque insuffisante : document et historique inchangés', docJ() === av && etat.peutAnnuler() === hist);
         PM.dialogue.fermer();
+      });
       });
     }
 
@@ -466,8 +478,14 @@
       var eqLib = ['5 villes contre 2', 'Écart de distance entre joueurs', 'Première ville inégale', 'Paire de carrefours à risque'];
       var presents = function () { return libelles().filter(function (x) { return eqLib.indexOf(x) >= 0; }); };
       ctrl('plateau généré (paire par défaut) : aucune alerte de paire ni d équilibre', presents().length === 0, presents().join());
-      // paire à risque (2,2)+(1,3) : 8,5 %
-      etat.appliquer(function (d) { var n = clone(d); n.plateau.jetons = jetonsPaire({ i: 2, j: 2 }, { i: 1, j: 3 }); return n; }, 'paire à risque');
+      // paire à risque (2,2)+(1,3) : 8,5 %. Depuis docs/17 (mineur 1), l'alerte de paire disparaît quand l'équilibre
+      // du plateau complet est vérifié sans alerte : on retire la tuile (3,0), loin des deux carrefours, pour que
+      // l'équilibre ne soit pas mesurable et que l'alerte manuelle reste due.
+      etat.appliquer(function (d) {
+        var n = clone(d); n.plateau.jetons = jetonsPaire({ i: 2, j: 2 }, { i: 1, j: 3 });
+        n.plateau.tuiles = n.plateau.tuiles.filter(function (t) { return !(t.col === 3 && t.lig === 0); });
+        return n;
+      }, 'paire à risque');
       return attendre(150).then(function () {
         ctrl('paire (2,2)+(1,3) : alerte « Paire de carrefours à risque » dans le panneau', libelles().indexOf('Paire de carrefours à risque') >= 0, libelles().join());
         ctrl('message de paire avec taux « 8,5 % » et la paire', /8,5 %/.test(cpt()) && /Carrefours en \(2, 2\) et \(1, 3\)/.test(cpt()), cpt().slice(0, 300));

@@ -57,7 +57,7 @@ function jetons9(carrefours) {
 }
 const MILIEU = [{ i: 1, j: 2 }, { i: 3, j: 2 }];
 
-/* --- Oracle : utilitaires de tests/catalogue.test.js (construireGraphe, distances, equilibre) --- */
+/* --- Oracle indépendant : copie de l'ancien utilitaire provisoire de tests/catalogue.test.js (construireGraphe, distances, equilibre) --- */
 const G = globalThis.PM.geometrie;
 function oracleGraphe(doc, carrefours) {
   const voisins = new Map(), jonctions = new Map(), parRaccord = new Map();
@@ -156,15 +156,16 @@ test('equilibre : distances triées, écart par rang, partage, tempo, première 
   assert.strictEqual(e.villes.length, 7);
 });
 
-test('equilibre : écart > 2 aux rangs 1 à 4 déclenche l\'alerte principale, pas l\'écart du rang 5', () => {
+test('equilibre : écart > 2 à un rang de 1 à 7, une seule alerte (ecart_rang_etendu) ; ecartRang reste une information', () => {
   let e = GR.equilibre(DOC_VIDE, { graphe: grapheDistances([2, 3, 3, 4, 5, 6, 6], [6, 6, 6, 6, 6, 6, 6]) });
   assert.strictEqual(e.ecartRang, 4);
-  assert.ok(e.alertes.some((a) => a.code === 'ecart_rang'));
-  // écart de 3 seulement au rang 5 : hors du critère
+  assert.deepStrictEqual(e.alertes.filter((a) => /^ecart_rang/.test(a.code)).map((a) => a.code), ['ecart_rang_etendu']);
+  // écart de 3 seulement au rang 5 : compte aussi (docs/16 b)
   e = GR.equilibre(DOC_VIDE, { graphe: grapheDistances([2, 3, 3, 4, 5, 6, 6], [2, 3, 3, 4, 8, 8, 8]) });
   assert.strictEqual(e.ecartRang, 0);
   assert.strictEqual(e.parRang[4].ecart, 3);
-  assert.ok(!e.alertes.some((a) => a.code === 'ecart_rang'));
+  assert.ok(e.parRang.every((r) => r.compte));
+  assert.deepStrictEqual(e.alertes.filter((a) => /^ecart_rang/.test(a.code)).map((a) => a.code), ['ecart_rang_etendu']);
 });
 
 test('equilibre : 5 villes contre 2 et apparition à plus de 7 pas de toute ville', () => {
@@ -210,7 +211,7 @@ test('equilibre : cohérence avec les utilitaires de tests/catalogue.test.js (m�
       assert.strictEqual(e.partage[2], o.plus2);
       assert.deepStrictEqual([e.D[1], e.D[2]], o.tri);
       assert.strictEqual(e.alertes.some((a) => a.code === 'cinq_contre_deux'), Math.max(o.plus1, o.plus2) >= 5);
-      assert.strictEqual(e.alertes.some((a) => a.code === 'ecart_rang'), o.ecart > 2);
+      assert.ok(!e.alertes.some((a) => a.code === 'ecart_rang')); // alerte supprimée (docs/17, I2) : champ seulement
     }
   }
 });
@@ -436,4 +437,35 @@ test('equilibre : score S, écart aux rangs 1 à 7, D6 étendu, première ville,
   assert.ok(e.alertes.some((a) => a.code === 'premiere_ville_inegale'));
   // plateau vide : S nul absent
   assert.strictEqual(GR.equilibre(M.nouveauDocument()).S, null);
+});
+
+test('equilibre : ville inaccessible → S et ecartMax7 null ; champs cinqContreDeux et premiereEgale exposés', () => {
+  const g = grapheDistances([2, 3, 3, 4, 5, 6, 6], [4, 3, 5, 4, 3, 6, 8]);
+  let e = GR.equilibre(DOC_VIDE, { graphe: g });
+  assert.strictEqual(e.cinqContreDeux, false);
+  assert.strictEqual(e.premiereEgale, false); // 2 pas contre 3 pas
+  assert.ok(Number.isFinite(e.S));
+  const v = 'J7,1';
+  for (const id of [...g.voisins.get(v)]) if (id.startsWith('q')) { g.voisins.get(v).delete(id); g.voisins.get(id).delete(v); }
+  e = GR.equilibre(DOC_VIDE, { graphe: g });
+  assert.strictEqual(e.S, null);
+  assert.strictEqual(e.ecartMax7, null);
+  assert.strictEqual(e.aSurveiller, false);
+  assert.ok(e.alertes.some((a) => a.code === 'ville_inaccessible'));
+  e = GR.equilibre(DOC_VIDE, { graphe: grapheDistances([2, 2, 2, 2, 2, 2, 2], [3, 3, 9, 9, 9, 9, 9]) });
+  assert.strictEqual(e.cinqContreDeux, true);
+  e = GR.equilibre(DOC_VIDE, { graphe: grapheDistances([2, 3, 3, 4, 5, 6, 6], [2, 3, 3, 4, 5, 6, 6]) });
+  assert.strictEqual(e.premiereEgale, true);
+});
+
+test('equilibre : 4 villes coupées du joueur 2, plateau toujours « complet » au sens des données, alerte ville_inaccessible', () => {
+  const g = grapheDistances([2, 3, 3, 4, 5, 6, 6], [4, 3, 5, 4, 3, 6, 8]);
+  for (const v of ['J4,1', 'J5,1', 'J6,1', 'J7,1']) {
+    for (const id of [...g.voisins.get(v)]) if (id.startsWith('q')) { g.voisins.get(v).delete(id); g.voisins.get(id).delete(v); }
+  }
+  const e = GR.equilibre(DOC_VIDE, { graphe: g });
+  assert.strictEqual(e.D[2].length, 3);
+  assert.ok(!e.lacunes.some((t) => /accessibles/.test(t)), e.lacunes.join(' / '));
+  assert.ok(e.alertes.some((a) => a.code === 'ville_inaccessible'));
+  assert.strictEqual(e.S, null);
 });

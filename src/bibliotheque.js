@@ -32,6 +32,9 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
    */
   function vignettesBibliotheque(doc, filtre) {
     var M = PM.modele, groupes = {}, ordre = ROLES.concat(['autre']);
+    var p = doc && doc.plateau;
+    // document mal formé : refus explicite (Error lisible), jamais un TypeError natif
+    if (!p || typeof p !== 'object' || !Array.isArray(p.tuiles)) throw new Error('Document invalide : plateau absent ou mal formé.');
     ordre.forEach(function (r) { groupes[r] = []; });
     (Array.isArray(doc.modeles) ? doc.modeles : []).forEach(function (m) {
       if (!m || typeof m !== 'object') return;

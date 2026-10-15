@@ -38,7 +38,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   /**
    * Modèle de présentation (sans DOM) :
    *  { explication, traversables, complet, lacunes: [texte], rangs: [{rang, d1, d2, ecart, fort, compte}],
-   *    ecartRang, partage: {j1, j2, egalite}, tempo: [{pas, j1, j2}], premiere: {j1, j2, ecart},
+   *    ecartRang (rangs 1 à 4, information), ecartMax7 (rangs 1 à 7), partage: {j1, j2, egalite}, tempo: [{pas, j1, j2}], premiere: {j1, j2, ecart},
    *    goulets: [{ville, j1, j2, faible}], articulations: {1: [texte], 2: [texte]}, alertes: [texte] }
    */
   function rapport(analyse, autre) {
@@ -81,6 +81,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       lacunes: r.lacunes.slice(),
       rangs: rangs,
       ecartRang: r.ecartRang,
+      ecartMax7: r.ecartMax7,
       partage: { j1: r.partage[1], j2: r.partage[2], egalite: r.partage.egalite },
       tempo: tempo,
       premiere: { j1: texteDistance(r.premiereVille[1]), j2: texteDistance(r.premiereVille[2]), ecart: texteDistance(r.premiereVille.ecart) },
@@ -193,11 +194,11 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       sDist.appendChild(tableau(doc, 'Distance de la k-ième ville la plus proche, par joueur. Écart mis en évidence au-delà de 2 (rangs 1 à 7).',
         ['Rang', 'Joueur 1', 'Joueur 2', 'Écart'],
         m.rangs.map(function (x) {
-          return { classe: (x.fort ? 'pm-equilibre-ecart-fort ' : '') + (x.compte ? '' : 'pm-equilibre-rang-libre'), cellules: [String(x.rang), x.d1, x.d2, x.ecart] };
+          return { classe: x.fort ? 'pm-equilibre-ecart-fort' : '', cellules: [String(x.rang), x.d1, x.d2, x.ecart] };
         })));
-      sDist.appendChild(el(doc, 'p', 'pm-equilibre-note', m.ecartRang === null
-        ? 'Écart maximal aux rangs 1 à 4 : non calculable.'
-        : 'Écart maximal aux rangs 1 à 4 : ' + m.ecartRang + (m.ecartRang > GR.SEUIL_ECART ? ' (supérieur à ' + GR.SEUIL_ECART + ').' : '.')));
+      sDist.appendChild(el(doc, 'p', 'pm-equilibre-note', m.ecartMax7 === null
+        ? 'Écart maximal aux rangs 1 à 7 : non calculable (ville manquante ou inaccessible).'
+        : 'Écart maximal aux rangs 1 à 7 : ' + m.ecartMax7 + (m.ecartMax7 > GR.SEUIL_ECART ? ' (supérieur à ' + GR.SEUIL_ECART + ').' : '.')));
       var pS = el(doc, 'p', 'pm-equilibre-score' + (m.aSurveiller ? ' pm-equilibre-surveiller' : ''),
         'Score S (somme des écarts sur les 7 rangs) : ' + m.scoreTexte + (m.aSurveiller ? ' : à surveiller (4 ou plus).' : '.'));
       sDist.appendChild(pS);

@@ -573,6 +573,26 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     { dc: -1, dl: 0, coin: 1 }, { dc: 0, dl: 0, coin: 0 }
   ];
 
+  /**
+   * Camp d'une jonction (règle unique, docs/11-revue-interface.md I3) : 1 pour la rangée de jonctions nord
+   * (j = 1, camp J1), 2 pour la rangée sud (j = NL - 1, camp J2), null pour la rangée du milieu ou une valeur
+   * invalide. `i` n'intervient pas (les colonnes ouest / est ne sont pas des camps) ; jamais d'exception.
+   */
+  function campJonction(i, j) {
+    if (j === 1) return 1;
+    if (j === NL - 1) return 2;
+    return null;
+  }
+
+  /** Plafond du stock exporté ou tiré par le générateur : somme des exemplaires des modèles complets. */
+  var PLAFOND_TUILES = 200;
+
+  /** Nombre d'exemplaires d'un modèle, lu d'une seule façon : entier ≥ 0, sinon 0. */
+  function exemplairesValides(modele) {
+    var n = modele && typeof modele === 'object' ? modele.exemplaires : undefined;
+    return estEntier(n) && n >= 0 ? n : 0;
+  }
+
   function jonctionInterieure(i, j) {
     return estEntier(i) && estEntier(j) && i >= 1 && i <= NC - 1 && j >= 1 && j <= NL - 1;
   }
@@ -1019,6 +1039,9 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     rotationDeduite: rotationDeduite,
     jonctionDuCoin: jonctionDuCoin,
     jonctionPossible: jonctionPossible,
+    campJonction: campJonction,
+    PLAFOND_TUILES: PLAFOND_TUILES,
+    exemplairesValides: exemplairesValides,
     nouveauDocument: nouveauDocument,
     clonerDocument: clonerDocument,
     modeleParId: modeleParId,

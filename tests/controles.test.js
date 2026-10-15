@@ -292,3 +292,28 @@ test('carrefours : message enrichi avec le taux de « 5 contre 2 » hors paire p
   // paire à 0 % (autre que la paire par défaut) : pas d'alerte
   assert.equal(trouver(C.calculer(avecJetons(base, jetons([1, 2], [2, 2]))).alertes, 'carrefours_paire').length, 0);
 });
+
+test('équilibre vérifié : pas d\'alerte carrefours_paire ; elle reste si l\'équilibre manque ou alerte ; ville_inaccessible affichée', () => {
+  delete require.cache[require.resolve('../src/graphe.js')]; // le test précédent a retiré PM.graphe
+  require('../src/graphe.js');
+  const GR = globalThis.PM.graphe, vrai = GR.equilibre;
+  const jetons = (a, b) => TOUTES_JONCTIONS.map(([i, j]) => [i, j, ((i === a[0] && j === a[1]) || (i === b[0] && j === b[1])) ? 'carrefour' : 'capture']);
+  const d = avecJetons(plateauComplet(), jetons([1, 1], [1, 2]));
+  const remplacer = (patch) => { GR.equilibre = (doc, o) => Object.assign({}, vrai(doc, o), patch); };
+  try {
+    remplacer({ complet: true, alertes: [] });
+    assert.equal(trouver(C.calculer(d).alertes, 'carrefours_paire').length, 0, 'équilibre mesuré sans alerte');
+    remplacer({ complet: true, alertes: [{ code: 'apparition_lointaine', message: 'x' }] });
+    assert.equal(trouver(C.calculer(d).alertes, 'carrefours_paire').length, 0, 'alerte hors panneau : sans effet');
+    remplacer({ complet: false, alertes: [] });
+    assert.equal(trouver(C.calculer(d).alertes, 'carrefours_paire').length, 1, 'équilibre non mesurable');
+    remplacer({ complet: true, alertes: [{ code: 'ville_inaccessible', message: '1 ville(s) hors d\'atteinte du joueur 2.' }] });
+    const r = C.calculer(d);
+    assert.equal(trouver(r.alertes, 'carrefours_paire').length, 1, 'équilibre mauvais');
+    assert.equal(trouver(r.alertes, 'ville_inaccessible').length, 1);
+    assert.ok(r.regroupees.some((g) => g.code === 'ville_inaccessible' && g.libelle === 'Ville inaccessible'));
+  } finally {
+    GR.equilibre = vrai;
+    delete globalThis.PM.graphe;
+  }
+});

@@ -3,9 +3,11 @@ const test = require('node:test');
 const assert = require('node:assert');
 require('../src/catalogue.js');
 require('../src/rendu.js');
+require('../src/graphe.js');
 const G = globalThis.PM.geometrie;
 const M = globalThis.PM.modele;
 const CAT = globalThis.PM.catalogue;
+const GR = globalThis.PM.graphe;
 const R = globalThis.PM.rendu;
 
 /* ====================================================================== */
@@ -57,104 +59,13 @@ function tirerPlateau(rng) {
 }
 
 /**
- * UTILITAIRE DE GRAPHE GLOBAL (provisoire, en attendant src/graphe.js du sous-agent 7).
- *
- * construireGraphe(doc, carrefours = [], filtreTuile = null) ->
- *   { voisins: Map<id, Set<id>>, cases: Map<id, case>, jonctions: Map<id, jonction>, apparitions: [{ id, joueur }] }
- *  - noeuds : les cases des tuiles posées (ids globaux « col,lig:idLocal » de tuileEnPlateau)
- *    et un noeud « J<i>,<j> » par jonction qui reçoit au moins un port ;
- *  - arêtes : chemins case-case internes ; une arête par raccord connecté face à face
- *    (raccord (cote, pos) contre raccordEnFace(cote, pos) du voisin) ; jonction - case porteuse du port ;
- *  - jonction : { id, i, j, ports, type: 'carrefour' si (i, j) figure dans `carrefours`, sinon 'capture' } ;
- *  - filtreTuile(tuile) -> booléen : ne garde que certaines tuiles (sous-graphes).
- * Hypothèse : villes et carrefours sont traversables par les plus courts chemins.
+ * Graphe global : PM.graphe (src/graphe.js). Les jonctions reçoivent les 9 jetons d'une paire de carrefours.
+ *  - structure (connexité, écart entre jonctions, sorties des apparitions) : villes traversables, comme le
+ *    contrôle « villes trop proches » du générateur ;
+ *  - équilibre : critère de docs/16 (villes non traversables, écart et S sur les rangs 1 à 7, « 5 contre 2 »).
  */
-function construireGraphe(doc, carrefours, filtreTuile) {
-  carrefours = carrefours || [];
-  const voisins = new Map(), cases = new Map(), jonctions = new Map(), parRaccord = new Map();
-  const noeud = (id) => { if (!voisins.has(id)) voisins.set(id, new Set()); };
-  const lier = (a, b) => { voisins.get(a).add(b); voisins.get(b).add(a); };
-  const elems = doc.plateau.tuiles
-    .filter((t) => !filtreTuile || filtreTuile(t))
-    .map((t) => ({ t, e: M.tuileEnPlateau(doc, t) }));
-  for (const { e } of elems) for (const c of e.cases) { cases.set(c.id, c); noeud(c.id); }
-  for (const { e } of elems) for (const [a, b] of e.aretes) lier(a, b);
-  for (const { t, e } of elems) for (const r of e.raccords) parRaccord.set(`${t.col},${t.lig},${r.cote},${r.pos}`, r.caseId);
-  for (const { t, e } of elems) {
-    for (const r of e.raccords) {
-      const d = G.coteVoisin(r.cote), f = G.raccordEnFace(r.cote, r.pos);
-      const autre = parRaccord.get(`${t.col + d.dc},${t.lig + d.dl},${f.cote},${f.pos}`);
-      if (autre) lier(r.caseId, autre);
-    }
-  }
-  for (const { e } of elems) {
-    for (const p of e.ports) {
-      const id = `J${p.i},${p.j}`;
-      noeud(id);
-      if (!jonctions.has(id)) {
-        const carrefour = carrefours.some((c) => c.i === p.i && c.j === p.j);
-        jonctions.set(id, { id, i: p.i, j: p.j, ports: 0, type: carrefour ? 'carrefour' : 'capture' });
-      }
-      jonctions.get(id).ports++;
-      lier(id, p.caseId);
-    }
-  }
-  const apparitions = [...cases.values()].filter((c) => c.type === 'apparition').map((c) => ({ id: c.id, joueur: c.joueur }));
-  return { voisins, cases, jonctions, apparitions };
-}
-
-/** Distances en pas (parcours en largeur) depuis un ensemble de noeuds sources : Map<id, pas>. */
-function distances(g, sources) {
-  const d = new Map();
-  let file = [];
-  for (const s of sources) if (g.voisins.has(s)) { d.set(s, 0); file.push(s); }
-  while (file.length) {
-    const suivants = [];
-    for (const x of file) for (const y of g.voisins.get(x)) if (!d.has(y)) { d.set(y, d.get(x) + 1); suivants.push(y); }
-    file = suivants;
-  }
-  return d;
-}
-
-/**
- * Équilibre selon D6 (1b) : distance de chaque ville à l'apparition la plus proche de chaque
- * joueur, 7 distances triées ; écart = plus grand écart aux rangs 1 à 4.
- * plus1 / plus2 : villes strictement plus proches de J1 / J2 (alerte secondaire à 5 contre 2).
- */
-function equilibre(g) {
-  const villes = [...g.jonctions.values()].filter((j) => j.type === 'capture');
-  const dist = [1, 2].map((p) => {
-    const d = distances(g, g.apparitions.filter((a) => a.joueur === p).map((a) => a.id));
-    return villes.map((v) => d.get(v.id));
-  });
-  const tri = dist.map((t) => t.slice().sort((a, b) => a - b));
-  let ecart = 0;
-  for (let r = 0; r < 4; r++) ecart = Math.max(ecart, Math.abs(tri[0][r] - tri[1][r]));
-  let plus1 = 0, plus2 = 0;
-  villes.forEach((v, k) => { if (dist[0][k] < dist[1][k]) plus1++; else if (dist[1][k] < dist[0][k]) plus2++; });
-  return { ecart, plus1, plus2, nbVilles: villes.length };
-}
-
-/**
- * Autoroutes de flanc (D4 de 1b) : pour chaque joueur, distance de ses apparitions à la
- * jonction adverse la plus proche (ligne j = 3 pour J1, j = 1 pour J2), dans le sous-graphe
- * « flancs » (colonnes 0 et 3 + apparitions) et dans le sous-graphe « centre » (colonnes 1 et 2).
- */
-function mesureFlancs(doc) {
-  const forme = doc.plateau.forme;
-  const flanc = (t) => t.col === 0 || t.col === 3 || M.roleCellule(t.col, t.lig, forme) === 'apparition';
-  const centre = (t) => t.col === 1 || t.col === 2;
-  return [1, 2].map((p) => {
-    const cible = p === 1 ? 3 : 1;
-    const mesure = (filtre) => {
-      const g = construireGraphe(doc, [], filtre);
-      const d = distances(g, g.apparitions.filter((a) => a.joueur === p).map((a) => a.id));
-      let m = Infinity;
-      for (const j of g.jonctions.values()) if (j.j === cible && d.has(j.id)) m = Math.min(m, d.get(j.id));
-      return m;
-    };
-    return { flanc: mesure(flanc), centre: mesure(centre) };
-  });
+function jetons9(carrefours) {
+  return JONCTIONS.map((jn) => ({ i: jn.i, j: jn.j, type: carrefours.some((c) => c.i === jn.i && c.j === jn.j) ? 'carrefour' : 'capture' }));
 }
 
 /* ====================================================================== */
@@ -406,47 +317,50 @@ const SIM = (function simuler() {
   const rng = mulberry32(GRAINE);
   const s = {
     morts: [], nonConnexes: 0, nonConnexesSansPorts: 0, jonctionsSans4Ports: 0, distMinJonctions: Infinity, nbCases: new Set(),
-    sortiesMin: Infinity, autoroutes: 0, flancMoins: [], ecarts: { milieu: [], unParCamp: [] },
-    cinqDeux: { milieu: 0, unParCamp: 0 }, distApparition: { A1: [], A2: [] }
+    sortiesMin: Infinity, autoroutes: 0, flancsInfinis: 0, flancMoins: [], ecarts: { milieu: [], unParCamp: [] },
+    scores: { milieu: [], unParCamp: [] }, cinqDeux: { milieu: 0, unParCamp: 0 }, premiereInegale: { milieu: 0, unParCamp: 0 },
+    distApparition: { A1: [], A2: [] }
   };
   for (let n = 0; n < NB_PLATEAUX; n++) {
     const doc = tirerPlateau(rng);
     s.morts.push(M.raccordsMorts(doc).length);
     for (const jn of JONCTIONS) if (M.portsJonction(doc, jn.i, jn.j).ports !== 4) s.jonctionsSans4Ports++;
 
-    const g = construireGraphe(doc, CARREFOURS.milieu);
-    if (distances(g, [g.voisins.keys().next().value]).size !== g.voisins.size) s.nonConnexes++;
-    // connexité par les seuls raccords et chemins internes (jonctions retirées) : juge les raccords latéraux
-    const sansJonctions = { voisins: new Map([...g.voisins].filter(([id]) => !id.startsWith('J'))
-      .map(([id, v]) => [id, new Set([...v].filter((x) => !x.startsWith('J')))])) };
-    if (distances(sansJonctions, [g.cases.keys().next().value]).size !== g.cases.size) s.nonConnexesSansPorts++;
-    if (g.jonctions.size !== 9) s.jonctionsSans4Ports++;
-    for (const j of g.jonctions.values()) if (j.ports !== 4) s.jonctionsSans4Ports++;
-    const js = [...g.jonctions.values()];
-    for (const a of js) {
-      const d = distances(g, [a.id]);
-      for (const b of js) if (b !== a) s.distMinJonctions = Math.min(s.distMinJonctions, d.get(b.id));
+    const g = GR.construire(doc, { jetons: jetons9(CARREFOURS.milieu), villesTraversables: true });
+    if (GR.distances(g, g.noeuds[0]).size !== g.noeuds.length) s.nonConnexes++;
+    // connexité par les seuls raccords et chemins internes (aucun jeton, donc aucune jonction) : juge les raccords latéraux
+    const sansJonctions = GR.construire(doc, { jetons: [], villesTraversables: true });
+    if (GR.distances(sansJonctions, sansJonctions.noeuds[0]).size !== sansJonctions.noeuds.length) s.nonConnexesSansPorts++;
+    if (g.jonctions.length !== 9) s.jonctionsSans4Ports++;
+    for (const j of g.jonctions) if (j.ports !== 4) s.jonctionsSans4Ports++;
+    for (const a of g.jonctions) {
+      const d = GR.distances(g, a.id);
+      for (const b of g.jonctions) if (b !== a) s.distMinJonctions = Math.min(s.distMinJonctions, d.has(b.id) ? d.get(b.id) : Infinity);
     }
     const deplacement = [...g.cases.values()].filter((c) => c.type === 'deplacement').length;
     s.nbCases.add(deplacement + CARREFOURS.milieu.length);
-    for (const a of g.apparitions) s.sortiesMin = Math.min(s.sortiesMin, g.voisins.get(a.id).size);
+    for (const p of [1, 2]) for (const id of g.apparitions[p]) s.sortiesMin = Math.min(s.sortiesMin, g.voisins.get(id).size);
 
     for (const cle of Object.keys(CARREFOURS)) {
-      const e = equilibre(cle === 'milieu' ? g : construireGraphe(doc, CARREFOURS[cle]));
-      assert.strictEqual(e.nbVilles, 7);
-      s.ecarts[cle].push(e.ecart);
-      if (Math.max(e.plus1, e.plus2) >= 5) s.cinqDeux[cle]++;
+      const e = GR.equilibre(doc, { jetons: jetons9(CARREFOURS[cle]) }); // villes non traversables (défaut)
+      assert.strictEqual(e.villes.length, 7);
+      assert.strictEqual(e.complet, true);
+      s.ecarts[cle].push(e.ecartMax7 === null ? Infinity : e.ecartMax7);
+      s.scores[cle].push(e.S === null ? Infinity : e.S);
+      if (e.cinqContreDeux) s.cinqDeux[cle]++;
+      if (!e.premiereEgale) s.premiereInegale[cle]++;
     }
-    for (const f of mesureFlancs(doc)) {
+    for (const f of GR.flancs(doc, { villesTraversables: true })) {
+      if (!Number.isFinite(f.flanc) || !Number.isFinite(f.centre)) s.flancsInfinis++;
       if (f.flanc < f.centre) s.autoroutes++;
       s.flancMoins.push(f.flanc - f.centre);
     }
     // distances triées de chaque case d'apparition aux 9 jonctions, par modèle
     for (const t of doc.plateau.tuiles) {
       if (M.roleCellule(t.col, t.lig, doc.plateau.forme) !== 'apparition') continue;
-      const sp = g.apparitions.find((a) => a.id.startsWith(`${t.col},${t.lig}:`));
-      const d = distances(g, [sp.id]);
-      s.distApparition[t.modeleId].push(js.map((j) => d.get(j.id)).sort((a, b) => a - b));
+      const sp = g.apparitions[1].concat(g.apparitions[2]).find((id) => id.startsWith(`${t.col},${t.lig}:`));
+      const d = GR.distances(g, sp);
+      s.distApparition[t.modeleId].push(g.jonctions.map((j) => d.get(j.id)).sort((a, b) => a - b));
     }
   }
   const profil = (k) => s.distApparition[k][0].map((_, r) => moyenne(s.distApparition[k].map((t) => t[r])));
@@ -461,10 +375,11 @@ const SIM = (function simuler() {
   console.log(`  sorties min d'une case d'apparition : ${s.sortiesMin}`);
   for (const cle of Object.keys(CARREFOURS)) {
     const e = s.ecarts[cle];
-    console.log(`  D6 carrefours ${JSON.stringify(CARREFOURS[cle])} : écart moyen ${f2(moyenne(e))}, pire ${Math.max(...e)}, ` +
-      `alertes (> 2) ${e.filter((x) => x > 2).length}, répartition ${JSON.stringify(histogramme(e))}, alertes 5 contre 2 : ${s.cinqDeux[cle]}`);
+    console.log(`  docs/16 (non traversables, rangs 1 à 7) carrefours ${JSON.stringify(CARREFOURS[cle])} : écart moyen ${f2(moyenne(e))}, pire ${Math.max(...e)}, ` +
+      `alertes (> 2) ${e.filter((x) => x > 2).length}, répartition ${JSON.stringify(histogramme(e))}, 5 contre 2 : ${s.cinqDeux[cle]}, ` +
+      `première ville inégale : ${s.premiereInegale[cle]}, S moyen ${f2(moyenne(s.scores[cle]))}, S >= 4 : ${s.scores[cle].filter((x) => x >= 4).length}`);
   }
-  console.log(`  flancs plus courts que le centre : ${s.autoroutes} / ${2 * NB_PLATEAUX} ; flanc - centre moyen ${f2(moyenne(s.flancMoins))} pas`);
+  console.log(`  flancs plus courts que le centre : ${s.autoroutes} / ${2 * NB_PLATEAUX} ; flanc - centre moyen ${f2(moyenne(s.flancMoins))} pas ; mesures infinies : ${s.flancsInfinis}`);
   console.log(`  distances triées moyennes apparition -> 9 jonctions : A1 ${s.profilA1.map(f2).join(' ')} | A2 ${s.profilA2.map(f2).join(' ')}`);
   return s;
 })();
@@ -492,15 +407,26 @@ test('simulation : peu de raccords morts (moyenne <= 1,5, max <= 2)', () => {
   assert.ok(Math.max(...SIM.morts) <= 2, String(Math.max(...SIM.morts)));
 });
 
-test('simulation : équilibre D6, aucun écart supérieur à 2 aux rangs 1 à 4', () => {
+/*
+ * Critère de docs/16 (villes non traversables, rangs 1 à 7) sur des plateaux tirés sans filtre : quelques écarts
+ * de 3 subsistent (mesuré : 0,9 % au milieu, 1,6 % un par camp ; le générateur les élimine). Seuils : jamais
+ * plus de 3, au plus 2 % (milieu) et 3 % (un par camp) au-delà de 2 ; « 5 contre 2 » nul au milieu, ≤ 6 % un par
+ * camp (mesuré 4,5 %, comme docs/12) ; première ville toujours à égalité (invariant d).
+ */
+test('simulation : équilibre (docs/16), écarts rares et bornés, pas de « 5 contre 2 » au milieu, première ville égale', () => {
+  const plafond = { milieu: 0.02, unParCamp: 0.03 };
   for (const cle of Object.keys(CARREFOURS)) {
-    assert.ok(Math.max(...SIM.ecarts[cle]) <= 2, cle);
+    assert.ok(Math.max(...SIM.ecarts[cle]) <= 3, cle);
+    assert.ok(SIM.ecarts[cle].filter((x) => x > 2).length <= plafond[cle] * NB_PLATEAUX, cle);
+    assert.strictEqual(SIM.premiereInegale[cle], 0, cle);
   }
   assert.strictEqual(SIM.cinqDeux.milieu, 0);
+  assert.ok(SIM.cinqDeux.unParCamp <= 0.06 * NB_PLATEAUX, String(SIM.cinqDeux.unParCamp));
 });
 
 test('simulation : pas d\'autoroute de flanc vers le camp adverse', () => {
   assert.strictEqual(SIM.autoroutes, 0);
+  assert.strictEqual(SIM.flancsInfinis, 0); // mesure réelle (villes traversables), jamais Infinity < Infinity
 });
 
 test('simulation : les 2 modèles d\'apparition donnent des distances comparables (écart <= 0,5 par rang)', () => {

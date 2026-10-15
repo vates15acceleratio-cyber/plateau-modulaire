@@ -67,12 +67,14 @@
       // Contrôle automatique : ouverture, génération avec une graine fixe (aperçu), puis application.
       var racine = PM_.generateur.ouvrir(etat);
       racine.champGraine.value = 'essai';
-      racine.boutonGenerer.click();
-      racine.boutonAppliquer.click(); // ferme la boîte et écrit dans la barre d'état
-      var apres = PM_.generateur.ouvrir(etat); // seconde ouverture (plateau non vide : avertissement) pour garder l'aperçu dans le DOM
-      apres.champGraine.value = 'essai';
-      apres.boutonGenerer.click();
-      document.body.setAttribute('data-essai', 'fait');
+      racine.boutonGenerer.click(); // le calcul part au tour suivant (setTimeout 0)
+      setTimeout(function () {
+        racine.boutonAppliquer.click(); // ferme la boîte et écrit dans la barre d'état
+        var apres = PM_.generateur.ouvrir(etat); // seconde ouverture (plateau non vide : avertissement) pour garder l'aperçu dans le DOM
+        apres.champGraine.value = 'essai';
+        apres.boutonGenerer.click();
+        setTimeout(function () { document.body.setAttribute('data-essai', 'fait'); }, 50);
+      }, 50);
     })();
   </script>
 </body>

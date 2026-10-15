@@ -158,7 +158,7 @@ test('aucun candidat acceptable : ok false, nombre d’essais borné (D7 n° 6) 
   const vrai = GR.equilibre;
   GR.equilibre = function (doc, options) {
     const e = vrai(doc, options);
-    return Object.assign({}, e, { partage: { 1: 5, 2: 2, egalite: 0 } });
+    return Object.assign({}, e, { partage: { 1: 5, 2: 2, egalite: 0 }, cinqContreDeux: true });
   };
   try {
     const r = GEN.generer(docExemples(), { graine: 'x', candidats: 5, essaisMax: 12 });
@@ -209,4 +209,65 @@ test('temps : 200 candidats en moins de 5 s sous Node', () => {
   assert.strictEqual(r.candidats, 200);
   console.log(`# 200 candidats (catalogue) : ${ms} ms, ${r.essais} essais`);
   assert.ok(ms < 5000, ms + ' ms');
+});
+
+test('critere : adaptateur des champs de PM.graphe.equilibre (pas de second calcul)', () => {
+  const r = GEN.generer(docCatalogue(), { graine: 'adapt', candidats: 20 });
+  const e = GR.equilibre(r.doc, { villesTraversables: false });
+  const c = GEN.critere(e);
+  assert.strictEqual(c.S, e.S);
+  assert.strictEqual(c.ecartMax, e.ecartMax7);
+  assert.strictEqual(c.premiereEgale, e.premiereEgale);
+  assert.strictEqual(c.cinqContreDeux, e.cinqContreDeux);
+  assert.strictEqual(c.villeInaccessible, false);
+  const inacc = GEN.critere(Object.assign({}, e, { S: null, ecartMax7: null }));
+  assert.strictEqual(inacc.villeInaccessible, true);
+  assert.strictEqual(inacc.S, null);
+});
+
+test('ville inaccessible : rejet sous sa propre cause, pas « écart »', () => {
+  const vrai = GR.equilibre;
+  GR.equilibre = function (doc, options) {
+    return Object.assign({}, vrai(doc, options), { S: null, ecartMax7: null });
+  };
+  try {
+    const r = GEN.generer(docExemples(), { graine: 'x', candidats: 3, essaisMax: 5 });
+    assert.strictEqual(r.ok, false);
+    assert.strictEqual(r.rejets.ville_inaccessible, 5);
+    assert.strictEqual(r.rejets.ecart, 0);
+    assert.match(r.raison, /ville inaccessible : 5/);
+  } finally {
+    GR.equilibre = vrai;
+  }
+});
+
+test('garde-fou D7 : cases de déplacement hors de 45 à 55, rejet sous une cause dédiée', () => {
+  const vrai = M.modeleParId;
+  // vue modifiée des modèles : plus aucune case de déplacement (2 carrefours seulement)
+  M.modeleParId = function (doc, id) {
+    const m = vrai(doc, id);
+    return m ? Object.assign({}, m, { cases: m.cases.filter((c) => c.type !== 'deplacement') }) : m;
+  };
+  try {
+    const r = GEN.generer(docExemples(), { graine: 'c', candidats: 2, essaisMax: 4 });
+    assert.strictEqual(r.ok, false);
+    assert.strictEqual(r.rejets.cases_deplacement, 4);
+    assert.match(r.raison, /cases de déplacement hors de 45 à 55 : 4/);
+  } finally {
+    M.modeleParId = vrai;
+  }
+  // bibliothèque réelle : 50 cases, aucun rejet de ce type
+  assert.strictEqual(GEN.generer(docCatalogue(), { graine: 'c', candidats: 20 }).rejets.cases_deplacement, 0);
+});
+
+test('plafond : plus de 200 tuiles au total dans la bibliothèque, refus clair', () => {
+  const d = docCatalogue();
+  d.modeles[0].exemplaires = 200; // 219 tuiles au total
+  const r = GEN.generer(d, { graine: 'p' });
+  assert.strictEqual(r.ok, false);
+  assert.match(r.raison, /219 tuiles/);
+  assert.match(r.raison, /200 au plus/);
+  const d2 = docCatalogue();
+  d2.modeles[0].exemplaires = 181; // exactement 200
+  assert.ok(GEN.generer(d2, { graine: 'p', candidats: 10 }).ok);
 });

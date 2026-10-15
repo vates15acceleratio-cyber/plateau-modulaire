@@ -41,10 +41,11 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     carrefours_paire: 'Paire de carrefours à risque',
     cinq_contre_deux: '5 villes contre 2',
     ecart_rang_etendu: 'Écart de distance entre joueurs',
-    premiere_ville_inegale: 'Première ville inégale'
+    premiere_ville_inegale: 'Première ville inégale',
+    ville_inaccessible: 'Ville inaccessible'
   };
   /** Alertes d'équilibre reprises de PM.graphe (villes non traversables, avis docs/16). */
-  var CODES_EQUILIBRE = ['cinq_contre_deux', 'ecart_rang_etendu', 'premiere_ville_inegale'];
+  var CODES_EQUILIBRE = ['cinq_contre_deux', 'ecart_rang_etendu', 'premiere_ville_inegale', 'ville_inaccessible'];
   /**
    * Taux typique de « 5 contre 2 » (en %) par paire de carrefours, villes non traversables, tiré de
    * docs/12-mesures-equilibre.md (1000 plateaux du catalogue, graine 20261015, section 2). Clé : « i,j+i,j »,
@@ -107,28 +108,22 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /* ------------------------------------------------------------------ */
 
   /**
-   * Camp d'une jonction : rangée nord (j = 1, camp J1) ou rangée sud (j = NL-1, camp J2), sinon aucun.
-   * « Même côté » = même camp de joueur (docs/11-revue-interface.md, arbitrage I3 ; 1b D7 :
-   * deux carrefours dans un camp donnent 3 villes contre 1). Les colonnes ouest / est ne sont pas des camps.
-   * Même règle que `PM.assemblage.carrefoursMemeCote` (test de cohérence dans tests/controles.test.js).
+   * Côté commun à deux jetons ('rangée nord' | 'rangée sud'), ou null. « Même côté » = même camp de joueur,
+   * selon la règle unique PM.modele.campJonction (docs/11-revue-interface.md, arbitrage I3 ; 1b D7 :
+   * deux carrefours dans un camp donnent 3 villes contre 1).
    */
-  function cotesJonction(i, j) {
-    var res = [];
-    if (j === 1) res.push('rangée nord');
-    if (j === NL - 1) res.push('rangée sud');
-    return res;
-  }
-
-  /** Premier côté commun à deux jetons, ou null. */
   function cotePartage(a, b) {
-    var cb = cotesJonction(b.i, b.j);
-    var ca = cotesJonction(a.i, a.j);
-    for (var k = 0; k < ca.length; k++) if (cb.indexOf(ca[k]) >= 0) return ca[k];
-    return null;
+    var camp = M.campJonction(a.i, a.j);
+    if (camp === null || camp !== M.campJonction(b.i, b.j)) return null;
+    return camp === 1 ? 'rangée nord' : 'rangée sud';
   }
 
-  /** Alertes sur les jetons : plus de 7 villes, plus de 2 carrefours, 2 carrefours sur le même côté. */
-  function alertesJetons(doc) {
+  /**
+   * Alertes sur les jetons : plus de 7 villes, plus de 2 carrefours, 2 carrefours sur le même côté,
+   * paire de carrefours à risque. `equilibreVerifie` : plateau complet dont l'équilibre (villes non
+   * traversables) ne donne aucune alerte ; la paire n'est alors plus annoncée comme à risque.
+   */
+  function alertesJetons(doc, equilibreVerifie) {
     var villes = [], carrefours = [], res = [];
     doc.plateau.jetons.forEach(function (j) {
       if (!j) return;
@@ -152,8 +147,9 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         }
       }
     }
-    // Mode manuel : une paire autre que (1,2)+(3,2) est permise, mais son risque est annoncé
-    if (carrefours.length === 2 && !cotePartage(carrefours[0], carrefours[1])) {
+    // Mode manuel : une paire autre que (1,2)+(3,2) est permise, mais son risque est annoncé,
+    // sauf si l'équilibre de ce plateau est mesuré et sans alerte (cas d'un plateau « carrefours variés »)
+    if (!equilibreVerifie && carrefours.length === 2 && !cotePartage(carrefours[0], carrefours[1])) {
       var tri = carrefours.slice().sort(function (a, b) { return (a.j - b.j) || (a.i - b.i); });
       var cle = tri[0].i + ',' + tri[0].j + '+' + tri[1].i + ',' + tri[1].j;
       var taux = TAUX_CINQ_CONTRE_DEUX[cle];
@@ -167,14 +163,19 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   }
 
   /**
-   * Alertes d'équilibre (villes non traversables), seulement si PM.graphe est chargé et que le plateau
-   * est complet : 7 villes, 4 apparitions, toutes les tuiles posées. Sinon aucune alerte.
+   * Équilibre mesuré (villes non traversables), seulement si PM.graphe est chargé et que le plateau
+   * est complet : 7 villes, 4 apparitions, toutes les tuiles posées. Renvoie null sinon.
    */
-  function alertesEquilibre(doc) {
-    if (!PM.graphe || typeof PM.graphe.equilibre !== 'function') return [];
+  function mesureEquilibre(doc) {
+    if (!PM.graphe || typeof PM.graphe.equilibre !== 'function') return null;
     var e;
-    try { e = PM.graphe.equilibre(doc, { villesTraversables: false }); } catch (x) { return []; }
-    if (!e.complet) return [];
+    try { e = PM.graphe.equilibre(doc, { villesTraversables: false }); } catch (x) { return null; }
+    return e && e.complet ? e : null;
+  }
+
+  /** Alertes d'équilibre affichées (codes de CODES_EQUILIBRE) d'une mesure, ou aucune si elle manque. */
+  function alertesEquilibre(e) {
+    if (!e) return [];
     return e.alertes.filter(function (a) { return CODES_EQUILIBRE.indexOf(a.code) >= 0; }).map(function (a) {
       return { code: a.code, message: a.message, niveau: 'alerte', cible: null };
     });
@@ -287,9 +288,17 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * erreurs / alertes : [{ code, message, niveau: 'erreur'|'alerte', cible }].
    */
   function calculer(doc) {
+    var p = doc && doc.plateau;
+    // document mal formé : refus explicite (Error lisible), jamais un TypeError natif
+    if (!p || typeof p !== 'object' || !Array.isArray(p.tuiles) || !Array.isArray(p.jetons) || !p.forme || typeof p.forme !== 'object') {
+      throw new Error('Document invalide : plateau absent ou mal formé.');
+    }
+    if (!Array.isArray(doc.modeles)) throw new Error('Document invalide : bibliothèque de modèles absente.');
     var v = M.validerPlateau(doc);
     var erreurs = v.erreurs.map(function (x) { return versEntree(x, 'erreur', doc); });
-    var alertes = v.alertes.map(function (x) { return versEntree(x, 'alerte', doc); }).concat(alertesJetons(doc)).concat(alertesEquilibre(doc));
+    var eq = mesureEquilibre(doc), alertesEq = alertesEquilibre(eq);
+    var alertes = v.alertes.map(function (x) { return versEntree(x, 'alerte', doc); })
+      .concat(alertesJetons(doc, eq !== null && alertesEq.length === 0)).concat(alertesEq);
     return {
       compteurs: compteursDuPlateau(doc),
       erreurs: erreurs,

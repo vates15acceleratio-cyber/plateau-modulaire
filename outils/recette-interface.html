@@ -55,11 +55,16 @@
       console.error = function () { noter('console.error : ' + Array.prototype.map.call(arguments, function (a) { return a && a.message ? a.message : String(a); }).join(' ')); ce.apply(console, arguments); };
       // La sauvegarde automatique de l'utilisateur (même origine en file://) est mise de côté puis
       // remise en place à la fermeture de la page (audit de sécurité, point 10).
+      // La remise en place doit passer APRÈS l'écouteur « pagehide » d'app.js (qui écrit l'autosave de la recette) :
+      // elle est inscrite au « load », donc après le démarrage de l'application, par une fonction enveloppe distincte.
       try {
         var cleUtil = 'plateau-modulaire:autosave', copieUtil = localStorage.getItem(cleUtil);
         localStorage.removeItem(cleUtil);
-        window.addEventListener('pagehide', function () {
+        var remettreAutosaveUtilisateur = function () {
           try { if (copieUtil !== null) localStorage.setItem(cleUtil, copieUtil); else localStorage.removeItem(cleUtil); } catch (e) { /* rien */ }
+        };
+        window.addEventListener('load', function () {
+          window.addEventListener('pagehide', function remiseEnPlaceApresApp() { remettreAutosaveUtilisateur(); });
         });
       } catch (e) { noter('localStorage inaccessible : ' + e.message); }
     })();

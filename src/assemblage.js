@@ -124,6 +124,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
 
   /** Teste le déplacement d'une tuile posée : {ok, raison, identique}. */
   function testerDeplacement(doc, de, vers) {
+    if (!estCellule(de) || !estCellule(vers)) return { ok: false, raison: 'Cellule de départ ou d’arrivée invalide.', identique: false };
     var t = M().tuileEn(doc, de.col, de.lig);
     if (!t) return { ok: false, raison: 'Aucune tuile dans cette cellule.', identique: false };
     if (de.col === vers.col && de.lig === vers.lig) return { ok: true, raison: '', identique: true };
@@ -135,7 +136,20 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
    * Déplace une tuile (pure) : retrait puis pose, la rotation d'une centrale est conservée.
    * Les jetons devenus invalides sont retirés (par retirerTuile). Lève une Error si la pose est refusée.
    */
+  /** Objet cellule {col, lig} (les valeurs elles-mêmes sont jugées par PM.modele). */
+  function estCellule(c) { return !!c && typeof c === 'object'; }
+
+  /** Lève une Error explicite (et non un TypeError natif) si le document n'a pas la forme attendue. */
+  function verifierDocument(doc) {
+    var p = doc && doc.plateau;
+    if (!p || typeof p !== 'object' || !Array.isArray(p.tuiles) || !Array.isArray(p.jetons) || !p.forme || typeof p.forme !== 'object') {
+      throw new Error('Document invalide : plateau absent ou mal formé.');
+    }
+    if (!Array.isArray(doc.modeles)) throw new Error('Document invalide : bibliothèque de modèles absente.');
+  }
+
   function deplacerTuile(doc, de, vers) {
+    if (!estCellule(de) || !estCellule(vers)) throw new Error('Cellule de départ ou d’arrivée invalide.');
     var t = M().tuileEn(doc, de.col, de.lig);
     if (!t) throw new Error('Aucune tuile dans cette cellule.');
     if (de.col === vers.col && de.lig === vers.lig) return M().clonerDocument(doc);
@@ -221,10 +235,13 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   function compterJetons(doc) { return doc.plateau.jetons.filter(Boolean).length; }
 
   /**
-   * Côté d'une jonction : 'nord' (j = 1, camp J1), 'sud' (j = 3, camp J2) ou null (rangée du milieu, neutre).
-   * Interprétation de la règle « jamais les 2 carrefours du même côté ».
+   * Côté d'une jonction : 'nord' (camp J1), 'sud' (camp J2) ou null (rangée du milieu, neutre),
+   * selon la règle unique PM.modele.campJonction. Interprétation de la règle « jamais les 2 carrefours du même côté ».
    */
-  function coteJonction(j) { return j === 1 ? 'nord' : j === NL - 1 ? 'sud' : null; }
+  function coteJonction(j) {
+    var camp = M().campJonction(null, j);
+    return camp === 1 ? 'nord' : camp === 2 ? 'sud' : null;
+  }
 
   /** Côté où se trouvent au moins 2 carrefours ('nord' | 'sud'), ou null (règle manuelle, sans blocage). */
   function carrefoursMemeCote(doc) {
@@ -375,6 +392,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
    *   clignote: {cellule?: 'col,lig', jonction?: 'i,j'}|null, surbrillance }.
    */
   function svgPlateau(doc, vue) {
+    verifierDocument(doc);
     vue = vue || {};
     var forme = doc.plateau.forme, s = [];
     s.push('<svg class="pm-assemblage-svg" xmlns="http://www.w3.org/2000/svg" viewBox="' + VUE.x + ' ' + VUE.y + ' ' + VUE.w + ' ' + VUE.h +

@@ -1,5 +1,6 @@
 /*
- * graphe.js : graphe global du plateau et analyse d'équilibre (D6 de docs/1b-avis-design-jeu-variante-jonctions.md).
+ * graphe.js : graphe global du plateau et analyse d'équilibre (critère de docs/16-avis-mesures-equilibre.md,
+ * qui prime sur D6 de docs/1b-avis-design-jeu-variante-jonctions.md).
  * Aucun accès au DOM : toutes les fonctions sont pures et ne modifient pas le document.
  *
  * Nœuds du graphe :
@@ -22,10 +23,10 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var G = PM.geometrie;
   var M = PM.modele;
 
-  /** Nombre de villes et seuils de l'avis de design de jeu (D6). */
+  /** Nombre de villes et seuils de l'avis docs/16 (constantes uniques, lues aussi par generateur.js). */
   var NB_VILLES = 7;
-  var RANGS_COMPARES = 4;       // écart mesuré aux rangs 1 à 4
-  var SEUIL_ECART = 2;          // alerte principale si l'écart dépasse 2
+  var RANGS_COMPARES = 4;       // ancien D6 : écart aux rangs 1 à 4 (champ ecartRang, information seulement)
+  var SEUIL_ECART = 2;          // alerte si l'écart dépasse 2 à un rang de 1 à 7 (docs/16 b)
   var SEUIL_CINQ_CONTRE_DEUX = 5;
   var SEUIL_APPARITION_LOINTAINE = 7;
   var SEUIL_S = 4;                 // score S à partir duquel le plateau est « à surveiller »
@@ -142,25 +143,29 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function distancesJoueur(g, joueur) { return parcours(g, g.apparitions[joueur] || [], null); }
 
   /* ------------------------------------------------------------------ */
-  /* Équilibre (D6)                                                      */
+  /* Équilibre (critère de docs/16)                                       */
   /* ------------------------------------------------------------------ */
 
   function tri(t) { return t.slice().sort(function (a, b) { return a - b; }); }
   var estFini = function (x) { return x !== undefined && isFinite(x); };
 
   /**
-   * Analyse d'équilibre d'un document (D6).
+   * Analyse d'équilibre d'un document (critère de docs/16).
    * options : villesTraversables, jetons (voir construire), nbVilles (défaut 7), graphe (graphe déjà construit).
    * Renvoie :
    *  - villes : [{id, i, j}] ; D : {1: [distances triées], 2: [...]} (villes inaccessibles exclues) ;
-   *  - parRang : [{rang, d1, d2, ecart, compte}] (compte = rang pris en compte dans l'écart, rangs 1 à 4) ;
-   *  - ecartRang : plus grand |D1(k) - D2(k)| aux rangs 1 à 4, ou null si le calcul est impossible ;
+   *  - parRang : [{rang, d1, d2, ecart, compte}] (compte = rang pris en compte dans S et l'écart, rangs 1 à 7) ;
+   *  - ecartRang : plus grand |D1(k) - D2(k)| aux rangs 1 à 4 (ancien D6, information sans alerte), ou null ;
+   *  - S, ecartMax7 : somme et maximum des écarts aux rangs 1 à 7 (docs/16), null si un joueur a moins de
+   *    nbVilles distances (ville inaccessible ou manquante) ;
+   *  - cinqContreDeux : un joueur strictement plus proche de 5 villes ou plus (7 villes posées) ;
+   *  - premiereEgale : première ville à la même distance pour les deux joueurs (invariant d) ;
    *  - partage : {1, 2, egalite} (villes strictement plus proches de J1, de J2, à égalité) ;
    *  - tempo : {1: {3, 4, 5}, 2: {3, 4, 5}} (villes atteignables en au plus 3, 4, 5 pas) ;
    *  - premiereVille : {1, 2, ecart} (distance de la ville la plus proche, null si aucune) ;
    *  - inaccessibles : {1: [{i, j}], 2: [{i, j}]} ;
    *  - alertes : [{code, message}] ; lacunes : [texte] ; complet : booléen (7 villes, 2 apparitions par joueur,
-   *    toutes les tuiles posées) ; partiel : !complet.
+   *    toutes les tuiles posées avec un modèle présent dans la bibliothèque) ; partiel : !complet.
    * Ne lève pas d'exception sur un plateau incomplet.
    */
   function equilibre(doc, options) {
@@ -173,8 +178,11 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     // Ce qui manque
     var plateau = (doc && doc.plateau) || {};
     var attendues = M.cellulesActives(plateau.forme || { retires: [] }).length;
-    var posees = (plateau.tuiles || []).length;
-    if (posees < attendues) lacunes.push('Il manque ' + (attendues - posees) + ' tuile(s) sur ' + attendues + '.');
+    var tuilesPosees = Array.isArray(plateau.tuiles) ? plateau.tuiles.filter(Boolean) : [];
+    // une tuile dont le modèle est introuvable est ignorée par le graphe : elle ne compte pas comme posée
+    var introuvables = tuilesPosees.filter(function (t) { return !M.modeleParId(doc, t.modeleId); }).length;
+    if (tuilesPosees.length < attendues) lacunes.push('Il manque ' + (attendues - tuilesPosees.length) + ' tuile(s) sur ' + attendues + '.');
+    if (introuvables) lacunes.push(introuvables + ' tuile(s) posée(s) dont le modèle est introuvable dans la bibliothèque : ignorée(s).');
     if (villes.length !== nbVilles) {
       lacunes.push(villes.length < nbVilles
         ? 'Il manque ' + (nbVilles - villes.length) + ' ville(s) : ' + villes.length + ' posée(s) sur ' + nbVilles + '.'
@@ -202,20 +210,20 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var parRang = [], ecartRang = null, nbRangs = Math.max(D[1].length, D[2].length);
     for (var k = 0; k < nbRangs; k++) {
       var d1 = k < D[1].length ? D[1][k] : null, d2 = k < D[2].length ? D[2][k] : null;
-      parRang.push({ rang: k + 1, d1: d1, d2: d2, ecart: d1 !== null && d2 !== null ? Math.abs(d1 - d2) : null, compte: k < RANGS_COMPARES });
+      parRang.push({ rang: k + 1, d1: d1, d2: d2, ecart: d1 !== null && d2 !== null ? Math.abs(d1 - d2) : null, compte: k < nbVilles });
     }
     if (avecAppar) {
       for (var r = 0; r < RANGS_COMPARES; r++) {
         if (parRang[r] && parRang[r].ecart !== null) ecartRang = Math.max(ecartRang === null ? 0 : ecartRang, parRang[r].ecart);
       }
     }
-    if (avecAppar && villes.length >= RANGS_COMPARES && Math.min(D[1].length, D[2].length) < RANGS_COMPARES) {
-      lacunes.push('Moins de ' + RANGS_COMPARES + ' villes accessibles pour un joueur : l\'écart par rang est partiel.');
-    }
+    // Des villes inaccessibles ne sont pas une donnée manquante (tuiles, villes et apparitions sont là) :
+    // pas de lacune, l'alerte ville_inaccessible les signale et S vaut null.
 
-    // Avis docs/16 : écart étendu aux rangs 1 à 7 et score S = somme des écarts sur les rangs communs
+    // Avis docs/16 : écart étendu aux rangs 1 à 7 et score S = somme des écarts, seulement si chaque joueur
+    // a ses nbVilles distances (sinon une ville est inaccessible ou manquante : pas de score trompeur)
     var S = null, ecartMax7 = null;
-    if (avecAppar) {
+    if (avecAppar && Math.min(D[1].length, D[2].length) >= nbVilles) {
       parRang.forEach(function (x) {
         if (x.ecart === null) return;
         S = (S === null ? 0 : S) + x.ecart;
@@ -232,22 +240,21 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     [1, 2].forEach(function (p) { [3, 4, 5].forEach(function (n) { tempo[p][n] = D[p].filter(function (x) { return x <= n; }).length; }); });
     var premiereVille = { 1: D[1].length ? D[1][0] : null, 2: D[2].length ? D[2][0] : null, ecart: null };
     if (premiereVille[1] !== null && premiereVille[2] !== null) premiereVille.ecart = Math.abs(premiereVille[1] - premiereVille[2]);
+    var premiereEgale = premiereVille.ecart === 0;
+    var cinqContreDeux = villes.length === nbVilles && Math.max(partage[1], partage[2]) >= SEUIL_CINQ_CONTRE_DEUX;
 
     var villesA4 = { 1: D[1].filter(function (x) { return x <= 4; }).length, 2: D[2].filter(function (x) { return x <= 4; }).length, ecart: null };
     villesA4.ecart = Math.abs(villesA4[1] - villesA4[2]);
 
     // Alertes
     var alertes = [];
-    if (ecartRang !== null && ecartRang > SEUIL_ECART) {
-      alertes.push({ code: 'ecart_rang', message: 'Un rang de villes est à ' + ecartRang + ' pas d\'écart entre les deux joueurs (plus de ' + SEUIL_ECART + ').' });
-    }
     if (ecartMax7 !== null && ecartMax7 > SEUIL_ECART) {
       alertes.push({ code: 'ecart_rang_etendu', message: 'Un rang de villes (de 1 à 7) est à ' + ecartMax7 + ' pas d\'écart entre les deux joueurs (plus de ' + SEUIL_ECART + ').' });
     }
     if (premiereVille.ecart !== null && premiereVille.ecart !== 0) {
       alertes.push({ code: 'premiere_ville_inegale', message: 'La première ville est à ' + premiereVille[1] + ' pas du joueur 1 et à ' + premiereVille[2] + ' pas du joueur 2 (elle devrait être à la même distance).' });
     }
-    if (villes.length === nbVilles && Math.max(partage[1], partage[2]) >= SEUIL_CINQ_CONTRE_DEUX) {
+    if (cinqContreDeux) {
       var fort = partage[1] >= partage[2] ? 1 : 2;
       alertes.push({ code: 'cinq_contre_deux', message: 'Le joueur ' + fort + ' est plus proche de ' + partage[fort] + ' villes contre ' + partage[3 - fort] + ' pour l\'autre.' });
     }
@@ -271,6 +278,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return {
       villes: villes.map(function (v) { return { id: v.id, i: v.i, j: v.j }; }),
       D: D, parRang: parRang, ecartRang: ecartRang, S: S, ecartMax7: ecartMax7, aSurveiller: S !== null && S >= SEUIL_S, villesA4: villesA4, partage: partage, alertes: alertes, tempo: tempo,
+      cinqContreDeux: cinqContreDeux, premiereEgale: premiereEgale,
       premiereVille: premiereVille, inaccessibles: inaccessibles, lacunes: lacunes,
       complet: lacunes.length === 0, partiel: lacunes.length > 0,
       villesTraversables: g.villesTraversables
@@ -365,8 +373,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /**
    * Autoroutes de flanc : pour chaque joueur, distance de ses apparitions à la ligne de jonctions adverse
    * (j = 3 pour J1, j = 1 pour J2), dans le sous-graphe « flancs » (colonnes 0 et 3 + apparitions) et dans
-   * le sous-graphe « centre » (colonnes 1 et 2). Toutes les jonctions portent un jeton traversable
-   * (comme l'utilitaire de tests/catalogue.test.js). Renvoie [{flanc, centre}] pour J1 puis J2 (Infinity si inatteignable).
+   * le sous-graphe « centre » (colonnes 1 et 2). Toutes les jonctions portent un jeton 'capture', traversable
+   * avec l'option villesTraversables: true (mesure de tests/catalogue.test.js). Renvoie [{flanc, centre}] pour J1 puis J2 (Infinity si inatteignable).
    */
   function flancs(doc, options) {
     options = options || {};
@@ -391,6 +399,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     NB_VILLES: NB_VILLES,
     RANGS_COMPARES: RANGS_COMPARES,
     SEUIL_ECART: SEUIL_ECART,
+    SEUIL_CINQ_CONTRE_DEUX: SEUIL_CINQ_CONTRE_DEUX,
     SEUIL_S: SEUIL_S,
     construire: construire,
     distances: distances,

@@ -625,7 +625,8 @@ test('équilibre : valeurs exactes sur graphe synthétique (S, écart par rang, 
   assert.deepStrictEqual(cinq.partage, { 1: 5, 2: 2, egalite: 0 });
   assert.strictEqual(cinq.aSurveiller, true);
   assert.deepStrictEqual(cinq.premiereVille, { 1: 2, 2: 4, ecart: 2 });
-  for (const c of ['cinq_contre_deux', 'ecart_rang_etendu', 'ecart_rang', 'premiere_ville_inegale']) assert.ok(codes(cinq).includes(c), c);
+  for (const c of ['cinq_contre_deux', 'ecart_rang_etendu', 'premiere_ville_inegale']) assert.ok(codes(cinq).includes(c), c);
+  assert.ok(!codes(cinq).includes('ecart_rang'), 'alerte ecart_rang supprimée (docs/17, I2)');
 
   // écart > 2 seulement aux rangs 5 à 7 (doc 16 b) : alerte étendue, pas l'ancienne alerte des rangs 1 à 4
   const loin = GR.equilibre(VIDE(), { graphe: grapheDistances([[2, 2], [3, 3], [4, 4], [5, 5], [6, 9], [7, 10], [8, 11]]) });
@@ -1081,7 +1082,7 @@ test('contrôles : deux carrefours du même camp, alerte dédiée sans message d
 /* Incohérence éventuelle : un plateau généré en mode « carrefours variés » avec une paire autre que la paire par défaut
  * reçoit l'alerte manuelle « Paire de carrefours à risque » (taux typique > 0), alors que le générateur a vérifié l'équilibre
  * de ce plateau (docs/16 : « une autre paire seulement si la configuration n'a aucune alerte »). */
-test('générateur x contrôles : un plateau « carrefours variés » ne porte aucune alerte', { todo: 'BUG: (mineur) un plateau généré avec une paire de carrefours autre que (1,2)+(3,2) reçoit une alerte manuelle carrefours_paire (taux typique > 0 %), alors que le générateur a vérifié ce plateau (docs/16, carrefours)' }, () => {
+test('générateur x contrôles : un plateau « carrefours variés » ne porte aucune alerte', () => {
   let avecAlerte = null;
   for (const graine of GRAINES) {
     const r = plateau(graine, { paireCarrefours: 'varies' });
@@ -1097,21 +1098,21 @@ test.after(() => { try { fs.rmSync(TMP, { recursive: true, force: true }); } cat
 /* Défauts constatés (todo : le test décrit le comportement attendu)    */
 /* ================================================================== */
 
-test('rapport d\'équilibre : les rangs 5 à 7 comptent comme les rangs 1 à 4 (docs/16 b), pas de rang grisé ni de note « rangs 1 à 4 »', { todo: 'BUG: (mineur) PM.equilibre.rapport marque compte=false pour les rangs 5 à 7 (affichés grisés, classe pm-equilibre-rang-libre) et la note « Écart maximal aux rangs 1 à 4 » subsiste, alors que docs/16 b) étend l\'alerte aux 7 rangs' }, () => {
+test('rapport d\'équilibre : les rangs 5 à 7 comptent comme les rangs 1 à 4 (docs/16 b), pas de rang grisé ni de note « rangs 1 à 4 »', () => {
   const g = grapheDistances([[2, 2], [3, 3], [4, 4], [5, 5], [6, 9], [7, 10], [8, 11]]);
   const analyse = { graphe: g, resultat: GR.equilibre(VIDE(), { graphe: g }), goulets: { 1: GR.goulets(g, 1), 2: GR.goulets(g, 2) } };
   const r = PM.equilibre.rapport(analyse, null);
   assert.deepStrictEqual(r.rangs.map((x) => x.compte), [true, true, true, true, true, true, true]);
 });
 
-test('rapport d\'équilibre : un même écart n\'est pas annoncé deux fois (ecart_rang et ecart_rang_etendu)', { todo: 'BUG: (mineur) pour un écart > 2 aux rangs 1 à 4, la liste des alertes du rapport contient deux messages quasi identiques (ecart_rang puis ecart_rang_etendu)' }, () => {
+test('rapport d\'équilibre : un même écart n\'est pas annoncé deux fois (ecart_rang et ecart_rang_etendu)', () => {
   const g = grapheDistances([[2, 10], [3, 9], [4, 8], [5, 7], [5, 7], [7, 5], [8, 4]]);
   const analyse = { graphe: g, resultat: GR.equilibre(VIDE(), { graphe: g }), goulets: { 1: GR.goulets(g, 1), 2: GR.goulets(g, 2) } };
   const r = PM.equilibre.rapport(analyse, null);
   assert.ok(r.alertes.filter((t) => /pas d'écart/.test(t)).length <= 1, r.alertes.join(' / '));
 });
 
-test('équilibre : une tuile posée dont le modèle est introuvable rend le plateau incomplet', { todo: 'BUG: (mineur) GR.equilibre ignore la tuile mais déclare complet = true, sans lacune (le décompte des tuiles se fait sur plateau.tuiles.length)' }, () => {
+test('équilibre : une tuile posée dont le modèle est introuvable rend le plateau incomplet', () => {
   const doc = clone(plateau('graphe').doc);
   doc.plateau.tuiles[0].modeleId = 'fantome';
   const e = GR.equilibre(doc);

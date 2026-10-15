@@ -95,10 +95,12 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
   /**
    * Tuiles à imprimer. options : { portee = 'stock' | 'posees' }.
-   * Renvoie { tuiles: [{ modeleId, exemplaire, joueur, posee }], exclus: [{ id, nom }] }.
-   *  - 'stock' : chaque exemplaire de chaque modèle complet ; les tuiles posées d'abord ;
-   *  - 'posees' : seulement les tuiles posées sur le plateau.
-   * Les modèles incomplets sont exclus et listés dans `exclus`. Tri par identifiant (ordre naturel).
+   * Renvoie { tuiles: [{ modeleId, exemplaire, joueur, posee }], exclus: [{ id, nom, raison }] }.
+   *  - 'stock' : chaque exemplaire de chaque modèle complet ; les tuiles posées d'abord ; lève une Error
+   *    au-delà de PM.modele.PLAFOND_TUILES tuiles au total ;
+   *  - 'posees' : seulement les tuiles posées sur le plateau ; une tuile au modèle introuvable est listée
+   *    dans `exclus` (raison 'introuvable').
+   * Les modèles incomplets sont exclus et listés dans `exclus` (raison 'incomplet'). Tri par identifiant (ordre naturel).
    * Les tuiles d'apparition reçoivent leur joueur : celui de leur cellule si elles sont posées, puis
    * 2 exemplaires par joueur ; à défaut, alternance (au sein de chaque modèle d'abord).
    */
@@ -107,14 +109,23 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     var modeles = tab(doc && doc.modeles).filter(function (m) { return m && typeof m === 'object'; });
     var tuilesPosees = tab(doc && doc.plateau && doc.plateau.tuiles);
     var exclus = [], entrees = [];
+    var complets = modeles.filter(function (m) { return M.validerModele(m).complet; });
+    if (portee === 'stock') {
+      // plafond du stock (somme des exemplaires des modèles complets) : au-delà, l'export est refusé
+      var stockTotal = complets.reduce(function (s, m) { return s + M.exemplairesValides(m); }, 0);
+      if (stockTotal > M.PLAFOND_TUILES) {
+        throw new Error('Le stock compte ' + stockTotal + ' tuiles (modèles complets, selon leurs exemplaires) : l\'export en accepte ' +
+          M.PLAFOND_TUILES + ' au plus. Réduisez le nombre d\'exemplaires ou exportez seulement les tuiles posées.');
+      }
+    }
     modeles.slice().sort(function (a, b) { return compareId(a.id, b.id); }).forEach(function (m) {
-      if (!M.validerModele(m).complet) {
-        exclus.push({ id: String(m.id), nom: String(m.nom || m.id) });
+      if (complets.indexOf(m) < 0) {
+        exclus.push({ id: String(m.id), nom: String(m.nom || m.id), raison: 'incomplet' });
         return;
       }
       var posees = tuilesPosees.filter(function (t) { return t && t.modeleId === m.id; })
         .sort(function (a, b) { return (a.lig - b.lig) || (a.col - b.col); });
-      var total = portee === 'posees' ? posees.length : (Number.isInteger(m.exemplaires) && m.exemplaires > 0 ? m.exemplaires : 0);
+      var total = portee === 'posees' ? posees.length : M.exemplairesValides(m);
       for (var k = 0; k < total; k++) {
         var posee = k < posees.length;
         var joueur = null;
@@ -122,6 +133,15 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         entrees.push({ modeleId: m.id, exemplaire: k + 1, joueur: joueur, posee: posee, _app: modeleAApparition(m) });
       }
     });
+    if (portee === 'posees') {
+      // tuiles posées dont le modèle n'est plus dans la bibliothèque : non imprimables, signalées
+      var vus = {};
+      tuilesPosees.forEach(function (t) {
+        if (!t || M.modeleParId(doc, t.modeleId) || vus['#' + t.modeleId]) return;
+        vus['#' + t.modeleId] = true;
+        exclus.push({ id: String(t.modeleId), nom: String(t.modeleId), raison: 'introuvable' });
+      });
+    }
     // Joueurs des apparitions non posées : 2 par joueur, alternance au sein de chaque modèle.
     var compte = { 1: 0, 2: 0 }, parModele = {};
     entrees.forEach(function (e) {
@@ -248,7 +268,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     var liste = listeTuiles(doc, options).tuiles;
     var parPlanche = f.colonnes * f.lignes, nbPlanches = Math.ceil(liste.length / parPlanche);
     var exemplairesDe = {};
-    tab(doc && doc.modeles).forEach(function (m) { if (m) exemplairesDe[m.id] = m.exemplaires; });
+    tab(doc && doc.modeles).forEach(function (m) { if (m) exemplairesDe[m.id] = M.exemplairesValides(m); });
     var planches = [];
     for (var p = 0; p < nbPlanches; p++) {
       var planche = {
@@ -553,14 +573,15 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
           break;
         }
         case 'g': {
-          var s = 'q\n' + (a.transform ? matricesTransform(a.transform) : '');
+          var s = 'q\n' + (a.transform ? matricesTransform(a.transform) : ''), cm = null;
           if (a['clip-path']) {
-            var cm = /^url\(#([^)]+)\)$/.exec(a['clip-path']);
+            cm = /^url\(#([^)]+)\)$/.exec(a['clip-path']);
             if (!cm) throw new Error('clip-path non pris en charge : ' + a['clip-path']);
-            // Le clipPath est déclaré à l'intérieur du <g> : on le résout à sa fermeture, d'où le marqueur.
-            s += '%%CLIP:' + cm[1] + '%%\n';
           }
           flux.push(s.replace(/\n$/, ''));
+          // Le clipPath est déclaré à l'intérieur du <g> : on le résout à la fin. Un objet (et non un marqueur
+          // textuel) tient sa place dans le flux, pour qu'aucun texte imprimé ne puisse être pris pour lui.
+          if (cm) flux.push({ clip: cm[1] });
           break;
         }
         case 'clipPath': courantClip = a.id; break;
@@ -602,11 +623,12 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     }
     if (pile.length) throw new Error('SVG mal formé : balise <' + pile[pile.length - 1].nom + '> non fermée.');
     if (!dims) throw new Error('SVG sans balise <svg>.');
-    // Résolution des marqueurs de découpe (le clipPath suit l'ouverture du <g> dans le flux).
-    var brut = flux.join('\n').replace(/%%CLIP:([^%]+)%%/g, function (_, id) {
-      if (!clips[id]) throw new Error('clipPath introuvable : ' + id);
-      return clips[id];
-    });
+    // Résolution des découpes (le clipPath suit l'ouverture du <g> dans le flux) ; les textes ne sont jamais relus.
+    var brut = flux.map(function (x) {
+      if (typeof x === 'string') return x;
+      if (!Object.prototype.hasOwnProperty.call(clips, x.clip)) throw new Error('clipPath introuvable : ' + x.clip);
+      return clips[x.clip];
+    }).join('\n');
     return { largeur: dims.largeur, hauteur: dims.hauteur, flux: brut };
   }
 
@@ -811,11 +833,21 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   }
 
   var compteurDialogue = 0;
+  var urlApercu = null;          // URL d'objet de l'aperçu affiché (une seule à la fois)
+  var fermetureSuivie = false;   // écouteur « close » de #dialogue déjà posé
+
+  /** Libère l'URL de l'aperçu (fermeture de #dialogue, réouverture, nouvel aperçu). */
+  function libererApercu() {
+    if (urlApercu) { URL.revokeObjectURL(urlApercu); urlApercu = null; }
+  }
 
   /** Ouvre la boîte « Exporter pour impression » (PM.dialogue). `etat` fournit doc() et signaler(). */
   function ouvrir(etat) {
+    libererApercu();
     var racine = PM.dialogue.ouvrir('Exporter pour impression');
-    var numero = ++compteurDialogue, urlApercu = null;
+    var numero = ++compteurDialogue;
+    var dlg = document.getElementById('dialogue');
+    if (dlg && !fermetureSuivie) { dlg.addEventListener('close', libererApercu); fermetureSuivie = true; }
     var choix = { tuiles: true, portee: 'stock', format: 'A3', jetons: false, apercu: false, fichier: 'pdf', unParFeuille: false };
 
     function el(nom, classe, texte) {
@@ -895,17 +927,25 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       relire();
       etatFichier.textContent = '';
       try { sortie = preparerSorties(etat.doc(), choix); } catch (e) { sortie = null; avertissement.textContent = e.message; }
-      if (!sortie) { bouton.disabled = true; return; }
-      var noms = sortie.exclus.map(function (x) { return x.nom; });
-      avertissement.textContent = noms.length
-        ? 'Attention : ' + noms.length + ' modèle(s) incomplet(s) exclu(s) de l\'export : ' + noms.join(', ') + '.'
-        : '';
+      if (!sortie) {
+        // refus (plafond du stock, grille impossible) : la raison reste affichée, rien d'ancien n'est proposé
+        bouton.disabled = true; resume.textContent = '';
+        libererApercu(); image.removeAttribute('src'); image.hidden = true;
+        return;
+      }
+      var nomsDe = function (raison) {
+        return sortie.exclus.filter(function (x) { return x.raison === raison; }).map(function (x) { return x.nom; });
+      };
+      var incomplets = nomsDe('incomplet'), introuvables = nomsDe('introuvable'), phrases = [];
+      if (incomplets.length) phrases.push('Attention : ' + incomplets.length + ' modèle(s) incomplet(s) exclu(s) de l\'export : ' + incomplets.join(', ') + '.');
+      if (introuvables.length) phrases.push('Attention : ' + introuvables.length + ' tuile(s) posée(s) au modèle introuvable, non exportée(s) : ' + introuvables.join(', ') + '.');
+      avertissement.textContent = phrases.join(' ');
       var n = sortie.feuilles.length;
       resume.textContent = n
         ? n + ' feuille(s) : ' + sortie.nbTuiles + ' tuile(s)' + (choix.jetons ? ', jetons' : '') + (choix.apercu ? ', aperçu' : '') + '.'
         : 'Rien à exporter : cochez un contenu' + (choix.tuiles ? ' ou posez des tuiles' : '') + '.';
       bouton.disabled = n === 0;
-      if (urlApercu) { URL.revokeObjectURL(urlApercu); urlApercu = null; }
+      libererApercu();
       if (n) {
         urlApercu = URL.createObjectURL(new Blob([sortie.feuilles[0].svg], { type: 'image/svg+xml' }));
         image.src = urlApercu; image.hidden = false;

@@ -128,14 +128,14 @@ test('robustesse : ids inconnus et coordonnées hors plateau avec un document va
   assert.deepEqual(mauvais, []);
 });
 
-test('robustesse : objets de cellule nuls passés à testerDeplacement / deplacerTuile', { todo: 'BUG: TypeError natif si `de` ou `vers` est null/undefined (message non affichable)' }, () => {
+test('robustesse : objets de cellule nuls passés à testerDeplacement / deplacerTuile', () => {
   const d = plateauComplet();
   assert.equal(exceptionNonPrevue(() => A.testerDeplacement(d, null, { col: 0, lig: 0 })), null);
   assert.equal(exceptionNonPrevue(() => A.testerDeplacement(d, { col: 1, lig: 1 }, null)), null);
   assert.equal(exceptionNonPrevue(() => A.deplacerTuile(d, { col: 1, lig: 1 }, undefined)), null);
 });
 
-test('robustesse : documents malformés (plateau absent, tuiles à null) ne plantent pas les calculs d\'affichage', { todo: 'BUG: calculer / svgPlateau / vignettesBibliotheque lèvent un TypeError natif sur un document sans plateau ou sans modèles' }, () => {
+test('robustesse : documents malformés (plateau absent, tuiles à null) ne plantent pas les calculs d\'affichage', () => {
   const docs = [{}, { modeles: [], plateau: null }, { modeles: null, plateau: { forme: { retires: [] }, tuiles: [], jetons: [] } }];
   const mauvais = [];
   for (const d of docs) {

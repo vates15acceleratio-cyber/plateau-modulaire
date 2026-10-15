@@ -784,3 +784,22 @@ test('jonctionDuCoin', () => {
   assert.deepStrictEqual(M.jonctionDuCoin(1, 1, 0), { i: 1, j: 1 });
   assert.deepStrictEqual(M.jonctionDuCoin(1, 1, 2), { i: 2, j: 2 });
 });
+
+test('campJonction : rangée nord = 1, rangée sud = 2, milieu ou valeur invalide = null, sans exception', () => {
+  for (let i = 1; i <= 3; i++) {
+    assert.strictEqual(M.campJonction(i, 1), 1);
+    assert.strictEqual(M.campJonction(i, G.GRILLE.lignes - 1), 2);
+    assert.strictEqual(M.campJonction(i, 2), null);
+  }
+  for (const j of [0, 4, -1, 1.5, '1', null, undefined, NaN, {}]) assert.strictEqual(M.campJonction(1, j), null, String(j));
+  assert.doesNotThrow(() => M.campJonction());
+});
+
+test('exemplairesValides : entier ≥ 0 lu tel quel, toute autre valeur vaut 0', () => {
+  assert.strictEqual(M.exemplairesValides({ exemplaires: 3 }), 3);
+  assert.strictEqual(M.exemplairesValides({ exemplaires: 0 }), 0);
+  for (const n of [-1, 2.5, '2', null, undefined, NaN, Infinity]) assert.strictEqual(M.exemplairesValides({ exemplaires: n }), 0, String(n));
+  assert.strictEqual(M.exemplairesValides(null), 0);
+  assert.strictEqual(M.exemplairesValides(undefined), 0);
+  assert.strictEqual(M.PLAFOND_TUILES, 200);
+});

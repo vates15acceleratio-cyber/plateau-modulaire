@@ -10,9 +10,10 @@
  *  - tuiles tirées dans la bibliothèque du document (modèles complets, selon leurs exemplaires),
  *    selon le rôle des cellules ; rotation aléatoire des centrales, rotation déduite des autres ;
  *  - 7 villes et 2 carrefours, paire (1,2)+(3,2) par défaut ;
- *  - élimination (D7 n° 1 et doc 16) : validerPlateau avec erreur, graphe non connexe (villes et
- *    apparitions hors de la composante principale), deux villes à moins de ECART_MIN_CAPTURES pas (D7),
- *    « 5 contre 2 » mesuré en villes NON traversables,
+ *  - stock plafonné à PM.modele.PLAFOND_TUILES tuiles (somme des exemplaires des modèles complets) ;
+ *  - élimination (D7 n° 1 et doc 16) : validerPlateau avec erreur, cases de déplacement hors de 45 à 55 (D7),
+ *    graphe non connexe (villes et apparitions hors de la composante principale), deux villes à moins de
+ *    ECART_MIN_CAPTURES pas (D7), ville inaccessible, « 5 contre 2 » mesuré en villes NON traversables,
  *    écart > 2 à un rang de 1 à 7, première ville à des distances différentes pour les deux joueurs ;
  *  - classement par S = Σ |D1(k) − D2(k)| sur les 7 rangs, puis pénalité secondaire (raccords morts
  *    au-delà de 2, ports morts, apparitions à moins de 2 sorties : D7 n° 2 et 3) ;
@@ -32,9 +33,11 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
 
   var M = PM.modele, GR = PM.graphe;
 
-  var NB_VILLES = 7;
-  var SEUIL_ECART = 2;            // écart toléré à chaque rang (doc 16, b)
-  var SEUIL_CINQ = 5;             // « 5 contre 2 » (doc 16, a)
+  // Constantes du critère d'équilibre : celles de PM.graphe (une seule définition, docs/16)
+  var NB_VILLES = GR.NB_VILLES;
+  var SEUIL_ECART = GR.SEUIL_ECART;  // écart toléré à chaque rang (doc 16, b)
+  var NB_CARREFOURS = 2;
+  var CASES_MIN = 45, CASES_MAX = 55; // garde-fou D7 : cases de déplacement (carrefours compris)
   var CANDIDATS_DEFAUT = 200;
   var FACTEUR_ESSAIS = 5;         // essais maximaux = candidats × 5 (D7 n° 6)
   var TOLERANCE_DEFAUT = 1;       // bons candidats : S ≤ Smin + tolérance (1 : garde de l'aléa, D7 n° 4 ; mesure 8)
@@ -92,8 +95,11 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   var JONCTIONS = [];
   for (var jj = 1; jj <= 3; jj++) for (var ii = 1; ii <= 3; ii++) JONCTIONS.push({ i: ii, j: jj });
 
-  /** Même camp = deux jonctions sur la rangée nord (j = 1) ou sur la rangée sud (j = 3) (règle de controles.js). */
-  function memeCamp(a, b) { return (a.j === 1 && b.j === 1) || (a.j === 3 && b.j === 3); }
+  /** Même camp = deux jonctions dans le même camp de joueur (règle unique PM.modele.campJonction). */
+  function memeCamp(a, b) {
+    var camp = M.campJonction(a.i, a.j);
+    return camp !== null && camp === M.campJonction(b.i, b.j);
+  }
 
   function memeJonction(a, b) { return a.i === b.i && a.j === b.j; }
 
@@ -122,29 +128,34 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   /* ------------------------------------------------------------------ */
 
   /**
-   * Critère d'équilibre du doc 16 sur un résultat de PM.graphe.equilibre :
-   * { S, ecartMax (rangs 1 à 7), premiereEgale, partage }.
+   * Adaptateur du critère d'équilibre du doc 16 : lit les champs calculés par PM.graphe.equilibre
+   * (aucun second calcul). Renvoie { S, ecartMax (rangs 1 à 7), premiereEgale, cinqContreDeux,
+   * villeInaccessible, partage, D }. S et ecartMax valent null si une ville est inaccessible.
    */
   function critere(e) {
-    var D1 = e.D[1], D2 = e.D[2], n = Math.max(D1.length, D2.length), S = 0, ecartMax = 0;
-    for (var k = 0; k < n; k++) {
-      var d1 = k < D1.length ? D1[k] : null, d2 = k < D2.length ? D2[k] : null;
-      if (d1 === null || d2 === null) { S = Infinity; ecartMax = Infinity; break; }
-      var ec = Math.abs(d1 - d2);
-      S += ec;
-      if (ec > ecartMax) ecartMax = ec;
-    }
     return {
-      S: S, ecartMax: ecartMax,
-      premiereEgale: D1.length > 0 && D2.length > 0 && D1[0] === D2[0],
+      S: e.S, ecartMax: e.ecartMax7,
+      premiereEgale: e.premiereEgale === true,
+      cinqContreDeux: e.cinqContreDeux === true,
+      villeInaccessible: e.S === null,
       partage: { 1: e.partage[1], 2: e.partage[2], egalite: e.partage.egalite },
-      D: { 1: D1.slice(), 2: D2.slice() }
+      D: { 1: e.D[1].slice(), 2: e.D[2].slice() }
     };
   }
 
-  /** « 5 contre 2 » : un joueur strictement plus proche de 5 villes ou plus (7 villes posées). */
-  function cinqContreDeux(e) {
-    return e.villes.length === NB_VILLES && Math.max(e.partage[1], e.partage[2]) >= SEUIL_CINQ;
+  /** Critère sans alerte : S mesurable, écart ≤ 2 aux 7 rangs, première ville égale (null n'est jamais accepté). */
+  function sansAlerte(c) {
+    return c.S !== null && c.ecartMax !== null && c.ecartMax <= SEUIL_ECART && c.premiereEgale;
+  }
+
+  /** Cases de déplacement d'un candidat (tuiles + carrefours), comme le compteur de PM.controles. */
+  function casesDeplacement(doc) {
+    var n = NB_CARREFOURS;
+    doc.plateau.tuiles.forEach(function (t) {
+      var m = M.modeleParId(doc, t.modeleId);
+      (m && Array.isArray(m.cases) ? m.cases : []).forEach(function (c) { if (c && c.type === 'deplacement') n++; });
+    });
+    return n;
   }
 
   /** Graphe connexe et villes + apparitions dans une même composante (parcours en villes traversables). */
@@ -187,16 +198,17 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     var eT = (traversables || deuxModes) ? GR.equilibre(docCandidat, { graphe: gT }) : null;
     res.critN = critere(eN);
     res.critT = eT ? critere(eT) : null;
-    res.cinqN = cinqContreDeux(eN);
-    res.cinqT = eT ? cinqContreDeux(eT) : false;
+    res.cinqN = res.critN.cinqContreDeux;
+    res.cinqT = eT ? res.critT.cinqContreDeux : false;
     res.crit = traversables ? res.critT : res.critN;
     // sorties de chaque case d'apparition (D7 n° 3)
     res.sortiesMin = Infinity;
     [1, 2].forEach(function (pj) {
       gT.apparitions[pj].forEach(function (id) { res.sortiesMin = Math.min(res.sortiesMin, gT.voisins.get(id).size); });
     });
-    function sansAlerte(c) { return c.ecartMax <= SEUIL_ECART && c.premiereEgale; }
-    if (res.cinqN || (traversables && res.cinqT)) res.cause = 'cinq_contre_deux';
+    // ville inaccessible (S non mesurable) testée avant l'écart : null n'est jamais comparé à un seuil
+    if (res.critN.villeInaccessible || res.crit.villeInaccessible) res.cause = 'ville_inaccessible';
+    else if (res.cinqN || (traversables && res.cinqT)) res.cause = 'cinq_contre_deux';
     else if (res.crit.ecartMax > SEUIL_ECART) res.cause = 'ecart';
     else if (!res.crit.premiereEgale) res.cause = 'premiere_ville';
     else if (deuxModes && (res.cinqT || !sansAlerte(res.critT) || !sansAlerte(res.critN))) res.cause = 'deux_modes';
@@ -213,7 +225,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     var stock = { centrale: [], coin: [], bord: [], apparition: [] };
     (Array.isArray(doc.modeles) ? doc.modeles : []).forEach(function (m) {
       if (!m || !stock[m.role] || !M.validerModele(m).complet) return;
-      var n = typeof m.exemplaires === 'number' && isFinite(m.exemplaires) ? Math.max(0, Math.floor(m.exemplaires)) : 0;
+      var n = M.exemplairesValides(m);
       for (var k = 0; k < n; k++) stock[m.role].push(m.id);
     });
     return stock;
@@ -252,7 +264,9 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     ecart_villes: 'villes trop proches',
     cinq_contre_deux: '« 5 contre 2 »',
     ecart: 'écart de plus de 2 pas à un rang',
-    premiere_ville: 'première ville à des distances différentes'
+    premiere_ville: 'première ville à des distances différentes',
+    ville_inaccessible: 'ville inaccessible',
+    cases_deplacement: 'cases de déplacement hors de ' + CASES_MIN + ' à ' + CASES_MAX
   };
 
   /**
@@ -276,7 +290,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     var tolerance = typeof options.tolerance === 'number' && options.tolerance >= 0 ? options.tolerance : TOLERANCE_DEFAUT;
     var rng = mulberry32(hacher(graine));
     var rapport = [];
-    var rejets = { plateau_invalide: 0, connexite: 0, ecart_villes: 0, cinq_contre_deux: 0, ecart: 0, premiere_ville: 0 };
+    var rejets = { plateau_invalide: 0, cases_deplacement: 0, connexite: 0, ecart_villes: 0, ville_inaccessible: 0, cinq_contre_deux: 0, ecart: 0, premiere_ville: 0 };
 
     function echec(raison, essais) {
       return { ok: false, doc: null, graine: graine, essais: essais || 0, candidats: 0, score: null, paire: null, rapport: rapport, raison: raison, rejets: rejets };
@@ -291,8 +305,13 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       rapport.push('La forme réduite du plateau est remplacée par le 4×4 complet (le générateur ne travaille que sur le 4×4 complet).');
     }
 
-    // Bibliothèque suffisante ?
+    // Stock plafonné (somme des exemplaires des modèles complets), puis bibliothèque suffisante ?
     var stock = stockParRole(doc), besoins = besoinsForme(forme), manques = [];
+    var total = M.ROLES.reduce(function (s, r) { return s + stock[r].length; }, 0);
+    if (total > M.PLAFOND_TUILES) {
+      return echec('La bibliothèque compte ' + total + ' tuiles (modèles complets, selon leurs exemplaires) : le générateur en accepte ' +
+        M.PLAFOND_TUILES + ' au plus. Réduisez le nombre d\'exemplaires.');
+    }
     M.ROLES.forEach(function (r) {
       if (stock[r].length < besoins[r]) {
         manques.push((besoins[r] - stock[r].length) + ' ' + LIBELLES_ROLE[r] + ' (' + stock[r].length + ' disponible(s), ' + besoins[r] + ' nécessaire(s))');
@@ -312,6 +331,8 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       var cand = { modeles: modeles, plateau: { forme: base.forme, tuiles: tuiles, jetons: jetonsPour(PAIRE_DEFAUT) } };
       var v = M.validerPlateau(cand);
       if (v.erreurs.length) { rejets.plateau_invalide++; continue; }
+      var nbCases = casesDeplacement(cand);
+      if (nbCases < CASES_MIN || nbCases > CASES_MAX) { rejets.cases_deplacement++; continue; } // garde-fou D7
       var ev = evaluer(cand, PAIRE_DEFAUT, traversables, false);
       if (!ev.ok) { rejets[ev.cause]++; continue; }
       var raccords = M.raccordsMorts(cand).filter(function (r) { return r.raison !== 'absent'; }).length;
@@ -347,7 +368,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       PAIRES.forEach(function (pp) {
         var e2 = memeJonction(pp[0], PAIRE_DEFAUT[0]) && memeJonction(pp[1], PAIRE_DEFAUT[1]) ? refDefaut : evaluer(docChoisi, pp, traversables, true);
         // la paire par défaut reste toujours permise (elle a déjà passé l'élimination du mode choisi)
-        if (pp === PAIRE_DEFAUT || (e2.ok && refDefaut.crit && e2.crit.S <= refDefaut.crit.S)) options2.push({ paire: pp, ev: pp === PAIRE_DEFAUT ? choisi.ev : e2 });
+        if (pp === PAIRE_DEFAUT || (e2.ok && refDefaut.crit && refDefaut.crit.S !== null && e2.crit.S !== null && e2.crit.S <= refDefaut.crit.S)) options2.push({ paire: pp, ev: pp === PAIRE_DEFAUT ? choisi.ev : e2 });
       });
       if (options2.length) {
         pairesPermises = options2.map(function (x) { return clePaire(x.paire); });
@@ -502,10 +523,25 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     racine.appendChild(zone);
 
     btnGenerer.addEventListener('click', function () {
+      if (btnGenerer.disabled) return;
       if (!champ.value.trim()) champ.value = nouvelleGraine();
-      resultat = generer(etat.doc(), {
-        graine: champ.value, paireCarrefours: rVaries.checked ? 'varies' : 'defaut', villesTraversables: cbTrav.checked
-      });
+      var options = { graine: champ.value, paireCarrefours: rVaries.checked ? 'varies' : 'defaut', villesTraversables: cbTrav.checked };
+      // Calcul synchrone : le bouton est désactivé et annonce la génération, puis le calcul part au tour suivant
+      // pour que le navigateur affiche cet état avant d'être occupé.
+      btnGenerer.disabled = true;
+      btnAppliquer.disabled = true;
+      btnGenerer.textContent = 'Génération…';
+      setTimeout(function () {
+        try { afficher(generer(etat.doc(), options)); } finally {
+          btnGenerer.disabled = false;
+          btnGenerer.textContent = 'Générer';
+        }
+      }, 0);
+    });
+
+    /** Affiche le résultat d'une génération dans la zone de résultat. */
+    function afficher(r) {
+      resultat = r;
       champ.value = resultat.graine;
       while (zone.firstChild) zone.removeChild(zone.firstChild);
       if (!resultat.ok) {
@@ -520,7 +556,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       resultat.rapport.forEach(function (t) { liste.appendChild(el(d, 'li', null, t)); });
       zone.appendChild(liste);
       btnAppliquer.disabled = false;
-    });
+    }
 
     btnAppliquer.addEventListener('click', function () {
       if (!resultat || !resultat.ok) return;
