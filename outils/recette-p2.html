@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recette de l'export, du rapport d'équilibre et du générateur (navigateur)</title>
+  <!-- Même coquille que index.html (boîte de dialogue commune comprise). Paramètre d'adresse « #vue=export | rapport | generateur » :
+       laisse la boîte correspondante ouverte à la fin du parcours (captures d écran) et masque le cadre de rapport.
+       Edge sans fenêtre : utiliser --virtual-time-budget=300000 (le rendu PNG A3 consomme du temps virtuel ; en dessous de 150000 le rapport est tronqué). -->
+  <link rel="stylesheet" href="../styles/base.css">
+  <link rel="stylesheet" href="../styles/editeur-tuile.css">
+  <link rel="stylesheet" href="../styles/assemblage.css">
+  <link rel="stylesheet" href="../styles/controles.css">
+  <link rel="stylesheet" href="../styles/export.css">
+  <link rel="stylesheet" href="../styles/equilibre.css">
+  <link rel="stylesheet" href="../styles/generateur.css">
+  <style>
+    #recette { position: fixed; left: 0; bottom: 0; width: 46vw; max-height: 40vh; overflow: auto; background: #fffbe6; border: 1px solid #999; font: 11px/1.3 monospace; z-index: 2147483647; pointer-events: none; padding: 4px; }
+    #erreurs { color: #c0261a; white-space: pre-wrap; }
+    #rapport { white-space: pre-wrap; margin: 0; }
+    body.vue #recette { display: none; }
+  </style>
+</head>
+<body>
+  <header id="barre" class="pm-barre">
+    <strong class="pm-titre">Plateau modulaire</strong>
+    <nav class="pm-onglets" role="tablist">
+      <button type="button" role="tab" data-onglet="plateau">Plateau</button>
+      <button type="button" role="tab" data-onglet="tuiles">Tuiles</button>
+    </nav>
+    <div class="pm-actions">
+      <button type="button" id="btn-annuler" title="Annuler (Ctrl+Z)">↶ Annuler</button>
+      <button type="button" id="btn-retablir" title="Rétablir (Ctrl+Y)">Rétablir ↷</button>
+      <button type="button" id="btn-ouvrir" title="Ouvrir un fichier JSON">Ouvrir</button>
+      <button type="button" id="btn-enregistrer" title="Enregistrer en JSON (Ctrl+S)">Enregistrer</button>
+      <button type="button" id="btn-exporter" title="Exporter pour impression" disabled>Exporter</button>
+    </div>
+    <span id="pastille-alertes" class="pm-pastille" hidden></span>
+  </header>
+  <main class="pm-principal">
+    <aside id="bibliotheque" class="pm-colonne-gauche" aria-label="Bibliothèque de tuiles"></aside>
+    <section id="ecran-plateau" class="pm-ecran" data-ecran="plateau">
+      <div id="assemblage" class="pm-zone-centrale"></div>
+      <aside id="controles" class="pm-colonne-droite" aria-label="Compteurs et alertes"></aside>
+    </section>
+    <section id="ecran-tuiles" class="pm-ecran" data-ecran="tuiles" hidden>
+      <div id="editeur" class="pm-zone-editeur"></div>
+    </section>
+  </main>
+  <dialog id="dialogue" class="pm-dialogue" aria-labelledby="dialogue-titre">
+    <header class="pm-dialogue-entete"><h2 id="dialogue-titre"></h2><button type="button" id="dialogue-fermer" aria-label="Fermer">✕</button></header>
+    <div id="dialogue-contenu" class="pm-dialogue-contenu"></div>
+  </dialog>
+  <footer id="barre-etat" class="pm-barre-etat" role="status" aria-live="polite"></footer>
+
+  <div id="recette"><div id="erreurs"></div><pre id="rapport"></pre></div>
+
+  <script>
+    // Capture des erreurs JavaScript ; la sauvegarde automatique de l'utilisateur est mise de côté AVANT le chargement
+    // de l'application (app.js la lit au démarrage), puis remise en place à la fin du parcours et à la fermeture.
+    var PM_P2 = { cleUtil: 'plateau-modulaire:autosave', copieUtil: null, mise: false };
+    (function () {
+      function noter(t) { var e = document.getElementById('erreurs'); if (e) e.textContent += 'ERREUR JS : ' + t + '\n'; }
+      window.onerror = function (msg, src, ligne) { noter(msg + ' (' + (src || '').split('/').pop() + ':' + ligne + ')'); };
+      window.addEventListener('unhandledrejection', function (ev) { noter('promesse rejetée : ' + (ev.reason && ev.reason.message || ev.reason)); });
+      var ce = console.error;
+      console.error = function () { noter('console.error : ' + Array.prototype.map.call(arguments, function (a) { return a && a.message ? a.message : String(a); }).join(' ')); ce.apply(console, arguments); };
+      PM_P2.remettre = function () {
+        try { if (PM_P2.copieUtil !== null) localStorage.setItem(PM_P2.cleUtil, PM_P2.copieUtil); else localStorage.removeItem(PM_P2.cleUtil); } catch (e) { /* rien */ }
+      };
+      try {
+        PM_P2.copieUtil = localStorage.getItem(PM_P2.cleUtil);
+        localStorage.removeItem(PM_P2.cleUtil);
+        PM_P2.mise = true;
+        window.addEventListener('pagehide', function () { PM_P2.remettre(); });
+      } catch (e) { noter('localStorage inaccessible : ' + e.message); }
+      if (/vue=/.test(location.hash)) document.addEventListener('DOMContentLoaded', function () { document.body.classList.add('vue'); });
+    })();
+  </script>
+  <script src="../src/geometrie.js"></script>
+  <script src="../src/modele.js"></script>
+  <script src="../src/catalogue.js"></script>
+  <script src="../src/rendu.js"></script>
+  <script src="../src/etat.js"></script>
+  <script src="../src/sauvegarde.js"></script>
+  <script src="../src/graphe.js"></script>
+  <script src="../src/equilibre.js"></script>
+  <script src="../src/generateur.js"></script>
+  <script src="../src/export.js"></script>
+  <script src="../src/controles.js"></script>
+  <script src="../src/bibliotheque.js"></script>
+  <script src="../src/assemblage.js"></script>
+  <script src="../src/editeur-tuile.js"></script>
+  <script src="../src/app.js"></script>
+  <script>
+  window.addEventListener('load', function () {
+    var M = PM.modele, GR = PM.graphe, GEN = PM.generateur, E = PM.exportation;
+    var etat = PM.app && PM.app.etat;
+    // enregistré APRÈS celui d'app.js (qui écrit l'autosave en attente à la fermeture) : la remise en place passe en dernier
+    window.addEventListener('pagehide', function () { PM_P2.remettre(); });
+    var rapportEl = document.getElementById('rapport');
+    var nOk = 0, nEchec = 0;
+    function $(id) { return document.getElementById(id); }
+    function ctrl(nom, cond, detail) {
+      if (cond) { nOk++; rapportEl.textContent += 'OK     ' + nom + '\n'; }
+      else { nEchec++; rapportEl.textContent += 'ÉCHEC  ' + nom + (detail !== undefined ? '  [' + detail + ']' : '') + '\n'; }
+    }
+    function titre(t) { rapportEl.textContent += '--- ' + t + '\n'; }
+    function J(o) { return JSON.stringify(o); }
+    function canon(o) {
+      if (Array.isArray(o)) return o.map(canon);
+      if (o && typeof o === 'object') { var r = {}; Object.keys(o).sort().forEach(function (k) { r[k] = canon(o[k]); }); return r; }
+      return o;
+    }
+    function CJ(o) { return J(canon(o)); }
+    function docJ() { return CJ(etat.doc()); }
+    function attendre(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function clone(o) { return JSON.parse(JSON.stringify(o)); }
+    function touche(key, opts) {
+      document.body.dispatchEvent(new KeyboardEvent('keydown', Object.assign({ key: key, bubbles: true, cancelable: true }, opts || {})));
+    }
+    function ctrlZ() { touche('z', { ctrlKey: true }); }
+    function ctrlY() { touche('y', { ctrlKey: true }); }
+    function reset(doc) {
+      PM.dialogue.fermer();
+      etat.remplacer(doc || PM.catalogue.nouveauDocument());
+      etat.majUi({ onglet: 'plateau', modeleSelectionne: null, surbrillance: null });
+      etat.signaler('', 'info');
+    }
+    function dialogueOuvert() { return $('dialogue').open === true; }
+    function contenu() { return $('dialogue-contenu'); }
+    function texteDialogue() { return contenu().textContent; }
+    function boutonParTexte(racine, texte) {
+      var bs = racine.querySelectorAll('button');
+      for (var i = 0; i < bs.length; i++) if (bs[i].textContent.trim() === texte) return bs[i];
+      return null;
+    }
+    function cliquer(el) { el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); }
+    function changer(input, coche) { input.checked = coche; input.dispatchEvent(new Event('change', { bubbles: true })); }
+    function radio(valeur, nom) { return contenu().querySelector('input[type=radio][name$="-' + nom + '"][value="' + valeur + '"]'); }
+    function caseA(valeur) { return contenu().querySelector('input[type=checkbox][value="' + valeur + '"]'); }
+    var JONCTIONS = [];
+    for (var jj = 1; jj <= 3; jj++) for (var ii = 1; ii <= 3; ii++) JONCTIONS.push({ i: ii, j: jj });
+    function jetonsPaire(a, b) {
+      var r = JONCTIONS.filter(function (x) { return !(x.i === a.i && x.j === a.j) && !(x.i === b.i && x.j === b.j); })
+        .map(function (x) { return { i: x.i, j: x.j, type: 'capture' }; });
+      return r.concat([{ i: a.i, j: a.j, type: 'carrefour' }, { i: b.i, j: b.j, type: 'carrefour' }]);
+    }
+    function charger(src) {
+      return new Promise(function (res, rej) { var im = new Image(); im.onload = function () { res(im); }; im.onerror = function () { rej(new Error('image illisible')); }; im.src = src; });
+    }
+    // attend (temps réel) qu'une condition soit vraie, au plus `max` ms
+    function jusqua(cond, max) {
+      var debut = Date.now();
+      return new Promise(function (res) { (function boucle() { if (cond() || Date.now() - debut > max) res(); else setTimeout(boucle, 100); })(); });
+    }
+    function octets(blob) { return blob.arrayBuffer().then(function (b) { return new Uint8Array(b); }); }
+    function u32(t, o) { return ((t[o] << 24) | (t[o + 1] << 16) | (t[o + 2] << 8) | t[o + 3]) >>> 0; }
+
+    // Interception des téléchargements : on garde le nom et le contenu, sans écrire de fichier.
+    var telechargements = [];
+    var clickOrigine = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function () {
+      if (this.hasAttribute('download')) {
+        var nom = this.getAttribute('download'), href = this.href;
+        telechargements.push({ nom: nom, promesse: fetch(href).then(function (r) { return r.blob(); }) });
+        return;
+      }
+      return clickOrigine.apply(this, arguments);
+    };
+
+    // Plateaux utiles
+    var plateauAlea = GEN.generer(PM.catalogue.nouveauDocument(), { graine: 'recette-p2', candidats: 60 });
+    // Plateau complet avec « 5 contre 2 » (villes non traversables) : jetons posés à la main sur des plateaux générés.
+    var cache5c2 = undefined;
+    function chercher5c2() {
+      if (cache5c2 !== undefined) return cache5c2;
+      cache5c2 = null;
+      ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8'].forEach(function (graine) {
+        if (cache5c2) return;
+        var base = GEN.generer(PM.catalogue.nouveauDocument(), { graine: graine, candidats: 60 });
+        for (var k = 0; k < JONCTIONS.length && !cache5c2; k++) for (var l = k + 1; l < JONCTIONS.length && !cache5c2; l++) {
+          var a = JONCTIONS[k], b = JONCTIONS[l];
+          if (a.j === b.j && a.j !== 2) continue;
+          var d = clone(base.doc); d.plateau.jetons = jetonsPaire(a, b);
+          var eq = GR.equilibre(d);
+          if (eq.alertes.some(function (x) { return x.code === 'cinq_contre_deux'; })) cache5c2 = { doc: d, paire: [a, b], eq: eq };
+        }
+      });
+      return cache5c2;
+    }
+    function libelles() { return [].map.call($('controles').querySelectorAll('.pm-controles-sommaire-libelle'), function (x) { return x.textContent; }); }
+
+    function s0_chargement() {
+      titre('0. Chargement');
+      ctrl('application démarrée', !!etat);
+      ctrl('bouton Exporter actif', $('btn-exporter') && !$('btn-exporter').disabled);
+      var bs = $('controles').querySelectorAll('.pm-controles-avenir-bouton');
+      var noms = [].map.call(bs, function (b) { return b.textContent + (b.disabled ? ' (inactif)' : ''); });
+      ctrl('boutons « Rapport d\'équilibre » et « Plateau aléatoire » actifs', noms.length === 2 && noms.join('|') === 'Rapport d\'équilibre|Plateau aléatoire', noms.join('|'));
+      ctrl('boîte de dialogue commune présente et fermée', !!$('dialogue') && !dialogueOuvert());
+      ctrl('modules chargés', !!(PM.graphe && PM.equilibre && PM.generateur && PM.exportation));
+      ctrl('sauvegarde automatique de l\'utilisateur mise de côté', PM_P2.mise === true);
+    }
+
+    function s1_export() {
+      titre('1. Export : boîte, aperçu, options');
+      reset();
+      var docInitial = docJ();
+      cliquer($('btn-exporter'));
+      ctrl('boîte ouverte, titre « Exporter pour impression »', dialogueOuvert() && $('dialogue-titre').textContent === 'Exporter pour impression');
+      ctrl('formulaire rempli (.pm-export)', !!contenu().querySelector('.pm-export .pm-export-formulaire'));
+      var resume = contenu().querySelector('.pm-export-resume');
+      ctrl('résumé : 4 feuilles, 20 tuiles (catalogue, A3)', /4 feuille\(s\) : 20 tuile\(s\)/.test(resume.textContent), resume.textContent);
+      ctrl('aucun avertissement avec le catalogue', contenu().querySelector('.pm-export-avertissement').textContent === '');
+      var img = contenu().querySelector('img.pm-export-apercu');
+      ctrl('aperçu : image avec adresse blob', img && /^blob:/.test(img.src) && !img.hidden, img && img.src.slice(0, 20));
+      return (img.complete ? Promise.resolve() : new Promise(function (r) { img.onload = r; img.onerror = r; setTimeout(r, 3000); })).then(function () {
+        ctrl('aperçu : image chargée (largeur naturelle > 0)', img.naturalWidth > 0, img.naturalWidth);
+        var r = img.getBoundingClientRect();
+        ctrl('aperçu visible dans la boîte (taille à l\'écran > 50 px)', r.width > 50 && r.height > 50, Math.round(r.width) + 'x' + Math.round(r.height));
+        var bouton = contenu().querySelector('.pm-export-telecharger');
+        ctrl('bouton Télécharger actif', bouton && !bouton.disabled);
+        changer(radio('A4', 'format'), true);
+        ctrl('A4 : 10 feuilles, 20 tuiles', /10 feuille\(s\) : 20 tuile\(s\)/.test(resume.textContent), resume.textContent);
+        changer(radio('A3', 'format'), true);
+        ctrl('retour A3 : 4 feuilles', /4 feuille\(s\)/.test(resume.textContent));
+        changer(radio('posees', 'portee'), true);
+        ctrl('plateau vide + « tuiles posées » : rien à exporter, bouton inactif', /Rien à exporter/.test(resume.textContent) && bouton.disabled, resume.textContent);
+        changer(radio('stock', 'portee'), true);
+        changer(caseA('tuiles'), false);
+        ctrl('aucun contenu : rien à exporter, bouton inactif, aperçu masqué', /Rien à exporter/.test(resume.textContent) && bouton.disabled && img.hidden);
+        ctrl('format A3 / A4 désactivés sans tuiles', radio('A3', 'format').disabled && radio('A4', 'format').disabled);
+        changer(caseA('jetons'), true);
+        ctrl('jetons seuls : 1 feuille', /1 feuille\(s\)/.test(resume.textContent), resume.textContent);
+        changer(caseA('apercu'), true);
+        ctrl('jetons + aperçu : 2 feuilles', /2 feuille\(s\)/.test(resume.textContent), resume.textContent);
+        changer(caseA('apercu'), false); changer(caseA('jetons'), false); changer(caseA('tuiles'), true);
+        ctrl('retour aux tuiles : 4 feuilles', /4 feuille\(s\)/.test(resume.textContent));
+        ctrl('l\'export ne modifie pas le document', docJ() === docInitial);
+      });
+    }
+
+    function s1b_bibliothequeModifiee() {
+      titre('1b. Export : bibliothèque modifiée, modèle incomplet, nom hostile');
+      var doc = PM.catalogue.nouveauDocument();
+      var hostile = '"><img src=x onerror=window.__pwn=1><script>window.__pwn=2<\/script>';
+      doc.modeles.find(function (m) { return m.id === 'C1'; }).exemplaires = 3;
+      doc.modeles.find(function (m) { return m.id === 'K1'; }).exemplaires = 0;
+      doc.modeles.find(function (m) { return m.id === 'B1'; }).exemplaires = 2;
+      var inc = doc.modeles.find(function (m) { return m.id === 'C3'; });
+      inc.cases = []; inc.nom = hostile;
+      reset(doc);
+      cliquer($('btn-exporter'));
+      var av = contenu().querySelector('.pm-export-avertissement'), resume = contenu().querySelector('.pm-export-resume');
+      ctrl('modèle incomplet signalé dans la boîte', /1 modèle\(s\) incomplet\(s\) exclu\(s\)/.test(av.textContent), av.textContent);
+      ctrl('le nom hostile est affiché comme texte (aucun élément injecté)', av.textContent.indexOf(hostile) >= 0 && av.children.length === 0);
+      ctrl('aucun <script> ni <img> injecté, hormis l\'aperçu', contenu().querySelectorAll('script').length === 0 && contenu().querySelectorAll('img').length === 1 && !window.__pwn);
+      ctrl('résumé : 4 feuilles, 21 tuiles (exemplaires modifiés)', /4 feuille\(s\) : 21 tuile\(s\)/.test(resume.textContent), resume.textContent);
+      changer(radio('A4', 'format'), true);
+      ctrl('A4 : 11 feuilles (21 tuiles par 2)', /11 feuille\(s\) : 21 tuile\(s\)/.test(resume.textContent), resume.textContent);
+      // les feuilles produites ne contiennent pas le modèle incomplet
+      var sortie = E.preparerSorties(etat.doc(), { format: 'A4' });
+      ctrl('preparerSorties : exclus = C3', J(sortie.exclus.map(function (x) { return x.id; })) === '["C3"]');
+      var svg = sortie.feuilles.map(function (f) { return f.svg; });
+      var tous = svg.every(function (s) {
+        var d = new DOMParser().parseFromString(s, 'image/svg+xml');
+        return !d.querySelector('parsererror') && d.documentElement.getAttribute('width') === '210mm';
+      });
+      ctrl('SVG des 11 feuilles bien formés (DOMParser)', tous);
+    }
+
+    function s1c_telechargements() {
+      titre('1c. Export : téléchargements PDF, SVG, PNG');
+      reset();
+      cliquer($('btn-exporter'));
+      telechargements.length = 0;
+      var bouton = contenu().querySelector('.pm-export-telecharger');
+      cliquer(bouton);
+      return attendre(1500).then(function () {
+        ctrl('PDF : un seul fichier plateau-tuiles-A3.pdf', telechargements.length === 1 && telechargements[0].nom === 'plateau-tuiles-A3.pdf', J(telechargements.map(function (t) { return t.nom; })));
+        return telechargements[0].promesse.then(octets);
+      }).then(function (b) {
+        var t = ''; for (var i = 0; i < b.length; i++) t += String.fromCharCode(b[i]);
+        ctrl('PDF téléchargé : en-tête %PDF-1.4 et fin %%EOF', t.slice(0, 8) === '%PDF-1.4' && /%%EOF\s*$/.test(t), t.slice(0, 8));
+        ctrl('PDF : 4 pages', (t.match(/\/Type \/Page(?!s)/g) || []).length === 4, (t.match(/\/Type \/Page(?!s)/g) || []).length);
+        ctrl('PDF : page A3 (841,89 x 1190,55 pt)', /\/MediaBox \[0 0 841\.89 1190\.55\]/.test(t));
+        ctrl('PDF : message de fin dans la boîte', /1 fichier\(s\) téléchargé\(s\)/.test(contenu().querySelector('.pm-export-formulaire').textContent));
+        // SVG
+        telechargements.length = 0;
+        changer(radio('svg', 'fichier'), true);
+        cliquer(bouton);
+        return attendre(2000);
+      }).then(function () {
+        ctrl('SVG : 4 fichiers nommés plateau-tuiles-A3-n.svg', telechargements.length === 4 && telechargements.map(function (t) { return t.nom; }).join() === 'plateau-tuiles-A3-1.svg,plateau-tuiles-A3-2.svg,plateau-tuiles-A3-3.svg,plateau-tuiles-A3-4.svg', J(telechargements.map(function (t) { return t.nom; })));
+        return Promise.all(telechargements.map(function (t) { return t.promesse.then(function (b) { return b.text(); }); }));
+      }).then(function (textes) {
+        ctrl('SVG téléchargés bien formés, 297mm x 420mm', textes.length === 4 && textes.every(function (s) {
+          var d = new DOMParser().parseFromString(s, 'image/svg+xml');
+          return !d.querySelector('parsererror') && d.documentElement.getAttribute('width') === '297mm' && d.documentElement.getAttribute('height') === '420mm';
+        }));
+        // PNG : planche des jetons seule
+        telechargements.length = 0;
+        changer(caseA('tuiles'), false); changer(caseA('jetons'), true); changer(radio('png', 'fichier'), true);
+        cliquer(bouton);
+        return jusqua(function () { return telechargements.length > 0; }, 30000);
+      }).then(function () {
+        ctrl('PNG : un fichier plateau-jetons-A4.png', telechargements.length === 1 && telechargements[0].nom === 'plateau-jetons-A4.png', J(telechargements.map(function (t) { return t.nom; })));
+        if (!telechargements.length) return null;
+        return telechargements[0].promesse;
+      }).then(function (blob) {
+        if (!blob) return null;
+        return octets(blob).then(function (b) {
+          var sig = [137, 80, 78, 71, 13, 10, 26, 10].every(function (v, i) { return b[i] === v; });
+          ctrl('PNG : signature valide', sig);
+          ctrl('PNG jetons : 2480 x 3508 px (A4, 300 dpi)', u32(b, 16) === 2480 && u32(b, 20) === 3508, u32(b, 16) + 'x' + u32(b, 20));
+          var type = String.fromCharCode(b[37], b[38], b[39], b[40]);
+          ctrl('PNG : chunk pHYs juste après IHDR, 11811 px/m, unité mètre', type === 'pHYs' && u32(b, 41) === 11811 && u32(b, 45) === 11811 && b[49] === 1, type + ' ' + u32(b, 41));
+          return charger(URL.createObjectURL(blob)).then(function (im) {
+            var c = document.createElement('canvas'); c.width = 124; c.height = 175;
+            var x = c.getContext('2d'); x.drawImage(im, 0, 0, 124, 175);
+            var d = x.getImageData(0, 0, 124, 175).data, noirs = 0, blancs = 0;
+            for (var i = 0; i < d.length; i += 4) { if (d[i] < 60 && d[i + 1] < 60) noirs++; else if (d[i] > 240 && d[i + 1] > 240) blancs++; }
+            ctrl('PNG jetons : image non vide (pixels noirs des villes) et fond blanc', noirs > 100 && blancs > 5000, noirs + ' noirs, ' + blancs + ' blancs');
+          });
+        });
+      }).then(function () {
+        // PNG d'une planche A3 de tuiles : dimensions et pHYs
+        var feuille = E.preparerSorties(PM.catalogue.nouveauDocument(), { format: 'A3' }).feuilles[0];
+        return E.rasteriser(feuille);
+      }).then(function (blob) {
+        return octets(blob);
+      }).then(function (b) {
+        ctrl('PNG planche A3 : 3508 x 4961 px', u32(b, 16) === 3508 && u32(b, 20) === 4961, u32(b, 16) + 'x' + u32(b, 20));
+        ctrl('PNG planche A3 : pHYs 11811', String.fromCharCode(b[37], b[38], b[39], b[40]) === 'pHYs' && u32(b, 41) === 11811);
+        PM.dialogue.fermer();
+      });
+    }
+
+    function s2_rapport() {
+      titre('2. Rapport d\'équilibre depuis le panneau de contrôles');
+      function ouvrirRapport() {
+        var b = boutonParTexte($('controles'), 'Rapport d\'équilibre');
+        cliquer(b);
+      }
+      // plateau vide : résultat partiel
+      reset();
+      var avant = docJ(), histAvant = etat.peutAnnuler();
+      ouvrirRapport();
+      ctrl('rapport ouvert (plateau vide) : titre « Rapport d\'équilibre »', dialogueOuvert() && $('dialogue-titre').textContent === 'Rapport d\'équilibre');
+      ctrl('plateau vide : document et historique inchangés', docJ() === avant && etat.peutAnnuler() === histAvant);
+      ctrl('plateau vide : « Plateau incomplet : résultat partiel » et lacunes', /Plateau incomplet : résultat partiel/.test(texteDialogue()) && /Il manque 16 tuile\(s\) sur 16/.test(texteDialogue()));
+      // plateau complet généré
+      reset(plateauAlea.doc);
+      var docAvant = docJ();
+      histAvant = etat.peutAnnuler();
+      ouvrirRapport();
+      var t = texteDialogue();
+      ctrl('rapport (plateau généré) : explication, tableau des 7 rangs', /Score S/.test(t) && contenu().querySelectorAll('table').length >= 3);
+      var tables = contenu().querySelectorAll('table'), lignes = tables[0] ? tables[0].querySelectorAll('tbody tr').length : 0;
+      ctrl('tableau des distances : 7 rangs', lignes === 7, lignes);
+      ctrl('plateau complet : pas de bloc « incomplet », « Aucune alerte d\'équilibre »', !/Plateau incomplet/.test(t) && /Aucune alerte d'équilibre/.test(t));
+      ctrl('rapport : première ville, partage, tempo, goulets', /Première ville/.test(t) && /Villes strictement plus proches/.test(t) && /Goulets/.test(t) && /≤ 3/.test(t));
+      var e = GR.equilibre(etat.doc());
+      ctrl('rapport : score S affiché = score calculé (' + e.S + ')', t.indexOf('Score S (somme des écarts sur les 7 rangs) : ' + e.S) >= 0);
+      var cb = contenu().querySelector('.pm-equilibre-option input[type=checkbox]');
+      ctrl('case « villes traversables » décochée par défaut', cb && cb.checked === false);
+      changer(cb, true);
+      var cb2 = contenu().querySelector('.pm-equilibre-option input[type=checkbox]');
+      ctrl('case traversables cochée : rapport redessiné', cb2 && cb2.checked === true && contenu().querySelectorAll('.pm-equilibre').length === 1);
+      changer(cb2, false);
+      ctrl('lecture seule : document inchangé après ouverture et bascule des modes', docJ() === docAvant);
+      ctrl('lecture seule : historique inchangé', etat.peutAnnuler() === histAvant);
+      // plateau déséquilibré : alertes affichées
+      var trouve = chercher5c2();
+      ctrl('configuration « 5 contre 2 » trouvée pour la recette', !!trouve);
+      if (trouve) {
+        reset(trouve.doc);
+        var avant2 = docJ();
+        ouvrirRapport();
+        var li = contenu().querySelectorAll('.pm-equilibre-alerte');
+        var texteAl = [].map.call(li, function (x) { return x.textContent; }).join(' | ');
+        ctrl('rapport : alerte « 5 villes contre 2 » affichée', /contre 2/.test(texteAl), texteAl);
+        ctrl('lecture seule : document inchangé (plateau déséquilibré)', docJ() === avant2);
+      }
+      PM.dialogue.fermer();
+      ctrl('boîte fermée', !dialogueOuvert());
+    }
+
+    function s3_generateur() {
+      titre('3. Plateau aléatoire : générer, appliquer, annuler');
+      // un seul modèle posé au départ pour que l'annulation soit discriminante
+      var base = PM.catalogue.nouveauDocument();
+      reset(base);
+      var posee = etat.appliquer(function (d) { return M.poserTuile(d, 'C1', 1, 1); }, 'tuile de départ');
+      ctrl('tuile de départ posée', posee.ok);
+      var docAvant = clone(etat.doc()), avantJ = docJ();
+      cliquer(boutonParTexte($('controles'), 'Plateau aléatoire'));
+      ctrl('boîte ouverte, titre « Plateau aléatoire »', dialogueOuvert() && $('dialogue-titre').textContent === 'Plateau aléatoire');
+      var champ = contenu().querySelector('.pm-generateur-graine');
+      var bGenerer = boutonParTexte(contenu(), 'Générer'), bAppliquer = boutonParTexte(contenu(), 'Appliquer au plateau');
+      ctrl('graine pré-remplie (6 chiffres), Appliquer inactif', /^\d{6}$/.test(champ.value) && bAppliquer.disabled, champ.value);
+      ctrl('avertissement « le plateau actuel sera remplacé »', !!contenu().querySelector('.pm-generateur-avertissement'));
+      var rd = contenu().querySelector('input[type=radio][value=defaut]'), rv = contenu().querySelector('input[type=radio][value=varies]');
+      ctrl('carrefours : paire par défaut cochée, « variés » décoché', rd && rd.checked && rv && !rv.checked);
+      champ.value = 'recette';
+      cliquer(bGenerer);
+      ctrl('aperçu SVG présent après Générer', !!contenu().querySelector('.pm-generateur-apercu svg'));
+      ctrl('résumé en plusieurs lignes (graine, S, carrefours)', contenu().querySelectorAll('.pm-generateur-resume li').length >= 5 && /Graine « recette »/.test(texteDialogue()));
+      ctrl('Appliquer actif après Générer', !bAppliquer.disabled);
+      ctrl('Générer ne modifie pas le plateau', docJ() === avantJ);
+      var attendu = GEN.generer(docAvant, { graine: 'recette' });
+      ctrl('plateau généré = GEN.generer(doc, {graine}) (reproductible)', attendu.ok);
+      var svg1 = contenu().querySelector('.pm-generateur-apercu').innerHTML;
+      cliquer(bGenerer);
+      ctrl('même graine : même aperçu', contenu().querySelector('.pm-generateur-apercu').innerHTML === svg1);
+      cliquer(bAppliquer);
+      ctrl('Appliquer : boîte fermée', !dialogueOuvert());
+      ctrl('plateau appliqué = plateau attendu (graine « recette »)', CJ(etat.doc().plateau) === CJ(attendu.doc.plateau));
+      ctrl('16 tuiles posées et 9 jetons dans le document', etat.doc().plateau.tuiles.length === 16 && etat.doc().plateau.jetons.length === 9);
+      return attendre(100).then(function () {
+        ctrl('plateau affiché : 16 tuiles et 9 jetons', $('assemblage').querySelectorAll('.pm-assemblage-occupee').length === 16 && $('assemblage').querySelectorAll('.pm-assemblage-jeton').length === 9,
+          $('assemblage').querySelectorAll('.pm-assemblage-occupee').length + ' / ' + $('assemblage').querySelectorAll('.pm-assemblage-jeton').length);
+        ctrl('barre d\'état : plateau appliqué avec la graine', /Plateau aléatoire appliqué \(graine recette/.test($('barre-etat').textContent), $('barre-etat').textContent);
+        var cpt = $('controles').textContent;
+        ctrl('contrôles : aucune alerte d\'équilibre sur le plateau généré', !/5 villes contre 2|Première ville inégale|Écart de rang|Paire de carrefours à risque/.test(cpt));
+        ctrlZ();
+        ctrl('Ctrl+Z : retour exact au plateau précédent', docJ() === avantJ && CJ(etat.doc()) === CJ(docAvant));
+        ctrl('Ctrl+Z : 1 tuile affichée, aucun jeton', $('assemblage').querySelectorAll('.pm-assemblage-occupee').length === 1 && $('assemblage').querySelectorAll('.pm-assemblage-jeton').length === 0);
+        ctrlY();
+        ctrl('Ctrl+Y : plateau généré rétabli', CJ(etat.doc().plateau) === CJ(attendu.doc.plateau));
+        ctrlZ();
+        // carrefours variés
+        cliquer(boutonParTexte($('controles'), 'Plateau aléatoire'));
+        var champ2 = contenu().querySelector('.pm-generateur-graine');
+        var rVaries = contenu().querySelector('input[type=radio][value=varies]');
+        ctrl('option « carrefours variés » proposée, décochée par défaut', rVaries && rVaries.checked === false);
+        rVaries.checked = true; rVaries.dispatchEvent(new Event('change', { bubbles: true }));
+        champ2.value = 'recette';
+        cliquer(boutonParTexte(contenu(), 'Générer'));
+        var attVar = GEN.generer(docAvant, { graine: 'recette', paireCarrefours: 'varies' });
+        ctrl('carrefours variés : résumé annonce la paire', texteDialogue().indexOf('Carrefours ' + attVar.paire) >= 0 && /carrefours variés/.test(texteDialogue()), attVar.paire);
+        cliquer(boutonParTexte(contenu(), 'Appliquer au plateau'));
+        ctrl('carrefours variés appliqués = plateau attendu', CJ(etat.doc().plateau) === CJ(attVar.doc.plateau));
+        ctrlZ();
+        ctrl('Ctrl+Z après carrefours variés : retour exact', docJ() === avantJ);
+        // bibliothèque insuffisante
+        var sansCoins = PM.catalogue.nouveauDocument();
+        sansCoins.modeles.forEach(function (m) { if (m.role === 'coin') m.exemplaires = 0; });
+        reset(sansCoins);
+        var av = docJ(), hist = etat.peutAnnuler();
+        cliquer(boutonParTexte($('controles'), 'Plateau aléatoire'));
+        cliquer(boutonParTexte(contenu(), 'Générer'));
+        var err = contenu().querySelector('.pm-generateur-erreur');
+        ctrl('bibliothèque insuffisante : raison claire dans la boîte', err && /Bibliothèque insuffisante/.test(err.textContent) && /coin/.test(err.textContent), err && err.textContent);
+        ctrl('bibliothèque insuffisante : Appliquer inactif, pas d\'aperçu', boutonParTexte(contenu(), 'Appliquer au plateau').disabled && !contenu().querySelector('.pm-generateur-apercu'));
+        ctrl('bibliothèque insuffisante : document et historique inchangés', docJ() === av && etat.peutAnnuler() === hist);
+        PM.dialogue.fermer();
+      });
+    }
+
+    function s4_controles() {
+      titre('4. Contrôles : alertes d équilibre et message de paire');
+      reset(plateauAlea.doc);
+      var cpt = function () { return $('controles').textContent; };
+      var eqLib = ['5 villes contre 2', 'Écart de distance entre joueurs', 'Première ville inégale', 'Paire de carrefours à risque'];
+      var presents = function () { return libelles().filter(function (x) { return eqLib.indexOf(x) >= 0; }); };
+      ctrl('plateau généré (paire par défaut) : aucune alerte de paire ni d équilibre', presents().length === 0, presents().join());
+      // paire à risque (2,2)+(1,3) : 8,5 %
+      etat.appliquer(function (d) { var n = clone(d); n.plateau.jetons = jetonsPaire({ i: 2, j: 2 }, { i: 1, j: 3 }); return n; }, 'paire à risque');
+      return attendre(150).then(function () {
+        ctrl('paire (2,2)+(1,3) : alerte « Paire de carrefours à risque » dans le panneau', libelles().indexOf('Paire de carrefours à risque') >= 0, libelles().join());
+        ctrl('message de paire avec taux « 8,5 % » et la paire', /8,5 %/.test(cpt()) && /Carrefours en \(2, 2\) et \(1, 3\)/.test(cpt()), cpt().slice(0, 300));
+        // plateau complet déséquilibré : alerte « 5 contre 2 » dans le panneau
+        var t = chercher5c2();
+        if (!t) { ctrl('configuration « 5 contre 2 » trouvée', false); return null; }
+        reset(t.doc);
+        return attendre(150).then(function () {
+          ctrl('plateau complet « 5 contre 2 » : groupe « 5 villes contre 2 » dans le panneau', libelles().indexOf('5 villes contre 2') >= 0, libelles().join());
+          // une tuile en moins : le plateau n'est plus complet, plus d'alerte d'équilibre
+          var col = 0, lig = 0;
+          etat.appliquer(function (d) { return M.retirerTuile(d, col, lig); }, 'retrait');
+          return attendre(150);
+        }).then(function () {
+          ctrl('tuile retirée : plus aucune alerte d équilibre dans le panneau', libelles().filter(function (x) { return ['5 villes contre 2', 'Écart de distance entre joueurs', 'Première ville inégale'].indexOf(x) >= 0; }).length === 0, libelles().join());
+          ctrlZ();
+          return attendre(100);
+        }).then(function () {
+          ctrl('Ctrl+Z : alerte « 5 contre 2 » revient avec le plateau complet', libelles().indexOf('5 villes contre 2') >= 0);
+        });
+      });
+    }
+
+    function s9_remiseEnPlace() {
+      titre('9. Sauvegarde automatique de l\'utilisateur');
+      reset();
+      return attendre(1800).then(function () {
+        PM_P2.remettre();
+        var actuel = null; try { actuel = localStorage.getItem(PM_P2.cleUtil); } catch (e) { /* ignoré */ }
+        ctrl('sauvegarde automatique de l\'utilisateur remise en place', actuel === PM_P2.copieUtil, String(actuel).slice(0, 40));
+      });
+    }
+
+    var chaine = Promise.resolve();
+    function etape(f) { chaine = chaine.then(function () { try { return f(); } catch (e) { nEchec++; rapportEl.textContent += 'ÉCHEC  exception dans ' + f.name + ' : ' + (e && e.stack || e) + '\n'; } }).catch(function (e) { nEchec++; rapportEl.textContent += 'ÉCHEC  rejet dans ' + f.name + ' : ' + (e && e.stack || e) + '\n'; }); }
+    if (!etat) { rapportEl.textContent = 'ÉCHEC  application non démarrée (PM.app.etat absent)\n'; nEchec++; }
+    else [s0_chargement, s1_export, s1b_bibliothequeModifiee, s1c_telechargements, s2_rapport, s3_generateur, s4_controles, s9_remiseEnPlace].forEach(etape);
+    chaine.then(function () {
+      var nErr = (document.getElementById('erreurs').textContent.match(/ERREUR JS/g) || []).length;
+      ctrl('aucune erreur JavaScript pendant tout le parcours', nErr === 0, nErr + ' erreur(s)');
+      HTMLAnchorElement.prototype.click = clickOrigine;
+      // vue laissée ouverte pour les captures d'écran
+      var vue = (location.hash.match(/vue=([a-z]+)/) || [])[1];
+      var suite = null;
+      if (vue) {
+        suite = true;
+        reset(plateauAlea.doc);
+        if (vue === 'export') cliquer($('btn-exporter'));
+        else if (vue === 'rapport') cliquer(boutonParTexte($('controles'), 'Rapport d\'équilibre'));
+        else if (vue === 'generateur') {
+          cliquer(boutonParTexte($('controles'), 'Plateau aléatoire'));
+          contenu().querySelector('.pm-generateur-graine').value = 'recette';
+          cliquer(boutonParTexte(contenu(), 'Générer'));
+        }
+      }
+      // la vue laisse une autosave différée : on attend qu'elle soit écrite, puis on remet celle de l'utilisateur
+      return (suite ? attendre(1800) : Promise.resolve()).then(function () {
+        PM_P2.remettre();
+        var actuel = null; try { actuel = localStorage.getItem(PM_P2.cleUtil); } catch (e) { /* ignoré */ }
+        ctrl('sauvegarde automatique de l utilisateur en place à la fin', actuel === PM_P2.copieUtil);
+        rapportEl.textContent += '=== TOTAL : ' + nOk + ' OK, ' + nEchec + ' ÉCHEC ===\n';
+        document.title = 'FIN ' + nOk + ' OK / ' + nEchec + ' ECHEC';
+      });
+    });
+  });
+  </script>
+</body>
+</html>

@@ -10,3 +10,11 @@
 
 ## Mineur
 M1 marqueur `%%CLIP:id%%` remplacé aussi dans les textes du PDF (un identifiant piégé fait échouer l'export ou s'imprime mal) ; M2 URL d'aperçu jamais libérée ; M3 PNG rastérisé avec une largeur en mm, limite de canvas de Safari iOS ; M4 `exemplaires` lus différemment, stock total non plafonné ; M5 génération synchrone sans indication ; M6 garde-fou « 45 à 55 cases » absent pour une bibliothèque personnalisée ; M7 tolérance 1 du générateur (à trancher) ; M8 identifiant non imprimé au recto (repli « marge seule » à noter) ; M9 CSP à reprendre.
+
+# Recette du testeur (Sonnet 5.5), 2026-10-15
+`tests/recette-p2.test.js` (47 tests, 4 `todo`) et `outils/recette-p2.html` (**96 OK, 0 échec**, budget de temps virtuel ≥ 150 000 à cause du rendu PNG A3) ; non-régression `recette-interface.html` 163 / 163. PDF du catalogue relu et rendu par PyMuPDF : 4 pages de 297 × 420 mm, vectoriel, aucune action active, barre de 100 mm = 283,46 pt, texte extrait correct.
+
+Bugs : **moyen** — `outils/recette-interface.html` écrase quand même la sauvegarde automatique de l'utilisateur (son écouteur `pagehide` passe avant celui d'`app.js`). **Mineurs** — 1) alerte `carrefours_paire` sur un plateau généré en « carrefours variés » dont l'équilibre est vérifié ; 2) rapport : rangs 5 à 7 grisés et note « rangs 1 à 4 » ; 3) alertes `ecart_rang` et `ecart_rang_etendu` en double ; 4) `graphe.equilibre` : tuile au modèle introuvable ignorée mais plateau dit complet ; 5) export : aucun plafond d'exemplaires ; 6) export « posées » : tuile au modèle introuvable omise sans signalement.
+
+## Corrections décidées (orchestrateur)
+Avant la version : bug moyen, mineurs 1 à 6, relecture I1 à I4, M1, M2, M4 (plafond de 200 tuiles au total pour l'export et le générateur), M5, M6, M8 (noter le repli « marge seule »). Reportés : M3 (PNG Safari iOS), M7 (tolérance : décision utilisateur), M9 (CSP).
