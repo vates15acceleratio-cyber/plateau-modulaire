@@ -37,9 +37,28 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     port_mort: 'Ports de coin morts',
     trop_de_villes: 'Trop de villes',
     trop_de_carrefours: 'Trop de carrefours',
-    carrefours_meme_cote: 'Carrefours sur le même côté'
+    carrefours_meme_cote: 'Carrefours sur le même côté',
+    carrefours_paire: 'Paire de carrefours à risque',
+    cinq_contre_deux: '5 villes contre 2',
+    ecart_rang_etendu: 'Écart de distance entre joueurs',
+    premiere_ville_inegale: 'Première ville inégale'
   };
-  var CODES_CARREFOURS = ['trop_de_carrefours', 'carrefours_meme_cote'];
+  /** Alertes d'équilibre reprises de PM.graphe (villes non traversables, avis docs/16). */
+  var CODES_EQUILIBRE = ['cinq_contre_deux', 'ecart_rang_etendu', 'premiere_ville_inegale'];
+  /**
+   * Taux typique de « 5 contre 2 » (en %) par paire de carrefours, villes non traversables, tiré de
+   * docs/12-mesures-equilibre.md (1000 plateaux du catalogue, graine 20261015, section 2). Clé : « i,j+i,j »,
+   * jonctions triées par ligne puis colonne. La paire par défaut (1,2)+(3,2) vaut 0 %.
+   */
+  var TAUX_CINQ_CONTRE_DEUX = {
+    '1,1+1,2': 9.6, '1,1+2,2': 8.5, '1,1+3,2': 4.4, '1,1+1,3': 4.5, '1,1+2,3': 4.5, '1,1+3,3': 4.4,
+    '2,1+1,2': 9.6, '2,1+2,2': 8.5, '2,1+3,2': 4.4, '2,1+1,3': 4.5, '2,1+2,3': 4.5, '2,1+3,3': 4.4,
+    '3,1+1,2': 9.6, '3,1+2,2': 8.5, '3,1+3,2': 4.4, '3,1+1,3': 4.5, '3,1+2,3': 4.5, '3,1+3,3': 4.4,
+    '1,2+2,2': 0, '1,2+3,2': 0, '1,2+1,3': 5.1, '1,2+2,3': 5.1, '1,2+3,3': 4.9,
+    '2,2+3,2': 0, '2,2+1,3': 8.5, '2,2+2,3': 8.5, '2,2+3,3': 8.4,
+    '3,2+1,3': 7.9, '3,2+2,3': 7.9, '3,2+3,3': 7.9
+  };
+  var CODES_CARREFOURS = ['trop_de_carrefours', 'carrefours_meme_cote', 'carrefours_paire'];
 
   function estNb(x) { return typeof x === 'number' && isFinite(x); }
 
@@ -133,7 +152,32 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         }
       }
     }
+    // Mode manuel : une paire autre que (1,2)+(3,2) est permise, mais son risque est annoncé
+    if (carrefours.length === 2 && !cotePartage(carrefours[0], carrefours[1])) {
+      var tri = carrefours.slice().sort(function (a, b) { return (a.j - b.j) || (a.i - b.i); });
+      var cle = tri[0].i + ',' + tri[0].j + '+' + tri[1].i + ',' + tri[1].j;
+      var taux = TAUX_CINQ_CONTRE_DEUX[cle];
+      if (taux !== undefined && taux > 0) {
+        res.push({ code: 'carrefours_paire', niveau: 'alerte', cible: cibleJonction(carrefours[1]),
+          message: 'Carrefours en (' + tri[0].i + ', ' + tri[0].j + ') et (' + tri[1].i + ', ' + tri[1].j + ') : environ ' +
+            String(taux).replace('.', ',') + ' % des plateaux ont « 5 villes contre 2 » avec cette paire (0 % avec (1, 2) et (3, 2)).' });
+      }
+    }
     return res;
+  }
+
+  /**
+   * Alertes d'équilibre (villes non traversables), seulement si PM.graphe est chargé et que le plateau
+   * est complet : 7 villes, 4 apparitions, toutes les tuiles posées. Sinon aucune alerte.
+   */
+  function alertesEquilibre(doc) {
+    if (!PM.graphe || typeof PM.graphe.equilibre !== 'function') return [];
+    var e;
+    try { e = PM.graphe.equilibre(doc, { villesTraversables: false }); } catch (x) { return []; }
+    if (!e.complet) return [];
+    return e.alertes.filter(function (a) { return CODES_EQUILIBRE.indexOf(a.code) >= 0; }).map(function (a) {
+      return { code: a.code, message: a.message, niveau: 'alerte', cible: null };
+    });
   }
 
   /* ------------------------------------------------------------------ */
@@ -245,7 +289,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function calculer(doc) {
     var v = M.validerPlateau(doc);
     var erreurs = v.erreurs.map(function (x) { return versEntree(x, 'erreur', doc); });
-    var alertes = v.alertes.map(function (x) { return versEntree(x, 'alerte', doc); }).concat(alertesJetons(doc));
+    var alertes = v.alertes.map(function (x) { return versEntree(x, 'alerte', doc); }).concat(alertesJetons(doc)).concat(alertesEquilibre(doc));
     return {
       compteurs: compteursDuPlateau(doc),
       erreurs: erreurs,

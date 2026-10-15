@@ -129,7 +129,7 @@ function valeurEcart(e) { return e.ecartRang === null ? 'n/a' : e.ecartRang; }
 
 function nouvelAcc() {
   return {
-    n: 0, ecart: {}, alerteEcart: 0, cinqDeux: 0, lointaine: 0, inaccessible: 0, partiel: 0, uneAlerte: 0,
+    n: 0, etendu: 0, premiereInegale: 0, surveiller: 0, S: {}, ecart: {}, alerteEcart: 0, cinqDeux: 0, lointaine: 0, inaccessible: 0, partiel: 0, uneAlerte: 0,
     ecartMinVilles: {}, sommeEcarts: {}, rang: [[], [], [], [], [], [], []], egalite: [], ville1: { 1: {}, 2: {} }, ecartPremiere: {},
     tempo: { 1: { 3: [], 4: [], 5: [] }, 2: { 3: [], 4: [], 5: [] } }
   };
@@ -140,6 +140,10 @@ function cumuler(acc, e, g) {
   const codes = e.alertes.map((a) => a.code);
   if (codes.includes('ecart_rang')) acc.alerteEcart++;
   if (codes.includes('cinq_contre_deux')) acc.cinqDeux++;
+  if (codes.includes('ecart_rang_etendu')) acc.etendu++;
+  if (codes.includes('premiere_ville_inegale')) acc.premiereInegale++;
+  if (e.aSurveiller) acc.surveiller++;
+  ajouterHist(acc.S, e.S === null ? 'n/a' : e.S);
   if (codes.includes('apparition_lointaine')) acc.lointaine++;
   if (codes.includes('ville_inaccessible')) acc.inaccessible++;
   if (codes.length) acc.uneAlerte++;
@@ -327,10 +331,10 @@ function rediger(stats, meta) {
     out(`${stats.nbPaires} paires (toutes sauf « même camp » : pas les deux sur j = 1, ni les deux sur j = 3).` +
       (meta.pairesControles !== undefined && meta.pairesControles !== null ? ` Contrôle croisé avec \`PM.controles\` : ${meta.pairesControles} paires sans alerte « carrefours_meme_cote ».` : ''));
     out();
-    out('| Paire de carrefours | Écart D6 moyen (T) | Alerte D6 (T) | 5 contre 2 (T) | Écart D6 moyen (N) | Alerte D6 (N) | 5 contre 2 (N) |\n|---|---|---|---|---|---|---|');
+    out('| Paire de carrefours | Écart D6 moyen (T) | Alerte D6 (T) | 5 contre 2 (T) | Écart D6 moyen (N) | Alerte D6 (N) | 5 contre 2 (N) | D6 étendu (T) | D6 étendu (N) | S ≥ 4 (N) |\n|---|---|---|---|---|---|---|---|---|---|');
     for (const p of PAIRES) {
       const t = stats.parPaire[p.cle].T, n = stats.parPaire[p.cle].N;
-      out(`| ${p.cle} | ${f2(moyHist(t.ecart))} | ${pc(t.alerteEcart, t.n)} | ${pc(t.cinqDeux, t.n)} | ${f2(moyHist(n.ecart))} | ${pc(n.alerteEcart, n.n)} | ${pc(n.cinqDeux, n.n)} |`);
+      out(`| ${p.cle} | ${f2(moyHist(t.ecart))} | ${pc(t.alerteEcart, t.n)} | ${pc(t.cinqDeux, t.n)} | ${f2(moyHist(n.ecart))} | ${pc(n.alerteEcart, n.n)} | ${pc(n.cinqDeux, n.n)} | ${pc(t.etendu, t.n)} | ${pc(n.etendu, n.n)} | ${pc(n.surveiller, n.n)} |`);
     }
     out();
     out('Histogramme de l\'écart D6, toutes paires, villes traversables :'); out(texteHist(T.toutes.ecart));
@@ -440,6 +444,30 @@ function rediger(stats, meta) {
   out();
   out('Autre indicateur à titre de comparaison : somme des écarts sur les 7 rangs (placement par défaut) :');
   out(texteHist(defaut.sommeEcarts));
+  /* 10 : critère de docs/16 */
+  out('## 10. Critère retenu (docs/16) : S, D6 étendu, première ville');
+  out();
+  out('S = somme des |D1(k) − D2(k)| sur les 7 rangs ; D6 étendu = écart > 2 à un rang quelconque de 1 à 7 ; « à surveiller » si S ≥ 4.');
+  out();
+  out('| Cas | Mesures | D6 étendu | S ≥ 4 | Première ville inégale | 5 contre 2 |\n|---|---|---|---|---|---|');
+  const casS = [['N, placement par défaut', N.defaut], ['T, placement par défaut', T.defaut]];
+  if (!stats.fixe) casS.push(['N, toutes les paires', N.toutes], ['T, toutes les paires', T.toutes]);
+  for (const [nom, a] of casS) out(`| ${nom} | ${a.n} | ${a.etendu} (${pc(a.etendu, a.n)}) | ${a.surveiller} (${pc(a.surveiller, a.n)}) | ${a.premiereInegale} | ${a.cinqDeux} (${pc(a.cinqDeux, a.n)}) |`);
+  out();
+  out('Distribution de S, placement par défaut, villes non traversables :'); out(texteHist(N.defaut.S));
+  if (!stats.fixe) { out('Distribution de S, toutes les paires, villes non traversables :'); out(texteHist(N.toutes.S)); }
+  if (meta.autresGraines && meta.autresGraines.length) {
+    out('Effet de C1 (villes traversables, moyenne sur les 30 paires) sur d\'autres tirages :');
+    out();
+    out('| Graine | Plateaux avec C1 | Écart moyen avec | Écart moyen sans | 5 contre 2 avec | 5 contre 2 sans | Au moins une alerte avec | Au moins une alerte sans |\n|---|---|---|---|---|---|---|---|');
+    for (const x of [{ graine: meta.graine, st: stats }].concat(meta.autresGraines)) {
+      const e = moyenneParModele(x.st.plateaux, 'C1', (p) => moyFinis(p.ecartToutes));
+      const c = moyenneParModele(x.st.plateaux, 'C1', (p) => p.cinqToutes / x.st.nbPaires);
+      const al = moyenneParModele(x.st.plateaux, 'C1', (p) => p.alerteToutes / x.st.nbPaires);
+      out(`| ${x.graine} | ${e.avec} | ${f2(e.mAvec)} | ${f2(e.mSans)} | ${pc(c.mAvec * 1000, 1000)} | ${pc(c.mSans * 1000, 1000)} | ${pc(al.mAvec * 1000, 1000)} | ${pc(al.mSans * 1000, 1000)} |`);
+    }
+    out();
+  }
   return L.join('\n') + '\n';
 }
 
@@ -449,6 +477,15 @@ function rediger(stats, meta) {
 
 /** Constats rédigés à la main après lecture des chiffres (ajoutés au rapport du lancement direct seulement). */
 const COMMENTAIRE = "## Constats (1000 plateaux, graine 20261015)\n\nFaits relevés dans les tableaux ci-dessus.\n\n- **Reproduction** : avec le placement (1,2)+(3,2), écart D6 moyen 0,42, pire écart 2 (1 plateau), 0 alerte « 5 contre 2 » ; avec (2,1)+(2,3), 44 « 5 contre 2 » sur 1000 et 12 plateaux à l'écart 2. Mêmes valeurs que `tests/catalogue.test.js`, qui valide l'implémentation de `PM.graphe`.\n- **Villes non traversables** : aucun changement sur le placement par défaut (mêmes histogrammes, écart maximal 2). Sur les 30 paires, la part d'écart > 2 passe de 0,2 % (48 configurations sur 30000) à 0,9 % (281), avec un écart maximal de 4 (15 configurations) ; « 5 contre 2 » reste à 5,7 %. Les flancs ne sont jamais plus courts que le centre (flanc moins centre : +1,55 pas, villes traversables ; +2,59 pas, non traversables). L'écart minimal entre deux villes reste 3 pas dans les deux modes.\n- **Paires de carrefours** : seules (1,2)+(2,2), (1,2)+(3,2) et (2,2)+(3,2) ont 0 % de « 5 contre 2 » ; toutes les autres paires en ont entre 4,4 % et 9,6 % (le maximum à 9,6 % pour (1,1)+(1,2), (2,1)+(1,2) et (3,1)+(1,2)). Les alertes D6 (> 2) ne dépassent 1 % sur aucune paire en villes traversables.\n- **Seuil « écart > 2 »** : il ne se déclenche presque jamais (0,1 % sur le placement par défaut, 0,2 % sur toutes les paires). Part des écarts ≥ 1 : 42,2 % (défaut) et 82,2 % (toutes paires) ; ≥ 2 : 0,1 % et 15,7 %. L'alerte « 5 contre 2 » (5,7 % sur toutes les paires) est l'alerte qui se déclenche réellement.\n- **Écart par rang** : aux rangs 1 à 3 l'écart moyen est 0,00 pour le placement par défaut (rangs 1 et 2 : 0,00 aussi sur toutes les paires). Pour le placement par défaut, l'écart sur les rangs 1 à 4 est donc porté par le rang 4. Chaque joueur a toujours sa première ville à 2 pas (30000 configurations sur 30000), l'écart sur la première ville est toujours 0.\n- **Tirage des apparitions** : écart moyen au placement par défaut 0,44 (A1A1 / A2A2), 0,41 (A1A2 miroir), 0,43 (A1A2 symétrie centrale) ; sur toutes les paires 1,00 / 0,98 / 0,96. « 5 contre 2 » sur toutes les paires : 6,5 % / 4,7 % / 5,9 %. Alertes D6 : 0,1 % à 0,2 % dans les trois cas.\n- **Modèles** : l'écart moyen avec ou sans un modèle diffère de 0,05 au plus (C1 : −0,05). Le seul écart marqué porte sur « 5 contre 2 » : 4,6 % avec C1 contre 8,0 % sans ; pour les autres modèles la différence va de −1,3 à +1,6 point. A1 et A2 sont posés sur tous les plateaux.\n- **Tempo** : villes atteignables en au plus 3 / 4 / 5 pas : 3,61 / 4,47 / 4,86 pour J1 et 3,61 / 4,48 / 4,84 pour J2 ; 1,10 ville à égalité en moyenne.\n- **Goulets** : au moins 3 chemins disjoints entre les apparitions d'un joueur et chaque ville (40,7 % des couples à 3, 59,3 % à 4) ; aucun point d'articulation sur 2000 cas, villes traversables ou non.\n- **Diversité** : 114 profils distincts sur 1000 plateaux au placement par défaut (le plus fréquent : 8,6 %) ; 72 si l'on ignore quel joueur est lequel ; 19 suites de distances distinctes pour un joueur, la plus fréquente représentant 24,6 % des cas. 1916 profils sur les 30000 configurations.\n- Aucune ville inaccessible, aucune apparition à plus de 7 pas de toute ville dans l'échantillon.\n\n## Points à soumettre à l'advisor design de jeu\n\n1. **Pouvoir discriminant du critère D6.** L'alerte « écart > 2 » est quasi muette ; au placement par défaut l'écart est nul aux rangs 1 à 3 sur les 1000 plateaux, seul le rang 4 varie. Faut-il garder le seuil, comparer d'autres rangs (5 à 7), ou considérer que le catalogue est équilibré par construction ?\n2. **Villes traversables ou non.** Le choix de règle change le taux d'écart > 2 sur les autres paires (0,2 % contre 0,9 %, écart jusqu'à 4). Quelle règle de jeu est retenue ?\n3. **Paires de carrefours.** Trois paires sur 30 évitent tout « 5 contre 2 ». La règle du générateur (paire par défaut, autre paire si aucune alerte) est cohérente avec ces chiffres ; l'ouverture du mode manuel à toutes les paires expose à 4,4 % à 9,6 % de « 5 contre 2 ».\n4. **Variété de jeu.** Un joueur voit presque toujours l'une des 19 suites de distances, dont une dans un quart des cas ; la variété vient surtout des chemins, pas des distances. Est-ce suffisant ?\n5. **Règle sur les apparitions.** Les écarts selon le tirage (0,96 à 1,00 sur toutes les paires) ne justifient pas à eux seuls une règle de symétrie centrale ; la différence de « 5 contre 2 » (4,7 % à 6,5 %) reste à interpréter.\n6. **C1.** Moins de « 5 contre 2 » quand C1 est posée (4,6 % contre 8,0 %) : effet à confirmer sur un autre tirage avant d'en tirer une conséquence.\n7. **Première ville** toujours à 2 pas : aucun tempo différentiel dans l'ouverture, à confirmer comme voulu.\n8. **Goulets** : aucun point d'articulation et au moins 3 chemins disjoints ; le « mur » de C6 n'a pas d'effet mesurable sur ces indicateurs.\n";
+
+const COMMENTAIRE_DOCS16 = `
+## Constats complémentaires (section 10, avis docs/16)
+
+- **S, placement par défaut** : villes non traversables, S vaut 0 dans 13,0 % des plateaux et au moins 4 dans 8,5 % ; villes traversables, 4,5 % (valeur citée par l'avis). Sur les 30 paires (non traversables) : S ≥ 4 dans 54,7 % des configurations, médiane 4.
+- **D6 étendu (écart > 2 à un rang de 1 à 7)** : 0,9 % au placement par défaut (non traversables), 0,0 % (traversables) ; 17,8 % sur les 30 paires (non traversables), 15,5 % (traversables). Par paire, voir la section 2.
+- **Première ville inégale** : 0 cas sur toutes les configurations mesurées, dans les deux modes (l'invariant tient sur ce catalogue).
+- **C1** : sur trois tirages indépendants, « 5 contre 2 » est plus rare quand C1 est posée (4,6 % contre 8,0 % ; 4,4 % contre 6,8 % ; 3,9 % contre 7,1 %) et l'écart moyen est plus bas de 0,06 à 0,07. L'effet se retrouve sur les trois graines.
+`;
 
 /** Les constats ci-dessus ne valent que pour le tirage de référence ; deux valeurs repères détectent un catalogue modifié. */
 function constatsValables(nb, graine, stats) {
@@ -463,10 +500,11 @@ function principal() {
   const t0 = Date.now();
   const entrees = tirerPlateaux(nb, graine);
   const stats = mesurer(entrees, { paires: 'toutes' });
+  const autresGraines = [101, 202].map((g2) => ({ graine: g2, st: mesurer(tirerPlateaux(nb, g2), { paires: 'toutes' }) }));
   const texte = rediger(stats, {
-    titre: 'Mesures d\'équilibre du catalogue (sous-agent 7)', graine, pairesControles: verifierPairesAvecControles(),
+    titre: 'Mesures d\'équilibre du catalogue (sous-agent 7)', graine, autresGraines, pairesControles: verifierPairesAvecControles(),
     notes: ['Plateaux tirés comme dans `tests/catalogue.test.js` (mêmes tirages pour la même graine), catalogue réel `PM.catalogue.nouveauDocument()`.']
-  }) + '\n' + (constatsValables(nb, graine, stats) ? COMMENTAIRE
+  }) + '\n' + (constatsValables(nb, graine, stats) ? COMMENTAIRE + COMMENTAIRE_DOCS16
     : '## Constats\n\nConstats rédigés à la main pour 1000 plateaux et la graine 20261015 : à réécrire pour cette mesure.\n');
   fs.writeFileSync(sortie, texte, 'utf8');
   console.log(`Rapport écrit : ${sortie} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);

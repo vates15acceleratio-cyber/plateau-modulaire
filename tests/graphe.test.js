@@ -128,6 +128,7 @@ function plateauExemples() {
 test('construire : plateau d\'exemples, jetons seulement là où ils sont posés', () => {
   let doc = plateauExemples();
   let g = GR.construire(doc);
+  assert.strictEqual(g.villesTraversables, false); // défaut
   assert.strictEqual(g.jonctions.length, 0);           // aucun jeton : aucun nœud de jonction
   assert.deepStrictEqual([g.apparitions[1].length, g.apparitions[2].length], [2, 2]);
   assert.strictEqual(g.cases.size, 4 * 4 + 4 * 3 + 4 * 3 + 4 * 3);
@@ -174,7 +175,7 @@ test('villesTraversables false sur un document : aucune distance ne diminue', ()
   for (let j = 1; j <= 3; j++) for (let i = 1; i <= 3; i++) {
     try { doc = M.poserJeton(doc, i, j, (i === 2 && j === 2) ? 'carrefour' : 'capture'); } catch (e) { /* jonction refusée */ }
   }
-  const gT = GR.construire(doc), gN = GR.construire(doc, { villesTraversables: false });
+  const gT = GR.construire(doc, { villesTraversables: true }), gN = GR.construire(doc, { villesTraversables: false });
   assert.ok(gT.villes.size >= 2);
   for (const p of [1, 2]) {
     const dT = GR.distancesJoueur(gT, p), dN = GR.distancesJoueur(gN, p);

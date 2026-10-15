@@ -28,6 +28,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var SEUIL_ECART = 2;          // alerte principale si l'écart dépasse 2
   var SEUIL_CINQ_CONTRE_DEUX = 5;
   var SEUIL_APPARITION_LOINTAINE = 7;
+  var SEUIL_S = 4;                 // score S à partir duquel le plateau est « à surveiller »
 
   /* ------------------------------------------------------------------ */
   /* Construction                                                        */
@@ -38,7 +39,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /**
    * Construit le graphe d'un document.
    * options :
-   *  - villesTraversables (défaut true) ;
+   *  - villesTraversables (défaut false : une ville n'est qu'une destination, cas le plus pessimiste, avis docs/16) ;
    *  - jetons : tableau [{i, j, type}] qui remplace doc.plateau.jetons (mesures : essayer des
    *    placements sans cloner le document) ;
    *  - filtreTuile(tuile) → booléen : ne garde que certaines tuiles (sous-graphes).
@@ -55,7 +56,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var voisins = new Map(), cases = new Map(), parRaccord = new Map(), portsParJonction = new Map();
     var g = {
       noeuds: [], voisins: voisins, cases: cases, jonctions: [], villes: new Set(),
-      apparitions: { 1: [], 2: [] }, villesTraversables: options.villesTraversables !== false
+      apparitions: { 1: [], 2: [] }, villesTraversables: options.villesTraversables === true
     };
 
     function noeud(id) { if (!voisins.has(id)) { voisins.set(id, new Set()); g.noeuds.push(id); } }
@@ -212,6 +213,16 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       lacunes.push('Moins de ' + RANGS_COMPARES + ' villes accessibles pour un joueur : l\'écart par rang est partiel.');
     }
 
+    // Avis docs/16 : écart étendu aux rangs 1 à 7 et score S = somme des écarts sur les rangs communs
+    var S = null, ecartMax7 = null;
+    if (avecAppar) {
+      parRang.forEach(function (x) {
+        if (x.ecart === null) return;
+        S = (S === null ? 0 : S) + x.ecart;
+        ecartMax7 = Math.max(ecartMax7 === null ? 0 : ecartMax7, x.ecart);
+      });
+    }
+
     // Partage, tempo, première ville
     var partage = { 1: 0, 2: 0, egalite: 0 };
     parVille.forEach(function (x) {
@@ -222,10 +233,19 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var premiereVille = { 1: D[1].length ? D[1][0] : null, 2: D[2].length ? D[2][0] : null, ecart: null };
     if (premiereVille[1] !== null && premiereVille[2] !== null) premiereVille.ecart = Math.abs(premiereVille[1] - premiereVille[2]);
 
+    var villesA4 = { 1: D[1].filter(function (x) { return x <= 4; }).length, 2: D[2].filter(function (x) { return x <= 4; }).length, ecart: null };
+    villesA4.ecart = Math.abs(villesA4[1] - villesA4[2]);
+
     // Alertes
     var alertes = [];
     if (ecartRang !== null && ecartRang > SEUIL_ECART) {
       alertes.push({ code: 'ecart_rang', message: 'Un rang de villes est à ' + ecartRang + ' pas d\'écart entre les deux joueurs (plus de ' + SEUIL_ECART + ').' });
+    }
+    if (ecartMax7 !== null && ecartMax7 > SEUIL_ECART) {
+      alertes.push({ code: 'ecart_rang_etendu', message: 'Un rang de villes (de 1 à 7) est à ' + ecartMax7 + ' pas d\'écart entre les deux joueurs (plus de ' + SEUIL_ECART + ').' });
+    }
+    if (premiereVille.ecart !== null && premiereVille.ecart !== 0) {
+      alertes.push({ code: 'premiere_ville_inegale', message: 'La première ville est à ' + premiereVille[1] + ' pas du joueur 1 et à ' + premiereVille[2] + ' pas du joueur 2 (elle devrait être à la même distance).' });
     }
     if (villes.length === nbVilles && Math.max(partage[1], partage[2]) >= SEUIL_CINQ_CONTRE_DEUX) {
       var fort = partage[1] >= partage[2] ? 1 : 2;
@@ -250,7 +270,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
     return {
       villes: villes.map(function (v) { return { id: v.id, i: v.i, j: v.j }; }),
-      D: D, parRang: parRang, ecartRang: ecartRang, partage: partage, alertes: alertes, tempo: tempo,
+      D: D, parRang: parRang, ecartRang: ecartRang, S: S, ecartMax7: ecartMax7, aSurveiller: S !== null && S >= SEUIL_S, villesA4: villesA4, partage: partage, alertes: alertes, tempo: tempo,
       premiereVille: premiereVille, inaccessibles: inaccessibles, lacunes: lacunes,
       complet: lacunes.length === 0, partiel: lacunes.length > 0,
       villesTraversables: g.villesTraversables
@@ -371,6 +391,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     NB_VILLES: NB_VILLES,
     RANGS_COMPARES: RANGS_COMPARES,
     SEUIL_ECART: SEUIL_ECART,
+    SEUIL_S: SEUIL_S,
     construire: construire,
     distances: distances,
     distancesJoueur: distancesJoueur,

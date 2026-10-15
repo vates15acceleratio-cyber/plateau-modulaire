@@ -151,7 +151,7 @@ test('equilibre : distances triées, écart par rang, partage, tempo, première 
   assert.deepStrictEqual(e.partage, { 1: 3, 2: 1, egalite: 3 });
   assert.deepStrictEqual(e.tempo, { 1: { 3: 3, 4: 4, 5: 5 }, 2: { 3: 2, 4: 4, 5: 5 } });
   assert.deepStrictEqual(e.premiereVille, { 1: 2, 2: 3, ecart: 1 });
-  assert.deepStrictEqual(e.alertes, []);
+  assert.deepStrictEqual(e.alertes.map((x) => x.code), ['premiere_ville_inegale']); // 2 pas contre 3 pas
   assert.deepStrictEqual(e.inaccessibles, { 1: [], 2: [] });
   assert.strictEqual(e.villes.length, 7);
 });
@@ -203,7 +203,7 @@ test('equilibre : cohérence avec les utilitaires de tests/catalogue.test.js (m�
     const doc = tirerPlateau(rng);
     for (const cle of Object.keys(paires)) {
       const o = oracleEquilibre(oracleGraphe(doc, paires[cle]));
-      const e = GR.equilibre(doc, { jetons: jetons9(paires[cle]) });
+      const e = GR.equilibre(doc, { jetons: jetons9(paires[cle]), villesTraversables: true });
       assert.strictEqual(e.complet, true, 'plateau complet sans lacune');
       assert.strictEqual(e.ecartRang, o.ecart, `plateau ${n} ${cle}`);
       assert.strictEqual(e.partage[1], o.plus1);
@@ -219,6 +219,7 @@ test('equilibre : les jetons du document sont lus, et option jetons les remplace
   let doc = tirerPlateau(mulberry32(7));
   for (const jn of jetons9(MILIEU)) doc = M.poserJeton(doc, jn.i, jn.j, jn.type);
   const a = GR.equilibre(doc), b = GR.equilibre(doc, { jetons: jetons9(MILIEU) });
+  assert.strictEqual(a.villesTraversables, false); // défaut : villes non traversables
   assert.deepStrictEqual(a.D, b.D);
   assert.strictEqual(a.complet, true);
   assert.strictEqual(GR.profil(doc), a.D[1].join(',') + '|' + a.D[2].join(','));
@@ -228,7 +229,7 @@ test('equilibre : villes non traversables, une distance change sur un plateau du
   const rng = mulberry32(20261015);
   for (let n = 0; n < 40; n++) {
     const doc = tirerPlateau(rng), jetons = jetons9(MILIEU);
-    const t = GR.equilibre(doc, { jetons }), nt = GR.equilibre(doc, { jetons, villesTraversables: false });
+    const t = GR.equilibre(doc, { jetons, villesTraversables: true }), nt = GR.equilibre(doc, { jetons, villesTraversables: false });
     assert.strictEqual(nt.villesTraversables, false);
     for (const p of [1, 2]) {
       assert.strictEqual(nt.D[p].length, t.D[p].length - nt.inaccessibles[p].length);
@@ -360,18 +361,19 @@ test('remplir : le rapport complet contient les tableaux, sans modifier le docum
   EQ.remplir(conteneur, doc);
   assert.strictEqual(JSON.stringify(doc), avant);
   const tableaux = conteneur.trouver('table');
-  assert.strictEqual(tableaux.length, 3);                        // distances, tempo, goulets
+  assert.ok(tableaux.length === 3 || tableaux.length === 4); // distances, [comparaison des modes], tempo, goulets
   assert.strictEqual(tableaux[0].trouver('tr').length, 1 + 7);   // en-tête + 7 rangs
   assert.ok(conteneur.textContent.includes('Les villes sont traversables'));
   assert.ok(!conteneur.textContent.includes('Plateau incomplet'));
   // la case à cocher recalcule : villes non traversables
   const cb = conteneur.trouver('input')[0];
-  assert.strictEqual(cb.checked, true);
-  cb.checked = false;
+  assert.strictEqual(cb.checked, false); // défaut : villes non traversables
+  cb.checked = true;
   cb.ecouteurs.change();
-  assert.strictEqual(conteneur.trouver('input')[0].checked, false);
+  assert.strictEqual(conteneur.trouver('input')[0].checked, true);
   assert.strictEqual(FauxElement.focus, conteneur.trouver('input')[0]); // la nouvelle case reprend le focus
-  assert.strictEqual(conteneur.trouver('table').length, 3);
+  assert.ok(conteneur.trouver('table').length >= 3);
+  assert.ok(conteneur.textContent.includes('Score S'));
 });
 
 test('remplir : plateau vide, le rapport dit ce qui manque', () => {
@@ -411,4 +413,27 @@ test('script de mesures : mode « fixe » (mesure 8), sans exception ni valeur i
   const sans = entrees.map((e) => ({ doc: Object.assign({}, e.doc, { plateau: Object.assign({}, e.doc.plateau, { jetons: [] }) }), jetons: jetons9(MILIEU) }));
   assert.deepStrictEqual(MES.mesurer(sans, { paires: 'fixe' }).acc.T.defaut.ecart, stats.acc.T.defaut.ecart);
   assert.strictEqual(MES.PAIRES.length, 30);
+});
+
+test('equilibre : score S, écart aux rangs 1 à 7, D6 étendu, première ville, villes à <= 4 pas', () => {
+  let e = GR.equilibre(DOC_VIDE, { graphe: grapheDistances([2, 3, 3, 4, 5, 6, 6], [2, 3, 3, 4, 5, 6, 6]) });
+  assert.strictEqual(e.S, 0);
+  assert.strictEqual(e.aSurveiller, false);
+  assert.deepStrictEqual(e.alertes, []);
+  assert.deepStrictEqual(e.villesA4, { 1: 4, 2: 4, ecart: 0 });
+  // D2 = 2 3 3 4 5 6 9 : écart 3 au rang 7 seulement : S = 3, D6 étendu mais pas D6 (rangs 1 à 4)
+  e = GR.equilibre(DOC_VIDE, { graphe: grapheDistances([2, 3, 3, 4, 5, 6, 6], [2, 3, 3, 4, 5, 6, 9]) });
+  assert.strictEqual(e.S, 3);
+  assert.strictEqual(e.ecartMax7, 3);
+  assert.strictEqual(e.ecartRang, 0);
+  assert.deepStrictEqual(e.alertes.map((a) => a.code), ['ecart_rang_etendu']);
+  // S = 4 : à surveiller
+  e = GR.equilibre(DOC_VIDE, { graphe: grapheDistances([2, 3, 3, 4, 5, 6, 6], [2, 4, 4, 5, 6, 6, 6]) });
+  assert.strictEqual(e.S, 4);
+  assert.strictEqual(e.aSurveiller, true);
+  // première ville inégale
+  e = GR.equilibre(DOC_VIDE, { graphe: grapheDistances([2, 3, 3, 4, 5, 6, 6], [3, 3, 3, 4, 5, 6, 6]) });
+  assert.ok(e.alertes.some((a) => a.code === 'premiere_ville_inegale'));
+  // plateau vide : S nul absent
+  assert.strictEqual(GR.equilibre(M.nouveauDocument()).S, null);
 });

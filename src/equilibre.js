@@ -19,11 +19,12 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   var GR = PM.graphe;
 
   var EXPLICATION = 'Pour chaque joueur, on mesure en pas la distance de chaque ville à son apparition la plus proche, ' +
-    'puis on trie les 7 distances. Le plateau est jugé équilibré si, aux rangs 1 à 4, les deux joueurs ne diffèrent ' +
-    'jamais de plus de 2 pas. Deux alertes secondaires : un joueur plus proche de 5 villes ou plus, ' +
-    'ou une apparition à plus de 7 pas de toute ville.';
+    'puis on trie les 7 distances. Alerte principale : un joueur plus proche de 5 villes ou plus (« 5 contre 2 »). ' +
+    'Alerte D6 étendu : deux joueurs qui diffèrent de plus de 2 pas à un rang quelconque de 1 à 7. ' +
+    'Le score S est la somme de ces écarts sur les 7 rangs (à surveiller à partir de 4). ' +
+    'La première ville doit être à la même distance pour les deux joueurs. Par défaut, une ville n\'est qu\'une destination (non traversable).';
 
-  /** Analyse complète : graphe, résultat D6 et goulets des deux joueurs. */
+  /** Analyse complète : graphe, résultat D6 et goulets des deux joueurs (villes non traversables par défaut). */
   function analyser(doc, options) {
     options = options || {};
     var graphe = GR.construire(doc, options);
@@ -40,12 +41,12 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
    *    ecartRang, partage: {j1, j2, egalite}, tempo: [{pas, j1, j2}], premiere: {j1, j2, ecart},
    *    goulets: [{ville, j1, j2, faible}], articulations: {1: [texte], 2: [texte]}, alertes: [texte] }
    */
-  function rapport(analyse) {
+  function rapport(analyse, autre) {
     var r = analyse.resultat, seuil = GR.SEUIL_ECART;
     var rangs = r.parRang.map(function (x) {
       return {
         rang: x.rang, d1: texteDistance(x.d1), d2: texteDistance(x.d2),
-        ecart: x.ecart === null ? '—' : String(x.ecart), fort: !!(x.compte && x.ecart !== null && x.ecart > seuil), compte: x.compte
+        ecart: x.ecart === null ? '—' : String(x.ecart), fort: x.ecart !== null && x.ecart > seuil, compte: x.compte
       };
     });
     var tempo = [3, 4, 5].map(function (n) { return { pas: n, j1: r.tempo[1][n], j2: r.tempo[2][n] }; });
@@ -60,7 +61,20 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
         return libelle + ' coupe ' + a.villesCoupees.length + ' ville(s) du joueur ' + gj.joueur + ' : ' + a.villesCoupees.map(nomVille).join(', ') + '.';
       });
     }
+    // Comparaison des deux modes (traversables / non), seulement s'ils diffèrent
+    function resume(res) {
+      return { traversables: res.villesTraversables, S: res.S === null ? '—' : String(res.S), ecartMax7: res.ecartMax7 === null ? '—' : String(res.ecartMax7),
+        partage: Math.max(res.partage[1], res.partage[2]) + ' contre ' + Math.min(res.partage[1], res.partage[2]),
+        alertes: res.alertes.map(function (a) { return a.code; }).join(', ') || 'aucune' };
+    }
+    var comparaison = null;
+    if (autre && JSON.stringify([autre.resultat.D, autre.resultat.alertes]) !== JSON.stringify([r.D, r.alertes])) {
+      comparaison = [resume(r), resume(autre.resultat)].sort(function (a, b) { return (a.traversables ? 1 : 0) - (b.traversables ? 1 : 0); });
+    }
     return {
+      S: r.S, scoreTexte: r.S === null ? '—' : String(r.S), aSurveiller: !!r.aSurveiller,
+      villesA4: { j1: r.villesA4[1], j2: r.villesA4[2], ecart: r.villesA4.ecart },
+      comparaison: comparaison,
       explication: EXPLICATION,
       traversables: r.villesTraversables,
       complet: r.complet,
@@ -123,11 +137,12 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   function dessiner(conteneur, lireDoc, options) {
     var doc = conteneur.ownerDocument || document;
     options = options || {};
-    var traversables = options.villesTraversables !== false;
+    var traversables = options.villesTraversables === true;
     while (conteneur.firstChild) conteneur.removeChild(conteneur.firstChild);
     var racine = el(doc, 'div', 'pm-equilibre');
-    var a = analyser(lireDoc(), { villesTraversables: traversables });
-    var m = rapport(a);
+    var docCourant = lireDoc();
+    var a = analyser(docCourant, { villesTraversables: traversables });
+    var m = rapport(a, analyser(docCourant, { villesTraversables: !traversables }));
 
     racine.appendChild(el(doc, 'p', 'pm-equilibre-explication', m.explication));
 
@@ -138,7 +153,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     cb.type = 'checkbox';
     cb.id = idCase;
     cb.checked = traversables;
-    var lab = el(doc, 'label', null, ' Les villes sont traversables (on peut passer par une ville pour aller ailleurs)');
+    var lab = el(doc, 'label', null, ' Les villes sont traversables (on peut passer par une ville pour aller ailleurs ; décoché = destination seulement, cas le plus pessimiste)');
     lab.setAttribute('for', idCase);
     lab.insertBefore(cb, lab.firstChild);
     cb.addEventListener('change', function () {
@@ -175,7 +190,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     // Distances triées
     var sDist = section(doc, 'Distances des villes (en pas), triées');
     if (m.rangs.length) {
-      sDist.appendChild(tableau(doc, 'Distance de la k-ième ville la plus proche, par joueur. Écart mis en évidence au-delà de 2 (rangs 1 à 4).',
+      sDist.appendChild(tableau(doc, 'Distance de la k-ième ville la plus proche, par joueur. Écart mis en évidence au-delà de 2 (rangs 1 à 7).',
         ['Rang', 'Joueur 1', 'Joueur 2', 'Écart'],
         m.rangs.map(function (x) {
           return { classe: (x.fort ? 'pm-equilibre-ecart-fort ' : '') + (x.compte ? '' : 'pm-equilibre-rang-libre'), cellules: [String(x.rang), x.d1, x.d2, x.ecart] };
@@ -183,6 +198,16 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       sDist.appendChild(el(doc, 'p', 'pm-equilibre-note', m.ecartRang === null
         ? 'Écart maximal aux rangs 1 à 4 : non calculable.'
         : 'Écart maximal aux rangs 1 à 4 : ' + m.ecartRang + (m.ecartRang > GR.SEUIL_ECART ? ' (supérieur à ' + GR.SEUIL_ECART + ').' : '.')));
+      var pS = el(doc, 'p', 'pm-equilibre-score' + (m.aSurveiller ? ' pm-equilibre-surveiller' : ''),
+        'Score S (somme des écarts sur les 7 rangs) : ' + m.scoreTexte + (m.aSurveiller ? ' : à surveiller (4 ou plus).' : '.'));
+      sDist.appendChild(pS);
+      if (m.comparaison) {
+        sDist.appendChild(tableau(doc, 'Les deux modes donnent des résultats différents',
+          ['Mode', 'S', 'Écart max (rangs 1 à 7)', 'Partage', 'Alertes'],
+          m.comparaison.map(function (c) {
+            return { cellules: [c.traversables ? 'Villes traversables' : 'Villes non traversables', c.S, c.ecartMax7, c.partage, c.alertes] };
+          })));
+      }
     } else {
       sDist.appendChild(el(doc, 'p', 'pm-equilibre-note', 'Aucune distance à afficher : il faut des villes et des apparitions reliées.'));
     }
@@ -194,6 +219,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       ' · du joueur 2 : ' + m.partage.j2 + ' · à égalité : ' + m.partage.egalite + '.'));
     sPartage.appendChild(tableau(doc, 'Villes atteignables en au plus n pas', ['Pas', 'Joueur 1', 'Joueur 2'],
       m.tempo.map(function (t) { return { cellules: ['≤ ' + t.pas, String(t.j1), String(t.j2)] }; })));
+    sPartage.appendChild(el(doc, 'p', 'pm-equilibre-note', 'Villes à au plus 4 pas : joueur 1 ' + m.villesA4.j1 + ', joueur 2 ' + m.villesA4.j2 + ' (différence ' + m.villesA4.ecart + ', information).'));
     sPartage.appendChild(el(doc, 'p', 'pm-equilibre-note', 'Première ville : joueur 1 à ' + m.premiere.j1 + ' pas, joueur 2 à ' +
       m.premiere.j2 + ' pas (écart ' + m.premiere.ecart + ').'));
     racine.appendChild(sPartage);
@@ -230,7 +256,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   /** Ouvre le rapport dans la boîte de dialogue commune. Lecture seule. */
   function ouvrir(etat) {
     var contenu = PM.dialogue.ouvrir('Rapport d\'équilibre');
-    return dessiner(contenu, function () { return etat.doc(); }, { villesTraversables: true });
+    return dessiner(contenu, function () { return etat.doc(); }, { villesTraversables: false });
   }
 
   PM.equilibre = { analyser: analyser, rapport: rapport, remplir: remplir, ouvrir: ouvrir, EXPLICATION: EXPLICATION };

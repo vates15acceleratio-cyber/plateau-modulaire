@@ -34,3 +34,7 @@
 @media (max-width: 560px) {
   .pm-equilibre-tableau th, .pm-equilibre-tableau td { padding: 4px 6px; }
 }
+
+/* Score S */
+.pm-equilibre-score { margin: 6px 0 0; font-weight: 600; }
+.pm-equilibre-surveiller { color: var(--pm-alerte); background: #fff3e0; padding: 4px 8px; border-radius: var(--pm-rayon); }

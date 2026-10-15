@@ -240,3 +240,55 @@ test('règle des carrefours identique dans les contrôles et l’assemblage (36 
     }
   }
 });
+
+/* ---------------------------------------------------------------------- */
+/* Alertes d'équilibre (docs/16) : PM.graphe, villes non traversables       */
+/* ---------------------------------------------------------------------- */
+
+test('équilibre : sans PM.graphe chargé, aucune alerte d\'équilibre', () => {
+  assert.equal(globalThis.PM.graphe, undefined);
+  let d = avecJetons(plateauComplet(), TOUTES_JONCTIONS.map(([i, j]) => [i, j, (i === 1 || i === 3) && j === 2 ? 'carrefour' : 'capture']));
+  const r = C.calculer(d);
+  for (const code of ['cinq_contre_deux', 'ecart_rang_etendu', 'premiere_ville_inegale']) assert.equal(trouver(r.alertes, code).length, 0, code);
+});
+
+test('équilibre : avec PM.graphe, alertes seulement sur plateau complet (7 villes, 4 apparitions)', () => {
+  require('../src/graphe.js');
+  try {
+    // plateau incomplet : rien
+    assert.deepEqual(C.calculer(docAvecExemples()).alertes, []);
+    const incomplet = avecJetons(plateauComplet(), [[2, 2, 'capture']]);
+    for (const a of C.calculer(incomplet).alertes) assert.ok(!['cinq_contre_deux', 'ecart_rang_etendu', 'premiere_ville_inegale'].includes(a.code), a.code);
+    // plateau complet : les codes d'équilibre sont cohérents avec PM.graphe (villes non traversables)
+    const d = avecJetons(plateauComplet(), TOUTES_JONCTIONS.map(([i, j]) => [i, j, (i === 1 || i === 3) && j === 2 ? 'carrefour' : 'capture']));
+    const e = globalThis.PM.graphe.equilibre(d, { villesTraversables: false });
+    assert.equal(e.complet, true);
+    const attendu = e.alertes.map((a) => a.code).filter((c) => ['cinq_contre_deux', 'ecart_rang_etendu', 'premiere_ville_inegale'].includes(c)).sort();
+    const obtenu = C.calculer(d).alertes.map((a) => a.code).filter((c) => ['cinq_contre_deux', 'ecart_rang_etendu', 'premiere_ville_inegale'].includes(c)).sort();
+    assert.deepEqual(obtenu, attendu);
+  } finally {
+    delete globalThis.PM.graphe;
+  }
+});
+
+test('carrefours : message enrichi avec le taux de « 5 contre 2 » hors paire par défaut', () => {
+  const base = plateauComplet();
+  const jetons = (a, b) => TOUTES_JONCTIONS.map(([i, j]) => [i, j, ((i === a[0] && j === a[1]) || (i === b[0] && j === b[1])) ? 'carrefour' : 'capture']);
+  // paire par défaut : pas d'alerte de paire
+  assert.equal(trouver(C.calculer(avecJetons(base, jetons([1, 2], [3, 2]))).alertes, 'carrefours_paire').length, 0);
+  // autre paire permise : alerte avec le taux
+  const al = trouver(C.calculer(avecJetons(base, jetons([1, 1], [1, 2]))).alertes, 'carrefours_paire');
+  assert.equal(al.length, 1);
+  assert.match(al[0].message, /\(1, 1\) et \(1, 2\)/);
+  assert.match(al[0].message, /9,6 %/);
+  assert.equal(al[0].niveau, 'alerte');
+  // l'ordre de pose ne change pas la paire
+  const inverse = trouver(C.calculer(avecJetons(base, jetons([1, 2], [1, 1]))).alertes, 'carrefours_paire');
+  assert.equal(inverse[0].message, al[0].message);
+  // paire du même camp : alerte existante, pas d'alerte de paire
+  const meme = C.calculer(avecJetons(base, jetons([1, 1], [2, 1]))).alertes;
+  assert.equal(trouver(meme, 'carrefours_paire').length, 0);
+  assert.equal(trouver(meme, 'carrefours_meme_cote').length, 1);
+  // paire à 0 % (autre que la paire par défaut) : pas d'alerte
+  assert.equal(trouver(C.calculer(avecJetons(base, jetons([1, 2], [2, 2]))).alertes, 'carrefours_paire').length, 0);
+});
