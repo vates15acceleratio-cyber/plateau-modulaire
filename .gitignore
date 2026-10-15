@@ -1,0 +1,31 @@
+# Livrables et dépendances
+dist/
+node_modules/
+
+# Fichiers système
+Thumbs.db
+desktop.ini
+.DS_Store
+ehthumbs.db
+
+# Éditeurs et fichiers temporaires
+*.tmp
+*.temp
+*.swp
+*~
+.vscode/
+.idea/
+
+# Secrets et configuration locale
+.env
+.env.*
+*.key
+*.pfx
+*.pem
+
+# Bases de données locales et journaux
+*.db
+*.sqlite
+*.sqlite3
+*.log
+npm-debug.log*

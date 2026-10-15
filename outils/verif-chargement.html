@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>Vérif chargement</title></head>
+<body><pre id="r">…</pre>
+<!-- Vérifie que les modules se chargent par <script src> en file:// (sans modules ES). -->
+<script src="../src/geometrie.js"></script>
+<script src="../src/modele.js"></script>
+<script>
+  var out;
+  try {
+    out = PM.modele.exemples.map(function (m) {
+      var v = PM.modele.validerModele(m);
+      return m.id + ' : ' + (v.complet ? 'complet' : 'ERREURS ' + JSON.stringify(v.erreurs));
+    }).join('\n');
+  } catch (e) { out = 'ECHEC : ' + e.message; }
+  document.getElementById('r').textContent = out;
+</script>
+</body></html>
