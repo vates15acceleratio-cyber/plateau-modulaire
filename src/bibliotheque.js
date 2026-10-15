@@ -141,7 +141,11 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       if (!zone) return;
       var id = zone.getAttribute('data-glisser');
       var m = PM.modele.modeleParId(etat.doc(), id);
-      if (!m || !PM.modele.validerModele(m).complet) return; // incomplet : non glissable
+      if (!m) return;
+      if (!PM.modele.validerModele(m).complet) { // incomplet : non glissable, et on dit pourquoi (recette B2)
+        etat.signaler('Ce modèle est incomplet : complétez-le dans l’éditeur avant de le poser.', 'erreur');
+        return;
+      }
       appui = { id: id, x: ev.clientX, y: ev.clientY, pointerId: ev.pointerId };
     });
     document.addEventListener('pointermove', function (ev) {

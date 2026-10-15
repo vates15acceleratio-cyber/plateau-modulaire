@@ -56,7 +56,10 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
           etat.signaler(raison, 'erreur');
           return { ok: false, raison: raison };
         }
-        if (!suivant || typeof suivant !== 'object') return { ok: false, raison: 'Résultat invalide.' };
+        if (!suivant || typeof suivant !== 'object') {
+          etat.signaler('Action impossible : résultat invalide.', 'erreur');
+          return { ok: false, raison: 'Résultat invalide.' };
+        }
         passe.push({ doc: courant, libelle: libelle || '' });
         if (passe.length > MAX_HISTORIQUE) passe.shift();
         futur = [];

@@ -1,5 +1,39 @@
 # Journal des modifications
 
+## [0.03.0] - 2026-10-15
+
+Mineure
+
+Première version utilisable de l'interface : ouvrir `index.html` dans le navigateur.
+
+### Ajouté
+- Page `index.html` avec deux onglets : Plateau et Tuiles.
+- Socle de l'interface : état partagé (`src/etat.js`) avec annuler et rétablir sur 100 niveaux, application (`src/app.js`), dessin SVG des tuiles et des jetons (`src/rendu.js`).
+- Éditeur de tuile (`src/editeur-tuile.js`) : création (choix du rôle), duplication et modification des modèles.
+- Bibliothèque de modèles et plateau d'assemblage (`src/bibliotheque.js`, `src/assemblage.js`) : glisser-déposer ou deux clics, rotations, jetons, formes réduites du plateau.
+- Compteurs et alertes (`src/controles.js`), avec pastille dans la barre du haut.
+- Sauvegarde : fichier JSON à télécharger et à ouvrir, et sauvegarde automatique dans le navigateur (`src/sauvegarde.js`).
+- Recettes : `tests/recette-interface.test.js` et `outils/recette-interface.html`.
+- Pages d'essai par module (`outils/essai-*.html`) et serveur local de test (`outils/serveur.js`).
+
+### Modifié
+- Catalogue (`src/catalogue.js`) retouché après la validation de l'advisor design de jeu : raccords morts en moyenne 0,69, au maximum 1 (seul le mur voulu de C6).
+
+### Corrigé
+- Fichier JSON piégé : les coordonnées non numériques sont écartées à l'ouverture, pour qu'un fichier ne puisse pas injecter de balisage dans l'interface (correctif de sécurité).
+- « Ouvrir » est annulable : le document précédent reste dans l'historique.
+- Sauvegarde automatique indisponible ou illisible : signalée dans la barre d'état au lieu d'échouer en silence.
+- Règle des carrefours unifiée : une seule règle « même camp de joueur » pour l'assemblage et les contrôles.
+- Modèle incomplet glissé sur le plateau : le refus est expliqué dans la barre d'état.
+- Action au résultat invalide : un message s'affiche dans la barre d'état.
+- Écran étroit : le plateau occupe toute la largeur et les cibles tactiles font 44 px.
+
+### Limites connues
+- Pas encore faits : export pour impression, plateau aléatoire, rapport d'équilibre.
+- Deux limites mineures de robustesse, avec tests `todo` : quelques fonctions pures lèvent une erreur native sur des entrées nulles que l'interface ne produit pas.
+- Non vérifié : ressenti souris et tactile, vrai téléphone, boîte de dialogue de fichier réelle.
+- Les cases du catalogue ne sont pas toutes sur la grille de 1 cm de l'éditeur : la première modification d'une case la recale de quelques millimètres.
+
 ## [0.02.0] - 2026-10-15
 
 ### Ajouté

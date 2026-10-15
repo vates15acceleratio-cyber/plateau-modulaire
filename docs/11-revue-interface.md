@@ -21,3 +21,11 @@ Contenu hostile dans les fragments SVG ; cohérence des règles de carrefours en
 ## Arbitrages de l'orchestrateur
 - **I3** : « même côté » = **même camp de joueur**, c'est-à-dire les 2 carrefours sur la rangée de jonctions nord (j = 1) ou les 2 sur la rangée sud (j = 3) (1b D7 : « sinon 3 villes contre 1 »). Les colonnes ouest / est ne sont pas des camps. Une seule fonction, dans `controles.js`, appelée par l'assemblage.
 - **B1, I1, I2, I3, M6** corrigés avant la version ; I4, I5 et les autres points mineurs reportés à l'itération suivante.
+
+# Recette de l'interface (testeur, Sonnet 5.5), 2026-10-15
+- `tests/recette-interface.test.js` (27 tests) et `outils/recette-interface.html` (163 contrôles navigateur, vrais événements Pointer / clavier sur l'application complète) : **163 OK, 0 échec**, aucune erreur JavaScript.
+- Parcours couverts : plateau 4×4 complet par glisser-déposer jusqu'à « Plateau complet » ; refus expliqués ; annuler / rétablir à travers les modules ; éditeur complet ; contrôles et surbrillance ; formes réduites ; sauvegarde, ouverture, autosave ; raccourcis par onglet.
+- Bugs corrigés par l'orchestrateur : modèle incomplet glissé sans explication (B2), règle des carrefours divergente (B3), `appliquer` sans message sur résultat invalide (B4), mise en page étroite et cibles tactiles (B1, CSS).
+- Restent (mineurs, `todo`) : `TypeError` natif de quelques fonctions pures sur des entrées nulles que l'interface ne produit jamais (B6).
+- À savoir : les cases du catalogue ne sont pas toutes sur la grille de 1 cm de l'éditeur ; la première modification d'une case la recale de quelques mm.
+- Non vérifié : ressenti réel souris / tactile, vrai téléphone, boîte de dialogue de fichier réelle.

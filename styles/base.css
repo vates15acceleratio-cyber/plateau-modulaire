@@ -43,11 +43,14 @@ button:focus-visible { outline: 2px solid var(--pm-accent); outline-offset: 1px;
 .pm-barre-etat[data-niveau="erreur"] { color: var(--pm-erreur); font-weight: 600; }
 .pm-module-absent { padding: 24px; color: var(--pm-discret); font-style: italic; }
 
-/* Écran étroit : colonnes empilées. */
+/* Écran étroit : colonnes empilées, plateau sur toute la largeur, cibles tactiles de 44 px (recette B1). */
 @media (max-width: 900px) {
   .pm-principal { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-  .pm-colonne-gauche { max-height: 180px; border-right: 0; border-bottom: 1px solid var(--pm-bord); }
-  .pm-ecran { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  .pm-colonne-gauche { max-height: 38vh; border-right: 0; border-bottom: 1px solid var(--pm-bord); }
+  .pm-ecran { grid-template-columns: 1fr; grid-template-rows: minmax(60vh, 1fr) auto; }
+  .pm-zone-centrale { min-height: 60vh; }
   .pm-colonne-droite { border-left: 0; border-top: 1px solid var(--pm-bord); }
-  .pm-barre { flex-wrap: wrap; }
+  .pm-barre { flex-wrap: wrap; gap: 8px; }
+  .pm-actions { margin-left: 0; flex-wrap: wrap; }
+  button { min-height: 44px; min-width: 44px; }
 }
