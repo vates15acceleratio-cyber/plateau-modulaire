@@ -17,9 +17,9 @@
  * Principes de conception (détaillés dans tests/catalogue.test.js) :
  *  - chaque côté intérieur porte la position milieu (pos 1), sauf le côté ouest
  *    de la centrale C6 (vide) : deux côtés face à face se raccordent presque toujours ;
- *  - les positions début / fin ne servent que de variantes, sur 3 modèles
- *    (C2 ouest pos 0, K4 est pos 2, B5 ouest pos 0), placées près d'une jonction
- *    pour contourner la ville ; chaque variante coûte en moyenne un raccord mort ;
+ *  - aucune position début / fin : la seule variante de profil est le côté ouest
+ *    vide de C6, un « mur » voulu qui crée un goulet (un raccord mort n'est admis
+ *    que s'il a un sens de jeu, docs/9-validation-catalogue.md) ;
  *  - les cases à port sont sur la bissectrice de leur coin ; chaque case d'une
  *    centrale porte exactement un port (4 cases, 4 ports) ;
  *  - dans une apparition, les deux cases à port touchent la case d'apparition
@@ -46,9 +46,14 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return { id: id, nom: nom, role: role, exemplaires: exemplaires, cases: cases, chemins: chemins };
   }
 
-  /* Centrales : 4 cases sur les bissectrices, une par quart (c1 NO, c2 NE, c3 SE, c4 SO). */
-  function casesCentrale() {
-    return [kase('c1', 36, 36), kase('c2', 84, 36), kase('c3', 84, 84), kase('c4', 36, 84)];
+  /*
+   * Centrales : 4 cases sur les bissectrices, une par quart (c1 NO, c2 NE, c3 SE, c4 SO).
+   * d = [dNO, dNE, dSE, dSO] : distance (mm) de chaque case à son coin, mesurée sur chaque axe
+   * (32 à 44 mm), pour varier les silhouettes sans changer le routage.
+   */
+  function casesCentrale(d) {
+    var C = PM.geometrie.COTE;
+    return [kase('c1', d[0], d[0]), kase('c2', C - d[1], d[1]), kase('c3', C - d[2], C - d[2]), kase('c4', d[3], C - d[3])];
   }
   function portsCentrale() {
     return [port('p1', 'c1', 0), port('p2', 'c2', 1), port('p3', 'c3', 2), port('p4', 'c4', 3)];
@@ -58,39 +63,39 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return [
       /* ---------------- Centrales ---------------- */
       // anneau des 4 cases ; raccords en moulinet (chaque milieu sur la case de début du côté)
-      modele('C1', 'Anneau', 'centrale', 1, casesCentrale(), [
+      modele('C1', 'Anneau', 'centrale', 1, casesCentrale([36, 36, 36, 36]), [
         lien('h1', 'c1', 'c2'), lien('h2', 'c2', 'c3'), lien('h3', 'c3', 'c4'), lien('h4', 'c4', 'c1')
       ].concat(portsCentrale(), [
         raccord('r1', 'c1', 0, 1), raccord('r2', 'c2', 1, 1), raccord('r3', 'c3', 2, 1), raccord('r4', 'c4', 3, 1)
       ])),
-      // U ouvert à l'ouest ; variante ouest pos 0 : l'ouest relie les deux bras par le voisin
-      modele('C2', 'Fer à cheval', 'centrale', 1, casesCentrale(), [
+      // U ouvert à l'ouest ; le raccord ouest est sur la case NO, la case SO est un bout de bras
+      modele('C2', 'Fer à cheval', 'centrale', 1, casesCentrale([32, 40, 40, 32]), [
         lien('h1', 'c1', 'c2'), lien('h2', 'c2', 'c3'), lien('h3', 'c3', 'c4')
       ].concat(portsCentrale(), [
         raccord('r1', 'c2', 0, 1), raccord('r2', 'c3', 1, 1), raccord('r3', 'c4', 2, 1),
-        raccord('r4', 'c1', 3, 1), raccord('r5', 'c4', 3, 0)
+        raccord('r4', 'c1', 3, 1)
       ])),
       // Z : bord nord, diagonale NE-SO, bord sud ; NO et SE à 3 pas
-      modele('C3', 'Zigzag', 'centrale', 1, casesCentrale(), [
+      modele('C3', 'Zigzag', 'centrale', 1, casesCentrale([36, 44, 36, 44]), [
         lien('h1', 'c1', 'c2'), lien('h2', 'c2', 'c4'), lien('h3', 'c4', 'c3')
       ].concat(portsCentrale(), [
         raccord('r1', 'c1', 0, 1), raccord('r2', 'c2', 1, 1), raccord('r3', 'c3', 2, 1), raccord('r4', 'c4', 3, 1)
       ])),
       // étoile autour de la case NO (diagonale vers SE) ; deux raccords sur la case SE
-      modele('C4', 'Étoile', 'centrale', 1, casesCentrale(), [
+      modele('C4', 'Étoile', 'centrale', 1, casesCentrale([44, 34, 34, 34]), [
         lien('h1', 'c1', 'c2'), lien('h2', 'c1', 'c4'), lien('h3', 'c1', 'c3')
       ].concat(portsCentrale(), [
         raccord('r1', 'c2', 0, 1), raccord('r2', 'c3', 1, 1), raccord('r3', 'c3', 2, 1), raccord('r4', 'c4', 3, 1)
       ])),
       // patte : triangle NO-NE-SE et queue vers SO
-      modele('C5', 'Patte', 'centrale', 1, casesCentrale(), [
+      modele('C5', 'Patte', 'centrale', 1, casesCentrale([38, 38, 44, 32]), [
         lien('h1', 'c1', 'c2'), lien('h2', 'c2', 'c3'), lien('h3', 'c1', 'c3'), lien('h4', 'c3', 'c4')
       ].concat(portsCentrale(), [
         raccord('r1', 'c2', 0, 1), raccord('r2', 'c3', 1, 1), raccord('r3', 'c4', 2, 1),
         raccord('r4', 'c1', 3, 1)
       ])),
       // losange (anneau + diagonale NE-SO), très relié : côté ouest sans raccord
-      modele('C6', 'Losange', 'centrale', 1, casesCentrale(), [
+      modele('C6', 'Losange', 'centrale', 1, casesCentrale([32, 44, 32, 44]), [
         lien('h1', 'c1', 'c2'), lien('h2', 'c2', 'c3'), lien('h3', 'c3', 'c4'), lien('h4', 'c4', 'c1'), lien('h5', 'c2', 'c4')
       ].concat(portsCentrale(), [
         raccord('r1', 'c1', 0, 1), raccord('r2', 'c2', 1, 1), raccord('r3', 'c3', 2, 1)
@@ -115,11 +120,11 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
           lien('h1', 'c2', 'c3'), lien('h2', 'c3', 'c1'), port('p1', 'c1', 2),
           raccord('r1', 'c2', 1, 1), raccord('r2', 'c1', 2, 1)
         ]),
-      // chemin E - S - port ; variante est pos 2 sur la case à port (contourne la ville)
-      modele('K4', 'Double est', 'coin', 1,
+      // chemin E - S - port par la diagonale ; est -> sud en 1 pas, port en bout de chemin
+      modele('K4', 'Diagonale', 'coin', 1,
         [kase('c1', 84, 84), kase('c2', 88, 36), kase('c3', 36, 88)], [
           lien('h1', 'c2', 'c3'), lien('h2', 'c3', 'c1'), port('p1', 'c1', 2),
-          raccord('r1', 'c2', 1, 1), raccord('r2', 'c3', 2, 1), raccord('r3', 'c1', 1, 2)
+          raccord('r1', 'c2', 1, 1), raccord('r2', 'c3', 2, 1)
         ]),
       // symétrique de K3 : l'est entre directement sur la case à port
       modele('K5', 'Équerre', 'coin', 1,
@@ -135,9 +140,9 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
           lien('h1', 'c3', 'c1'), lien('h2', 'c3', 'c2'), port('p1', 'c1', 2), port('p2', 'c2', 3),
           raccord('r1', 'c1', 1, 1), raccord('r2', 'c2', 3, 1), raccord('r3', 'c3', 2, 1)
         ]),
-      // barre basse entre les ports, case haute vers l'est ; est-ouest en 1 pas
+      // barre basse entre les ports, case haute au NE vers l'est ; est-ouest en 1 pas
       modele('B2', 'Barre', 'bord', 1,
-        [kase('c1', 84, 84), kase('c2', 36, 84), kase('c3', 60, 42)], [
+        [kase('c1', 84, 84), kase('c2', 36, 84), kase('c3', 88, 40)], [
           lien('h1', 'c1', 'c2'), lien('h2', 'c3', 'c2'), port('p1', 'c1', 2), port('p2', 'c2', 3),
           raccord('r1', 'c3', 1, 1), raccord('r2', 'c2', 3, 1), raccord('r3', 'c1', 2, 1)
         ]),
@@ -153,11 +158,11 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
           lien('h1', 'c1', 'c2'), lien('h2', 'c1', 'c3'), port('p1', 'c1', 2), port('p2', 'c2', 3),
           raccord('r1', 'c3', 1, 1), raccord('r2', 'c2', 3, 1), raccord('r3', 'c2', 2, 1)
         ]),
-      // barre basse + case haute vers l'ouest ; variante ouest pos 0 sur la case SO
+      // barre basse + case haute au NO vers l'ouest (silhouette symétrique de B2)
       modele('B5', 'Pont', 'bord', 1,
-        [kase('c1', 84, 84), kase('c2', 36, 84), kase('c3', 60, 42)], [
+        [kase('c1', 84, 84), kase('c2', 36, 84), kase('c3', 32, 40)], [
           lien('h1', 'c1', 'c2'), lien('h2', 'c2', 'c3'), port('p1', 'c1', 2), port('p2', 'c2', 3),
-          raccord('r1', 'c1', 1, 1), raccord('r2', 'c3', 3, 1), raccord('r3', 'c2', 3, 0), raccord('r4', 'c1', 2, 1)
+          raccord('r1', 'c1', 1, 1), raccord('r2', 'c3', 3, 1), raccord('r4', 'c1', 2, 1)
         ]),
 
       /* ---------------- Apparitions (extérieur N, ports SE et SO) ---------------- */

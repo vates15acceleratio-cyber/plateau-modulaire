@@ -34,3 +34,9 @@ Livré : `src/catalogue.js` (`PM.catalogue = { version, modeles, nouveauDocument
 - **Arbitrage variété / raccords morts à soumettre à l'advisor design de jeu.**
 - Utilitaires de graphe dans `tests/catalogue.test.js` (`construireGraphe`, `distances`, `equilibre`, `mesureFlancs`) : à reprendre dans `src/graphe.js` (sous-agent 7). Contrôle de tracé `problemesTrace` : base de la règle « chevauchement chemin / case ».
 - Tracé attendu des chemins : amorce perpendiculaire de 10 mm au raccord, puis coude.
+
+## Retouches après validation (2026-10-15)
+- C2 sans `r5` ; K4 sans `r3` (renommé « Diagonale ») ; B5 sans `r3`, case haute en (32, 40) ; B2 case haute en (88, 40).
+- Cases des centrales décalées le long de la bissectrice (32 à 44 mm selon le modèle) : gain visuel seulement.
+- Second mur (C5 sans `r4`) : **rejeté** (raccords morts ×2, D6 moins bon, une autoroute de flanc apparaît).
+- Nouvelles mesures : raccords morts **0,69 en moyenne, 1 au maximum** (seul le mur voulu de C6) ; D6, flancs, A1/A2 inchangés.
