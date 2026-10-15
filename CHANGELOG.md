@@ -1,5 +1,12 @@
 # Journal des modifications
 
+## [0.02.0] - 2026-10-15
+
+### Ajouté
+- Catalogue réel des tuiles (`src/catalogue.js`) : 18 modèles, 20 tuiles (6 centrales, 5 coins, 5 bords neutres, 2 modèles d'apparition en double), tous valides.
+- Tests du catalogue (`tests/catalogue.test.js`) avec simulation de 1000 plateaux 4×4 aléatoires : connexité, écart entre villes, 50 cases de déplacement, raccords morts, équilibre.
+- `docs/8-catalogue.md` : description des modèles et mesures de la simulation.
+
 ## [0.01.0] - 2026-10-15
 
 Première version

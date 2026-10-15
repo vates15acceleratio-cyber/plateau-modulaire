@@ -20,6 +20,7 @@ PlateauModulaire/
     sauvegarde.js       JSON                                                            (sous-agent 5)
     export.js           PDF / SVG / PNG                                                 (sous-agent 6)
     generateur.js       plateau aléatoire                                               (sous-agent 8)
+    catalogue.js        catalogue réel des 18 modèles / 20 tuiles                       (sous-agent catalogue)
     app.js              colle les écrans entre eux (orchestrateur)
   vendor/               bibliothèques tierces embarquées (version figée), ex. jsPDF
   tests/
@@ -46,6 +47,7 @@ PlateauModulaire/
 | Module | État | Tests |
 |---|---|---|
 | `geometrie.js`, `modele.js` (sous-agent 1) | livré le 2026-10-15, corrigé après revue et recette le 2026-10-15 | 225 / 225 (dont recette du testeur) |
+| `catalogue.js` (sous-agent catalogue) | livré le 2026-10-15, 18 modèles / 20 tuiles, à charger après `modele.js` | 19 (simulation de 1000 plateaux) |
 
 ## Référence fonctionnelle
 `docs/3-synthese.md`, puis `docs/2-avis-geometrie.md` (conventions de côtés / coins, masques, cas de test T1 à T4).
