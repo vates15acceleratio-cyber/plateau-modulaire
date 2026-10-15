@@ -48,6 +48,17 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   /** Lit une table indexée par rôle, seulement si le rôle est connu (sinon undefined). */
   function tableRole(table, role) { return ROLES.indexOf(role) >= 0 ? table[role] : undefined; }
 
+  /**
+   * Format de grille (objet de PM.geometrie.format) à partir d'un objet format, d'un identifiant
+   * ('4x4' | '5x5') ou de rien (format 4×4 par défaut).
+   */
+  function resoudreFormat(f) {
+    if (f && typeof f === 'object') return f;
+    return G.format(f === undefined || f === null ? G.FORMAT_DEFAUT : f);
+  }
+  /** Format du document : champ `format`, absent = '4x4'. Lève une Error si le format est inconnu. */
+  function formatDuDocument(doc) { return G.format((doc && doc.format) || G.FORMAT_DEFAUT); }
+
   function nomCote(c) { return ['nord', 'est', 'sud', 'ouest'][c]; }
   function nomCoin(k) { return ['NO', 'NE', 'SE', 'SO'][k]; }
 
@@ -126,7 +137,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   function refRaccord(r, ch) { return { type: 'raccord', id: r.cote + ':' + r.pos, cote: r.cote, pos: r.pos, chemin: ch && ch.id }; }
 
   /**
-   * Règles de validation. Chaque règle reçoit le modèle et renvoie un tableau
+   * Règles de validation. Chaque règle reçoit le modèle et le format de grille, et renvoie un tableau
    * d'erreurs. Pour ajouter une règle (ex. chevauchement chemin / case),
    * pousser une fonction dans PM.modele.regles.
    */
@@ -183,25 +194,25 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   });
 
   // Géométrie des cases : diamètre, marge de coupe, chevauchement, zones de coin
-  regles.push(function (m) {
+  regles.push(function (m, F) {
     var e = [], cases = [];
     tab(m.cases).forEach(function (c) {
       if (estObjet(c) && estNombre(c.x) && estNombre(c.y) && estNombre(c.diametre) && c.diametre > 0) cases.push(c);
       else e.push(err('case_invalide', 'Position ou diamètre de case invalide.', refCase(estObjet(c) ? c.id : undefined)));
     });
-    var marge = G.MARGE_COUPE_CASE;
+    var marge = F.MARGE_COUPE_CASE;
     cases.forEach(function (c) {
       var r = c.diametre / 2;
-      if (c.diametre > G.DIAMETRE_CASE_MAX + EPS) {
-        e.push(err('diametre', 'Case trop grande (' + G.DIAMETRE_CASE_MAX + ' mm au plus).', refCase(c.id)));
+      if (c.diametre > F.DIAMETRE_CASE_MAX + EPS) {
+        e.push(err('diametre', 'Case trop grande (' + F.DIAMETRE_CASE_MAX + ' mm au plus).', refCase(c.id)));
       }
       if (c.x - r < marge - EPS || c.y - r < marge - EPS ||
-          c.x + r > G.COTE - marge + EPS || c.y + r > G.COTE - marge + EPS) {
+          c.x + r > F.COTE - marge + EPS || c.y + r > F.COTE - marge + EPS) {
         e.push(err('hors_tuile', 'Case trop près du bord de la tuile (' + marge + ' mm de marge).', refCase(c.id)));
       }
       for (var k = 0; k < 4; k++) {
-        var p = G.pointCoin(k);
-        if (Math.hypot(c.x - p.x, c.y - p.y) < G.RAYON_ZONE_COIN + r - EPS) {
+        var p = F.pointCoin(k);
+        if (Math.hypot(c.x - p.x, c.y - p.y) < F.RAYON_ZONE_COIN + r - EPS) {
           e.push(err('zone_coin', 'Case dans une zone de coin (réservée au jeton).', refCase(c.id)));
           break;
         }
@@ -315,16 +326,16 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   });
 
   /**
-   * Valide un modèle de tuile (orientation canonique). Ne lève jamais d'exception.
-   * Renvoie { complet, erreurs: [{code, message, ref}] }.
+   * Valide un modèle de tuile (orientation canonique) pour le format `format` (objet ou identifiant,
+   * 4×4 par défaut). Ne lève jamais d'exception sur le modèle. Renvoie { complet, erreurs: [{code, message, ref}] }.
    */
-  function validerModele(modele) {
-    var erreurs = [];
+  function validerModele(modele, format) {
+    var erreurs = [], F = resoudreFormat(format);
     if (!estObjet(modele)) {
       return { complet: false, erreurs: [err('modele_absent', 'Modèle absent.', { type: 'modele', id: undefined })] };
     }
     regles.forEach(function (r) {
-      try { erreurs = erreurs.concat(r(modele)); } catch (ex) {
+      try { erreurs = erreurs.concat(r(modele, F)); } catch (ex) {
         erreurs.push(err('regle_en_erreur', 'Le modèle n\'a pas pu être vérifié (données inattendues).', refModele(modele)));
       }
     });
@@ -435,22 +446,25 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   /* ------------------------------------------------------------------ */
   /* Forme du plateau, rôles et rotations                                */
   /* Convention : une cellule est (col, lig) ; une jonction est (i, j)   */
-  /* avec i = colonne et j = ligne des coins de cellules (1..3).         */
+  /* avec i = colonne et j = ligne des coins de cellules (1..3 en 4×4). */
+  /* Le dernier paramètre `format` (objet ou identifiant) est facultatif */
+  /* et vaut le format 4×4 par défaut.                                   */
   /* ------------------------------------------------------------------ */
 
-  var NC = G.GRILLE.colonnes, NL = G.GRILLE.lignes;
-
-  function dansGrille(col, lig) {
+  function dansGrille(col, lig, F) {
+    var NC = F.GRILLE.colonnes, NL = F.GRILLE.lignes;
     return estEntier(col) && estEntier(lig) && col >= 0 && col < NC && lig >= 0 && lig < NL;
   }
-  function estCoinGrille(col, lig) {
+  function estCoinGrille(col, lig, F) {
+    var NC = F.GRILLE.colonnes, NL = F.GRILLE.lignes;
     return (col === 0 || col === NC - 1) && (lig === 0 || lig === NL - 1);
   }
   function estRetiree(col, lig, forme) {
     return tab(forme && forme.retires).some(function (r) { return !!r && r.col === col && r.lig === lig; });
   }
   /** Cellule d'apparition : colonnes intérieures de la rangée nord (J1) ou sud (J2). */
-  function estApparition(col, lig) {
+  function estApparition(col, lig, F) {
+    var NC = F.GRILLE.colonnes, NL = F.GRILLE.lignes;
     return (lig === 0 || lig === NL - 1) && col >= 1 && col <= NC - 2;
   }
 
@@ -459,8 +473,8 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
    * voisin dans la même colonne. Ne lève jamais d'exception.
    * Renvoie { valide, erreurs: [{code, message}] }.
    */
-  function validerForme(forme) {
-    var erreurs = [];
+  function validerForme(forme, format) {
+    var erreurs = [], F = resoudreFormat(format), NC = F.GRILLE.colonnes, NL = F.GRILLE.lignes;
     function ajouter(code, message) { erreurs.push({ code: code, message: message }); }
     if (forme !== null && forme !== undefined &&
         (!estObjet(forme) || (forme.retires !== undefined && !Array.isArray(forme.retires)))) {
@@ -472,7 +486,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     for (i = 0; i < retires.length; i++) {
       if (!estObjet(retires[i]) || !estNombre(retires[i].col) || !estNombre(retires[i].lig)) {
         ajouter('retrait_invalide', 'Une cellule retirée est mal décrite.');
-      } else if (!dansGrille(retires[i].col, retires[i].lig)) {
+      } else if (!dansGrille(retires[i].col, retires[i].lig, F)) {
         ajouter('hors_grille', 'Une cellule retirée est hors de la grille.');
       }
     }
@@ -488,8 +502,8 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
       return { valide: false, erreurs: erreurs };
     }
     retires.forEach(function (r) {
-      if (estCoinGrille(r.col, r.lig)) return;
-      if (estApparition(r.col, r.lig)) {
+      if (estCoinGrille(r.col, r.lig, F)) return;
+      if (estApparition(r.col, r.lig, F)) {
         ajouter('apparition_retiree', 'Une cellule d\'apparition ne peut pas être retirée.');
       } else if (r.col >= 1 && r.col <= NC - 2) {
         ajouter('cellule_interieure', 'Une cellule centrale ne peut pas être retirée.');
@@ -502,8 +516,8 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
       }
     });
     if (!erreurs.length) {
-      cellulesActives(forme).forEach(function (c) {
-        if (roleCellule(c.col, c.lig, forme) === null) {
+      cellulesActives(forme, F).forEach(function (c) {
+        if (roleCellule(c.col, c.lig, forme, F) === null) {
           ajouter('role_impossible', 'La cellule (' + c.col + ', ' + c.lig + ') n\'a pas de rôle possible.');
         }
       });
@@ -512,8 +526,8 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   }
 
   /** Cellules présentes dans la forme, ordre lignes puis colonnes. */
-  function cellulesActives(forme) {
-    var res = [];
+  function cellulesActives(forme, format) {
+    var res = [], F = resoudreFormat(format), NC = F.GRILLE.colonnes, NL = F.GRILLE.lignes;
     for (var lig = 0; lig < NL; lig++) {
       for (var col = 0; col < NC; col++) {
         if (!estRetiree(col, lig, forme)) res.push({ col: col, lig: lig });
@@ -523,11 +537,11 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   }
 
   /** Côtés d'une cellule dont le voisin est hors grille ou retiré. */
-  function cotesExposes(col, lig, forme) {
+  function cotesExposes(col, lig, forme, F) {
     var res = [];
     for (var c = 0; c < 4; c++) {
       var d = G.coteVoisin(c), vc = col + d.dc, vl = lig + d.dl;
-      if (!dansGrille(vc, vl) || estRetiree(vc, vl, forme)) res.push(c);
+      if (!dansGrille(vc, vl, F) || estRetiree(vc, vl, forme)) res.push(c);
     }
     return res;
   }
@@ -536,10 +550,11 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
    * Rôle attendu d'une cellule, ou null (hors grille, retirée, ou aucun modèle possible).
    * Apparitions : fixes. Sinon selon les côtés exposés : 0 centrale, 1 bord, 2 adjacents coin.
    */
-  function roleCellule(col, lig, forme) {
-    if (!dansGrille(col, lig) || estRetiree(col, lig, forme)) return null;
-    if (estApparition(col, lig)) return 'apparition';
-    var ex = cotesExposes(col, lig, forme);
+  function roleCellule(col, lig, forme, format) {
+    var F = resoudreFormat(format);
+    if (!dansGrille(col, lig, F) || estRetiree(col, lig, forme)) return null;
+    if (estApparition(col, lig, F)) return 'apparition';
+    var ex = cotesExposes(col, lig, forme, F);
     if (ex.length === 0) return 'centrale';
     if (ex.length === 1) return 'bord';
     if (ex.length === 2 && (ex[1] - ex[0] === 1 || (ex[0] === 0 && ex[1] === 3))) return 'coin';
@@ -547,23 +562,24 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   }
 
   /** Joueur d'une cellule d'apparition (1 au nord, 2 au sud), null sinon. Le camp se déduit de la cellule. */
-  function joueurCellule(col, lig) {
-    if (!estApparition(col, lig)) return null;
+  function joueurCellule(col, lig, format) {
+    if (!estApparition(col, lig, resoudreFormat(format))) return null;
     return lig === 0 ? 1 : 2;
   }
 
   /** Rotation imposée (entier 0..3) d'une cellule coin / bord / apparition ; null pour une centrale ou une cellule sans rôle. */
-  function rotationDeduite(col, lig, forme) {
-    var role = roleCellule(col, lig, forme);
+  function rotationDeduite(col, lig, forme, format) {
+    var F = resoudreFormat(format);
+    var role = roleCellule(col, lig, forme, F);
     if (role === null || role === 'centrale') return null;
-    if (role === 'apparition') return joueurCellule(col, lig) === 1 ? 0 : 2;
-    var ex = cotesExposes(col, lig, forme);
+    if (role === 'apparition') return joueurCellule(col, lig, F) === 1 ? 0 : 2;
+    var ex = cotesExposes(col, lig, forme, F);
     if (role === 'bord') return ex[0];
     // coin : côtés exposés {rot + 3, rot} (canonique N et O pour rot 0)
     return (ex[0] === 0 && ex[1] === 3) ? 0 : ex[1];
   }
 
-  /** Jonction (i, j) = (colonne, ligne) touchée par le coin k de la cellule (col, lig). */
+  /** Jonction (i, j) = (colonne, ligne) touchée par le coin k de la cellule (col, lig) (indépendant du format). */
   function jonctionDuCoin(col, lig, k) {
     return [{ i: col, j: lig }, { i: col + 1, j: lig }, { i: col + 1, j: lig + 1 }, { i: col, j: lig + 1 }][k];
   }
@@ -578,9 +594,9 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
    * (j = 1, camp J1), 2 pour la rangée sud (j = NL - 1, camp J2), null pour la rangée du milieu ou une valeur
    * invalide. `i` n'intervient pas (les colonnes ouest / est ne sont pas des camps) ; jamais d'exception.
    */
-  function campJonction(i, j) {
+  function campJonction(i, j, format) {
     if (j === 1) return 1;
-    if (j === NL - 1) return 2;
+    if (j === resoudreFormat(format).GRILLE.lignes - 1) return 2;
     return null;
   }
 
@@ -593,7 +609,8 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return estEntier(n) && n >= 0 ? n : 0;
   }
 
-  function jonctionInterieure(i, j) {
+  function jonctionInterieure(i, j, F) {
+    var NC = F.GRILLE.colonnes, NL = F.GRILLE.lignes;
     return estEntier(i) && estEntier(j) && i >= 1 && i <= NC - 1 && j >= 1 && j <= NL - 1;
   }
 
@@ -602,18 +619,19 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
    * 4 cellules actives et au moins MIN_PORTS_JONCTION ports possibles (ports obligatoires
    * des rôles déduits, après rotation).
    */
-  function jonctionPossible(forme, i, j) {
-    if (!jonctionInterieure(i, j)) return false;
+  function jonctionPossible(forme, i, j, format) {
+    var F = resoudreFormat(format);
+    if (!jonctionInterieure(i, j, F)) return false;
     var ports = 0;
     for (var n = 0; n < AUTOUR_JONCTION.length; n++) {
       var a = AUTOUR_JONCTION[n], col = i + a.dc, lig = j + a.dl;
-      var role = roleCellule(col, lig, forme);
+      var role = roleCellule(col, lig, forme, F);
       if (role === null) return false;
-      var rot = rotationDeduite(col, lig, forme);
+      var rot = rotationDeduite(col, lig, forme, F);
       var masque = G.tournerPorts(tableRole(PORTS_OBLIGATOIRES, role), rot === null ? 0 : rot);
       if ((masque >> a.coin) & 1) ports++;
     }
-    return ports >= G.MIN_PORTS_JONCTION;
+    return ports >= F.MIN_PORTS_JONCTION;
   }
 
   /* ------------------------------------------------------------------ */
@@ -655,22 +673,22 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
 
   /** Teste la pose d'une tuile. Renvoie { ok, raison, rot }. Refuse tant que la forme est invalide. */
   function peutPoserTuile(doc, modeleId, col, lig) {
-    var forme = doc.plateau.forme;
+    var forme = doc.plateau.forme, F = formatDuDocument(doc);
     function non(raison) { return { ok: false, raison: raison, rot: 0 }; }
     var modele = modeleParId(doc, modeleId);
     if (!modele) return non('Modèle de tuile introuvable.');
-    if (!validerForme(forme).valide) return non('La forme du plateau est invalide.');
-    if (!dansGrille(col, lig)) return non('Cette cellule est hors de la grille.');
+    if (!validerForme(forme, F).valide) return non('La forme du plateau est invalide.');
+    if (!dansGrille(col, lig, F)) return non('Cette cellule est hors de la grille.');
     if (estRetiree(col, lig, forme)) return non('Cette cellule est retirée du plateau.');
     if (tuileEn(doc, col, lig)) return non('Cette cellule est déjà occupée.');
-    var attendu = roleCellule(col, lig, forme);
+    var attendu = roleCellule(col, lig, forme, F);
     if (attendu === null) return non('Aucune tuile ne convient à cette cellule.');
     if (modele.role !== attendu) {
       return non('Cette tuile est ' + LIBELLE_ROLE[modele.role] + ', la cellule attend ' + LIBELLE_ROLE[attendu] + '.');
     }
-    if (!validerModele(modele).complet) return non('Ce modèle est incomplet.');
+    if (!validerModele(modele, F).complet) return non('Ce modèle est incomplet.');
     if (exemplairesRestants(doc, modeleId) <= 0) return non('Il ne reste plus d\'exemplaire de cette tuile.');
-    var rot = rotationDeduite(col, lig, forme);
+    var rot = rotationDeduite(col, lig, forme, F);
     return { ok: true, raison: '', rot: rot === null ? 0 : rot };
   }
 
@@ -744,18 +762,19 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
 
   /** Raison pour laquelle la jonction ne peut pas accueillir de jeton (hors occupation), ou null. */
   function raisonJonction(doc, i, j) {
-    if (!jonctionInterieure(i, j)) return 'Ce n\'est pas une jonction intérieure.';
+    var F = formatDuDocument(doc);
+    if (!jonctionInterieure(i, j, F)) return 'Ce n\'est pas une jonction intérieure.';
     var p = portsJonction(doc, i, j);
     if (p.tuiles < 4) return 'Il faut 4 tuiles autour de la jonction (' + p.tuiles + ' posées).';
-    if (p.ports < G.MIN_PORTS_JONCTION) {
-      return 'Il faut au moins ' + G.MIN_PORTS_JONCTION + ' ports à la jonction (' + p.ports + ').';
+    if (p.ports < F.MIN_PORTS_JONCTION) {
+      return 'Il faut au moins ' + F.MIN_PORTS_JONCTION + ' ports à la jonction (' + p.ports + ').';
     }
     return null;
   }
 
   /** Teste la pose d'un jeton sur la jonction (i, j) = (colonne, ligne). Renvoie { ok, raison }. */
   function peutPoserJeton(doc, i, j) {
-    if (!jonctionInterieure(i, j)) return { ok: false, raison: 'Ce n\'est pas une jonction intérieure.' };
+    if (!jonctionInterieure(i, j, formatDuDocument(doc))) return { ok: false, raison: 'Ce n\'est pas une jonction intérieure.' };
     if (jetonEn(doc, i, j)) return { ok: false, raison: 'Cette jonction a déjà un jeton.' };
     var raison = raisonJonction(doc, i, j);
     return raison ? { ok: false, raison: raison } : { ok: true, raison: '' };
@@ -814,7 +833,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
    * 'mort' = voisin posé sans raccord en face.
    */
   function raccordsMorts(doc) {
-    var res = [], forme = doc.plateau.forme;
+    var res = [], forme = doc.plateau.forme, F = formatDuDocument(doc);
     doc.plateau.tuiles.forEach(function (t) {
       var mA = masquesTuilePosee(doc, t).raccords;
       for (var cote = 0; cote < 4; cote++) {
@@ -826,7 +845,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
           raison = 'mort';
         } else {
           morts = G.triplet(mA, cote);
-          raison = (!dansGrille(vc, vl) || estRetiree(vc, vl, forme)) ? 'vide' : 'absent';
+          raison = (!dansGrille(vc, vl, F) || estRetiree(vc, vl, forme)) ? 'vide' : 'absent';
         }
         for (var pos = 0; pos < 3; pos++) {
           if ((morts >> pos) & 1) res.push({ col: t.col, lig: t.lig, cote: cote, pos: pos, raison: raison });
@@ -841,13 +860,13 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
    * [{ col, lig, coin, i, j }] (coin dans le repère du plateau, après rotation).
    */
   function portsCoinMorts(doc) {
-    var res = [], forme = doc.plateau.forme;
+    var res = [], forme = doc.plateau.forme, F = formatDuDocument(doc);
     doc.plateau.tuiles.forEach(function (t) {
       var ports = masquesTuilePosee(doc, t).portsCoin;
       for (var k = 0; k < 4; k++) {
         if (!((ports >> k) & 1)) continue;
         var jn = jonctionDuCoin(t.col, t.lig, k);
-        if (!jonctionPossible(forme, jn.i, jn.j)) res.push({ col: t.col, lig: t.lig, coin: k, i: jn.i, j: jn.j });
+        if (!jonctionPossible(forme, jn.i, jn.j, F)) res.push({ col: t.col, lig: t.lig, coin: k, i: jn.i, j: jn.j });
       }
     });
     return res;
@@ -863,15 +882,15 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   function tuileEnPlateau(doc, tuile) {
     var m = modeleParId(doc, tuile.modeleId);
     if (!m) return null;
-    var rot = ((tuile.rot % 4) + 4) % 4;
+    var F = formatDuDocument(doc), rot = ((tuile.rot % 4) + 4) % 4;
     function gid(id) { return tuile.col + ',' + tuile.lig + ':' + id; }
     var res = { cases: [], aretes: [], raccords: [], ports: [] };
     tab(m.cases).forEach(function (c) {
       if (!estObjet(c)) return;
-      var p = G.tournerPoint({ x: c.x, y: c.y }, rot);
+      var p = F.tournerPoint({ x: c.x, y: c.y }, rot);
       res.cases.push({
-        id: gid(c.id), x: p.x + tuile.col * G.COTE, y: p.y + tuile.lig * G.COTE, diametre: c.diametre, type: c.type,
-        joueur: c.type === 'apparition' ? joueurCellule(tuile.col, tuile.lig) : null
+        id: gid(c.id), x: p.x + tuile.col * F.COTE, y: p.y + tuile.lig * F.COTE, diametre: c.diametre, type: c.type,
+        joueur: c.type === 'apparition' ? joueurCellule(tuile.col, tuile.lig, F) : null
       });
     });
     tab(m.chemins).forEach(function (ch) {
@@ -892,16 +911,16 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
 
   /** Erreurs d'une tuile posée : [{ code, message, ref: {type:'tuile', col, lig} }] ([] si elle est correcte). */
   function verifierTuilePosee(doc, tuile) {
-    var e = [], ref = { type: 'tuile', col: tuile.col, lig: tuile.lig }, forme = doc.plateau.forme;
+    var e = [], ref = { type: 'tuile', col: tuile.col, lig: tuile.lig }, forme = doc.plateau.forme, F = formatDuDocument(doc);
     var m = modeleParId(doc, tuile.modeleId);
     if (!m) e.push(err('modele_absent', 'Le modèle de cette tuile n\'existe plus.', ref));
-    else if (!validerModele(m).complet) e.push(err('modele_incomplet', 'Le modèle de cette tuile est incomplet.', ref));
-    if (!dansGrille(tuile.col, tuile.lig)) {
+    else if (!validerModele(m, F).complet) e.push(err('modele_incomplet', 'Le modèle de cette tuile est incomplet.', ref));
+    if (!dansGrille(tuile.col, tuile.lig, F)) {
       e.push(err('hors_grille', 'Cette tuile est hors de la grille.', ref));
     } else if (estRetiree(tuile.col, tuile.lig, forme)) {
       e.push(err('cellule_retiree', 'Cette tuile est sur une cellule retirée.', ref));
     } else {
-      var attendu = roleCellule(tuile.col, tuile.lig, forme);
+      var attendu = roleCellule(tuile.col, tuile.lig, forme, F);
       if (attendu === null) e.push(err('role_impossible', 'Aucune tuile ne convient à cette cellule.', ref));
       else if (m && m.role !== attendu) {
         e.push(err('role_incorrect', 'Cette tuile est ' + LIBELLE_ROLE[m.role] + ', la cellule attend ' + LIBELLE_ROLE[attendu] + '.', ref));
@@ -909,7 +928,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
       if (!estEntier(tuile.rot) || tuile.rot < 0 || tuile.rot > 3) {
         e.push(err('rot_invalide', 'La rotation doit être un entier de 0 à 3.', ref));
       } else {
-        var rotAttendue = rotationDeduite(tuile.col, tuile.lig, forme);
+        var rotAttendue = rotationDeduite(tuile.col, tuile.lig, forme, F);
         if (rotAttendue !== null && tuile.rot !== rotAttendue) {
           e.push(err('rot_incorrecte', 'La rotation de cette tuile ne correspond pas à sa cellule.', ref));
         }
@@ -927,7 +946,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
    */
   function validerPlateau(doc) {
     var erreurs = [], alertes = [];
-    validerForme(doc.plateau.forme).erreurs.forEach(function (x) {
+    validerForme(doc.plateau.forme, formatDuDocument(doc)).erreurs.forEach(function (x) {
       erreurs.push(err(x.code, x.message, { type: 'forme' }));
     });
     doc.plateau.tuiles.forEach(function (t) { erreurs = erreurs.concat(verifierTuilePosee(doc, t)); });
@@ -959,7 +978,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
    * Les tuiles dont le rôle ne correspond plus restent en place : validerPlateau les signale.
    */
   function changerForme(doc, forme) {
-    var v = validerForme(forme);
+    var F = formatDuDocument(doc), v = validerForme(forme, F);
     if (!v.valide) throw new Error(v.erreurs[0].message);
     var nouveau = clone(doc);
     nouveau.plateau.forme = { retires: clone(tab(forme && forme.retires)) };
@@ -967,7 +986,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
       return !estRetiree(t.col, t.lig, nouveau.plateau.forme);
     });
     nouveau.plateau.tuiles.forEach(function (t) {
-      var rot = rotationDeduite(t.col, t.lig, nouveau.plateau.forme);
+      var rot = rotationDeduite(t.col, t.lig, nouveau.plateau.forme, F);
       if (rot !== null) t.rot = rot;
     });
     return nettoyerJetons(nouveau);
@@ -1029,6 +1048,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     regles: regles,
     masquesDuModele: masquesDuModele,
     validerModele: validerModele,
+    formatDuDocument: formatDuDocument,
     nouvelId: nouvelId,
     exemples: EXEMPLES,                                      // tableau gelé (lecture seule)
     copieExemples: function () { return clone(EXEMPLES); },  // copie modifiable

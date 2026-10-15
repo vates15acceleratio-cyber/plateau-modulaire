@@ -36,10 +36,11 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     // document mal formé : refus explicite (Error lisible), jamais un TypeError natif
     if (!p || typeof p !== 'object' || !Array.isArray(p.tuiles)) throw new Error('Document invalide : plateau absent ou mal formé.');
     ordre.forEach(function (r) { groupes[r] = []; });
+    var F = M.formatDuDocument(doc);
     (Array.isArray(doc.modeles) ? doc.modeles : []).forEach(function (m) {
       if (!m || typeof m !== 'object') return;
       var role = ROLES.indexOf(m.role) >= 0 ? m.role : 'autre';
-      var complet = M.validerModele(m).complet;
+      var complet = M.validerModele(m, F).complet;
       var restants = M.exemplairesRestants(doc, m.id);
       groupes[role].push({
         id: m.id, nom: m.nom || '', role: role, exemplaires: m.exemplaires, posees: nbPosees(doc, m.id),
@@ -83,9 +84,9 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     selFiltre.addEventListener('change', function () { filtre = selFiltre.value; dessiner(); });
 
     function vignetteHtml(v, ui) {
-      var m = PM.modele.modeleParId(etat.doc(), v.id);
-      var svg = '<svg class="pm-biblio-svg" viewBox="-3 -3 126 126" aria-hidden="true">' +
-        PM.rendu.contenuTuile(m, { rot: 0, joueur: v.role === 'apparition' ? 1 : null }) + '</svg>';
+      var m = PM.modele.modeleParId(etat.doc(), v.id), F = PM.modele.formatDuDocument(etat.doc()), t = F.COTE + 6;
+      var svg = '<svg class="pm-biblio-svg" viewBox="-3 -3 ' + t + ' ' + t + '" aria-hidden="true">' +
+        PM.rendu.contenuTuile(m, { rot: 0, joueur: v.role === 'apparition' ? 1 : null, format: F }) + '</svg>';
       var classes = ['pm-biblio-vignette'];
       if (!v.complet) classes.push('pm-biblio-incomplet');
       if (v.restants <= 0) classes.push('pm-biblio-epuise');
@@ -145,7 +146,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       var id = zone.getAttribute('data-glisser');
       var m = PM.modele.modeleParId(etat.doc(), id);
       if (!m) return;
-      if (!PM.modele.validerModele(m).complet) { // incomplet : non glissable, et on dit pourquoi (recette B2)
+      if (!PM.modele.validerModele(m, PM.modele.formatDuDocument(etat.doc())).complet) { // incomplet : non glissable, et on dit pourquoi (recette B2)
         etat.signaler('Ce modèle est incomplet : complétez-le dans l’éditeur avant de le poser.', 'erreur');
         return;
       }

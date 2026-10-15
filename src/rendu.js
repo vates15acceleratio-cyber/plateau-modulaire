@@ -8,6 +8,7 @@
  *  - chemin vers un raccord : amorce perpendiculaire de 10 mm depuis le bord, puis segment vers la case ;
  *  - chemin vers un port de coin : amorce de 28 mm sur la bissectrice depuis le coin, puis segment vers la case.
  * Sur la tuile imprimée, raccords et ports sont prolongés jusqu'au bord (et dans le fond perdu).
+ * Format de grille : paramètre ou option `format` (objet de PM.geometrie.format ou identifiant), 4×4 par défaut.
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
 if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); // chargement sous Node
@@ -17,8 +18,8 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
 
   var G = PM.geometrie;
 
-  var AMORCE_RACCORD = 10;
-  var AMORCE_PORT = 28;
+  var AMORCE_RACCORD = G.AMORCE_RACCORD; // valeurs du format 4×4, gardées pour l'API
+  var AMORCE_PORT = G.AMORCE_PORT;
   var NORMALE = [{ x: 0, y: 1 }, { x: -1, y: 0 }, { x: 0, y: -1 }, { x: 1, y: 0 }]; // vers l'intérieur, par côté
   var BISSECTRICE = [{ x: 1, y: 1 }, { x: -1, y: 1 }, { x: -1, y: -1 }, { x: 1, y: -1 }]
     .map(function (v) { return { x: v.x / Math.SQRT2, y: v.y / Math.SQRT2 }; }); // vers l'intérieur, par coin
@@ -26,15 +27,21 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   /** Palette d'impression (docs/6-avis-prepresse.md). */
   var COULEURS = { vert: '#007A4D', rouge: '#D8321C', noir: '#111111', blanc: '#FFFFFF' };
 
+  /** Format de grille à partir d'un objet format, d'un identifiant ou de rien (4×4). */
+  function leFormat(f) {
+    if (f && typeof f === 'object') return f;
+    return G.format(f === undefined || f === null ? G.FORMAT_DEFAUT : f);
+  }
+
   function estCase(e) { return e && typeof e === 'object' && e['case'] !== undefined; }
 
   /**
    * Tracés de tous les chemins d'un modèle, en coordonnées locales canoniques.
    * Renvoie [{id, type: 'lien'|'raccord'|'port', cases: [case...], pts: [{x,y}...], raccord?, coin?}].
-   * Les chemins mal formés (case inconnue, extrémité invalide) sont ignorés.
+   * Les chemins mal formés (case inconnue, extrémité invalide) sont ignorés. `format` : 4×4 par défaut.
    */
-  function tracesModele(m) {
-    var cs = Object.create(null);
+  function tracesModele(m, format) {
+    var F = leFormat(format), cs = Object.create(null);
     (m && Array.isArray(m.cases) ? m.cases : []).forEach(function (c) {
       if (c && typeof c === 'object' && typeof c.id === 'string') cs[c.id] = c;
     });
@@ -50,13 +57,13 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
       }
       var o = ext.filter(function (e) { return !estCase(e); })[0], c = cases[0];
       if (o && o.raccord && o.raccord.cote >= 0 && o.raccord.cote <= 3 && o.raccord.pos >= 0 && o.raccord.pos <= 2) {
-        var P = G.pointRaccord(o.raccord.cote, o.raccord.pos), n = NORMALE[o.raccord.cote];
+        var P = F.pointRaccord(o.raccord.cote, o.raccord.pos), n = NORMALE[o.raccord.cote];
         res.push({ id: ch.id, type: 'raccord', raccord: { cote: o.raccord.cote, pos: o.raccord.pos }, cases: cases,
-          pts: [P, { x: P.x + AMORCE_RACCORD * n.x, y: P.y + AMORCE_RACCORD * n.y }, pt(c)] });
+          pts: [P, { x: P.x + F.AMORCE_RACCORD * n.x, y: P.y + F.AMORCE_RACCORD * n.y }, pt(c)] });
       } else if (o && o.coin >= 0 && o.coin <= 3) {
-        var K = G.pointCoin(o.coin), b = BISSECTRICE[o.coin];
+        var K = F.pointCoin(o.coin), b = BISSECTRICE[o.coin];
         res.push({ id: ch.id, type: 'port', coin: o.coin, cases: cases,
-          pts: [K, { x: K.x + AMORCE_PORT * b.x, y: K.y + AMORCE_PORT * b.y }, pt(c)] });
+          pts: [K, { x: K.x + F.AMORCE_PORT * b.x, y: K.y + F.AMORCE_PORT * b.y }, pt(c)] });
       }
     });
     return res;
@@ -64,9 +71,10 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
 
   function pt(c) { return { x: c.x, y: c.y }; }
 
-  /** Applique une rotation (quarts de tour horaires) aux points d'un tracé. */
-  function tournerTrace(t, rot) {
-    return Object.assign({}, t, { pts: t.pts.map(function (p) { return G.tournerPoint(p, rot); }) });
+  /** Applique une rotation (quarts de tour horaires) aux points d'un tracé, autour du centre de la tuile du format. */
+  function tournerTrace(t, rot, format) {
+    var F = leFormat(format);
+    return Object.assign({}, t, { pts: t.pts.map(function (p) { return F.tournerPoint(p, rot); }) });
   }
 
   function f(n) { return Math.round(n * 1000) / 1000; }
@@ -74,15 +82,16 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   function echapper(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
   /**
-   * Contenu SVG (sans balise <svg>) d'une tuile dans le repère local 0..120, tournée de `rot`.
+   * Contenu SVG (sans balise <svg>) d'une tuile dans le repère local 0..COTE (120 mm en 4×4), tournée de `rot`.
    * options : { rot = 0, joueur = null (1 | 2, pour les cases d'apparition), fondPerdu = 0 (mm, prolonge
-   *   le fond et les chemins au-delà du bord), contour = true (trait de coupe fin), identifiant = null (texte) }.
+   *   le fond et les chemins au-delà du bord), contour = true (trait de coupe fin), identifiant = null (texte),
+   *   format = 4×4 (objet de PM.geometrie.format ou identifiant) }.
    */
   function contenuTuile(m, options) {
-    var o = options || {}, rot = o.rot || 0, fp = o.fondPerdu || 0, C = G.COTE, L = G.LARGEUR_CHEMIN;
+    var o = options || {}, F = leFormat(o.format), rot = o.rot || 0, fp = o.fondPerdu || 0, C = F.COTE, L = F.LARGEUR_CHEMIN;
     var s = [];
     s.push('<rect x="' + (-fp) + '" y="' + (-fp) + '" width="' + (C + 2 * fp) + '" height="' + (C + 2 * fp) + '" fill="' + COULEURS.blanc + '"/>');
-    var ts = tracesModele(m).map(function (t) { return tournerTrace(t, rot); });
+    var ts = tracesModele(m, F).map(function (t) { return tournerTrace(t, rot, F); });
     // Les raccords et ports sont prolongés au-delà du bord de la valeur du fond perdu.
     ts.forEach(function (t) {
       var pts = t.pts.slice();
@@ -96,7 +105,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     });
     (m && Array.isArray(m.cases) ? m.cases : []).forEach(function (c) {
       if (!c || typeof c !== 'object' || typeof c.x !== 'number' || typeof c.y !== 'number') return;
-      var p = G.tournerPoint({ x: c.x, y: c.y }, rot), r = (c.diametre || G.DIAMETRE_CASE_MAX) / 2;
+      var p = F.tournerPoint({ x: c.x, y: c.y }, rot), r = (c.diametre || F.DIAMETRE_CASE_MAX) / 2;
       if (c.type === 'apparition') {
         var cote = r * 1.8, rouge = o.joueur === 2;
         s.push('<rect x="' + f(p.x - cote / 2) + '" y="' + f(p.y - cote / 2) + '" width="' + f(cote) + '" height="' + f(cote) +
@@ -122,19 +131,19 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return s.join('');
   }
 
-  /** SVG autonome d'une tuile, à l'échelle réelle (attributs width / height en mm). */
+  /** SVG autonome d'une tuile, à l'échelle réelle (attributs width / height en mm). Options : voir contenuTuile. */
   function svgTuile(m, options) {
-    var o = options || {}, fp = o.fondPerdu || 0, C = G.COTE, t = C + 2 * fp;
+    var o = options || {}, fp = o.fondPerdu || 0, C = leFormat(o.format).COTE, t = C + 2 * fp;
     return '<svg xmlns="http://www.w3.org/2000/svg" width="' + t + 'mm" height="' + t + 'mm" viewBox="' +
       (-fp) + ' ' + (-fp) + ' ' + t + ' ' + t + '">' + contenuTuile(m, o) + '</svg>';
   }
 
   /**
    * Contenu SVG d'un jeton centré en (cx, cy) : ville = disque noir + couronne crénelée blanche ;
-   * carrefour = disque blanc + croix noire.
+   * carrefour = disque blanc + croix noire. `format` : 4×4 par défaut (diamètre du jeton).
    */
-  function contenuJeton(type, cx, cy) {
-    var r = G.DIAMETRE_JETON / 2, s = [];
+  function contenuJeton(type, cx, cy, format) {
+    var r = leFormat(format).DIAMETRE_JETON / 2, s = [];
     if (type === 'capture') {
       s.push('<circle cx="' + f(cx) + '" cy="' + f(cy) + '" r="' + r + '" fill="' + COULEURS.noir + '"/>');
       var w = 14, h = 9, x0 = cx - w / 2, y0 = cy - h / 2 + 1, cr = 'M' + f(x0) + ' ' + f(y0 + h);

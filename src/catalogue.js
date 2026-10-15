@@ -52,7 +52,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * (32 à 44 mm), pour varier les silhouettes sans changer le routage.
    */
   function casesCentrale(d) {
-    var C = PM.geometrie.COTE;
+    var C = PM.geometrie.format('4x4').COTE; // catalogue du format 4×4
     return [kase('c1', d[0], d[0]), kase('c2', C - d[1], d[1]), kase('c3', C - d[2], C - d[2]), kase('c4', d[3], C - d[3])];
   }
   function portsCentrale() {

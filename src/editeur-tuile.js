@@ -8,7 +8,8 @@
  *
  * Toute modification du document passe par etat.appliquer(...) avec PM.modele.remplacerModele
  * (ou ajouterModele / changerExemplaires) : l'historique et la sauvegarde sont gérés par l'état.
- * Le modèle est édité en orientation canonique (repère local 0..120 mm, origine au coin NO).
+ * Le modèle est édité en orientation canonique (repère local 0..COTE mm, 120 en 4×4, origine au coin NO),
+ * avec le format de grille du document (PM.modele.formatDuDocument).
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
 if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); // chargement sous Node
@@ -28,11 +29,21 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
   /** Diamètre d'une case neuve (mm), identique à celui du catalogue. */
   var DIAMETRE_DEFAUT = 24;
-  /** Pas de la grille d'aimantation des cases : 1 cm. */
-  var PAS_GRILLE = 10;
-  /** Zone visible du canevas (mm) : la tuile plus une marge pour les demi-disques et les coins. */
-  var VUE = { x: -16, y: -16, l: 152, h: 152 };
-  /** Rayon des cibles cliquables (mm). */
+  /** Format de grille à partir d'un objet format, d'un identifiant ou de rien (4×4). */
+  function leFormat(f) {
+    if (f && typeof f === 'object') return f;
+    return G.format(f === undefined || f === null ? G.FORMAT_DEFAUT : f);
+  }
+  /** Zone visible du canevas (mm) pour un format : la tuile plus une marge pour les demi-disques et les coins. */
+  function vuePour(format) {
+    var C = leFormat(format).COTE;
+    return { x: -16, y: -16, l: C + 32, h: C + 32 };
+  }
+  /** Pas de la grille d'aimantation des cases : 1 cm (valeur du format 4×4, gardée pour l'API). */
+  var PAS_GRILLE = G.PAS_EDITEUR;
+  /** Zone visible du canevas en 4×4 (valeur gardée pour l'API). */
+  var VUE = vuePour();
+  /** Rayon des cibles cliquables (mm, indépendants du format). */
   var RAYON_RACCORD = 6;
   var RAYON_COIN = 9;
   var TOLERANCE_CHEMIN = 4;
@@ -128,19 +139,19 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
   /**
    * Point de la grille de 1 cm le plus proche de (x, y) où une case de ce diamètre respecte la marge
-   * de coupe et les zones de coin. Renvoie { x, y } (mm).
+   * de coupe et les zones de coin. Renvoie { x, y } (mm). `format` : 4×4 par défaut.
    */
-  function aimanter(x, y, diametre) {
-    var r = (diametre || DIAMETRE_DEFAUT) / 2;
-    var mini = G.MARGE_COUPE_CASE + r, maxi = G.COTE - G.MARGE_COUPE_CASE - r;
-    var zone = G.RAYON_ZONE_COIN + r;
+  function aimanter(x, y, diametre, format) {
+    var F = leFormat(format), pas = F.PAS_EDITEUR, r = (diametre || DIAMETRE_DEFAUT) / 2;
+    var mini = F.MARGE_COUPE_CASE + r, maxi = F.COTE - F.MARGE_COUPE_CASE - r;
+    var zone = F.RAYON_ZONE_COIN + r;
     var meilleur = null, dMeilleur = Infinity;
-    var debut = Math.ceil(mini / PAS_GRILLE), fin = Math.floor(maxi / PAS_GRILLE);
+    var debut = Math.ceil(mini / pas), fin = Math.floor(maxi / pas);
     for (var i = debut; i <= fin; i++) {
       for (var j = debut; j <= fin; j++) {
-        var gx = i * PAS_GRILLE, gy = j * PAS_GRILLE, ok = true;
+        var gx = i * pas, gy = j * pas, ok = true;
         for (var k = 0; k < 4; k++) {
-          var c = G.pointCoin(k);
+          var c = F.pointCoin(k);
           if (dist(gx, gy, c.x, c.y) < zone) { ok = false; break; }
         }
         if (!ok) continue;
@@ -148,7 +159,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         if (d < dMeilleur - 1e-9) { dMeilleur = d; meilleur = { x: gx, y: gy }; }
       }
     }
-    return meilleur || { x: G.COTE / 2, y: G.COTE / 2 };
+    return meilleur || { x: F.COTE / 2, y: F.COTE / 2 };
   }
 
   /* ------------------------------------------------------------------ */
@@ -180,20 +191,20 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     return c;
   }
 
-  /** Ajoute une case au point de grille le plus proche de (x, y). */
-  function ajouterCase(modele, x, y, type) {
+  /** Ajoute une case au point de grille le plus proche de (x, y). `format` : 4×4 par défaut. */
+  function ajouterCase(modele, x, y, type, format) {
     var m = clone(modele);
     if (!Array.isArray(m.cases)) m.cases = [];
-    var p = aimanter(x, y, DIAMETRE_DEFAUT);
+    var p = aimanter(x, y, DIAMETRE_DEFAUT, format);
     m.cases.push({ id: M.nouvelId(m, PREFIXE_CASE), x: p.x, y: p.y, diametre: DIAMETRE_DEFAUT, type: type || 'deplacement' });
     return m;
   }
 
-  /** Déplace une case (position aimantée sur la grille de 1 cm). */
-  function deplacerCase(modele, id, x, y) {
+  /** Déplace une case (position aimantée sur la grille de 1 cm). `format` : 4×4 par défaut. */
+  function deplacerCase(modele, id, x, y, format) {
     var m = clone(modele), c = caseParId(m, id);
     if (!c) throw new Error('Case introuvable.');
-    var p = aimanter(x, y, c.diametre);
+    var p = aimanter(x, y, c.diametre, format);
     c.x = p.x; c.y = p.y;
     return m;
   }
@@ -300,18 +311,18 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   /**
    * Élément sous le point (x, y) en mm : raccord, coin (actifs ou non), case, chemin, sinon null.
    * Renvoie { type: 'raccord', cote, pos, actif } | { type: 'coin', coin, actif } | { type: 'case', id }
-   * | { type: 'chemin', id }.
+   * | { type: 'chemin', id }. `format` : 4×4 par défaut.
    */
-  function cibleEn(modele, x, y) {
-    var role = modele && modele.role, cote, pos, k;
+  function cibleEn(modele, x, y, format) {
+    var F = leFormat(format), role = modele && modele.role, cote, pos, k;
     for (cote = 0; cote < 4; cote++) {
       for (pos = 0; pos < 3; pos++) {
-        var p = G.pointRaccord(cote, pos);
+        var p = F.pointRaccord(cote, pos);
         if (dist(x, y, p.x, p.y) <= RAYON_RACCORD) return { type: 'raccord', cote: cote, pos: pos, actif: raccordActif(role, cote) };
       }
     }
     for (k = 0; k < 4; k++) {
-      var q = G.pointCoin(k);
+      var q = F.pointCoin(k);
       if (dist(x, y, q.x, q.y) <= RAYON_COIN) return { type: 'coin', coin: k, actif: coinActif(role, k) };
     }
     var cs = tab(modele && modele.cases);
@@ -319,7 +330,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       var c = cs[i];
       if (c && dist(x, y, c.x, c.y) <= (c.diametre || DIAMETRE_DEFAUT) / 2) return { type: 'case', id: c.id };
     }
-    var ts = R.tracesModele(modele);
+    var ts = R.tracesModele(modele, F);
     for (var t = 0; t < ts.length; t++) {
       for (var s = 0; s + 1 < ts[t].pts.length; s++) {
         if (distanceSegment(x, y, ts[t].pts[s], ts[t].pts[s + 1]) <= TOLERANCE_CHEMIN) return { type: 'chemin', id: ts[t].id };
@@ -346,12 +357,12 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     return null;
   }
 
-  /** Texte d'aide (survol) pour une cible. */
-  function libelleCible(modele, c) {
+  /** Texte d'aide (survol) pour une cible. `format` : 4×4 par défaut. */
+  function libelleCible(modele, c, format) {
     if (!c) return '';
     if (c.type === 'raccord') {
       if (!c.actif) return 'Raccord inactif : le côté ' + NOMS_COTES[c.cote] + ' est extérieur pour ce rôle.';
-      return 'Raccord côté ' + NOMS_COTES[c.cote] + ', à ' + cm(G.POSITIONS_RACCORD[c.pos]) + ' cm du coin ' + NOMS_COINS[c.cote] + '.';
+      return 'Raccord côté ' + NOMS_COTES[c.cote] + ', à ' + cm(leFormat(format).POSITIONS_RACCORD[c.pos]) + ' cm du coin ' + NOMS_COINS[c.cote] + '.';
     }
     if (c.type === 'coin') {
       return c.actif ? 'Coin ' + NOMS_COINS[c.coin] + ' : port de coin obligatoire pour ce rôle.'
@@ -366,11 +377,11 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   }
 
   /** Cote courte dessinée sur le canevas au survol d'un raccord ou d'une case : { x, y, texte } ou null. */
-  function coteCourte(modele, c) {
+  function coteCourte(modele, c, format) {
     if (!c) return null;
     if (c.type === 'raccord' && c.actif) {
-      var p = G.pointRaccord(c.cote, c.pos);
-      return { x: p.x, y: p.y, texte: cm(G.POSITIONS_RACCORD[c.pos]) + ' cm' };
+      var F = leFormat(format), p = F.pointRaccord(c.cote, c.pos);
+      return { x: p.x, y: p.y, texte: cm(F.POSITIONS_RACCORD[c.pos]) + ' cm' };
     }
     if (c.type === 'case') {
       var k = caseParId(modele, c.id);
@@ -381,10 +392,10 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
   /**
    * Éléments à entourer pour une référence d'erreur (ref de validerModele ou sélection) :
-   * { cercles: [{x, y, r}], lignes: [[{x, y}...]], tuile: bool }.
+   * { cercles: [{x, y, r}], lignes: [[{x, y}...]], tuile: bool }. `format` : 4×4 par défaut.
    */
-  function haloDe(modele, ref) {
-    var res = { cercles: [], lignes: [], tuile: false };
+  function haloDe(modele, ref, format) {
+    var F = leFormat(format), res = { cercles: [], lignes: [], tuile: false };
     if (!ref) return res;
     if (ref.type === 'case') {
       (ref.ids || [ref.id]).forEach(function (id) {
@@ -392,12 +403,12 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         if (c) res.cercles.push({ x: c.x, y: c.y, r: (c.diametre || DIAMETRE_DEFAUT) / 2 + 3 });
       });
     } else if (ref.type === 'chemin') {
-      R.tracesModele(modele).forEach(function (t) { if (t.id === ref.id) res.lignes.push(t.pts); });
+      R.tracesModele(modele, F).forEach(function (t) { if (t.id === ref.id) res.lignes.push(t.pts); });
     } else if (ref.type === 'coin') {
-      var k = G.pointCoin(ref.id);
+      var k = F.pointCoin(ref.id);
       if (k) res.cercles.push({ x: k.x, y: k.y, r: 12 });
     } else if (ref.type === 'raccord') {
-      var p = G.pointRaccord(ref.cote, ref.pos);
+      var p = F.pointRaccord(ref.cote, ref.pos);
       if (p) res.cercles.push({ x: p.x, y: p.y, r: 9 });
     } else if (ref.type === 'modele') {
       res.tuile = true;
@@ -438,18 +449,18 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
   function pointsSvg(pts) { return pts.map(function (p) { return arrondi(p.x) + ',' + arrondi(p.y); }).join(' '); }
 
-  /** Grille de 1 cm (lignes fines). */
-  function svgGrille() {
-    var s = '';
-    for (var v = PAS_GRILLE; v < G.COTE; v += PAS_GRILLE) {
-      s += '<line x1="' + v + '" y1="0" x2="' + v + '" y2="' + G.COTE + '"/><line x1="0" y1="' + v + '" x2="' + G.COTE + '" y2="' + v + '"/>';
+  /** Grille de 1 cm (lignes fines). `format` : 4×4 par défaut (de même pour les fragments suivants). */
+  function svgGrille(format) {
+    var F = leFormat(format), C = F.COTE, s = '';
+    for (var v = F.PAS_EDITEUR; v < C; v += F.PAS_EDITEUR) {
+      s += '<line x1="' + v + '" y1="0" x2="' + v + '" y2="' + C + '"/><line x1="0" y1="' + v + '" x2="' + C + '" y2="' + v + '"/>';
     }
     return s;
   }
 
   /** Quarts de disque R 20 mm des quatre coins (zones réservées au jeton). */
-  function svgZonesCoin() {
-    var r = G.RAYON_ZONE_COIN, C = G.COTE;
+  function svgZonesCoin(format) {
+    var F = leFormat(format), r = F.RAYON_ZONE_COIN, C = F.COTE;
     // chaque quart est tracé dans le sens horaire (sweep = 1)
     var chemins = [
       'M0 0 L' + r + ' 0 A' + r + ' ' + r + ' 0 0 1 0 ' + r + ' Z',
@@ -461,16 +472,16 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   }
 
   /** Demi-disques des 12 raccords, sur le bord, côté intérieur. */
-  function svgRaccords(modele, marques) {
-    var role = modele.role, util = extremitesUtilisees(modele).raccords, s = '', RR = 5;
+  function svgRaccords(modele, marques, format) {
+    var F = leFormat(format), role = modele.role, util = extremitesUtilisees(modele).raccords, s = '', RR = 5;
     for (var cote = 0; cote < 4; cote++) {
       for (var pos = 0; pos < 3; pos++) {
-        var p = G.pointRaccord(0, pos), cle = cote + ':' + pos;
+        var p = F.pointRaccord(0, pos), cle = cote + ':' + pos;
         var cls = 'pm-editeur-raccord ' + (raccordActif(role, cote) ? 'pm-editeur-actif' : 'pm-editeur-inactif');
         if (util.indexOf(cle) >= 0) cls += ' pm-editeur-utilise';
         if (marques && marques.raccords.indexOf(cle) >= 0) cls += ' pm-editeur-en-erreur';
         // tracé sur le côté nord puis tourné autour du centre : même convention que les masques
-        s += '<path class="' + cls + '" data-raccord="' + cle + '" transform="rotate(' + (90 * cote) + ' ' + (G.COTE / 2) + ' ' + (G.COTE / 2) + ')" d="M' +
+        s += '<path class="' + cls + '" data-raccord="' + cle + '" transform="rotate(' + (90 * cote) + ' ' + (F.COTE / 2) + ' ' + (F.COTE / 2) + ')" d="M' +
           arrondi(p.x - RR) + ' 0 A' + RR + ' ' + RR + ' 0 0 0 ' + arrondi(p.x + RR) + ' 0 Z"/>';
       }
     }
@@ -478,10 +489,10 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   }
 
   /** Quatre coins : gros points, grisés s'ils sont interdits par le rôle, pulsants si le port manque. */
-  function svgCoins(modele, marques) {
-    var role = modele.role, util = extremitesUtilisees(modele).coins, s = '';
+  function svgCoins(modele, marques, format) {
+    var F = leFormat(format), role = modele.role, util = extremitesUtilisees(modele).coins, s = '';
     for (var k = 0; k < 4; k++) {
-      var p = G.pointCoin(k);
+      var p = F.pointCoin(k);
       var cls = 'pm-editeur-coin ' + (coinActif(role, k) ? 'pm-editeur-actif' : 'pm-editeur-inactif');
       if (util.indexOf(k) >= 0) cls += ' pm-editeur-utilise';
       if (marques && marques.coinsManquants.indexOf(k) >= 0) cls += ' pm-editeur-pulse';
@@ -492,9 +503,9 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   }
 
   /** Cases et chemins en erreur (contours rouges), par-dessus le dessin de la tuile. */
-  function svgMarquesErreur(modele, marques) {
+  function svgMarquesErreur(modele, marques, format) {
     var s = '';
-    R.tracesModele(modele).forEach(function (t) {
+    R.tracesModele(modele, format).forEach(function (t) {
       if (marques.chemins.indexOf(t.id) >= 0) s += '<polyline class="pm-editeur-chemin-erreur" points="' + pointsSvg(t.pts) + '"/>';
     });
     tab(modele.cases).forEach(function (c) {
@@ -506,10 +517,10 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   }
 
   /** Halo (clic sur une erreur, ou alerte d'un autre module). */
-  function svgHalo(halo, classe) {
-    var s = '';
+  function svgHalo(halo, classe, format) {
+    var s = '', C = leFormat(format).COTE;
     classe = classe || 'pm-editeur-halo';
-    if (halo.tuile) s += '<rect class="' + classe + '" x="1" y="1" width="' + (G.COTE - 2) + '" height="' + (G.COTE - 2) + '" rx="3"/>';
+    if (halo.tuile) s += '<rect class="' + classe + '" x="1" y="1" width="' + (C - 2) + '" height="' + (C - 2) + '" rx="3"/>';
     halo.cercles.forEach(function (c) { s += '<circle class="' + classe + '" cx="' + arrondi(c.x) + '" cy="' + arrondi(c.y) + '" r="' + arrondi(c.r) + '"/>'; });
     halo.lignes.forEach(function (l) { s += '<polyline class="' + classe + ' pm-editeur-halo-ligne" points="' + pointsSvg(l) + '"/>'; });
     return s;
@@ -519,16 +530,16 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
    * Vignette d'une rotation (piège n° 2) : tuile tournée de `rot` quarts de tour, repère N sur le côté
    * où se retrouve le nord canonique (rot 0 : haut, 1 : droite, 2 : bas, 3 : gauche).
    */
-  function svgVignette(modele, rot) {
-    var C = G.COTE, h = C / 2;
+  function svgVignette(modele, rot, format) {
+    var F = leFormat(format), C = F.COTE, h = C / 2;
     var pos = [{ x: h, y: -6 }, { x: C + 6, y: h }, { x: h, y: C + 6 }, { x: -6, y: h }][rot % 4];
     var trait = [
       { x1: 0, y1: 0, x2: C, y2: 0 }, { x1: C, y1: 0, x2: C, y2: C },
       { x1: 0, y1: C, x2: C, y2: C }, { x1: 0, y1: 0, x2: 0, y2: C }
     ][rot % 4];
-    return '<svg class="pm-editeur-vignette-svg" viewBox="-14 -14 148 148" role="img" aria-label="Rotation ' + (90 * rot) + ' degrés, repère N ' +
+    return '<svg class="pm-editeur-vignette-svg" viewBox="-14 -14 ' + (C + 28) + ' ' + (C + 28) + '" role="img" aria-label="Rotation ' + (90 * rot) + ' degrés, repère N ' +
       ['en haut', 'à droite', 'en bas', 'à gauche'][rot % 4] + '">' +
-      R.contenuTuile(modele, { rot: rot }) +
+      R.contenuTuile(modele, { rot: rot, format: F }) +
       '<line class="pm-editeur-repere-trait" x1="' + trait.x1 + '" y1="' + trait.y1 + '" x2="' + trait.x2 + '" y2="' + trait.y2 + '"/>' +
       '<text class="pm-editeur-repere-n" x="' + pos.x + '" y="' + pos.y + '" text-anchor="middle" dominant-baseline="central">N</text></svg>';
   }
@@ -614,8 +625,11 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
     var colCanevas = el('div', 'pm-editeur-colonne-canevas');
     zone.appendChild(colCanevas);
+    /** Format du document courant (le canevas se redessine s'il change). */
+    function fmt() { return M.formatDuDocument(etat.doc()); }
+    var formatAffiche = fmt(), vueAffichee = vuePour(formatAffiche);
     var svg = svgEl('svg', {
-      'class': 'pm-editeur-canevas', viewBox: VUE.x + ' ' + VUE.y + ' ' + VUE.l + ' ' + VUE.h,
+      'class': 'pm-editeur-canevas', viewBox: vueAffichee.x + ' ' + vueAffichee.y + ' ' + vueAffichee.l + ' ' + vueAffichee.h,
       tabindex: '0', role: 'application',
       'aria-label': 'Canevas de la tuile : cliquer pour ajouter une case, glisser pour déplacer ou tracer un chemin'
     });
@@ -629,8 +643,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     var gApercu = svgEl('g', { 'class': 'pm-editeur-g-apercu' });
     var gCote = svgEl('g', { 'class': 'pm-editeur-g-cote' });
     [gFond, gGrille, gZones, gMarques, gSelection, gRaccords, gCoins, gApercu, gCote].forEach(function (g) { svg.appendChild(g); });
-    gGrille.innerHTML = svgGrille();
-    gZones.innerHTML = svgZonesCoin();
+    gGrille.innerHTML = svgGrille(formatAffiche);
+    gZones.innerHTML = svgZonesCoin(formatAffiche);
     colCanevas.appendChild(svg);
     var aide = el('p', 'pm-editeur-aide');
     aide.setAttribute('aria-live', 'polite');
@@ -738,28 +752,28 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     function pointMm(ev) {
       var rect = svg.getBoundingClientRect();
       if (!rect.width || !rect.height) return null;
-      return ecranVersMm(ev.clientX, ev.clientY, rect, VUE);
+      return ecranVersMm(ev.clientX, ev.clientY, rect, vueAffichee);
     }
 
     function effacerApercu() { gApercu.innerHTML = ''; }
 
     function dessinerApercu(m, p) {
-      var s = '', cible2 = cibleEn(m, p.x, p.y), d = geste.depart;
+      var F = fmt(), s = '', cible2 = cibleEn(m, p.x, p.y, F), d = geste.depart;
       var depart = null;
       if (d && d.type === 'case') {
         var c = caseParId(m, d.id);
         if (c) depart = { x: c.x, y: c.y };
       } else if (d && (d.type === 'raccord' || d.type === 'coin') && d.actif) {
-        depart = d.type === 'raccord' ? G.pointRaccord(d.cote, d.pos) : G.pointCoin(d.coin);
+        depart = d.type === 'raccord' ? F.pointRaccord(d.cote, d.pos) : F.pointCoin(d.coin);
       }
       var versChemin = depart && cible2 && extremiteDeCible(cible2) && !(cible2.type === 'case' && d.type === 'case' && cible2.id === d.id);
       if (versChemin) {
-        var fin = cible2.type === 'case' ? caseParId(m, cible2.id) : (cible2.type === 'raccord' ? G.pointRaccord(cible2.cote, cible2.pos) : G.pointCoin(cible2.coin));
+        var fin = cible2.type === 'case' ? caseParId(m, cible2.id) : (cible2.type === 'raccord' ? F.pointRaccord(cible2.cote, cible2.pos) : F.pointCoin(cible2.coin));
         s += '<line class="pm-editeur-apercu-chemin" x1="' + depart.x + '" y1="' + depart.y + '" x2="' + fin.x + '" y2="' + fin.y + '"/>';
         s += '<circle class="pm-editeur-apercu-cible" cx="' + fin.x + '" cy="' + fin.y + '" r="9"/>';
       } else if (d && d.type === 'case') {
         var cc = caseParId(m, d.id), dec = geste.decalage || { dx: 0, dy: 0 };
-        var q = aimanter(p.x + dec.dx, p.y + dec.dy, cc ? cc.diametre : DIAMETRE_DEFAUT);
+        var q = aimanter(p.x + dec.dx, p.y + dec.dy, cc ? cc.diametre : DIAMETRE_DEFAUT, F);
         s += '<circle class="pm-editeur-apercu-case" cx="' + arrondi(q.x) + '" cy="' + arrondi(q.y) + '" r="' + arrondi((cc ? cc.diametre : DIAMETRE_DEFAUT) / 2) + '"/>';
       } else if (depart) {
         s += '<line class="pm-editeur-apercu-chemin pm-editeur-apercu-libre" x1="' + arrondi(depart.x) + '" y1="' + arrondi(depart.y) + '" x2="' + arrondi(p.x) + '" y2="' + arrondi(p.y) + '"/>';
@@ -784,7 +798,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         var meme = ext && cleExt(ext) === cleExt(arme);
         if (ext && !meme) { tracer(arme, ext); return; }
         arme = null;
-        if (cible && (cible.type === 'raccord' || cible.type === 'coin') && !cible.actif) etat.signaler(libelleCible(m, cible), 'alerte');
+        if (cible && (cible.type === 'raccord' || cible.type === 'coin') && !cible.actif) etat.signaler(libelleCible(m, cible, fmt()), 'alerte');
         else if (!meme) etat.signaler('Chemin annulé : cliquez d\'abord sur une case, un raccord ou un coin, puis sur l\'autre extrémité.', 'info');
         rafraichir(true);
         return;
@@ -792,7 +806,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       haloLocal = null;
       if (!cible) {
         var avant = M.nouvelId(m, PREFIXE_CASE);
-        var r = modifier(function (x) { return ajouterCase(x, p.x, p.y); }, 'Ajouter une case');
+        var r = modifier(function (x) { return ajouterCase(x, p.x, p.y, undefined, fmt()); }, 'Ajouter une case');
         selection = r.ok ? { type: 'case', id: avant } : null;
         if (r.ok && tab(m.cases).length + 1 > M.NB_CASES_PAR_ROLE[m.role]) {
           etat.signaler('Une tuile « ' + m.role + ' » a ' + M.NB_CASES_PAR_ROLE[m.role] + ' cases : celle-ci est en trop (Suppr pour l\'enlever).', 'alerte');
@@ -802,7 +816,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       }
       if ((cible.type === 'raccord' || cible.type === 'coin') && !cible.actif) {
         selection = null;
-        etat.signaler(libelleCible(m, cible), 'alerte');
+        etat.signaler(libelleCible(m, cible, fmt()), 'alerte');
         rafraichir(true);
         return;
       }
@@ -821,16 +835,16 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       if (!m) { rafraichir(true); return; }
       rafraichissementDiffere = false;
       if (!g.deplace) { clic(m, g.depart, g.p0); return; }
-      var d = g.depart, cible2 = cibleEn(m, p.x, p.y);
+      var d = g.depart, cible2 = cibleEn(m, p.x, p.y, fmt());
       if (d && d.type === 'case') {
         var ext = extremiteDeCible(cible2);
         if (ext && !(cible2.type === 'case' && cible2.id === d.id)) {
           tracer({ 'case': d.id }, ext);
         } else if (cible2 && (cible2.type === 'raccord' || cible2.type === 'coin') && !cible2.actif) {
-          etat.signaler(libelleCible(m, cible2), 'alerte');
+          etat.signaler(libelleCible(m, cible2, fmt()), 'alerte');
         } else {
           var dec = g.decalage || { dx: 0, dy: 0 }, id = d.id;
-          modifier(function (x) { return deplacerCase(x, id, p.x + dec.dx, p.y + dec.dy); }, 'Déplacer une case');
+          modifier(function (x) { return deplacerCase(x, id, p.x + dec.dx, p.y + dec.dy, fmt()); }, 'Déplacer une case');
           selection = { type: 'case', id: id };
           arme = null;
         }
@@ -849,7 +863,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       if (!p) return;
       if (ev.preventDefault) ev.preventDefault();
       if (svg.focus) { try { svg.focus({ preventScroll: true }); } catch (e) { /* ignoré */ } }
-      var cible = cibleEn(m, p.x, p.y);
+      var cible = cibleEn(m, p.x, p.y, fmt());
       geste = { px0: ev.clientX, py0: ev.clientY, p0: p, courantMm: p, depart: cible, deplace: false, pointerId: ev.pointerId, decalage: null };
       if (cible && cible.type === 'case') {
         var c = caseParId(m, cible.id);
@@ -873,7 +887,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         if (geste.deplace) dessinerApercu(m, p);
         return;
       }
-      var cible = cibleEn(m, p.x, p.y);
+      var cible = cibleEn(m, p.x, p.y, fmt());
       var cle = cible ? JSON.stringify(cible) : '';
       if (cle === (survol ? JSON.stringify(survol) : '')) return;
       survol = cible;
@@ -890,7 +904,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       var m = modeleCourant();
       if (!m || geste) return;
       var p = pointMm(ev);
-      var cible = p ? cibleEn(m, p.x, p.y) : null;
+      var cible = p ? cibleEn(m, p.x, p.y, fmt()) : null;
       if (cible && cible.type === 'case') {
         selection = { type: 'case', id: cible.id };
         basculerSelection();
@@ -919,10 +933,11 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         var m = modeleCourant(), c = caseParId(m, selection.id);
         if (!c) return;
         ev.preventDefault();
-        var dx = k === 'ArrowLeft' ? -PAS_GRILLE : k === 'ArrowRight' ? PAS_GRILLE : 0;
-        var dy = k === 'ArrowUp' ? -PAS_GRILLE : k === 'ArrowDown' ? PAS_GRILLE : 0;
+        var pas = fmt().PAS_EDITEUR;
+        var dx = k === 'ArrowLeft' ? -pas : k === 'ArrowRight' ? pas : 0;
+        var dy = k === 'ArrowUp' ? -pas : k === 'ArrowDown' ? pas : 0;
         var id = c.id;
-        modifier(function (x) { return deplacerCase(x, id, c.x + dx, c.y + dy); }, 'Déplacer une case');
+        modifier(function (x) { return deplacerCase(x, id, c.x + dx, c.y + dy, fmt()); }, 'Déplacer une case');
       }
     });
 
@@ -956,8 +971,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
     function majSurvol(m) {
       if (!m) { gCote.innerHTML = ''; info.textContent = ''; return; }
-      info.textContent = libelleCible(m, survol);
-      var c = coteCourte(m, survol);
+      info.textContent = libelleCible(m, survol, fmt());
+      var c = coteCourte(m, survol, fmt());
       gCote.innerHTML = c
         ? '<text class="pm-editeur-cote" x="' + arrondi(c.x) + '" y="' + arrondi(Math.min(c.y + 12, 112)) + '" text-anchor="middle">' + echapper(c.texte) + '</text>'
         : '';
@@ -1012,11 +1027,19 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       if (arme && !extremiteExiste(m, arme)) arme = null;
       var util = nbUtilisations(doc, m.id);
       var ext = haloExterne(m);
-      var cle = JSON.stringify([m, util, selection, arme, haloLocal, ext]);
+      var F = M.formatDuDocument(doc);
+      if (F !== formatAffiche) { // nouveau format de grille : canevas, grille et zones de coin à refaire
+        formatAffiche = F;
+        vueAffichee = vuePour(F);
+        svg.setAttribute('viewBox', vueAffichee.x + ' ' + vueAffichee.y + ' ' + vueAffichee.l + ' ' + vueAffichee.h);
+        gGrille.innerHTML = svgGrille(F);
+        gZones.innerHTML = svgZonesCoin(F);
+      }
+      var cle = JSON.stringify([m, util, selection, arme, haloLocal, ext, F.id]);
       if (!force && cle === derniereCle) return;
       derniereCle = cle;
 
-      var valid = M.validerModele(m);
+      var valid = M.validerModele(m, F);
       var marques = marquages(valid.erreurs);
 
       // champs de la barre (on ne touche pas au champ qui a le focus)
@@ -1033,19 +1056,19 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         avertissement.textContent = '';
       }
 
-      gFond.innerHTML = R.contenuTuile(m, { contour: true });
-      gMarques.innerHTML = svgMarquesErreur(m, marques);
+      gFond.innerHTML = R.contenuTuile(m, { contour: true, format: F });
+      gMarques.innerHTML = svgMarquesErreur(m, marques, F);
       var haloRef = haloLocal || ext;
       var s = '';
-      if (haloRef) s += svgHalo(haloDe(m, haloRef));
-      if (selection) s += svgHalo(haloDe(m, selection), 'pm-editeur-selection');
+      if (haloRef) s += svgHalo(haloDe(m, haloRef, F), undefined, F);
+      if (selection) s += svgHalo(haloDe(m, selection, F), 'pm-editeur-selection', F);
       if (arme) {
-        var pt = typeExt(arme) === 'case' ? caseParId(m, arme['case']) : typeExt(arme) === 'raccord' ? G.pointRaccord(arme.raccord.cote, arme.raccord.pos) : G.pointCoin(arme.coin);
+        var pt = typeExt(arme) === 'case' ? caseParId(m, arme['case']) : typeExt(arme) === 'raccord' ? F.pointRaccord(arme.raccord.cote, arme.raccord.pos) : F.pointCoin(arme.coin);
         if (pt) s += '<circle class="pm-editeur-arme" cx="' + arrondi(pt.x) + '" cy="' + arrondi(pt.y) + '" r="' + arrondi(typeExt(arme) === 'case' ? ((caseParId(m, arme['case']).diametre || DIAMETRE_DEFAUT) / 2 + 5) : 10) + '"/>';
       }
       gSelection.innerHTML = s;
-      gRaccords.innerHTML = svgRaccords(m, marques);
-      gCoins.innerHTML = svgCoins(m, marques);
+      gRaccords.innerHTML = svgRaccords(m, marques, F);
+      gCoins.innerHTML = svgCoins(m, marques, F);
 
       // statut
       var nbCases = tab(m.cases).length, attendu = M.NB_CASES_PAR_ROLE[m.role];
@@ -1057,7 +1080,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       // aperçu des 4 rotations
       var h = '';
       for (var rot = 0; rot < 4; rot++) {
-        h += '<figure class="pm-editeur-vignette">' + svgVignette(m, rot) + '<figcaption>' + (90 * rot) + '°</figcaption></figure>';
+        h += '<figure class="pm-editeur-vignette">' + svgVignette(m, rot, F) + '<figcaption>' + (90 * rot) + '°</figcaption></figure>';
       }
       vignettes.innerHTML = h;
 
@@ -1083,6 +1106,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     DIAMETRE_DEFAUT: DIAMETRE_DEFAUT,
     PAS_GRILLE: PAS_GRILLE,
     VUE: VUE,
+    vuePour: vuePour,
     monter: monter,
     // conversion écran <-> mm
     ecranVersMm: ecranVersMm,

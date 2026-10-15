@@ -25,10 +25,14 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   /* Constantes                                                          */
   /* ------------------------------------------------------------------ */
 
-  var FOND_PERDU = 3;                    // mm
-  var COTE_PLANCHE = G.COTE + 2 * FOND_PERDU; // 126 mm : tuile avec fond perdu
+  var FOND_PERDU = G.FOND_PERDU;         // 3 mm (identique sur tous les formats)
   var GOUTTIERE = 6;                     // mm entre deux fonds perdus
-  var PAS = COTE_PLANCHE + GOUTTIERE;    // 132 mm
+  /** Côté d'une tuile avec fond perdu pour le format F : 126 mm en 4×4, 106 mm en 5×5. */
+  function cotePlanche(F) { return F.COTE + 2 * FOND_PERDU; }
+  /** Pas de la grille d'une planche pour le format F : 132 mm en 4×4. */
+  function pasPlanche(F) { return cotePlanche(F) + GOUTTIERE; }
+  var COTE_PLANCHE = cotePlanche(G);     // valeurs du format 4×4, gardées pour l'API
+  var PAS = pasPlanche(G);
   var MARGE_MIN = 15;                    // mm
   var MARGE_IMPRIMABLE = 5;              // mm : zone que les imprimantes de bureau ne couvrent pas
   var EPAISSEUR_REPERE = 0.25;           // mm
@@ -41,7 +45,10 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   var DPI = 300;
   var PX_PAR_METRE = 11811;              // 300 dpi
 
-  /** Formats de feuille (portrait). L'A4 ne peut pas porter deux colonnes (2 x 126 + 6 = 258 mm > 210 mm). */
+  /**
+   * Formats de feuille (portrait). L'A4 ne peut pas porter deux colonnes (4×4 : 2 x 126 + 6 = 258 mm > 210 mm ;
+   * 5×5 : 2 x 106 + 6 = 218 mm > 210 mm).
+   */
   var FORMATS = {
     A3: { largeur: 297, hauteur: 420, colonnes: 2, lignes: 3 },
     A4: { largeur: 210, hauteur: 297, colonnes: 1, lignes: 2 }
@@ -109,7 +116,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     var modeles = tab(doc && doc.modeles).filter(function (m) { return m && typeof m === 'object'; });
     var tuilesPosees = tab(doc && doc.plateau && doc.plateau.tuiles);
     var exclus = [], entrees = [];
-    var complets = modeles.filter(function (m) { return M.validerModele(m).complet; });
+    var F = M.formatDuDocument(doc);
+    var complets = modeles.filter(function (m) { return M.validerModele(m, F).complet; });
     if (portee === 'stock') {
       // plafond du stock (somme des exemplaires des modèles complets) : au-delà, l'export est refusé
       var stockTotal = complets.reduce(function (s, m) { return s + M.exemplairesValides(m); }, 0);
@@ -129,7 +137,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       for (var k = 0; k < total; k++) {
         var posee = k < posees.length;
         var joueur = null;
-        if (posee && modeleAApparition(m)) joueur = M.joueurCellule(posees[k].col, posees[k].lig);
+        if (posee && modeleAApparition(m)) joueur = M.joueurCellule(posees[k].col, posees[k].lig, F);
         entrees.push({ modeleId: m.id, exemplaire: k + 1, joueur: joueur, posee: posee, _app: modeleAApparition(m) });
       }
     });
@@ -171,11 +179,15 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   /* Calepinage                                                          */
   /* ------------------------------------------------------------------ */
 
-  /** Marges (mm) d'un format ; lève une Error si la grille ne tient pas avec des marges >= 15 mm. */
-  function margesFormat(nomFormat) {
+  /**
+   * Marges (mm) d'un format de feuille pour les tuiles du format de grille `grille` (objet ou identifiant,
+   * 4×4 par défaut) ; lève une Error si la grille ne tient pas avec des marges >= 15 mm.
+   */
+  function margesFormat(nomFormat, grille) {
     var f = FORMATS[nomFormat];
     if (!f) throw new Error('Format inconnu : ' + nomFormat + '.');
-    var utile = { x: f.colonnes * COTE_PLANCHE + (f.colonnes - 1) * GOUTTIERE, y: f.lignes * COTE_PLANCHE + (f.lignes - 1) * GOUTTIERE };
+    var cp = cotePlanche(grille && typeof grille === 'object' ? grille : G.format(grille || G.FORMAT_DEFAUT));
+    var utile = { x: f.colonnes * cp + (f.colonnes - 1) * GOUTTIERE, y: f.lignes * cp + (f.lignes - 1) * GOUTTIERE };
     var mx = (f.largeur - utile.x) / 2, my = (f.hauteur - utile.y) / 2;
     if (mx < MARGE_MIN - 1e-9 || my < MARGE_MIN - 1e-9) {
       throw new Error('La grille ne tient pas sur ' + nomFormat + ' avec des marges d\'au moins ' + MARGE_MIN + ' mm.');
@@ -191,7 +203,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
    *    chaque fond perdu, qui sert aux deux tuiles car leurs lignes de coupe sont alignées.
    */
   function calculerReperes(planche) {
-    var occupe = {}, vus = {}, res = [];
+    var occupe = {}, vus = {}, res = [], cp = planche.pas - GOUTTIERE; // côté de la tuile avec fond perdu
     planche.tuiles.forEach(function (t) { occupe[t.col + ',' + t.lig] = true; });
     function ajouter(x1, y1, x2, y2, partage) {
       var a = [x1, y1, x2, y2].map(function (v) { return Math.round(v * 1000) / 1000; });
@@ -203,7 +215,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     planche.tuiles.forEach(function (t) {
       [-1, 1].forEach(function (sx) {
         [-1, 1].forEach(function (sy) {
-          var bordX = t.x + (sx > 0 ? COTE_PLANCHE : 0), bordY = t.y + (sy > 0 ? COTE_PLANCHE : 0); // bord du fond perdu
+          var bordX = t.x + (sx > 0 ? cp : 0), bordY = t.y + (sy > 0 ? cp : 0); // bord du fond perdu
           var coupeX = bordX - sx * FOND_PERDU, coupeY = bordY - sy * FOND_PERDU;                    // coin de coupe
           var voisinX = occupe[(t.col + sx) + ',' + t.lig], voisinY = occupe[t.col + ',' + (t.lig + sy)];
           // trait horizontal, sur la ligne de coupe y = coupeY
@@ -258,13 +270,13 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
    * options : { format = 'A3' | 'A4', portee = 'stock' | 'posees' }.
    * Une planche : { format, nom, titre, numero, total, largeur, hauteur, colonnes, lignes, margeX, margeY, pas,
    *   tuiles: [{ modeleId, exemplaire, joueur, posee, col, lig, rot, x, y, etiquette }], reperes, textes, barre }.
-   * (x, y) = coin nord-ouest du carré de 126 mm (fond perdu compris), pas de la tuile coupée (qui est à +3 mm).
+   * (x, y) = coin nord-ouest du carré de 126 mm en 4×4 (fond perdu compris), pas de la tuile coupée (qui est à +3 mm).
    * rot vaut 0 : la tuile physique est imprimée en orientation canonique, on la tourne à la pose.
    * Lève une Error si la grille ne tient pas sur la feuille.
    */
   function calepiner(doc, options) {
     var nomFormat = options && options.format ? options.format : 'A3';
-    var f = FORMATS[nomFormat], marges = margesFormat(nomFormat);
+    var F = M.formatDuDocument(doc), f = FORMATS[nomFormat], marges = margesFormat(nomFormat, F), pas = pasPlanche(F);
     var liste = listeTuiles(doc, options).tuiles;
     var parPlanche = f.colonnes * f.lignes, nbPlanches = Math.ceil(liste.length / parPlanche);
     var exemplairesDe = {};
@@ -275,14 +287,14 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         format: nomFormat, nom: 'plateau-tuiles-' + nomFormat + '-' + (p + 1),
         titre: 'Plateau modulaire - tuiles ' + nomFormat + ' - planche ' + (p + 1) + '/' + nbPlanches,
         numero: p + 1, total: nbPlanches, largeur: f.largeur, hauteur: f.hauteur,
-        colonnes: f.colonnes, lignes: f.lignes, margeX: marges.x, margeY: marges.y, pas: PAS, tuiles: []
+        colonnes: f.colonnes, lignes: f.lignes, margeX: marges.x, margeY: marges.y, pas: pas, tuiles: []
       };
       liste.slice(p * parPlanche, (p + 1) * parPlanche).forEach(function (t, k) {
         var col = k % f.colonnes, lig = Math.floor(k / f.colonnes);
         var etiquette = t.modeleId + (exemplairesDe[t.modeleId] > 1 ? '-' + t.exemplaire : '');
         planche.tuiles.push({
           modeleId: t.modeleId, exemplaire: t.exemplaire, joueur: t.joueur, posee: t.posee, col: col, lig: lig, rot: 0,
-          x: marges.x + col * PAS, y: marges.y + lig * PAS, etiquette: etiquette
+          x: marges.x + col * pas, y: marges.y + lig * pas, etiquette: etiquette
         });
       });
       planche.reperes = calculerReperes(planche);
@@ -333,15 +345,15 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
   /** SVG d'une planche de tuiles (voir calepiner). `doc` fournit les modèles. */
   function svgPlanche(doc, planche) {
-    var corps = '', n = 0;
+    var corps = '', n = 0, F = M.formatDuDocument(doc), cp = cotePlanche(F);
     planche.tuiles.forEach(function (t) {
       var modele = M.modeleParId(doc, t.modeleId);
       if (!modele) throw new Error('Modèle introuvable : ' + t.modeleId);
       n++;
       var id = 'pm-clip-' + n;
       corps += '<g transform="translate(' + nb(t.x + FOND_PERDU) + ' ' + nb(t.y + FOND_PERDU) + ')" clip-path="url(#' + id + ')">' +
-        '<clipPath id="' + id + '"><rect x="' + (-FOND_PERDU) + '" y="' + (-FOND_PERDU) + '" width="' + COTE_PLANCHE + '" height="' + COTE_PLANCHE + '"/></clipPath>' +
-        R.contenuTuile(modele, { rot: t.rot || 0, joueur: t.joueur, fondPerdu: FOND_PERDU, contour: false }) + '</g>';
+        '<clipPath id="' + id + '"><rect x="' + (-FOND_PERDU) + '" y="' + (-FOND_PERDU) + '" width="' + cp + '" height="' + cp + '"/></clipPath>' +
+        R.contenuTuile(modele, { rot: t.rot || 0, joueur: t.joueur, fondPerdu: FOND_PERDU, contour: false, format: F }) + '</g>';
     });
     planche.reperes.forEach(function (r) { corps += svgLigne(r.x1, r.y1, r.x2, r.y2, EPAISSEUR_REPERE, NOIR_REPERAGE); });
     corps += svgBarre(planche.barre);
@@ -393,30 +405,32 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     return enveloppeSvg(p.largeur, p.hauteur, corps);
   }
 
-  /** Aperçu du plateau assemblé (48 x 48 cm) mis à l'échelle sur A3, sans repères : non imprimable. */
+  /** Aperçu du plateau assemblé (48 x 48 cm en 4×4) mis à l'échelle sur A3, sans repères : non imprimable. */
   function svgApercuPlateau(doc) {
-    var f = FORMATS.A3, cote = G.COTE * G.GRILLE.colonnes, echelle = 270 / cote, x0 = (f.largeur - 270) / 2, y0 = 50;
+    var F = M.formatDuDocument(doc), C = F.COTE;
+    var f = FORMATS.A3, cote = C * F.GRILLE.colonnes, echelle = 270 / cote, x0 = (f.largeur - 270) / 2, y0 = 50;
     var corps = '<g transform="translate(' + nb(x0) + ' ' + nb(y0) + ') scale(' + nb(echelle) + ')">', n = 0;
     tab(doc && doc.plateau && doc.plateau.tuiles).forEach(function (t) {
       var modele = M.modeleParId(doc, t.modeleId);
-      var tx = t.col * G.COTE, ty = t.lig * G.COTE;
-      if (!modele || !M.validerModele(modele).complet) {
-        corps += '<rect x="' + tx + '" y="' + ty + '" width="' + G.COTE + '" height="' + G.COTE + '" fill="none" stroke="' + R.COULEURS.noir +
+      var tx = t.col * C, ty = t.lig * C;
+      if (!modele || !M.validerModele(modele, F).complet) {
+        corps += '<rect x="' + tx + '" y="' + ty + '" width="' + C + '" height="' + C + '" fill="none" stroke="' + R.COULEURS.noir +
           '" stroke-width="0.5" stroke-dasharray="3 3"/>';
         return;
       }
       n++;
       var id = 'pm-clip-' + n;
       corps += '<g transform="translate(' + tx + ' ' + ty + ')" clip-path="url(#' + id + ')">' +
-        '<clipPath id="' + id + '"><rect x="0" y="0" width="' + G.COTE + '" height="' + G.COTE + '"/></clipPath>' +
-        R.contenuTuile(modele, { rot: t.rot || 0, joueur: M.joueurCellule(t.col, t.lig), fondPerdu: 0, contour: true }) + '</g>';
+        '<clipPath id="' + id + '"><rect x="0" y="0" width="' + C + '" height="' + C + '"/></clipPath>' +
+        R.contenuTuile(modele, { rot: t.rot || 0, joueur: M.joueurCellule(t.col, t.lig, F), fondPerdu: 0, contour: true, format: F }) + '</g>';
     });
     tab(doc && doc.plateau && doc.plateau.jetons).forEach(function (j) {
-      if (j && (j.type === 'capture' || j.type === 'carrefour')) corps += R.contenuJeton(j.type, j.i * G.COTE, j.j * G.COTE);
+      if (j && (j.type === 'capture' || j.type === 'carrefour')) corps += R.contenuJeton(j.type, j.i * C, j.j * C, F);
     });
     corps += '<rect x="0" y="0" width="' + cote + '" height="' + cote + '" fill="none" stroke="' + R.COULEURS.noir + '" stroke-width="0.8"/></g>';
     corps += svgTexte({ texte: 'Aperçu, non imprimable', x: f.largeur / 2, y: 28, taille: 9, ancre: 'middle', gras: true });
-    corps += svgTexte({ texte: 'Plateau assemblé 48 x 48 cm, réduit à 56 % : aucun repère de coupe.', x: f.largeur / 2, y: 38, taille: 3.5, ancre: 'middle', gras: false });
+    corps += svgTexte({ texte: 'Plateau assemblé ' + (cote / 10) + ' x ' + (C * F.GRILLE.lignes / 10) + ' cm, réduit à ' + Math.round(echelle * 100) +
+      ' % : aucun repère de coupe.', x: f.largeur / 2, y: 38, taille: 3.5, ancre: 'middle', gras: false });
     return enveloppeSvg(f.largeur, f.hauteur, corps);
   }
 

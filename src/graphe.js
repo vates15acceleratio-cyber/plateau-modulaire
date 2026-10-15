@@ -177,7 +177,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
     // Ce qui manque
     var plateau = (doc && doc.plateau) || {};
-    var attendues = M.cellulesActives(plateau.forme || { retires: [] }).length;
+    var attendues = M.cellulesActives(plateau.forme || { retires: [] }, M.formatDuDocument(doc)).length;
     var tuilesPosees = Array.isArray(plateau.tuiles) ? plateau.tuiles.filter(Boolean) : [];
     // une tuile dont le modèle est introuvable est ignorée par le graphe : elle ne compte pas comme posée
     var introuvables = tuilesPosees.filter(function (t) { return !M.modeleParId(doc, t.modeleId); }).length;
@@ -372,19 +372,19 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   /**
    * Autoroutes de flanc : pour chaque joueur, distance de ses apparitions à la ligne de jonctions adverse
-   * (j = 3 pour J1, j = 1 pour J2), dans le sous-graphe « flancs » (colonnes 0 et 3 + apparitions) et dans
-   * le sous-graphe « centre » (colonnes 1 et 2). Toutes les jonctions portent un jeton 'capture', traversable
+   * (j = lignes - 1, soit 3 en 4×4, pour J1 ; j = 1 pour J2), dans le sous-graphe « flancs » (première et
+   * dernière colonnes + apparitions) et dans le sous-graphe « centre » (colonnes 1 et colonnes - 2). Toutes les jonctions portent un jeton 'capture', traversable
    * avec l'option villesTraversables: true (mesure de tests/catalogue.test.js). Renvoie [{flanc, centre}] pour J1 puis J2 (Infinity si inatteignable).
    */
   function flancs(doc, options) {
     options = options || {};
-    var forme = doc.plateau.forme;
+    var forme = doc.plateau.forme, F = M.formatDuDocument(doc), grille = F.GRILLE;
     var jetons = [];
-    for (var j = 1; j < G.GRILLE.lignes; j++) for (var i = 1; i < G.GRILLE.colonnes; i++) jetons.push({ i: i, j: j, type: 'capture' });
-    var flanc = function (t) { return t.col === 0 || t.col === G.GRILLE.colonnes - 1 || M.roleCellule(t.col, t.lig, forme) === 'apparition'; };
-    var centre = function (t) { return t.col === 1 || t.col === G.GRILLE.colonnes - 2; };
+    for (var j = 1; j < grille.lignes; j++) for (var i = 1; i < grille.colonnes; i++) jetons.push({ i: i, j: j, type: 'capture' });
+    var flanc = function (t) { return t.col === 0 || t.col === grille.colonnes - 1 || M.roleCellule(t.col, t.lig, forme, F) === 'apparition'; };
+    var centre = function (t) { return t.col === 1 || t.col === grille.colonnes - 2; };
     return [1, 2].map(function (p) {
-      var cible = p === 1 ? G.GRILLE.lignes - 1 : 1;
+      var cible = p === 1 ? grille.lignes - 1 : 1;
       function mesure(filtre) {
         var g = construire(doc, { jetons: jetons, filtreTuile: filtre, villesTraversables: options.villesTraversables });
         var d = distancesJoueur(g, p), m = Infinity;

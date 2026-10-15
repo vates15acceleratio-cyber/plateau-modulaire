@@ -1,30 +1,48 @@
 /*
- * assemblage.js : écran du plateau (grille 4×4, pose des tuiles, jetons, alertes visuelles).
+ * assemblage.js : écran du plateau (grille du format du document, pose des tuiles, jetons, alertes visuelles).
  * Le calcul est fait par des fonctions pures exportées (testées sous Node) ; le DOM n'est
- * manipulé que dans `monter`. Unité : mm (viewBox du SVG en mm, cellule de 120 mm).
+ * manipulé que dans `monter`. Unité : mm (viewBox du SVG en mm, cellule de COTE mm : 120 en 4×4).
  *
  * Repères : cellule (col, lig), origine en haut à gauche (nord-ouest), lignes croissantes vers le sud ;
- * jonction (i, j) = (colonne, ligne) des coins de cellules, intérieure si 1 ≤ i, j ≤ 3, en (i·120, j·120) mm.
+ * jonction (i, j) = (colonne, ligne) des coins de cellules, intérieure si 1 ≤ i ≤ colonnes - 1 et
+ * 1 ≤ j ≤ lignes - 1 (1..3 en 4×4), en (i·COTE, j·COTE) mm.
+ * Les fonctions sans document prennent un dernier paramètre `format` facultatif (4×4 par défaut).
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
+
+if (!PM.modele && typeof require === 'function') require('./modele.js'); // chargement sous Node
 
 (function () {
   'use strict';
 
-  var COTE = 120;                 // côté d'une cellule (mm), = PM.geometrie.COTE
-  var NC = 4, NL = 4;             // grille 4×4
-  var RAYON_CELLULE = 60;         // aimantation d'une tuile (D10) : distance max au centre (norme max, carré de 120 mm)
   var RAYON_JONCTION = 15;        // aimantation d'un jeton (D10)
-  var NB_JONCTIONS = 9;
-  /** Zone visible du SVG (mm) : plateau de 0 à 480, marges pour les camps et les dimensions. */
-  var VUE = { x: -40, y: -52, w: 560, h: 600 };
+
+  function M() { return PM.modele; }
+  function G() { return PM.geometrie; }
+  /** Format de grille à partir d'un objet format, d'un identifiant ou de rien (4×4). */
+  function leFormat(f) {
+    if (f && typeof f === 'object') return f;
+    return G().format(f === undefined || f === null ? G().FORMAT_DEFAUT : f);
+  }
+  /** Format du document (champ `format`, absent = 4×4). */
+  function formatDoc(doc) { return M().formatDuDocument(doc); }
+
+  /** Zone visible du SVG (mm) : plateau de 0 à colonnes × COTE, marges pour les camps et les dimensions. */
+  function vuePour(format) {
+    var F = leFormat(format), w = F.GRILLE.colonnes * F.COTE, h = F.GRILLE.lignes * F.COTE;
+    return { x: -40, y: -52, w: w + 80, h: h + 120 };
+  }
+
+  // Valeurs du format 4×4, gardées pour l'API (les calculs passent par le format du document).
+  var COTE = PM.geometrie.COTE;     // côté d'une cellule (mm)
+  var RAYON_CELLULE = COTE / 2;     // aimantation d'une tuile (D10) : distance max au centre (norme max, carré de COTE mm)
+  /** Zone visible du SVG (mm) en 4×4 : plateau de 0 à 480. */
+  var VUE = vuePour();
   var NORMALE = [{ x: 0, y: 1 }, { x: -1, y: 0 }, { x: 0, y: -1 }, { x: 1, y: 0 }]; // vers l'intérieur, par côté
   var BISSECTRICE = [{ x: 1, y: 1 }, { x: -1, y: 1 }, { x: -1, y: -1 }, { x: 1, y: -1 }]
     .map(function (v) { return { x: v.x / Math.SQRT2, y: v.y / Math.SQRT2 }; }); // vers l'intérieur, par coin
   var LIBELLE_ROLE = { centrale: 'une centrale', coin: 'un coin', bord: 'un bord', apparition: 'une apparition' };
 
-  function M() { return PM.modele; }
-  function G() { return PM.geometrie; }
   function cle(a, b) { return a + ',' + b; }
   function arrondi(n) { return Math.round(n * 1000) / 1000; }
   function echapper(s) {
@@ -61,24 +79,26 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   }
 
   /**
-   * Cellule sous un point (mm) : celle dont le centre est à moins de 60 mm en norme max
-   * (c'est-à-dire la cellule de 120 mm qui contient le point), ou null hors de la grille.
+   * Cellule sous un point (mm) : celle dont le centre est à moins de COTE / 2 en norme max
+   * (c'est-à-dire la cellule de COTE mm qui contient le point), ou null hors de la grille.
    */
-  function celluleSous(x, y) {
+  function celluleSous(x, y, format) {
     if (typeof x !== 'number' || typeof y !== 'number' || !isFinite(x) || !isFinite(y)) return null;
-    var col = Math.floor(x / COTE), lig = Math.floor(y / COTE);
-    if (col < 0 || col >= NC || lig < 0 || lig >= NL) return null;
-    var cx = col * COTE + COTE / 2, cy = lig * COTE + COTE / 2;
-    if (Math.max(Math.abs(x - cx), Math.abs(y - cy)) > RAYON_CELLULE) return null;
+    var F = leFormat(format), C = F.COTE;
+    var col = Math.floor(x / C), lig = Math.floor(y / C);
+    if (col < 0 || col >= F.GRILLE.colonnes || lig < 0 || lig >= F.GRILLE.lignes) return null;
+    var cx = col * C + C / 2, cy = lig * C + C / 2;
+    if (Math.max(Math.abs(x - cx), Math.abs(y - cy)) > C / 2) return null;
     return { col: col, lig: lig };
   }
 
   /** Jonction intérieure la plus proche d'un point (mm), si elle est à 15 mm au plus ; sinon null. */
-  function jonctionSous(x, y) {
+  function jonctionSous(x, y, format) {
     if (typeof x !== 'number' || typeof y !== 'number' || !isFinite(x) || !isFinite(y)) return null;
-    var i = Math.round(x / COTE), j = Math.round(y / COTE);
-    if (i < 1 || i > NC - 1 || j < 1 || j > NL - 1) return null;
-    if (Math.hypot(x - i * COTE, y - j * COTE) > RAYON_JONCTION) return null;
+    var F = leFormat(format), C = F.COTE;
+    var i = Math.round(x / C), j = Math.round(y / C);
+    if (i < 1 || i > F.GRILLE.colonnes - 1 || j < 1 || j > F.GRILLE.lignes - 1) return null;
+    if (Math.hypot(x - i * C, y - j * C) > RAYON_JONCTION) return null;
     return { i: i, j: j };
   }
 
@@ -88,9 +108,9 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
 
   /** Cellules où le modèle peut être posé maintenant : [{col, lig, rot}]. */
   function cellulesCompatibles(doc, modeleId) {
-    var res = [];
-    for (var lig = 0; lig < NL; lig++) {
-      for (var col = 0; col < NC; col++) {
+    var res = [], F = formatDoc(doc);
+    for (var lig = 0; lig < F.GRILLE.lignes; lig++) {
+      for (var col = 0; col < F.GRILLE.colonnes; col++) {
         var t = M().peutPoserTuile(doc, modeleId, col, lig);
         if (t.ok) res.push({ col: col, lig: lig, rot: t.rot });
       }
@@ -163,7 +183,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   function raisonCourteJonction(doc, i, j) {
     var p = M().portsJonction(doc, i, j);
     if (p.tuiles < 4) return 'la jonction (' + i + ',' + j + ') n\'a plus 4 tuiles';
-    if (p.ports < G().MIN_PORTS_JONCTION) return 'la jonction (' + i + ',' + j + ') n\'a plus que ' + pluriel(p.ports, 'port');
+    if (p.ports < formatDoc(doc).MIN_PORTS_JONCTION) return 'la jonction (' + i + ',' + j + ') n\'a plus que ' + pluriel(p.ports, 'port');
     var r = M().peutPoserJeton(doc, i, j).raison;
     return 'la jonction (' + i + ',' + j + ') : ' + (r || 'jeton invalide').replace(/\.$/, '').toLowerCase();
   }
@@ -196,7 +216,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       if (!t || !maloriente(apres, t)) return;
       var tAvant = M().tuileEn(avant, t.col, t.lig);
       if (tAvant && tAvant.modeleId === t.modeleId && maloriente(avant, tAvant)) return; // déjà signalée avant
-      res.tuilesARevoir.push({ col: t.col, lig: t.lig, modeleId: t.modeleId, attendu: M().roleCellule(t.col, t.lig, apres.plateau.forme) });
+      res.tuilesARevoir.push({ col: t.col, lig: t.lig, modeleId: t.modeleId, attendu: M().roleCellule(t.col, t.lig, apres.plateau.forme, formatDoc(apres)) });
     });
     return res;
   }
@@ -238,16 +258,16 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
    * Côté d'une jonction : 'nord' (camp J1), 'sud' (camp J2) ou null (rangée du milieu, neutre),
    * selon la règle unique PM.modele.campJonction. Interprétation de la règle « jamais les 2 carrefours du même côté ».
    */
-  function coteJonction(j) {
-    var camp = M().campJonction(null, j);
+  function coteJonction(j, format) {
+    var camp = M().campJonction(null, j, format);
     return camp === 1 ? 'nord' : camp === 2 ? 'sud' : null;
   }
 
   /** Côté où se trouvent au moins 2 carrefours ('nord' | 'sud'), ou null (règle manuelle, sans blocage). */
   function carrefoursMemeCote(doc) {
-    var n = { nord: 0, sud: 0 };
+    var n = { nord: 0, sud: 0 }, F = formatDoc(doc);
     doc.plateau.jetons.forEach(function (jt) {
-      if (jt && jt.type === 'carrefour') { var c = coteJonction(jt.j); if (c) n[c]++; }
+      if (jt && jt.type === 'carrefour') { var c = coteJonction(jt.j, F); if (c) n[c]++; }
     });
     return n.nord >= 2 ? 'nord' : n.sud >= 2 ? 'sud' : null;
   }
@@ -273,12 +293,14 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   /* Formes du plateau                                                   */
   /* ------------------------------------------------------------------ */
 
-  var NOMS_COIN = { '0,0': 'NO', '3,0': 'NE', '3,3': 'SE', '0,3': 'SO' };
-  var COINS = [{ col: 0, lig: 0 }, { col: 3, lig: 0 }, { col: 3, lig: 3 }, { col: 0, lig: 3 }];
-
   /** Les 15 formes proposées : [{cle, groupe, libelle, forme: {retires}}]. */
-  function formesProposees() {
-    var res = [{ cle: 'complet', groupe: '4×4 complet', libelle: '4×4 complet', forme: { retires: [] } }];
+  function formesProposees(format) {
+    var F = leFormat(format), dc = F.GRILLE.colonnes - 1, dl = F.GRILLE.lignes - 1;
+    var COINS = [{ col: 0, lig: 0 }, { col: dc, lig: 0 }, { col: dc, lig: dl }, { col: 0, lig: dl }];
+    var NOMS_COIN = {};
+    ['NO', 'NE', 'SE', 'SO'].forEach(function (nom, k) { NOMS_COIN[cle(COINS[k].col, COINS[k].lig)] = nom; });
+    var complet = F.GRILLE.colonnes + '×' + F.GRILLE.lignes + ' complet';
+    var res = [{ cle: 'complet', groupe: complet, libelle: complet, forme: { retires: [] } }];
     COINS.forEach(function (c) {
       res.push({ cle: 'c' + c.col + c.lig, groupe: '1 coin retiré', libelle: 'Sans le coin ' + NOMS_COIN[cle(c.col, c.lig)],
         forme: { retires: [{ col: c.col, lig: c.lig }] } });
@@ -292,7 +314,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       }
     }
     COINS.forEach(function (c) {
-      var bord = { col: c.col, lig: c.lig === 0 ? 1 : 2 };
+      var bord = { col: c.col, lig: c.lig === 0 ? 1 : dl - 1 };
       res.push({ cle: 'c' + c.col + c.lig + 'b' + bord.col + bord.lig, groupe: 'Coin et bord voisin',
         libelle: 'Sans le coin ' + NOMS_COIN[cle(c.col, c.lig)] + ' et le bord (' + bord.col + ',' + bord.lig + ')',
         forme: { retires: [{ col: c.col, lig: c.lig }, bord] } });
@@ -301,18 +323,18 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   }
 
   /** Clé de la forme proposée identique à `forme` (ordre des cellules indifférent), ou null. */
-  function cleForme(forme) {
+  function cleForme(forme, format) {
     var r = (forme && Array.isArray(forme.retires) ? forme.retires : []).map(function (x) { return x && cle(x.col, x.lig); }).sort().join('|');
-    var f = formesProposees().filter(function (p) {
+    var f = formesProposees(format).filter(function (p) {
       return p.forme.retires.map(function (x) { return cle(x.col, x.lig); }).sort().join('|') === r;
     })[0];
     return f ? f.cle : null;
   }
 
   /** Étiquette d'une cellule libre : 'Coin', 'Bord', 'Apparition J1', 'Apparition J2', 'Centrale', ou null. */
-  function etiquetteCellule(col, lig, forme) {
-    var r = M().roleCellule(col, lig, forme);
-    if (r === 'apparition') return 'Apparition J' + M().joueurCellule(col, lig);
+  function etiquetteCellule(col, lig, forme, format) {
+    var r = M().roleCellule(col, lig, forme, format);
+    if (r === 'apparition') return 'Apparition J' + M().joueurCellule(col, lig, format);
     return r ? r.charAt(0).toUpperCase() + r.slice(1) : null;
   }
 
@@ -327,17 +349,17 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
    * (x, y) = point sur la frontière ou au coin ; (nx, ny) = direction vers l'intérieur de la tuile.
    */
   function alertesPlateau(doc) {
-    var res = [];
+    var res = [], F = formatDoc(doc), C = F.COTE;
     M().raccordsMorts(doc).forEach(function (r) {
       if (r.raison === 'absent') return;
-      var p = G().pointRaccord(r.cote, r.pos), n = NORMALE[r.cote];
+      var p = F.pointRaccord(r.cote, r.pos), n = NORMALE[r.cote];
       res.push({ type: 'raccord', col: r.col, lig: r.lig, cote: r.cote, pos: r.pos, raison: r.raison,
-        x: r.col * COTE + p.x, y: r.lig * COTE + p.y, nx: n.x, ny: n.y });
+        x: r.col * C + p.x, y: r.lig * C + p.y, nx: n.x, ny: n.y });
     });
     M().portsCoinMorts(doc).forEach(function (p) {
-      var k = G().pointCoin(p.coin), b = BISSECTRICE[p.coin];
+      var k = F.pointCoin(p.coin), b = BISSECTRICE[p.coin];
       res.push({ type: 'port', col: p.col, lig: p.lig, coin: p.coin, i: p.i, j: p.j,
-        x: p.col * COTE + k.x, y: p.lig * COTE + k.y, nx: b.x, ny: b.y });
+        x: p.col * C + k.x, y: p.lig * C + k.y, nx: b.x, ny: b.y });
     });
     return res;
   }
@@ -349,6 +371,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
    */
   function cibleSurbrillance(s, doc) {
     if (!s || typeof s !== 'object') return [];
+    var F = formatDoc(doc), COTE = F.COTE;
     function cellule(col, lig) { return { forme: 'rect', x: col * COTE, y: lig * COTE, w: COTE, h: COTE }; }
     function tuilesDuModele(id) {
       return doc.plateau.tuiles.filter(function (t) { return t && t.modeleId === id; }).map(function (t) { return cellule(t.col, t.lig); });
@@ -357,12 +380,12 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       case 'tuile': return typeof s.col === 'number' ? [cellule(s.col, s.lig)] : [];
       case 'raccord': {
         if (typeof s.cote !== 'number') return [cellule(s.col, s.lig)];
-        var p = G().pointRaccord(s.cote, s.pos || 0);
+        var p = F.pointRaccord(s.cote, s.pos || 0);
         return [{ forme: 'cercle', x: s.col * COTE + p.x, y: s.lig * COTE + p.y, r: 12 }];
       }
       case 'port': case 'coin': {
         if (typeof s.col !== 'number') return [];
-        var k = G().pointCoin(typeof s.coin === 'number' ? s.coin : s.id);
+        var k = F.pointCoin(typeof s.coin === 'number' ? s.coin : s.id);
         if (!k) return [cellule(s.col, s.lig)];
         return [{ forme: 'cercle', x: s.col * COTE + k.x, y: s.lig * COTE + k.y, r: 14 }];
       }
@@ -370,7 +393,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
         return typeof s.i === 'number' ? [{ forme: 'cercle', x: s.i * COTE, y: s.j * COTE, r: 22 }] : [];
       case 'case': case 'chemin': return tuilesDuModele(s.modeleId);
       case 'modele': return tuilesDuModele(s.id);
-      case 'forme': return [{ forme: 'rect', x: 0, y: 0, w: NC * COTE, h: NL * COTE }];
+      case 'forme': return [{ forme: 'rect', x: 0, y: 0, w: F.GRILLE.colonnes * COTE, h: F.GRILLE.lignes * COTE }];
       default: return [];
     }
   }
@@ -379,9 +402,9 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   /* Dessin SVG (chaînes, sans DOM)                                      */
   /* ------------------------------------------------------------------ */
 
-  /** Repère N d'une tuile (nord canonique du modèle, tourné de `rot`), coordonnées locales 0..120. */
-  function repereNord(rot) {
-    var p = G().tournerPoint({ x: 60, y: 9 }, rot);
+  /** Repère N d'une tuile (nord canonique du modèle, tourné de `rot`), coordonnées locales 0..COTE. */
+  function repereNord(rot, F) {
+    var p = F.tournerPoint({ x: F.COTE / 2, y: 9 }, rot);
     return '<g class="pm-assemblage-nord"><circle cx="' + arrondi(p.x) + '" cy="' + arrondi(p.y) + '" r="4.2"/>' +
       '<text x="' + arrondi(p.x) + '" y="' + arrondi(p.y + 2.2) + '" text-anchor="middle">N</text></g>';
   }
@@ -395,21 +418,24 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     verifierDocument(doc);
     vue = vue || {};
     var forme = doc.plateau.forme, s = [];
-    s.push('<svg class="pm-assemblage-svg" xmlns="http://www.w3.org/2000/svg" viewBox="' + VUE.x + ' ' + VUE.y + ' ' + VUE.w + ' ' + VUE.h +
-      '" role="group" aria-label="Plateau 4 × 4, 48 × 48 cm">');
+    var F = formatDoc(doc), COTE = F.COTE, NC = F.GRILLE.colonnes, NL = F.GRILLE.lignes, V = vuePour(F);
+    var larg = NC * COTE, haut = NL * COTE, milieu = larg / 2, demi = COTE / 2;
+    var dimensions = (larg / 10) + ' × ' + (haut / 10) + ' cm';
+    s.push('<svg class="pm-assemblage-svg" xmlns="http://www.w3.org/2000/svg" viewBox="' + V.x + ' ' + V.y + ' ' + V.w + ' ' + V.h +
+      '" role="group" aria-label="Plateau ' + NC + ' × ' + NL + ', ' + dimensions + '">');
     // Camps et dimensions
-    s.push('<text class="pm-assemblage-camp pm-assemblage-camp-j1" x="240" y="-26" text-anchor="middle">Camp J1 (nord)</text>');
-    s.push('<text class="pm-assemblage-camp pm-assemblage-camp-j2" x="240" y="512" text-anchor="middle">Camp J2 (sud)</text>');
-    s.push('<text class="pm-assemblage-dimensions" x="240" y="536" text-anchor="middle">48 × 48 cm</text>');
-    s.push('<rect class="pm-assemblage-cadre" x="0" y="0" width="480" height="480"/>');
+    s.push('<text class="pm-assemblage-camp pm-assemblage-camp-j1" x="' + milieu + '" y="-26" text-anchor="middle">Camp J1 (nord)</text>');
+    s.push('<text class="pm-assemblage-camp pm-assemblage-camp-j2" x="' + milieu + '" y="' + (haut + 32) + '" text-anchor="middle">Camp J2 (sud)</text>');
+    s.push('<text class="pm-assemblage-dimensions" x="' + milieu + '" y="' + (haut + 56) + '" text-anchor="middle">' + dimensions + '</text>');
+    s.push('<rect class="pm-assemblage-cadre" x="0" y="0" width="' + larg + '" height="' + haut + '"/>');
 
     // Cellules
     for (var lig = 0; lig < NL; lig++) {
       for (var col = 0; col < NC; col++) {
         var k = cle(col, lig), x = col * COTE, y = lig * COTE;
-        var t = M().tuileEn(doc, col, lig), role = M().roleCellule(col, lig, forme);
+        var t = M().tuileEn(doc, col, lig), role = M().roleCellule(col, lig, forme, F);
         var classes = ['pm-assemblage-cellule'];
-        var etiquette = etiquetteCellule(col, lig, forme);
+        var etiquette = etiquetteCellule(col, lig, forme, F);
         var nom;
         if (t) classes.push('pm-assemblage-occupee');
         else if (role === null) classes.push('pm-assemblage-retiree');
@@ -426,27 +452,27 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
           ' tabindex="0" role="button" aria-label="' + echapper(nom) + '">');
         if (t) {
           if (m) {
-            s.push(PM.rendu.contenuTuile(m, { rot: t.rot, joueur: M().joueurCellule(col, lig) }));
-            s.push(repereNord(t.rot));
+            s.push(PM.rendu.contenuTuile(m, { rot: t.rot, joueur: M().joueurCellule(col, lig, F), format: F }));
+            s.push(repereNord(t.rot, F));
           } else {
-            s.push('<rect class="pm-assemblage-absent" x="0" y="0" width="120" height="120"/>' +
-              '<text class="pm-assemblage-etiquette" x="60" y="64" text-anchor="middle">Modèle absent</text>');
+            s.push('<rect class="pm-assemblage-absent" x="0" y="0" width="' + COTE + '" height="' + COTE + '"/>' +
+              '<text class="pm-assemblage-etiquette" x="' + demi + '" y="' + (demi + 4) + '" text-anchor="middle">Modèle absent</text>');
           }
         } else if (role === null) {
-          s.push('<rect class="pm-assemblage-fond-retire" x="4" y="4" width="112" height="112"/>' +
-            '<text class="pm-assemblage-etiquette" x="60" y="64" text-anchor="middle">Retirée</text>');
+          s.push('<rect class="pm-assemblage-fond-retire" x="4" y="4" width="' + (COTE - 8) + '" height="' + (COTE - 8) + '"/>' +
+            '<text class="pm-assemblage-etiquette" x="' + demi + '" y="' + (demi + 4) + '" text-anchor="middle">Retirée</text>');
         } else {
-          s.push('<rect class="pm-assemblage-silhouette" x="5" y="5" width="110" height="110" rx="4"/>' +
-            '<text class="pm-assemblage-etiquette" x="60" y="64" text-anchor="middle">' + echapper(etiquette) + '</text>');
+          s.push('<rect class="pm-assemblage-silhouette" x="5" y="5" width="' + (COTE - 10) + '" height="' + (COTE - 10) + '" rx="4"/>' +
+            '<text class="pm-assemblage-etiquette" x="' + demi + '" y="' + (demi + 4) + '" text-anchor="middle">' + echapper(etiquette) + '</text>');
         }
-        s.push('<rect class="pm-assemblage-zone" x="0" y="0" width="120" height="120"><title>' + echapper(nom) + '</title></rect>');
+        s.push('<rect class="pm-assemblage-zone" x="0" y="0" width="' + COTE + '" height="' + COTE + '"><title>' + echapper(nom) + '</title></rect>');
         s.push('</g>');
       }
     }
 
     // Alertes (raccords et ports morts)
     alertesPlateau(doc).forEach(function (a) {
-      var lg = a.type === 'raccord' ? G().LARGEUR_CHEMIN + 2 : 24;
+      var lg = a.type === 'raccord' ? F.LARGEUR_CHEMIN + 2 : 24;
       var titre = a.type === 'port' ? 'Port de coin vers une jonction qui ne peut pas recevoir de jeton'
         : a.raison === 'vide' ? 'Raccord face au vide' : 'Raccord sans vis-à-vis';
       var ax = a.x + a.nx * 5, ay = a.y + a.ny * 5; // triangle légèrement à l'intérieur
@@ -463,7 +489,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       for (var i = 1; i < NC; i++) {
         var kj = cle(i, j), cx = i * COTE, cy = j * COTE;
         var jeton = doc.plateau.jetons.filter(function (x) { return x && x.i === i && x.j === j; })[0];
-        var possible = M().jonctionPossible(forme, i, j);
+        var possible = M().jonctionPossible(forme, i, j, F);
         var test = jeton ? { ok: true } : M().peutPoserJeton(doc, i, j);
         var cl = ['pm-assemblage-jonction'], info;
         if (jeton) {
@@ -482,7 +508,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
         }
         if (vue.clignote && vue.clignote.jonction === kj) cl.push('pm-assemblage-clignote');
         s.push('<g class="' + cl.join(' ') + '" data-jonction="' + kj + '" data-cle="j:' + kj + '" tabindex="0" role="button" aria-label="' + echapper(info) + '">');
-        if (jeton) s.push(PM.rendu.contenuJeton(jeton.type, cx, cy));
+        if (jeton) s.push(PM.rendu.contenuJeton(jeton.type, cx, cy, F));
         else s.push('<circle class="pm-assemblage-point" cx="' + cx + '" cy="' + cy + '" r="' + (possible ? 9 : 6) + '"/>');
         s.push('<circle class="pm-assemblage-zone-jonction" cx="' + cx + '" cy="' + cy + '" r="' + RAYON_JONCTION + '"><title>' + echapper(info) + '</title></circle>');
         s.push('</g>');
@@ -543,7 +569,8 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
 
     function svg() { return scene.querySelector('svg'); }
     function rectSvg() { var e = svg(); return e ? e.getBoundingClientRect() : { left: 0, top: 0, width: 1, height: 1 }; }
-    function pointMm(ev) { return ecranVersMm(ev.clientX, ev.clientY, rectSvg(), VUE); }
+    function formatCourant() { return formatDoc(etat.doc()); }
+    function pointMm(ev) { return ecranVersMm(ev.clientX, ev.clientY, rectSvg(), vuePour(formatCourant())); }
 
     function compatiblesCourants() {
       var doc = etat.doc(), liste = null;
@@ -568,9 +595,9 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
         clignote: clignote, surbrillance: ui.surbrillance
       });
       if (cleFocus) { var el = scene.querySelector('[data-cle="' + cleFocus + '"]'); if (el) el.focus(); }
-      var k = cleForme(doc.plateau.forme);
+      var F = formatDoc(doc), k = cleForme(doc.plateau.forme, F);
       selForme.value = k || '';
-      compteur.textContent = 'Jetons posés ' + compterJetons(doc) + '/' + NB_JONCTIONS;
+      compteur.textContent = 'Jetons posés ' + compterJetons(doc) + '/' + ((F.GRILLE.colonnes - 1) * (F.GRILLE.lignes - 1));
       var t = selection && M().tuileEn(doc, selection.col, selection.lig);
       if (ui.aPoser) consigne.textContent = 'Pose de « ' + ui.aPoser + ' » : cliquez une cellule éclairée (Échap pour annuler).';
       else if (t) consigne.textContent = 'Tuile (' + t.col + ',' + t.lig + ') sélectionnée : ' +
@@ -646,7 +673,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       if (!aJeton) {
         var test = M().peutPoserJeton(doc, i, j);
         if (!test.ok) {
-          var raison = M().jonctionPossible(doc.plateau.forme, i, j) ? test.raison
+          var raison = M().jonctionPossible(doc.plateau.forme, i, j, formatDoc(doc)) ? test.raison
             : 'Cette jonction ne peut pas recevoir de jeton avec cette forme de plateau.';
           faireClignoter({ jonction: cle(i, j) });
           etat.signaler(raison, 'erreur');
@@ -678,7 +705,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       }
       selection = null;
       dessiner();
-      var et = etiquetteCellule(col, lig, doc.plateau.forme);
+      var et = etiquetteCellule(col, lig, doc.plateau.forme, formatDoc(doc));
       etat.signaler(et ? 'Cellule (' + col + ',' + lig + ') : ' + et.toLowerCase() + ' attendu' +
         (/^(Centrale|Apparition)/.test(et) ? 'e' : '') + '. Glissez une tuile de ce rôle depuis la bibliothèque.'
         : 'Cette cellule est retirée du plateau.', 'info');
@@ -688,17 +715,17 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
 
     function dessinerFantome() {
       if (!glissement) { fantome.hidden = true; fantome.innerHTML = ''; return; }
-      var m = M().modeleParId(etat.doc(), glissement.modeleId);
-      var taille = COTE * cadrage(rectSvg(), VUE).echelle;
+      var m = M().modeleParId(etat.doc(), glissement.modeleId), F = formatCourant();
+      var taille = F.COTE * cadrage(rectSvg(), vuePour(F)).echelle;
       fantome.style.width = taille + 'px';
       fantome.style.height = taille + 'px';
-      fantome.innerHTML = '<svg viewBox="0 0 120 120" width="100%" height="100%" aria-hidden="true">' +
-        PM.rendu.contenuTuile(m, { rot: glissement.rot, joueur: null }) + '</svg>';
+      fantome.innerHTML = '<svg viewBox="0 0 ' + F.COTE + ' ' + F.COTE + '" width="100%" height="100%" aria-hidden="true">' +
+        PM.rendu.contenuTuile(m, { rot: glissement.rot, joueur: null, format: F }) + '</svg>';
       fantome.hidden = false;
     }
 
     function placerFantome(ev) {
-      var taille = COTE * cadrage(rectSvg(), VUE).echelle;
+      var F = formatCourant(), taille = F.COTE * cadrage(rectSvg(), vuePour(F)).echelle;
       fantome.style.transform = 'translate(' + (ev.clientX - taille / 2) + 'px,' + (ev.clientY - taille / 2) + 'px)';
     }
 
@@ -720,7 +747,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     function bouger(ev) {
       if (!glissement) return;
       placerFantome(ev);
-      var p = pointMm(ev), c = celluleSous(p.x, p.y);
+      var p = pointMm(ev), c = celluleSous(p.x, p.y, formatCourant());
       var avant = glissement.cible;
       if ((avant && c && avant.col === c.col && avant.lig === c.lig) || (!avant && !c)) return;
       glissement.cible = c;
@@ -729,7 +756,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
 
     function lacher(ev) {
       if (!glissement) return;
-      var g = glissement, p = pointMm(ev), c = celluleSous(p.x, p.y);
+      var g = glissement, p = pointMm(ev), c = celluleSous(p.x, p.y, formatCourant());
       terminerGlissement();
       if (!c) {
         etat.signaler(g.de ? 'Déplacement annulé : lâchez la tuile sur une cellule du plateau.' : 'Pose annulée : lâchez la tuile sur une cellule du plateau.', 'info');
@@ -776,7 +803,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       appui = null;
       if (scene.contains(cible)) activer(cible);
       else { // l'élément a été redessiné entre-temps : retrouver la cible par la position
-        var p = pointMm(ev), jn = jonctionSous(p.x, p.y), c = celluleSous(p.x, p.y);
+        var F = formatCourant(), p = pointMm(ev), jn = jonctionSous(p.x, p.y, F), c = celluleSous(p.x, p.y, F);
         var el = jn ? scene.querySelector('[data-jonction="' + cle(jn.i, jn.j) + '"]')
           : c ? scene.querySelector('[data-cellule="' + cle(c.col, c.lig) + '"]') : null;
         activer(el);
@@ -837,6 +864,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
 
   PM.assemblage = {
     VUE: VUE,
+    vuePour: vuePour,
     COTE: COTE,
     RAYON_CELLULE: RAYON_CELLULE,
     RAYON_JONCTION: RAYON_JONCTION,

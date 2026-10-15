@@ -16,8 +16,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 (function () {
   'use strict';
 
-  var M = PM.modele, G = PM.geometrie;
-  var NC = G.GRILLE.colonnes, NL = G.GRILLE.lignes;
+  var M = PM.modele;
 
   /** Composition visée (synthèse des advisors). */
   var NB_VILLES = 7;
@@ -27,8 +26,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var NB_APPARITIONS_PAR_JOUEUR = 2;
   var NB_JETONS = 9;
 
-  /** Dimensions de la boîte englobante du plateau (en cm). La forme retire des cellules, pas la boîte. */
-  var DIMENSIONS = (NC * G.COTE / 10) + ' × ' + (NL * G.COTE / 10) + ' cm';
+  /** Dimensions de la boîte englobante du plateau (en cm) pour le format F. La forme retire des cellules, pas la boîte. */
+  function dimensions(F) { return (F.GRILLE.colonnes * F.COTE / 10) + ' × ' + (F.GRILLE.lignes * F.COTE / 10) + ' cm'; }
 
   /** Libellés des groupes d'erreurs et d'alertes (un code sans libellé affiche le premier message). */
   var LIBELLES = {
@@ -112,9 +111,9 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * selon la règle unique PM.modele.campJonction (docs/11-revue-interface.md, arbitrage I3 ; 1b D7 :
    * deux carrefours dans un camp donnent 3 villes contre 1).
    */
-  function cotePartage(a, b) {
-    var camp = M.campJonction(a.i, a.j);
-    if (camp === null || camp !== M.campJonction(b.i, b.j)) return null;
+  function cotePartage(a, b, F) {
+    var camp = M.campJonction(a.i, a.j, F);
+    if (camp === null || camp !== M.campJonction(b.i, b.j, F)) return null;
     return camp === 1 ? 'rangée nord' : 'rangée sud';
   }
 
@@ -124,7 +123,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * traversables) ne donne aucune alerte ; la paire n'est alors plus annoncée comme à risque.
    */
   function alertesJetons(doc, equilibreVerifie) {
-    var villes = [], carrefours = [], res = [];
+    var villes = [], carrefours = [], res = [], F = M.formatDuDocument(doc);
     doc.plateau.jetons.forEach(function (j) {
       if (!j) return;
       if (j.type === 'capture') villes.push(j);
@@ -140,7 +139,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     }
     for (var a = 0; a < carrefours.length; a++) {
       for (var b = a + 1; b < carrefours.length; b++) {
-        var cote = cotePartage(carrefours[a], carrefours[b]);
+        var cote = cotePartage(carrefours[a], carrefours[b], F);
         if (cote) {
           res.push({ code: 'carrefours_meme_cote', niveau: 'alerte', cible: cibleJonction(carrefours[b]),
             message: 'Deux carrefours sur la même ' + cote + ' du plateau.' });
@@ -149,7 +148,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     }
     // Mode manuel : une paire autre que (1,2)+(3,2) est permise, mais son risque est annoncé,
     // sauf si l'équilibre de ce plateau est mesuré et sans alerte (cas d'un plateau « carrefours variés »)
-    if (!equilibreVerifie && carrefours.length === 2 && !cotePartage(carrefours[0], carrefours[1])) {
+    if (!equilibreVerifie && carrefours.length === 2 && !cotePartage(carrefours[0], carrefours[1], F)) {
       var tri = carrefours.slice().sort(function (a, b) { return (a.j - b.j) || (a.i - b.i); });
       var cle = tri[0].i + ',' + tri[0].j + '+' + tri[1].i + ',' + tri[1].j;
       var taux = TAUX_CINQ_CONTRE_DEUX[cle];
@@ -195,20 +194,21 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /**
    * Cibles qui dépendent de la forme (ajout de l'orchestrateur à l'intégration) : dans une forme réduite,
    * moins de jonctions sont possibles, donc moins de carrefours, et moins de cases de déplacement.
-   * Sur le 4×4 complet : 2 carrefours, 9 jetons, 50 cases.
+   * Sur le 4×4 complet : 2 carrefours, 9 jetons, 50 cases. `format` : 4×4 par défaut.
    */
-  function ciblesSelonForme(forme) {
+  function ciblesSelonForme(forme, format) {
     var jonctions = 0, cases = 0;
-    for (var i = 1; i <= 3; i++) for (var j = 1; j <= 3; j++) if (M.jonctionPossible(forme, i, j)) jonctions++;
-    M.cellulesActives(forme).forEach(function (cel) {
-      cases += DEPLACEMENT_PAR_ROLE[M.roleCellule(cel.col, cel.lig, forme)] || 0;
+    var F = format && typeof format === 'object' ? format : PM.geometrie.format(format || PM.geometrie.FORMAT_DEFAUT);
+    for (var i = 1; i < F.GRILLE.colonnes; i++) for (var j = 1; j < F.GRILLE.lignes; j++) if (M.jonctionPossible(forme, i, j, F)) jonctions++;
+    M.cellulesActives(forme, F).forEach(function (cel) {
+      cases += DEPLACEMENT_PAR_ROLE[M.roleCellule(cel.col, cel.lig, forme, F)] || 0;
     });
     var carrefours = Math.max(0, Math.min(NB_CARREFOURS, jonctions - NB_VILLES));
     return { carrefours: carrefours, casesDeplacement: cases + carrefours };
   }
 
   function compteursDuPlateau(doc) {
-    var plateau = doc.plateau;
+    var plateau = doc.plateau, F = M.formatDuDocument(doc);
     var villes = 0, carrefours = 0, casesDeplacement = 0, petitesTuiles = 0;
     var apparitions = { 1: 0, 2: 0 };
     plateau.jetons.forEach(function (j) {
@@ -227,21 +227,21 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         if (!c) return;
         if (c.type === 'deplacement') casesDeplacement++;
         else if (c.type === 'apparition') {
-          var joueur = M.joueurCellule(t.col, t.lig);
+          var joueur = M.joueurCellule(t.col, t.lig, F);
           if (joueur) apparitions[joueur]++;
         }
       });
     });
-    var c = ciblesSelonForme(plateau.forme);
+    var c = ciblesSelonForme(plateau.forme, F);
     return [
       compteur('villes', 'Villes', villes, NB_VILLES),
       compteur('carrefours', 'Carrefours', carrefours, c.carrefours),
       compteur('cases_deplacement', 'Cases de déplacement', casesDeplacement, c.casesDeplacement),
-      compteur('tuiles', 'Tuiles posées', plateau.tuiles.length, M.cellulesActives(plateau.forme).length),
+      compteur('tuiles', 'Tuiles posées', plateau.tuiles.length, M.cellulesActives(plateau.forme, F).length),
       compteur('apparitions_j1', 'Apparitions J1', apparitions[1], NB_APPARITIONS_PAR_JOUEUR),
       compteur('apparitions_j2', 'Apparitions J2', apparitions[2], NB_APPARITIONS_PAR_JOUEUR),
       compteur('jetons', 'Jetons posés', plateau.jetons.length, NB_VILLES + c.carrefours),
-      { cle: 'dimensions', libelle: 'Dimensions', valeur: DIMENSIONS, cible: DIMENSIONS, etat: 'ok' },
+      { cle: 'dimensions', libelle: 'Dimensions', valeur: dimensions(F), cible: dimensions(F), etat: 'ok' },
       compteur('tuiles_petites', 'Tuiles à moins de 2 cases', petitesTuiles, 0)
     ];
   }

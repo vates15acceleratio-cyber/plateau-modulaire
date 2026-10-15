@@ -1,6 +1,7 @@
 /*
  * geometrie.js : constantes (mm), côtés / coins, masques, rotation, appariement.
- * Aucun accès au DOM. Voir docs/2-avis-geometrie.md (D3, D4).
+ * Aucun accès au DOM. Voir docs/2-avis-geometrie.md (D3, D4) ; formats 4×4 et 5×5 :
+ * docs/20-avis-geometrie-v2.md (D4). PM.geometrie.format(id) décrit un format ; PM.geometrie.* = format 4×4.
  *
  * Conventions
  *  - Côtés : 0 = N, 1 = E, 2 = S, 3 = O.  Coins : 0 = NO, 1 = NE, 2 = SE, 3 = SO
@@ -14,19 +15,28 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
 (function () {
   'use strict';
 
-  var COTE = 120;
+  /**
+   * Formats de grille carrée (docs/20-avis-geometrie-v2.md, D4). Toutes les cotes en mm.
+   * Seules les valeurs propres à chaque format figurent ici ; les autres sont dans COMMUNES.
+   */
+  var DEFINITIONS = {
+    '4x4': { COTE: 120, POSITIONS_RACCORD: [30, 60, 90], DIAMETRE_CASE_MAX: 30, GRILLE: { colonnes: 4, lignes: 4 } },
+    '5x5': { COTE: 100, POSITIONS_RACCORD: [30, 50, 70], DIAMETRE_CASE_MAX: 24, GRILLE: { colonnes: 5, lignes: 5 } }
+  };
+  var IDS_FORMATS = ['4x4', '5x5'];
+  var FORMAT_DEFAUT = '4x4';
 
-  /** Constantes de conception (toutes en mm sauf mention contraire). */
-  var CONSTANTES = {
-    COTE: COTE,
-    POSITIONS_RACCORD: [30, 60, 90], // distance depuis le coin de début du côté
+  /** Cotes et règles identiques sur tous les formats. */
+  var COMMUNES = {
     RAYON_ZONE_COIN: 20,
-    DIAMETRE_CASE_MAX: 30,
+    DIAMETRE_CASE_JONCTION: 24,
+    DIAMETRE_JETON: 30,
     MARGE_COUPE_CASE: 4,             // bord du disque à >= 4 mm du bord de tuile
     LARGEUR_CHEMIN: 8,
+    AMORCE_RACCORD: 10,              // amorce perpendiculaire d'un chemin vers un raccord
+    AMORCE_PORT: 28,                 // amorce sur la bissectrice d'un chemin vers un port de coin
     FOND_PERDU: 3,
-    DIAMETRE_JETON: 30,
-    GRILLE: { colonnes: 4, lignes: 4 },
+    PAS_EDITEUR: 10,                 // pas de la grille d'aimantation de l'éditeur de tuile
     ECART_MIN_CAPTURES: 3,           // pas minimum entre deux villes
     MIN_PORTS_JONCTION: 2
   };
@@ -74,30 +84,6 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     };
   }
 
-  /** Point d'un raccord en coordonnées locales (tuile canonique). */
-  function pointRaccord(cote, pos) {
-    var d = CONSTANTES.POSITIONS_RACCORD[pos];
-    switch (cote) {
-      case NORD: return { x: d, y: 0 };
-      case EST: return { x: COTE, y: d };
-      case SUD: return { x: COTE - d, y: COTE };
-      default: return { x: 0, y: COTE - d };
-    }
-  }
-
-  /** Coin k en coordonnées locales. */
-  function pointCoin(k) {
-    return [{ x: 0, y: 0 }, { x: COTE, y: 0 }, { x: COTE, y: COTE }, { x: 0, y: COTE }][k];
-  }
-
-  /** Rotation horaire de `rot` quarts de tour d'un point autour du centre de la tuile. */
-  function tournerPoint(p, rot) {
-    var n = quarts(rot);
-    var x = p.x, y = p.y, t;
-    for (var i = 0; i < n; i++) { t = x; x = COTE - y; y = t; }
-    return { x: x, y: y };
-  }
-
   /** Décalage de cellule du voisin situé de l'autre côté du côté `cote`. */
   function coteVoisin(cote) {
     return [{ dc: 0, dl: -1 }, { dc: 1, dl: 0 }, { dc: 0, dl: 1 }, { dc: -1, dl: 0 }][cote];
@@ -106,31 +92,92 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   /** Raccord qui lui fait face de l'autre côté : le côté opposé, position 2 - p. */
   function raccordEnFace(cote, pos) { return { cote: (cote + 2) % 4, pos: 2 - pos }; }
 
-  PM.geometrie = {
-    COTE: COTE,
-    POSITIONS_RACCORD: CONSTANTES.POSITIONS_RACCORD,
-    RAYON_ZONE_COIN: CONSTANTES.RAYON_ZONE_COIN,
-    DIAMETRE_CASE_MAX: CONSTANTES.DIAMETRE_CASE_MAX,
-    MARGE_COUPE_CASE: CONSTANTES.MARGE_COUPE_CASE,
-    LARGEUR_CHEMIN: CONSTANTES.LARGEUR_CHEMIN,
-    FOND_PERDU: CONSTANTES.FOND_PERDU,
-    DIAMETRE_JETON: CONSTANTES.DIAMETRE_JETON,
-    GRILLE: CONSTANTES.GRILLE,
-    ECART_MIN_CAPTURES: CONSTANTES.ECART_MIN_CAPTURES,
-    MIN_PORTS_JONCTION: CONSTANTES.MIN_PORTS_JONCTION,
-    NORD: NORD, EST: EST, SUD: SUD, OUEST: OUEST,
-    bitRaccord: bitRaccord,
-    tournerRaccords: tournerRaccords,
-    tournerPorts: tournerPorts,
-    triplet: triplet,
-    inverser3: inverser3,
-    apparier: apparier,
-    pointRaccord: pointRaccord,
-    pointCoin: pointCoin,
-    tournerPoint: tournerPoint,
-    coteVoisin: coteVoisin,
-    raccordEnFace: raccordEnFace
-  };
+  /** Fonctions du repère local qui dépendent du côté de tuile `COTE`. */
+  function fonctionsDuCote(COTE, POSITIONS_RACCORD) {
+    /** Point d'un raccord en coordonnées locales (tuile canonique). */
+    function pointRaccord(cote, pos) {
+      var d = POSITIONS_RACCORD[pos];
+      switch (cote) {
+        case NORD: return { x: d, y: 0 };
+        case EST: return { x: COTE, y: d };
+        case SUD: return { x: COTE - d, y: COTE };
+        default: return { x: 0, y: COTE - d };
+      }
+    }
+
+    /** Coin k en coordonnées locales. */
+    function pointCoin(k) {
+      return [{ x: 0, y: 0 }, { x: COTE, y: 0 }, { x: COTE, y: COTE }, { x: 0, y: COTE }][k];
+    }
+
+    /** Rotation horaire de `rot` quarts de tour d'un point autour du centre de la tuile. */
+    function tournerPoint(p, rot) {
+      var n = quarts(rot);
+      var x = p.x, y = p.y, t;
+      for (var i = 0; i < n; i++) { t = x; x = COTE - y; y = t; }
+      return { x: x, y: y };
+    }
+
+    return { pointRaccord: pointRaccord, pointCoin: pointCoin, tournerPoint: tournerPoint };
+  }
+
+  /** Construit l'objet (gelé en profondeur) d'un format à partir de sa définition. */
+  function creerFormat(id) {
+    var def = DEFINITIONS[id];
+    var positions = Object.freeze(def.POSITIONS_RACCORD.slice());
+    var f = {
+      id: id,
+      COTE: def.COTE,
+      POSITIONS_RACCORD: positions,
+      RAYON_ZONE_COIN: COMMUNES.RAYON_ZONE_COIN,
+      DIAMETRE_CASE_MAX: def.DIAMETRE_CASE_MAX,
+      DIAMETRE_CASE_JONCTION: COMMUNES.DIAMETRE_CASE_JONCTION,
+      MARGE_COUPE_CASE: COMMUNES.MARGE_COUPE_CASE,
+      LARGEUR_CHEMIN: COMMUNES.LARGEUR_CHEMIN,
+      AMORCE_RACCORD: COMMUNES.AMORCE_RACCORD,
+      AMORCE_PORT: COMMUNES.AMORCE_PORT,
+      FOND_PERDU: COMMUNES.FOND_PERDU,
+      DIAMETRE_JETON: COMMUNES.DIAMETRE_JETON,
+      GRILLE: Object.freeze({ colonnes: def.GRILLE.colonnes, lignes: def.GRILLE.lignes }),
+      PAS_EDITEUR: COMMUNES.PAS_EDITEUR,
+      ECART_MIN_CAPTURES: COMMUNES.ECART_MIN_CAPTURES,
+      MIN_PORTS_JONCTION: COMMUNES.MIN_PORTS_JONCTION,
+      NORD: NORD, EST: EST, SUD: SUD, OUEST: OUEST,
+      bitRaccord: bitRaccord,
+      tournerRaccords: tournerRaccords,
+      tournerPorts: tournerPorts,
+      triplet: triplet,
+      inverser3: inverser3,
+      apparier: apparier,
+      coteVoisin: coteVoisin,
+      raccordEnFace: raccordEnFace
+    };
+    var fn = fonctionsDuCote(def.COTE, positions);
+    f.pointRaccord = fn.pointRaccord;
+    f.pointCoin = fn.pointCoin;
+    f.tournerPoint = fn.tournerPoint;
+    return Object.freeze(f);
+  }
+
+  var CACHE = {};
+
+  /**
+   * Objet gelé décrivant le format de grille `id` ('4x4' ou '5x5') : cotes, grille et fonctions du repère
+   * local. Toujours le même objet pour un même id. Lève une Error si le format est inconnu.
+   */
+  function format(id) {
+    if (IDS_FORMATS.indexOf(id) < 0) throw new Error('Format de grille inconnu : ' + String(id) + '.');
+    if (!CACHE[id]) CACHE[id] = creerFormat(id);
+    return CACHE[id];
+  }
+
+  // API historique : PM.geometrie.* est un alias du format 4×4 (non gelé : les tests peuvent ajuster une règle).
+  PM.geometrie = {};
+  var defaut = format(FORMAT_DEFAUT);
+  Object.keys(defaut).forEach(function (k) { if (k !== 'id') PM.geometrie[k] = defaut[k]; });
+  PM.geometrie.FORMATS = Object.freeze(IDS_FORMATS.slice());
+  PM.geometrie.FORMAT_DEFAUT = FORMAT_DEFAUT;
+  PM.geometrie.format = format;
 
   if (typeof module !== 'undefined' && module.exports) module.exports = PM.geometrie;
 })();

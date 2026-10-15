@@ -92,8 +92,15 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   /* Jonctions et paires de carrefours                                   */
   /* ------------------------------------------------------------------ */
 
-  var JONCTIONS = [];
-  for (var jj = 1; jj <= 3; jj++) for (var ii = 1; ii <= 3; ii++) JONCTIONS.push({ i: ii, j: jj });
+  /** Jonctions intérieures d'un format, rangée par rangée (j puis i) : cet ordre fixe le tirage pour une graine. */
+  function jonctionsInterieures(F) {
+    var res = [];
+    for (var j = 1; j < F.GRILLE.lignes; j++) for (var i = 1; i < F.GRILLE.colonnes; i++) res.push({ i: i, j: j });
+    return res;
+  }
+
+  // Le générateur (règles D7, paires de carrefours) ne travaille que sur le 4×4 complet.
+  var JONCTIONS = jonctionsInterieures(PM.geometrie.format('4x4'));
 
   /** Même camp = deux jonctions dans le même camp de joueur (règle unique PM.modele.campJonction). */
   function memeCamp(a, b) {
@@ -222,9 +229,9 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
 
   /** Stock par rôle (ids répétés selon les exemplaires), modèles complets seulement, ordre du document. */
   function stockParRole(doc) {
-    var stock = { centrale: [], coin: [], bord: [], apparition: [] };
+    var stock = { centrale: [], coin: [], bord: [], apparition: [] }, F = M.formatDuDocument(doc);
     (Array.isArray(doc.modeles) ? doc.modeles : []).forEach(function (m) {
-      if (!m || !stock[m.role] || !M.validerModele(m).complet) return;
+      if (!m || !stock[m.role] || !M.validerModele(m, F).complet) return;
       var n = M.exemplairesValides(m);
       for (var k = 0; k < n; k++) stock[m.role].push(m.id);
     });
@@ -423,17 +430,17 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
 
   /** Miniature SVG (texte) d'un plateau généré, avec PM.rendu (résolu à l'appel : ordre de chargement). */
   function svgApercu(doc) {
-    var R = PM.rendu, C = PM.geometrie.COTE, s = [];
-    var cote = PM.geometrie.GRILLE.colonnes * C, haut = PM.geometrie.GRILLE.lignes * C;
+    var R = PM.rendu, F = M.formatDuDocument(doc), C = F.COTE, s = [];
+    var cote = F.GRILLE.colonnes * C, haut = F.GRILLE.lignes * C;
     s.push('<svg xmlns="http://www.w3.org/2000/svg" class="pm-generateur-svg" viewBox="-4 -4 ' + (cote + 8) + ' ' + (haut + 8) +
       '" role="img" aria-label="Aperçu du plateau généré">');
     doc.plateau.tuiles.forEach(function (t) {
       var m = M.modeleParId(doc, t.modeleId);
       if (!m) return;
       s.push('<g transform="translate(' + (t.col * C) + ' ' + (t.lig * C) + ')">' +
-        R.contenuTuile(m, { rot: t.rot, joueur: M.joueurCellule(t.col, t.lig) }) + '</g>');
+        R.contenuTuile(m, { rot: t.rot, joueur: M.joueurCellule(t.col, t.lig, F), format: F }) + '</g>');
     });
-    doc.plateau.jetons.forEach(function (j) { s.push(R.contenuJeton(j.type, j.i * C, j.j * C)); });
+    doc.plateau.jetons.forEach(function (j) { s.push(R.contenuJeton(j.type, j.i * C, j.j * C, F)); });
     s.push('</svg>');
     return s.join('');
   }
