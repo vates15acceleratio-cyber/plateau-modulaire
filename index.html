@@ -9,6 +9,9 @@
   <link rel="stylesheet" href="styles/editeur-tuile.css">
   <link rel="stylesheet" href="styles/assemblage.css">
   <link rel="stylesheet" href="styles/controles.css">
+  <link rel="stylesheet" href="styles/export.css">
+  <link rel="stylesheet" href="styles/equilibre.css">
+  <link rel="stylesheet" href="styles/generateur.css">
 </head>
 <body>
   <header id="barre" class="pm-barre">
@@ -38,6 +41,12 @@
     </section>
   </main>
 
+  <!-- Boîte de dialogue commune (export, rapport d'équilibre, plateau aléatoire) : PM.dialogue dans app.js. -->
+  <dialog id="dialogue" class="pm-dialogue" aria-labelledby="dialogue-titre">
+    <header class="pm-dialogue-entete"><h2 id="dialogue-titre"></h2><button type="button" id="dialogue-fermer" aria-label="Fermer">✕</button></header>
+    <div id="dialogue-contenu" class="pm-dialogue-contenu"></div>
+  </dialog>
+
   <footer id="barre-etat" class="pm-barre-etat" role="status" aria-live="polite"></footer>
 
   <!-- Ordre de chargement : géométrie, modèle, catalogue, rendu, état, puis modules d'écran, puis app. -->
@@ -47,6 +56,10 @@
   <script src="src/rendu.js"></script>
   <script src="src/etat.js"></script>
   <script src="src/sauvegarde.js"></script>
+  <script src="src/graphe.js"></script>
+  <script src="src/equilibre.js"></script>
+  <script src="src/generateur.js"></script>
+  <script src="src/export.js"></script>
   <script src="src/controles.js"></script>
   <script src="src/bibliotheque.js"></script>
   <script src="src/assemblage.js"></script>

@@ -45,3 +45,16 @@ Chaque sous-agent écrit **seulement** : son `src/<module>.js`, sa feuille `styl
    `"/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" --headless=new --disable-gpu --virtual-time-budget=3000 --dump-dom "file:///C:/Users/EQC/Documents/Claude/PlateauModulaire/outils/essai-<module>.html"`
    (pour capter les erreurs JavaScript, la page d'essai écrit `window.onerror` dans un élément `#erreurs`).
 4. Les tests n'utilisent pas les identifiants ni les coordonnées du catalogue (il peut changer) : utiliser `PM.modele.copieExemples()` ou des données propres au test.
+
+## Modules de priorité 2 et export (2026-10-15)
+
+| Module | Objet global | Fichiers | Point d'accroche (écrit par l'orchestrateur) |
+|---|---|---|---|
+| Export impression (sous-agent 6) | `PM.exportation` | `src/export.js`, `styles/export.css` | bouton « Exporter » de la barre → `PM.exportation.ouvrir(etat)` |
+| Graphe (sous-agent 7) | `PM.graphe` | `src/graphe.js` (pur, sans DOM) | — |
+| Rapport d'équilibre (sous-agent 7) | `PM.equilibre` | `src/equilibre.js`, `styles/equilibre.css` | bouton « Rapport d'équilibre » du panneau de contrôles → `PM.equilibre.ouvrir(etat)` |
+| Générateur (sous-agent 8) | `PM.generateur` | `src/generateur.js`, `styles/generateur.css` | bouton « Plateau aléatoire » du panneau de contrôles → `PM.generateur.ouvrir(etat)` |
+
+- **Boîte de dialogue commune** : `PM.dialogue.ouvrir(titre)` renvoie l'élément de contenu (vide) à remplir ; `PM.dialogue.fermer()`. Le module ne crée pas d'autre fenêtre.
+- Ordre de chargement dans `index.html` : … `sauvegarde.js`, `graphe.js`, `equilibre.js`, `generateur.js`, `export.js`, `controles.js`, … `app.js`.
+- Mêmes règles qu'au-dessus : périmètre d'écriture limité aux fichiers du module, tests `tests/<module>.test.js` lancés seuls, page d'essai `outils/essai-<module>.html`, vérification dans Edge sans fenêtre.

@@ -318,17 +318,23 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     blocAlertes.appendChild(zoneAlertes);
     racine.appendChild(blocAlertes);
 
-    // Emplacements réservés (priorité 2)
+    // Outils de priorité 2 : actifs dès que leur module est chargé (PM.equilibre, PM.generateur),
+    // qui exposent ouvrir(etat) et affichent leur contenu dans la boîte de dialogue commune (PM.dialogue).
     var blocAVenir = el('section', 'pm-controles-bloc');
     blocAVenir.appendChild(el('h2', 'pm-controles-titre', 'Outils'));
     var listeAVenir = el('ul', 'pm-controles-avenir');
-    ['Rapport d\'équilibre', 'Plateau aléatoire'].forEach(function (nom) {
+    [['Rapport d\'équilibre', 'equilibre'], ['Plateau aléatoire', 'generateur']].forEach(function (outil) {
       var li = el('li', 'pm-controles-avenir-item');
-      var bouton = el('button', 'pm-controles-avenir-bouton', nom);
+      var bouton = el('button', 'pm-controles-avenir-bouton', outil[0]);
       bouton.type = 'button';
-      bouton.disabled = true;
+      var module = PM[outil[1]];
       li.appendChild(bouton);
-      li.appendChild(el('span', 'pm-controles-badge', 'bientôt'));
+      if (module && typeof module.ouvrir === 'function') {
+        bouton.addEventListener('click', function () { module.ouvrir(etat); });
+      } else {
+        bouton.disabled = true;
+        li.appendChild(el('span', 'pm-controles-badge', 'bientôt'));
+      }
       listeAVenir.appendChild(li);
     });
     blocAVenir.appendChild(listeAVenir);

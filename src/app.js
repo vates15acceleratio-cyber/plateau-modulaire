@@ -55,6 +55,27 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     return { doc: neuf, message: 'Glissez une tuile de la bibliothèque vers une case du plateau.', niveau: 'info' };
   }
 
+  /**
+   * Boîte de dialogue commune (export, rapport d'équilibre, plateau aléatoire).
+   * PM.dialogue.ouvrir(titre) → élément de contenu vide à remplir ; PM.dialogue.fermer().
+   * Un seul contenu à la fois ; Échap ou ✕ ferme.
+   */
+  PM.dialogue = {
+    ouvrir: function (titre) {
+      var d = $('dialogue'), c = $('dialogue-contenu');
+      if (!d || !c) throw new Error('Boîte de dialogue absente de la page.');
+      $('dialogue-titre').textContent = titre || '';
+      c.innerHTML = '';
+      if (typeof d.showModal === 'function') { if (!d.open) d.showModal(); } else d.setAttribute('open', '');
+      return c;
+    },
+    fermer: function () {
+      var d = $('dialogue');
+      if (!d) return;
+      if (typeof d.close === 'function') { if (d.open) d.close(); } else d.removeAttribute('open');
+    }
+  };
+
   function demarrer() {
     var init = documentInitial();
     var etat = PM.etat.creer(init.doc);
@@ -72,6 +93,11 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     $('btn-enregistrer').addEventListener('click', enregistrer);
     $('btn-ouvrir').addEventListener('click', ouvrir);
     $('pastille-alertes').addEventListener('click', function () { etat.majUi({ onglet: 'plateau' }); });
+    if ($('dialogue-fermer')) $('dialogue-fermer').addEventListener('click', function () { PM.dialogue.fermer(); });
+    if (PM.exportation && typeof PM.exportation.ouvrir === 'function') {
+      $('btn-exporter').disabled = false;
+      $('btn-exporter').addEventListener('click', function () { PM.exportation.ouvrir(etat); });
+    }
 
     function enregistrer() {
       var S = PM.sauvegarde;
