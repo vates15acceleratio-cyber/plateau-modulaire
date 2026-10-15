@@ -1,5 +1,7 @@
 # Plateau modulaire — Brief de projet
 
+> **VERSION 2 : lire d'abord `docs/18-decisions-v2.md`, qui prime sur tout le reste.**
+>
 > **À LIRE EN PREMIER (2026-10-15).** Les décisions des advisors sont consolidées dans **`docs/3-synthese.md`**, qui **prime** sur les sections 2, 3, 5 (point 3), 6, 8.3 et 9 de ce brief. Principaux changements : grille 4×4 de tuiles de 12 cm ; captures = **jetons posés sur les jonctions de 4 tuiles** (plus sur des tuiles centrales) ; plus de contour libre ni d'identifiant de compatibilité ; cases de tuile `deplacement | apparition` uniquement. Les lignes caduques ci-dessous sont annotées « → voir synthèse ».
 
 ## 1. Objectif

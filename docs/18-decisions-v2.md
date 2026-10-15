@@ -1,0 +1,41 @@
+# Décisions de la version 2 (utilisateur), 2026-10-15
+
+> **Ce document prime sur tous les précédents** (brief, synthèse `3-synthese.md`, avis) là où ils se contredisent. Il décrit ce que l'utilisateur a demandé après avoir utilisé la version 1.00.0.
+
+## Formats de grille
+- **Grilles toujours pleines** : le choix « 4×4 avec coins ou bords retirés » est **supprimé**.
+- **Trois formats**, choisis à la création du projet (un document = un format) :
+  1. **4×4 carré** (format actuel, tuiles de 12 cm) ;
+  2. **5×5 carré** (tuiles de 10 cm au plus, pour tenir dans 50 × 50 cm) ;
+  3. **Hexagonal** : plateau en grand hexagone, **réalisé en dernier**. Les camps sont les **3 côtés de l'hexagone les plus proches** de chaque joueur.
+- Chaque format a son propre catalogue de tuiles.
+
+## Joueurs, camps et apparitions
+- Les joueurs sont **vert** et **rouge** (vert au nord, rouge au sud sur les grilles carrées).
+- **Plus de tuile ni de catégorie « apparition »**. **Toutes les tuiles du pourtour** (bords et coins) portent **une case d'apparition** qui permet de faire apparaître un groupe.
+- **Propriété des cases d'apparition selon la position** :
+  - 4×4 : les **2 rangées les plus proches** de chaque joueur lui appartiennent (rangées 0 et 1 au vert, 2 et 3 au rouge) ;
+  - 5×5 : 2 rangées par joueur ; la **rangée centrale est neutre** (ses cases d'apparition ne servent à personne).
+- **Impression** : la case d'apparition est imprimée **neutre** (symbole noir et blanc) ; une même tuile de bord peut aller d'un côté ou de l'autre. **À l'écran**, elle s'affiche en **vert ou rouge** selon le camp de sa position (neutre au centre en 5×5).
+
+## Jonctions et villes
+- **Une jonction (coin commun à 4 tuiles) n'est jamais vide** : soit une **ville** (jeton), soit une **case chemin** — une vraie case, où un pion peut s'arrêter, qui compte dans les distances. Le jeton « carrefour » disparaît : toute jonction sans ville est une case chemin.
+- **7 villes** sur tous les formats.
+- **Au moins 3 cases entre deux villes** (4 pas ; auparavant 2 cases). Si un plateau ne le respecte pas : **alerte, sans blocage** ; le générateur ne produit jamais ce cas.
+
+## Pose des tuiles sur le plateau
+- **Plus de liberté** : les rôles imposés par la position disparaissent autant que possible (une tuile de bord peut prendre la place d'une autre tuile de bord, les coins aussi, etc.).
+- **Seul blocage** : un plateau **très déséquilibré** pour les joueurs. Proposition retenue : bloquer seulement en cas de « 5 villes contre 2 » ou d'un écart de plus de 3 cases entre joueurs (critère à préciser par l'advisor design de jeu) ; le reste reste en alerte.
+
+## Coins
+- Les coins actuels sont **trop loin de l'action**. Ils deviennent des **coins d'apparition** (ils portent une case d'apparition, comme tous les bords) et doivent devenir utiles : piste « **raccourci** » (à concevoir par l'advisor design de jeu : chemin rapide vers le jeu central).
+
+## Création des tuiles : plus de liberté
+- **Supprimés comme obligations** : les chemins de coin obligatoires ; le nombre de cases imposé par rôle.
+- **Autorisé** : des cases dont les chemins **ne se croisent pas** dans la tuile (plusieurs réseaux séparés sur une même tuile).
+- **Garder un minimum pour rester modulaire** : positions de raccord standardisées sur les côtés, contraintes physiques (tuile dans son carré, marges de coupe, pas de chevauchement), cases reliées à quelque chose. Le détail est à proposer par l'advisor géométrie.
+
+## Ordre de réalisation
+1. Règles de la version 2 sur le **4×4** (points ci-dessus).
+2. Format **5×5**.
+3. Format **hexagonal** à la fin.

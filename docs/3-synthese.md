@@ -1,5 +1,7 @@
 # Synthèse des advisors (orchestrateur), 2026-10-15
 
+> **Version 2 : `docs/18-decisions-v2.md` prime sur cette synthèse** (grilles pleines, formats 5×5 et hexagonal, apparitions sur tous les bords, jonctions-cases, 3 cases entre villes, tuiles plus libres).
+
 Sources : `1b-avis-design-jeu-variante-jonctions.md` (design de jeu, version B retenue) et `2-avis-geometrie.md` (géométrie). Ce fichier fait référence pour les sous-agents ; en cas de conflit, il prime sur les avis détaillés et sur les sections 2, 3 et 6 du brief.
 
 ## Décisions arrêtées
