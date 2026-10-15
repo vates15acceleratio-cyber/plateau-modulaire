@@ -22,6 +22,10 @@ PlateauModulaire/
     generateur.js       plateau aléatoire                                               (sous-agent 8)
     catalogue.js        catalogue réel des 18 modèles / 20 tuiles                       (sous-agent catalogue)
     app.js              colle les écrans entre eux (orchestrateur)
+    etat.js             état partagé, historique annuler / rétablir (orchestrateur)
+    rendu.js            tracé des chemins et SVG des tuiles / jetons (orchestrateur)
+    bibliotheque.js     colonne bibliothèque de modèles                                 (sous-agent 3)
+  styles/               base.css (orchestrateur) + une feuille par module d'écran
   vendor/               bibliothèques tierces embarquées (version figée), ex. jsPDF
   tests/
     *.test.js           tests Node (node:test + node:assert), un fichier par module
@@ -51,3 +55,6 @@ PlateauModulaire/
 
 ## Référence fonctionnelle
 `docs/3-synthese.md`, puis `docs/2-avis-geometrie.md` (conventions de côtés / coins, masques, cas de test T1 à T4).
+
+## Contrats des modules d'interface
+Voir `docs/10-contrats-interface.md` (montage, état partagé, interactions, périmètres d'écriture, vérification dans Edge sans fenêtre).

@@ -1,0 +1,43 @@
+/* base.css : coquille de l'application (barre, onglets, colonnes, barre d'état). Propriété de l'orchestrateur. */
+:root {
+  --pm-fond: #f4f5f3;
+  --pm-panneau: #ffffff;
+  --pm-texte: #1d1f1c;
+  --pm-discret: #6b7068;
+  --pm-bord: #d9dcd5;
+  --pm-accent: #007A4D;
+  --pm-alerte: #c46a00;
+  --pm-erreur: #c0261a;
+  --pm-rayon: 6px;
+  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  color: var(--pm-texte);
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { display: grid; grid-template-rows: auto 1fr auto; background: var(--pm-fond); }
+button { font: inherit; cursor: pointer; border: 1px solid var(--pm-bord); background: var(--pm-panneau); border-radius: var(--pm-rayon); padding: 6px 10px; min-height: 32px; }
+button:hover:not(:disabled) { border-color: var(--pm-accent); }
+button:disabled { opacity: .45; cursor: default; }
+button:focus-visible { outline: 2px solid var(--pm-accent); outline-offset: 1px; }
+
+.pm-barre { display: flex; align-items: center; gap: 16px; padding: 8px 14px; background: var(--pm-panneau); border-bottom: 1px solid var(--pm-bord); }
+.pm-titre { font-size: 15px; }
+.pm-onglets { display: flex; gap: 4px; }
+.pm-onglets button[aria-selected="true"] { background: var(--pm-accent); border-color: var(--pm-accent); color: #fff; }
+.pm-actions { display: flex; gap: 6px; margin-left: auto; }
+.pm-pastille { padding: 4px 10px; border-radius: 999px; background: #fff3e0; color: var(--pm-alerte); font-weight: 600; cursor: pointer; }
+.pm-pastille.pm-ok { background: #e6f4ec; color: var(--pm-accent); }
+
+.pm-principal { display: grid; grid-template-columns: 220px 1fr; min-height: 0; }
+.pm-colonne-gauche { border-right: 1px solid var(--pm-bord); background: var(--pm-panneau); overflow: auto; min-height: 0; }
+.pm-ecran { display: grid; grid-template-columns: 1fr 260px; min-height: 0; }
+.pm-ecran[hidden] { display: none; }
+.pm-ecran[data-ecran="tuiles"] { grid-template-columns: 1fr; }
+.pm-zone-centrale, .pm-zone-editeur { min-height: 0; overflow: auto; position: relative; }
+.pm-colonne-droite { border-left: 1px solid var(--pm-bord); background: var(--pm-panneau); overflow: auto; min-height: 0; }
+
+.pm-barre-etat { padding: 6px 14px; border-top: 1px solid var(--pm-bord); background: var(--pm-panneau); color: var(--pm-discret); min-height: 30px; }
+.pm-barre-etat[data-niveau="alerte"] { color: var(--pm-alerte); }
+.pm-barre-etat[data-niveau="erreur"] { color: var(--pm-erreur); font-weight: 600; }
+.pm-module-absent { padding: 24px; color: var(--pm-discret); font-style: italic; }

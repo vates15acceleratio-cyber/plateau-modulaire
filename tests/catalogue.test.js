@@ -2,9 +2,11 @@
 const test = require('node:test');
 const assert = require('node:assert');
 require('../src/catalogue.js');
+require('../src/rendu.js');
 const G = globalThis.PM.geometrie;
 const M = globalThis.PM.modele;
 const CAT = globalThis.PM.catalogue;
+const R = globalThis.PM.rendu;
 
 /* ====================================================================== */
 /* Outils de simulation                                                    */
@@ -180,31 +182,12 @@ function distPointPolyligne(p, P) {
   return m;
 }
 
-const NORMALE = [{ x: 0, y: 1 }, { x: -1, y: 0 }, { x: 0, y: -1 }, { x: 1, y: 0 }]; // vers l'intérieur, par côté
-const BISSECTRICE = [{ x: 1, y: 1 }, { x: -1, y: 1 }, { x: -1, y: -1 }, { x: 1, y: -1 }]
-  .map((v) => ({ x: v.x / Math.SQRT2, y: v.y / Math.SQRT2 }));      // vers l'intérieur, par coin
-const AMORCE_RACCORD = 10;  // D7 : segment perpendiculaire d'au moins 10 mm au raccord
-const AMORCE_PORT = 28;     // port sur la bissectrice jusqu'au-delà de la zone de coin (20 mm) + demi-chemin
-
 /**
- * Tracé simplifié de chaque chemin : lien case-case = segment ; raccord = amorce perpendiculaire
- * de 10 mm puis segment vers la case ; port = amorce sur la bissectrice puis segment vers la case.
+ * Tracé de chaque chemin : convention commune à l'écran et à l'export, définie dans src/rendu.js
+ * (lien = segment ; raccord = amorce perpendiculaire de 10 mm puis segment ; port = amorce de 28 mm
+ * sur la bissectrice puis segment).
  */
-function traces(m) {
-  const cs = new Map(m.cases.map((c) => [c.id, c]));
-  return m.chemins.map((ch) => {
-    const ext = [ch.a, ch.b];
-    const cases = ext.filter((e) => e['case'] !== undefined).map((e) => cs.get(e['case']));
-    if (cases.length === 2) return { id: ch.id, type: 'lien', cases, pts: [cases[0], cases[1]] };
-    const o = ext.find((e) => e['case'] === undefined), c = cases[0];
-    if (o.raccord) {
-      const P = G.pointRaccord(o.raccord.cote, o.raccord.pos), n = NORMALE[o.raccord.cote];
-      return { id: ch.id, type: 'raccord', cases, pts: [P, { x: P.x + AMORCE_RACCORD * n.x, y: P.y + AMORCE_RACCORD * n.y }, c] };
-    }
-    const K = G.pointCoin(o.coin), b = BISSECTRICE[o.coin];
-    return { id: ch.id, type: 'port', coin: o.coin, cases, pts: [K, { x: K.x + AMORCE_PORT * b.x, y: K.y + AMORCE_PORT * b.y }, c] };
-  });
-}
+function traces(m) { return R.tracesModele(m); }
 
 /** Retire d'un tracé la partie couverte par ses cases d'extrémité (rayon + 4 mm pour la case commune). */
 function rogner(t, commun) {
@@ -293,8 +276,9 @@ test('catalogue : noms courts, ids de cases et de chemins en chaînes', () => {
 });
 
 test('catalogue : profils de raccords (pos 1 partout, variantes recensées)', () => {
-  // Variantes voulues : tout autre écart au profil « pos 1 sur chaque côté intérieur » est une régression.
-  const variantes = { C2: { 3: 0b011 }, C6: { 3: 0b000 }, K4: { 1: 0b110 }, B5: { 3: 0b011 } };
+  // Seule variante voulue : le côté ouest vide de C6 (« mur », docs/9-validation-catalogue.md).
+  // Tout autre écart au profil « pos 1 sur chaque côté intérieur » est une régression.
+  const variantes = { C6: { 3: 0b000 } };
   for (const m of CAT.modeles) {
     const r = M.masquesDuModele(m).raccords;
     for (let cote = 0; cote < 4; cote++) {
@@ -503,9 +487,9 @@ test('simulation : chaque case d\'apparition a au moins 2 sorties', () => {
   assert.ok(SIM.sortiesMin >= 2, String(SIM.sortiesMin));
 });
 
-test('simulation : peu de raccords morts (moyenne <= 3, max <= 4 ; mesuré 2,8 et 4)', () => {
-  assert.ok(moyenne(SIM.morts) <= 3, String(moyenne(SIM.morts)));
-  assert.ok(Math.max(...SIM.morts) <= 4, String(Math.max(...SIM.morts)));
+test('simulation : peu de raccords morts (moyenne <= 1,5, max <= 2)', () => {
+  assert.ok(moyenne(SIM.morts) <= 1.5, String(moyenne(SIM.morts)));
+  assert.ok(Math.max(...SIM.morts) <= 2, String(Math.max(...SIM.morts)));
 });
 
 test('simulation : équilibre D6, aucun écart supérieur à 2 aux rangs 1 à 4', () => {

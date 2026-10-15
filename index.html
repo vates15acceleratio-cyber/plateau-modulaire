@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plateau modulaire</title>
+  <!-- Page de développement : chaque module a sa feuille de style (préfixe de classe propre). -->
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/editeur-tuile.css">
+  <link rel="stylesheet" href="styles/assemblage.css">
+  <link rel="stylesheet" href="styles/controles.css">
+</head>
+<body>
+  <header id="barre" class="pm-barre">
+    <strong class="pm-titre">Plateau modulaire</strong>
+    <nav class="pm-onglets" role="tablist">
+      <button type="button" role="tab" data-onglet="plateau">Plateau</button>
+      <button type="button" role="tab" data-onglet="tuiles">Tuiles</button>
+    </nav>
+    <div class="pm-actions">
+      <button type="button" id="btn-annuler" title="Annuler (Ctrl+Z)">↶ Annuler</button>
+      <button type="button" id="btn-retablir" title="Rétablir (Ctrl+Y)">Rétablir ↷</button>
+      <button type="button" id="btn-ouvrir" title="Ouvrir un fichier JSON">Ouvrir</button>
+      <button type="button" id="btn-enregistrer" title="Enregistrer en JSON (Ctrl+S)">Enregistrer</button>
+      <button type="button" id="btn-exporter" title="Exporter pour impression" disabled>Exporter</button>
+    </div>
+    <span id="pastille-alertes" class="pm-pastille" hidden></span>
+  </header>
+
+  <main class="pm-principal">
+    <aside id="bibliotheque" class="pm-colonne-gauche" aria-label="Bibliothèque de tuiles"></aside>
+    <section id="ecran-plateau" class="pm-ecran" data-ecran="plateau">
+      <div id="assemblage" class="pm-zone-centrale"></div>
+      <aside id="controles" class="pm-colonne-droite" aria-label="Compteurs et alertes"></aside>
+    </section>
+    <section id="ecran-tuiles" class="pm-ecran" data-ecran="tuiles" hidden>
+      <div id="editeur" class="pm-zone-editeur"></div>
+    </section>
+  </main>
+
+  <footer id="barre-etat" class="pm-barre-etat" role="status" aria-live="polite"></footer>
+
+  <!-- Ordre de chargement : géométrie, modèle, catalogue, rendu, état, puis modules d'écran, puis app. -->
+  <script src="src/geometrie.js"></script>
+  <script src="src/modele.js"></script>
+  <script src="src/catalogue.js"></script>
+  <script src="src/rendu.js"></script>
+  <script src="src/etat.js"></script>
+  <script src="src/sauvegarde.js"></script>
+  <script src="src/controles.js"></script>
+  <script src="src/bibliotheque.js"></script>
+  <script src="src/assemblage.js"></script>
+  <script src="src/editeur-tuile.js"></script>
+  <script src="src/app.js"></script>
+</body>
+</html>
