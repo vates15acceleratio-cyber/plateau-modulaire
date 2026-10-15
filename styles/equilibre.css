@@ -1,0 +1,36 @@
+/* equilibre.css : rapport d'équilibre dans la boîte de dialogue (sous-agent 7). Classes préfixées pm-equilibre-. */
+
+.pm-equilibre { display: grid; gap: 14px; min-width: 0; }
+.pm-equilibre-explication { margin: 0; color: var(--pm-discret); line-height: 1.45; }
+.pm-equilibre-option { margin: 0; }
+.pm-equilibre-option label { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; cursor: pointer; }
+.pm-equilibre-option input { width: 18px; height: 18px; margin: 0; accent-color: var(--pm-accent); }
+.pm-equilibre-option input:focus-visible { outline: 2px solid var(--pm-accent); outline-offset: 2px; }
+
+.pm-equilibre-section { min-width: 0; }
+.pm-equilibre-titre { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--pm-discret); text-transform: uppercase; letter-spacing: .04em; }
+.pm-equilibre-note { margin: 6px 0 0; color: var(--pm-discret); }
+
+/* Lacunes du plateau incomplet */
+.pm-equilibre-manque { border: 1px solid var(--pm-alerte); border-radius: var(--pm-rayon); background: #fff3e0; padding: 8px 12px; color: var(--pm-texte); }
+.pm-equilibre-manque ul { margin: 6px 0 0; padding-left: 20px; }
+
+/* Alertes */
+.pm-equilibre-alertes { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.pm-equilibre-alerte { border-left: 4px solid var(--pm-alerte); background: #fff3e0; padding: 6px 10px; border-radius: 0 var(--pm-rayon) var(--pm-rayon) 0; }
+.pm-equilibre-ok { margin: 0; color: var(--pm-accent); font-weight: 600; }
+
+/* Tableaux */
+.pm-equilibre-tableau { border-collapse: collapse; width: 100%; max-width: 560px; font-variant-numeric: tabular-nums; }
+.pm-equilibre-legende { text-align: left; color: var(--pm-discret); padding-bottom: 4px; caption-side: top; }
+.pm-equilibre-tableau th, .pm-equilibre-tableau td { border: 1px solid var(--pm-bord); padding: 4px 10px; text-align: center; }
+.pm-equilibre-tableau thead th { background: #eef0ec; }
+.pm-equilibre-tableau tbody th { text-align: left; font-weight: 600; background: #f8f9f7; }
+.pm-equilibre-rang-libre { color: var(--pm-discret); }
+.pm-equilibre-ecart-fort td, .pm-equilibre-ecart-fort th { background: #fde8e6; color: var(--pm-erreur); font-weight: 700; }
+.pm-equilibre-goulet td, .pm-equilibre-goulet th { background: #fff3e0; }
+.pm-equilibre-articulations { margin: 8px 0 0; padding-left: 20px; }
+
+@media (max-width: 560px) {
+  .pm-equilibre-tableau th, .pm-equilibre-tableau td { padding: 4px 6px; }
+}
