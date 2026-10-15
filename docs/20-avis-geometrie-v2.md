@@ -46,3 +46,13 @@ Rien en dur pour 4 côtés : masques de 3N bits, rotation modulo 3N, côté oppo
 | T2 | Bord `0x808` rot 2 (`0x220`) en (1,3) et (2,3) | `apparier(0x220,1,0x220).connectes = 4` |
 | T3 | Étoile 5×5, raccord N du centre en p0 | distance porteuse–segment 9,8 < 16 : blocage `chemin_case` (4×4 : 9,6 < 19) |
 | T4 | 4×4 sans jeton, deux ports vers J(2,2), puis villes en (1,1) et (2,1) | J(2,2) a 2 voisins ; ville–ville ≥ 3 cases ; pas d'alerte |
+
+## Complément de l'advisor (second rapport, après les réponses de l'utilisateur)
+- **Cible de cases** (cases des tuiles + jonctions-cases) : **4×4 ≈ 60 tenable** (minimum 54 avec tous les ports ; 60 avec coins à 3 cases, 4 bords à 4 cases, 2 étoiles + 2 centrales à 3 ports). **5×5 ≈ 75 tenable en renonçant à quelques ports** (minimum 80 avec tous les ports) : coins 4 × 2 cases ; bords 6 à 2 ports × 3 + 6 à 1 port × 2 ; centrales 8 « port – relais – port » × 3 + 1 à 3 ports × 4 ; 9 jonctions-cases → 75 ; 41 ports pour 16 jonctions (2,6 en moyenne) : le générateur garantit ≥ 2 ports par jonction et ≥ 3 aux jonctions des villes.
+- Variante de positions 5×5 proposée : 28 / 50 / 72, avec un pas d'éditeur de 5 mm.
+
+## Arbitrages de l'orchestrateur (2026-10-15)
+- **Positions des raccords en 5×5 : 30 / 50 / 70** (premier rapport) : plus de jeu avec la zone de coin (bord du chemin à 26 mm du coin, contre 24 mm pour 28) et alignées sur la grille de 10 mm de l'éditeur.
+- **R1 à R4 ne bloquent pas dans l'éditeur ni sur le plateau** : ce sont des **alertes** expliquées en une phrase (« cette tuile peut rapprocher deux villes à moins de 3 cases »), car l'utilisateur a choisi des tuiles plus libres et « villes trop proches → alerte sans blocage ». Seules les règles **physiques** bloquent (extrémités, Ø, marge, zone de coin, chevauchement, chemin contre case, croisement, amorce dans la zone, case isolée). Le **catalogue** et le **générateur** respectent R1 à R4.
+- **« Plateau très déséquilibré »** : mesurable seulement sur un plateau complet (7 villes, toutes les tuiles). Chaque pose reste permise (annuler fonctionne toujours) ; un plateau complet très déséquilibré devient une **erreur** (pastille rouge, message qui nomme le critère, export de l'aperçu du plateau refusé). Seuils (« 5 contre 2 », écart > 3 à un rang) en **paramètres**, provisoires jusqu'à la mesure du catalogue v2.
+- **Cible de cases** : ≈ 60 en 4×4, ≈ 75 en 5×5 (confirmé par l'utilisateur : « 75 pour le 5×5 seulement »).

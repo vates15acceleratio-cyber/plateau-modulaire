@@ -44,4 +44,5 @@
 - **5×5, « 4 contre 3 » structurel** : accepté, compensé par les distances (pas d'alerte) ; le générateur cherche à rendre la 7e ville équidistante.
 - **La case d'apparition est une vraie case** : elle compte dans les distances.
 - **Villes non traversables** : c'est la **règle du jeu** (on s'arrête dans une ville). L'option « traversables » peut disparaître de l'interface.
-- **Nombre de cases** : l'utilisateur préfère **viser environ 75 cases** (interprétation de l'orchestrateur, à confirmer : ≈ 75 pour le 5×5 au lieu de 80 à 90 ; ≈ 60 accepté pour le 4×4).
+- **Nombre de cases** : **≈ 75 pour le 5×5** (au lieu de 80 à 90), **≈ 60 pour le 4×4** (confirmé).
+- **Conséquences arbitrées par l'orchestrateur** (détail dans `20-avis-geometrie-v2.md`) : les règles qui garantissent l'écart entre villes (R1 à R4) sont des **alertes** dans l'éditeur, pas des blocages ; un plateau **complet** très déséquilibré est une **erreur** (pose toujours permise, export de l'aperçu refusé).
