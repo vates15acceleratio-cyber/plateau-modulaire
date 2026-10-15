@@ -10,6 +10,7 @@
  *      {type:'tuile', col, lig} | {type:'raccord', col, lig, cote, pos} | {type:'port', col, lig, coin}
  *      | {type:'jonction', i, j} | {type:'case', modeleId, id} | {type:'chemin', modeleId, id}
  *  - message : {texte, niveau: 'info'|'alerte'|'erreur'} pour la barre d'état, ou null
+ *  - aPoser : id du modèle armé pour une pose en deux clics (bouton « Poser » de la bibliothèque), ou absent
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
 

@@ -217,3 +217,12 @@ test('regroupées : erreurs d\'abord, puis raccords morts, puis ports morts', ()
   assert.equal(raccords.nombre, trouver(r.alertes, 'raccord_mort').length);
   assert.equal(raccords.elements.length, raccords.nombre);
 });
+
+test('cibles selon la forme (intégration) : 4×4 complet = 2 carrefours / 50 cases ; formes réduites', () => {
+  const C = globalThis.PM.controles;
+  assert.deepEqual(C.ciblesSelonForme({ retires: [] }), { carrefours: 2, casesDeplacement: 50 });
+  // Sans le coin NO : la jonction (1,1) devient impossible (8 jonctions) → 1 carrefour ; 3 cases en moins.
+  assert.deepEqual(C.ciblesSelonForme({ retires: [{ col: 0, lig: 0 }] }), { carrefours: 1, casesDeplacement: 46 });
+  // Sans deux coins : 7 jonctions → 0 carrefour.
+  assert.deepEqual(C.ciblesSelonForme({ retires: [{ col: 0, lig: 0 }, { col: 3, lig: 3 }] }).carrefours, 0);
+});

@@ -91,9 +91,11 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       if (PM.controles && typeof PM.controles.calculer === 'function') {
         var r = PM.controles.calculer(etat.doc());
         var n = (r.erreurs ? r.erreurs.length : 0) + (r.alertes ? r.alertes.length : 0);
+        var incomplet = (r.compteurs || []).some(function (c) { return c.etat !== 'ok'; });
         past.hidden = false;
-        past.textContent = n ? n + ' alerte' + (n > 1 ? 's' : '') : 'Plateau valide';
-        past.classList.toggle('pm-ok', n === 0);
+        past.textContent = n ? n + ' alerte' + (n > 1 ? 's' : '') : (incomplet ? 'Plateau incomplet' : 'Plateau complet');
+        past.classList.toggle('pm-ok', n === 0 && !incomplet);
+        past.classList.toggle('pm-neutre', n === 0 && incomplet);
       }
       if (evt && evt.raison === 'doc' && PM.sauvegarde && typeof PM.sauvegarde.autosave === 'function') PM.sauvegarde.autosave(etat.doc());
     }
@@ -104,6 +106,11 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     monterModule('assemblage', 'assemblage', etat);
     monterModule('controles', 'controles', etat);
     monterModule('editeurTuile', 'editeur', etat);
+
+    // À la fermeture de la page, la sauvegarde automatique différée est écrite tout de suite.
+    window.addEventListener('pagehide', function () {
+      if (PM.sauvegarde && typeof PM.sauvegarde.ecrireMaintenant === 'function') PM.sauvegarde.ecrireMaintenant(etat.doc());
+    });
 
     rafraichir();
     etat.signaler(init.repris ? 'Travail précédent repris (sauvegarde automatique).' : 'Glissez une tuile de la bibliothèque vers une case du plateau.', 'info');

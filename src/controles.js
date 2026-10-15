@@ -141,6 +141,24 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return { cle: cle, libelle: libelle, valeur: valeur, cible: cible, etat: valeur === cible ? 'ok' : 'ecart' };
   }
 
+  /** Cases de déplacement attendues par rôle de cellule (docs/3-synthese.md : composition des tuiles). */
+  var DEPLACEMENT_PAR_ROLE = { centrale: 4, coin: 3, bord: 3, apparition: 2 };
+
+  /**
+   * Cibles qui dépendent de la forme (ajout de l'orchestrateur à l'intégration) : dans une forme réduite,
+   * moins de jonctions sont possibles, donc moins de carrefours, et moins de cases de déplacement.
+   * Sur le 4×4 complet : 2 carrefours, 9 jetons, 50 cases.
+   */
+  function ciblesSelonForme(forme) {
+    var jonctions = 0, cases = 0;
+    for (var i = 1; i <= 3; i++) for (var j = 1; j <= 3; j++) if (M.jonctionPossible(forme, i, j)) jonctions++;
+    M.cellulesActives(forme).forEach(function (cel) {
+      cases += DEPLACEMENT_PAR_ROLE[M.roleCellule(cel.col, cel.lig, forme)] || 0;
+    });
+    var carrefours = Math.max(0, Math.min(NB_CARREFOURS, jonctions - NB_VILLES));
+    return { carrefours: carrefours, casesDeplacement: cases + carrefours };
+  }
+
   function compteursDuPlateau(doc) {
     var plateau = doc.plateau;
     var villes = 0, carrefours = 0, casesDeplacement = 0, petitesTuiles = 0;
@@ -166,14 +184,15 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         }
       });
     });
+    var c = ciblesSelonForme(plateau.forme);
     return [
       compteur('villes', 'Villes', villes, NB_VILLES),
-      compteur('carrefours', 'Carrefours', carrefours, NB_CARREFOURS),
-      compteur('cases_deplacement', 'Cases de déplacement', casesDeplacement, NB_CASES_DEPLACEMENT),
+      compteur('carrefours', 'Carrefours', carrefours, c.carrefours),
+      compteur('cases_deplacement', 'Cases de déplacement', casesDeplacement, c.casesDeplacement),
       compteur('tuiles', 'Tuiles posées', plateau.tuiles.length, M.cellulesActives(plateau.forme).length),
       compteur('apparitions_j1', 'Apparitions J1', apparitions[1], NB_APPARITIONS_PAR_JOUEUR),
       compteur('apparitions_j2', 'Apparitions J2', apparitions[2], NB_APPARITIONS_PAR_JOUEUR),
-      compteur('jetons', 'Jetons posés', plateau.jetons.length, NB_JETONS),
+      compteur('jetons', 'Jetons posés', plateau.jetons.length, NB_VILLES + c.carrefours),
       { cle: 'dimensions', libelle: 'Dimensions', valeur: DIMENSIONS, cible: DIMENSIONS, etat: 'ok' },
       compteur('tuiles_petites', 'Tuiles à moins de 2 cases', petitesTuiles, 0)
     ];
@@ -383,6 +402,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   PM.controles = {
     NB_VILLES: NB_VILLES,
     NB_CARREFOURS: NB_CARREFOURS,
+    ciblesSelonForme: ciblesSelonForme,
     calculer: calculer,
     monter: monter,
     revaliderPlateau: revaliderPlateau

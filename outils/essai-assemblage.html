@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Essai : bibliothèque et plateau d'assemblage</title>
+  <link rel="stylesheet" href="../styles/base.css">
+  <link rel="stylesheet" href="../styles/assemblage.css">
+  <style>
+    /* Mise en page propre à la page d'essai */
+    body { grid-template-rows: auto 1fr auto; }
+    .essai-barre { display: flex; gap: 12px; align-items: center; padding: 6px 12px; background: #fff; border-bottom: 1px solid var(--pm-bord); font-size: 13px; }
+    .essai-principal { display: grid; grid-template-columns: 220px 1fr; min-height: 0; }
+    #erreurs { color: var(--pm-erreur); font-weight: 600; white-space: pre-wrap; }
+    @media (max-width: 700px) { .essai-principal { grid-template-columns: 1fr; grid-template-rows: 40vh 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="essai-barre">
+    <strong>Essai assemblage</strong>
+    <a href="essai-assemblage.html">vide</a>
+    <a href="essai-assemblage.html?plein">plein</a>
+    <span>Onglet : <span id="onglet"></span></span>
+    <button type="button" id="retour-plateau" hidden>Revenir au plateau</button>
+    <button type="button" id="annuler">Annuler (Ctrl+Z)</button>
+    <span id="erreurs"></span>
+  </div>
+  <main class="essai-principal">
+    <aside id="bibliotheque" class="pm-colonne-gauche" aria-label="Bibliothèque de tuiles"></aside>
+    <div id="assemblage" class="pm-zone-centrale"></div>
+  </main>
+  <footer id="barre-etat" class="pm-barre-etat" role="status" aria-live="polite"></footer>
+
+  <script>
+    // Capte les erreurs JavaScript pour la vérification sans fenêtre (--dump-dom)
+    window.onerror = function (msg, src, ligne) {
+      var e = document.getElementById('erreurs');
+      if (e) e.textContent += 'ERREUR : ' + msg + ' (' + (src || '').split('/').pop() + ':' + ligne + ')\n';
+    };
+  </script>
+  <script src="../src/geometrie.js"></script>
+  <script src="../src/modele.js"></script>
+  <script src="../src/catalogue.js"></script>
+  <script src="../src/rendu.js"></script>
+  <script src="../src/etat.js"></script>
+  <script src="../src/bibliotheque.js"></script>
+  <script src="../src/assemblage.js"></script>
+  <script>
+    (function () {
+      var M = PM.modele;
+      var doc = PM.catalogue.nouveauDocument();
+
+      // ?plein : 16 tuiles du catalogue (une par cellule, selon le rôle) puis 7 villes et 2 carrefours.
+      if (/[?&]plein\b/.test(location.search)) {
+        M.cellulesActives(doc.plateau.forme).forEach(function (c) {
+          var role = M.roleCellule(c.col, c.lig, doc.plateau.forme);
+          var m = doc.modeles.filter(function (x) {
+            return x.role === role && M.peutPoserTuile(doc, x.id, c.col, c.lig).ok;
+          })[0];
+          if (m) doc = M.poserTuile(doc, m.id, c.col, c.lig);
+        });
+        for (var j = 1; j <= 3; j++) {
+          for (var i = 1; i <= 3; i++) {
+            if (!M.peutPoserJeton(doc, i, j).ok) continue;
+            var carrefour = j === 2 && (i === 1 || i === 3);
+            doc = M.poserJeton(doc, i, j, carrefour ? 'carrefour' : 'capture');
+          }
+        }
+      }
+
+      var etat = PM.etat.creer(doc);
+      PM.essai = { etat: etat };
+      PM.bibliotheque.monter(document.getElementById('bibliotheque'), etat);
+      PM.assemblage.monter(document.getElementById('assemblage'), etat);
+
+      var barre = document.getElementById('barre-etat'), onglet = document.getElementById('onglet');
+      var retour = document.getElementById('retour-plateau');
+      function maj() {
+        var ui = etat.ui();
+        barre.textContent = ui.message ? ui.message.texte : '';
+        barre.setAttribute('data-niveau', ui.message ? ui.message.niveau : 'info');
+        onglet.textContent = ui.onglet + (ui.modeleSelectionne ? ' (modèle ' + ui.modeleSelectionne + ')' : '');
+        retour.hidden = ui.onglet === 'plateau';
+        document.getElementById('assemblage').style.visibility = ui.onglet === 'plateau' ? '' : 'hidden';
+      }
+      etat.abonner(maj);
+      retour.addEventListener('click', function () { etat.majUi({ onglet: 'plateau' }); });
+      document.getElementById('annuler').addEventListener('click', function () { etat.annuler(); });
+      document.addEventListener('keydown', function (ev) {
+        var k = ev.key.toLowerCase();
+        if ((ev.ctrlKey || ev.metaKey) && k === 'z') { ev.preventDefault(); etat.annuler(); }
+        else if ((ev.ctrlKey || ev.metaKey) && k === 'y') { ev.preventDefault(); etat.retablir(); }
+      });
+      maj();
+      etat.signaler('Page d\'essai : ' + doc.plateau.tuiles.length + ' tuile(s), ' + doc.plateau.jetons.length + ' jeton(s).', 'info');
+    })();
+  </script>
+</body>
+</html>

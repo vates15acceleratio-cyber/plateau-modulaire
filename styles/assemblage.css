@@ -1,0 +1,100 @@
+/* assemblage.css : bibliothèque de modèles (pm-biblio-…) et plateau d'assemblage (pm-assemblage-…). */
+
+/* ---------------- Bibliothèque ---------------- */
+.pm-biblio { display: flex; flex-direction: column; }
+.pm-biblio-entete { padding: 10px 10px 6px; border-bottom: 1px solid var(--pm-bord); position: sticky; top: 0; background: var(--pm-panneau); z-index: 1; }
+.pm-biblio-titre { font-size: 14px; margin: 0 0 6px; }
+.pm-biblio-filtre { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.pm-biblio-filtre select { flex: 1; font: inherit; min-height: 30px; }
+.pm-biblio-aide { margin: 6px 0 0; font-size: 11px; color: var(--pm-discret); }
+.pm-biblio-liste { padding: 4px 8px 12px; }
+.pm-biblio-groupe-titre { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--pm-discret); margin: 10px 2px 4px; }
+.pm-biblio-nombre { font-weight: normal; }
+.pm-biblio-vignettes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pm-biblio-vignette { border: 1px solid var(--pm-bord); border-radius: var(--pm-rayon); background: var(--pm-panneau); padding: 4px; }
+.pm-biblio-vignette.pm-biblio-selection { border-color: var(--pm-accent); box-shadow: 0 0 0 1px var(--pm-accent); }
+.pm-biblio-vignette.pm-biblio-arme { border-color: var(--pm-accent); background: #e6f4ec; }
+.pm-biblio-ouvrir { display: flex; gap: 8px; align-items: center; width: 100%; border: 0; padding: 2px; background: none; text-align: left; user-select: none; }
+.pm-biblio-image { flex: 0 0 64px; width: 64px; height: 64px; display: block; }
+.pm-biblio-glissable { cursor: grab; touch-action: none; }
+.pm-biblio-svg { width: 100%; height: 100%; display: block; }
+.pm-biblio-texte { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.pm-biblio-id { font-weight: 600; font-size: 13px; }
+.pm-biblio-nom { font-size: 12px; color: var(--pm-discret); overflow: hidden; text-overflow: ellipsis; }
+.pm-biblio-badge { align-self: flex-start; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: #fff3e0; color: var(--pm-alerte); font-weight: 600; }
+.pm-biblio-stock { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+.pm-biblio-stock button { min-height: 28px; padding: 2px 8px; }
+.pm-biblio-restants { flex: 1; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
+.pm-biblio-epuise .pm-biblio-restants { color: var(--pm-discret); }
+.pm-biblio-epuise .pm-biblio-image { opacity: .4; }
+.pm-biblio-incomplet .pm-biblio-image { opacity: .55; filter: grayscale(1); }
+.pm-biblio-poser[aria-pressed="true"] { background: var(--pm-accent); color: #fff; border-color: var(--pm-accent); }
+.pm-biblio-vide { color: var(--pm-discret); font-style: italic; padding: 12px 4px; }
+
+/* ---------------- Plateau ---------------- */
+.pm-assemblage { display: flex; flex-direction: column; height: 100%; min-height: 320px; }
+.pm-assemblage-outils { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 12px; border-bottom: 1px solid var(--pm-bord); background: var(--pm-panneau); }
+.pm-assemblage-forme { display: flex; align-items: center; gap: 6px; }
+.pm-assemblage-forme select { font: inherit; min-height: 30px; }
+.pm-assemblage-compteur { font-weight: 600; font-variant-numeric: tabular-nums; }
+.pm-assemblage-consigne { color: var(--pm-discret); font-size: 12px; }
+.pm-assemblage-scene { flex: 1; min-height: 0; padding: 8px; display: flex; touch-action: none; }
+.pm-assemblage-svg { width: 100%; height: 100%; display: block; user-select: none; }
+.pm-assemblage-glisse, .pm-assemblage-glisse * { cursor: grabbing !important; }
+
+.pm-assemblage-camp { font-size: 15px; font-weight: 600; fill: var(--pm-texte); }
+.pm-assemblage-camp-j1 { fill: #007A4D; }
+.pm-assemblage-camp-j2 { fill: #D8321C; }
+.pm-assemblage-dimensions { font-size: 12px; fill: var(--pm-discret); }
+.pm-assemblage-cadre { fill: #fafaf8; stroke: var(--pm-bord); stroke-width: 1; }
+
+.pm-assemblage-cellule { cursor: pointer; outline: none; }
+.pm-assemblage-occupee { cursor: grab; }
+.pm-assemblage-zone { fill: transparent; stroke: none; }
+.pm-assemblage-silhouette { fill: #f0f1ee; stroke: #b9bdb4; stroke-width: 1.2; stroke-dasharray: 5 4; }
+.pm-assemblage-fond-retire { fill: none; stroke: #e1e3de; stroke-width: 1; stroke-dasharray: 2 4; }
+.pm-assemblage-retiree { cursor: default; }
+.pm-assemblage-absent { fill: #fdecea; stroke: var(--pm-erreur); stroke-width: 1; }
+.pm-assemblage-etiquette { font-size: 12px; fill: var(--pm-discret); pointer-events: none; }
+.pm-assemblage-nord { pointer-events: none; opacity: .55; }
+.pm-assemblage-nord circle { fill: #fff; stroke: #6b7068; stroke-width: .5; }
+.pm-assemblage-nord text { font-size: 5.5px; font-weight: 700; fill: #6b7068; font-family: system-ui, sans-serif; }
+
+.pm-assemblage-compatible .pm-assemblage-zone { fill: rgba(0, 122, 77, .16); stroke: var(--pm-accent); stroke-width: 2; }
+.pm-assemblage-estompee { opacity: .35; }
+.pm-assemblage-cible .pm-assemblage-zone { stroke: var(--pm-accent); stroke-width: 4; }
+.pm-assemblage-estompee.pm-assemblage-cible .pm-assemblage-zone { stroke: var(--pm-erreur); stroke-width: 3; }
+.pm-assemblage-selection .pm-assemblage-zone { stroke: var(--pm-accent); stroke-width: 3; }
+.pm-assemblage-cellule:focus-visible .pm-assemblage-zone,
+.pm-assemblage-jonction:focus-visible .pm-assemblage-zone-jonction { stroke: #1a5fb4; stroke-width: 3; }
+
+/* Jonctions et jetons */
+.pm-assemblage-jonction { cursor: pointer; outline: none; }
+.pm-assemblage-zone-jonction { fill: transparent; stroke: none; }
+.pm-assemblage-point { fill: #fff; stroke: #6b7068; stroke-width: 1.2; stroke-dasharray: 3 2; }
+.pm-assemblage-disponible:hover .pm-assemblage-point { stroke: var(--pm-accent); stroke-width: 2; }
+.pm-assemblage-refusee .pm-assemblage-point { fill: #eceee9; stroke: #b9bdb4; }
+.pm-assemblage-impossible { cursor: not-allowed; }
+.pm-assemblage-impossible .pm-assemblage-point { fill: #c9ccc5; stroke: none; }
+
+/* Alertes : raccords morts et ports de coin morts */
+.pm-assemblage-alerte-trait { stroke: var(--pm-alerte); stroke-width: 2.4; stroke-dasharray: 3 2.5; fill: none; }
+.pm-assemblage-alerte-triangle { fill: var(--pm-alerte); stroke: #fff; stroke-width: .8; }
+.pm-assemblage-alerte-signe { font-size: 10px; font-weight: 700; fill: #fff; pointer-events: none; }
+
+/* Refus (clignotement) et surbrillance demandée par les contrôles */
+@keyframes pm-assemblage-clignoter { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+.pm-assemblage-clignote .pm-assemblage-zone,
+.pm-assemblage-clignote .pm-assemblage-zone-jonction { fill: rgba(192, 38, 26, .28); stroke: var(--pm-erreur); stroke-width: 3; animation: pm-assemblage-clignoter .3s ease-in-out 3; }
+.pm-assemblage-surbrillance { fill: rgba(196, 106, 0, .15); stroke: var(--pm-alerte); stroke-width: 4; pointer-events: none; animation: pm-assemblage-clignoter .8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .pm-assemblage-clignote .pm-assemblage-zone, .pm-assemblage-clignote .pm-assemblage-zone-jonction, .pm-assemblage-surbrillance { animation: none; }
+}
+
+/* Fantôme de la tuile pendant le glissement */
+.pm-assemblage-fantome { position: fixed; left: 0; top: 0; pointer-events: none; opacity: .8; z-index: 50; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .25)); }
+.pm-assemblage-fantome[hidden] { display: none; }
+
+@media (max-width: 700px) {
+  .pm-assemblage-consigne { flex-basis: 100%; }
+}

@@ -379,6 +379,20 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   }
 
   /**
+   * Écrit immédiatement la sauvegarde automatique (annule l'écriture différée en attente).
+   * Appelée à la fermeture de la page (pagehide). Ne lève jamais d'exception ; renvoie true si écrit.
+   */
+  function ecrireMaintenant(doc, stockage) {
+    try {
+      if (minuteur !== null) { clearTimeout(minuteur); minuteur = null; }
+      enAttente = null;
+      return ecrireAutosave(doc, stockageVoulu(stockage));
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
    * Relit la sauvegarde automatique. Renvoie {ok:true, doc, date, alertes} ou null
    * si rien n'est enregistré, si le stockage est indisponible ou si le contenu est illisible.
    */
@@ -422,6 +436,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     telecharger: telecharger,
     ouvrirFichier: ouvrirFichier,
     autosave: autosave,
+    ecrireMaintenant: ecrireMaintenant,
     restaurerAutosave: restaurerAutosave,
     effacerAutosave: effacerAutosave
   };
