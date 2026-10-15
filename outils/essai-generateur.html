@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Essai : plateau aléatoire</title>
+  <link rel="stylesheet" href="../styles/base.css">
+  <link rel="stylesheet" href="../styles/generateur.css">
+  <style>
+    /* Mise en page de l'essai seulement */
+    body { display: block; height: auto; padding: 12px; }
+    #erreurs { color: #c0261a; font-weight: 600; }
+  </style>
+  <!-- Capture des erreurs JavaScript dans #erreurs (avant tout autre script). -->
+  <script>
+    window.onerror = function (message, source, ligne) {
+      var zone = document.getElementById('erreurs');
+      if (zone) zone.textContent += (zone.textContent ? '\n' : '') + 'Erreur : ' + message + ' (ligne ' + ligne + ')';
+    };
+  </script>
+</head>
+<body>
+  <p>Essai du module « plateau aléatoire » seul : bibliothèque du catalogue, plateau vide.</p>
+  <p id="erreurs"></p>
+  <p><button type="button" id="ouvrir">Plateau aléatoire</button></p>
+  <p id="barre-etat"></p>
+
+  <!-- Boîte de dialogue commune, copie de index.html -->
+  <dialog id="dialogue" class="pm-dialogue" aria-labelledby="dialogue-titre">
+    <header class="pm-dialogue-entete"><h2 id="dialogue-titre"></h2><button type="button" id="dialogue-fermer" aria-label="Fermer">✕</button></header>
+    <div id="dialogue-contenu" class="pm-dialogue-contenu"></div>
+  </dialog>
+
+  <script src="../src/geometrie.js"></script>
+  <script src="../src/modele.js"></script>
+  <script src="../src/catalogue.js"></script>
+  <script src="../src/etat.js"></script>
+  <script src="../src/rendu.js"></script>
+  <script src="../src/graphe.js"></script>
+  <script src="../src/generateur.js"></script>
+  <script>
+    (function () {
+      var PM_ = globalThis.PM;
+
+      // PM.dialogue minimal (le vrai est défini par app.js, non chargé ici)
+      PM_.dialogue = {
+        ouvrir: function (titre) {
+          var d = document.getElementById('dialogue'), c = document.getElementById('dialogue-contenu');
+          document.getElementById('dialogue-titre').textContent = titre || '';
+          c.innerHTML = '';
+          if (typeof d.showModal === 'function') { if (!d.open) d.showModal(); } else d.setAttribute('open', '');
+          return c;
+        },
+        fermer: function () { var d = document.getElementById('dialogue'); if (d.open) d.close(); }
+      };
+      document.getElementById('dialogue-fermer').addEventListener('click', function () { PM_.dialogue.fermer(); });
+
+      var etat = PM_.etat.creer(PM_.catalogue.nouveauDocument());
+      // barre d'état de l'essai : affiche les messages signalés
+      etat.abonner(function (e) {
+        var m = e.ui.message;
+        document.getElementById('barre-etat').textContent = m ? m.texte : '';
+        document.getElementById('barre-etat').setAttribute('data-tuiles', String(e.doc.plateau.tuiles.length));
+      });
+      document.getElementById('ouvrir').addEventListener('click', function () { PM_.generateur.ouvrir(etat); });
+
+      // Contrôle automatique : ouverture, génération avec une graine fixe (aperçu), puis application.
+      var racine = PM_.generateur.ouvrir(etat);
+      racine.champGraine.value = 'essai';
+      racine.boutonGenerer.click();
+      racine.boutonAppliquer.click(); // ferme la boîte et écrit dans la barre d'état
+      var apres = PM_.generateur.ouvrir(etat); // seconde ouverture (plateau non vide : avertissement) pour garder l'aperçu dans le DOM
+      apres.champGraine.value = 'essai';
+      apres.boutonGenerer.click();
+      document.body.setAttribute('data-essai', 'fait');
+    })();
+  </script>
+</body>
+</html>
