@@ -365,3 +365,31 @@ test('sécurité (revue B1) : un fichier piégé ne fait passer aucun balisage d
   assert.deepEqual(mm.chemins.map((c) => c.id), ['k2']);
   assert.ok(r.alertes.some((a) => a.code === 'elements_ignores'));
 });
+
+test('audit de sécurité : plafonds à l’ouverture (taille, tableaux, valeurs)', () => {
+  const S = globalThis.PM.sauvegarde, L = S.LIMITES;
+  const env = (modeles, plateau) => JSON.stringify({ format: 'plateau-modulaire', version: 1, modeles, plateau: plateau || { forme: { retires: [] }, tuiles: [], jetons: [] } });
+  // fichier trop volumineux : refusé avant JSON.parse
+  const gros = S.depuisJSON(' '.repeat(L.octets + 1) + '{}');
+  assert.equal(gros.ok, false);
+  assert.equal(gros.erreurs[0].code, 'trop_gros');
+  // trop de cases : tronquées ; rôle non textuel → '' ; coordonnée extrême écartée ; exemplaires bornés
+  const cases = Array.from({ length: L.cases + 50 }, (_, k) => ({ id: 'c' + k, x: 10, y: 10, diametre: 24, type: 'deplacement' }));
+  cases.push({ id: 'z', x: 1e308, y: 10 });
+  const r = S.depuisJSON(env([{ id: 'M', nom: 'n', role: { pas: 'texte' }, exemplaires: 1e308, cases, chemins: [] }]));
+  assert.equal(r.ok, true);
+  assert.equal(r.doc.modeles[0].cases.length, L.cases);
+  assert.equal(r.doc.modeles[0].role, '');
+  assert.equal(r.doc.modeles[0].exemplaires, 0);
+  // retraits de forme : seuls {col, lig} entiers, au plus L.retires
+  const retires = [{ col: 0, lig: 0, extra: { profond: true } }, { col: 'a', lig: 0 }, ...Array.from({ length: 40 }, () => ({ col: 3, lig: 3 }))];
+  const f = S.depuisJSON(env([], { forme: { retires }, tuiles: [], jetons: [] }));
+  assert.equal(f.ok, true);
+  assert.ok(f.doc.plateau.forme.retires.length <= L.retires);
+  assert.deepEqual(f.doc.plateau.forme.retires[0], { col: 0, lig: 0 });
+  // trop de tuiles : seules les premières sont lues, avec une alerte
+  const tuiles = Array.from({ length: L.tuiles + 10 }, () => ({ modeleId: 'M', col: 1, lig: 1, rot: 0 }));
+  const t = S.depuisJSON(env([], { forme: { retires: [] }, tuiles, jetons: [] }));
+  assert.equal(t.doc.plateau.tuiles.length, L.tuiles);
+  assert.ok(t.alertes.some((a) => a.code === 'tuiles_en_trop'));
+});

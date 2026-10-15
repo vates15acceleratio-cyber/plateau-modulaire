@@ -53,7 +53,15 @@
       window.addEventListener('unhandledrejection', function (ev) { noter('promesse rejetée : ' + (ev.reason && ev.reason.message || ev.reason)); });
       var ce = console.error;
       console.error = function () { noter('console.error : ' + Array.prototype.map.call(arguments, function (a) { return a && a.message ? a.message : String(a); }).join(' ')); ce.apply(console, arguments); };
-      try { localStorage.removeItem('plateau-modulaire:autosave'); } catch (e) { noter('localStorage inaccessible : ' + e.message); }
+      // La sauvegarde automatique de l'utilisateur (même origine en file://) est mise de côté puis
+      // remise en place à la fermeture de la page (audit de sécurité, point 10).
+      try {
+        var cleUtil = 'plateau-modulaire:autosave', copieUtil = localStorage.getItem(cleUtil);
+        localStorage.removeItem(cleUtil);
+        window.addEventListener('pagehide', function () {
+          try { if (copieUtil !== null) localStorage.setItem(cleUtil, copieUtil); else localStorage.removeItem(cleUtil); } catch (e) { /* rien */ }
+        });
+      } catch (e) { noter('localStorage inaccessible : ' + e.message); }
     })();
   </script>
   <script src="../src/geometrie.js"></script>

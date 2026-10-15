@@ -15,6 +15,11 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var FORMAT = 'plateau-modulaire';
   var VERSION = 1;
   var CLE_AUTOSAVE = 'plateau-modulaire:autosave';
+  /**
+   * Plafonds à l'ouverture d'un fichier (audit de sécurité : un fichier hostile ne doit pas bloquer le
+   * navigateur). Très au-dessus de tout usage normal : 4×4 tuiles, 9 jetons, une vingtaine de modèles.
+   */
+  var LIMITES = { octets: 5e6, modeles: 500, cases: 64, chemins: 256, tuiles: 64, jetons: 64, retires: 16, texte: 200, coordonnee: 1000, exemplaires: 999 };
   /** Intervalle minimal entre deux écritures dans localStorage (ms). */
   var DELAI_AUTOSAVE = 1000;
   /** Délai de repli après retour du focus, pour détecter une annulation sans événement `cancel` (ms). */
@@ -50,7 +55,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var nom = typeof brut.nom === 'string' ? brut.nom : '';
     var libelle = nom || brut.id;
     var exemplaires = brut.exemplaires;
-    if (!(estEntier(exemplaires) && exemplaires >= 0)) {
+    if (!(estEntier(exemplaires) && exemplaires >= 0 && exemplaires <= LIMITES.exemplaires)) {
       exemplaires = 0;
       alertes.push(erreur('exemplaires_invalides', 'Le modèle « ' + libelle + ' » : nombre d\'exemplaires invalide, ramené à 0.'));
     }
@@ -58,8 +63,11 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     // Sécurité (docs/11-revue-interface.md, B1) : seuls les champs connus sont gardés, avec leur type
     // attendu (nombres finis pour les coordonnées, textes pour les ids) ; un fichier piégé ne doit pas
     // pouvoir glisser du balisage dans le SVG de l'interface.
-    function texteOuNul(v) { return typeof v === 'string' ? v : (typeof v === 'number' && isFinite(v) ? String(v) : null); }
-    function nombre(v) { return typeof v === 'number' && isFinite(v); }
+    function texteOuNul(v) {
+      var t = typeof v === 'string' ? v : (typeof v === 'number' && isFinite(v) ? String(v) : null);
+      return t !== null && t.length > LIMITES.texte ? t.slice(0, LIMITES.texte) : t;
+    }
+    function nombre(v) { return typeof v === 'number' && isFinite(v) && Math.abs(v) <= LIMITES.coordonnee; }
     function normaliserCase(c) {
       if (!estObjet(c) || !nombre(c.x) || !nombre(c.y) || (c.diametre !== undefined && !nombre(c.diametre))) return null;
       var n = { id: texteOuNul(c.id), x: c.x, y: c.y };
@@ -86,10 +94,12 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         return n;
       }).filter(function (x) { return x; });
     }
-    var cases = garder(brut.cases, normaliserCase);
-    var chemins = garder(brut.chemins, normaliserChemin);
+    var cases = garder(tab(brut.cases).slice(0, LIMITES.cases), normaliserCase);
+    var chemins = garder(tab(brut.chemins).slice(0, LIMITES.chemins), normaliserChemin);
+    var tronques = Math.max(0, tab(brut.cases).length - LIMITES.cases) + Math.max(0, tab(brut.chemins).length - LIMITES.chemins);
+    if (tronques) ignores += tronques;
     if (ignores) alertes.push(erreur('elements_ignores', 'Le modèle « ' + libelle + ' » : ' + ignores + ' case(s) ou chemin(s) mal formé(s) ignoré(s).'));
-    var m = { id: brut.id, nom: nom, role: brut.role, exemplaires: exemplaires, cases: cases, chemins: chemins };
+    var m = { id: brut.id, nom: nom.slice(0, LIMITES.texte), role: typeof brut.role === 'string' ? brut.role.slice(0, LIMITES.texte) : '', exemplaires: exemplaires, cases: cases, chemins: chemins };
     if (!M.validerModele(m).complet) {
       alertes.push(erreur('modele_incomplet', 'Le modèle « ' + libelle + ' » est incomplet : conservé comme brouillon, non posable.'));
     }
@@ -102,6 +112,10 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    */
   function normaliserModeles(liste, alertes, pris) {
     var modeles = [], renommes = [];
+    if (tab(liste).length > LIMITES.modeles) {
+      alertes.push(erreur('modeles_en_trop', 'Trop de modèles : seuls les ' + LIMITES.modeles + ' premiers sont lus.'));
+      liste = tab(liste).slice(0, LIMITES.modeles);
+    }
     tab(liste).forEach(function (brut) {
       if (!estObjet(brut)) {
         alertes.push(erreur('modele_ignore', 'Un élément de la liste des modèles n\'est pas un modèle : ignoré.'));
@@ -131,7 +145,14 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       alertes.push(erreur('forme_invalide', 'La forme du plateau était mal formée : remplacée par un plateau complet.'));
       return { retires: [] };
     }
-    return { retires: cloner(tab(forme.retires)) };
+    // Seuls {col, lig} entiers sont gardés, et au plus LIMITES.retires entrées (audit, points 1 et 3).
+    var retires = tab(forme.retires).slice(0, LIMITES.retires).filter(function (r) {
+      return estObjet(r) && estEntier(r.col) && estEntier(r.lig);
+    }).map(function (r) { return { col: r.col, lig: r.lig }; });
+    if (retires.length !== tab(forme.retires).length) {
+      alertes.push(erreur('forme_invalide', 'La forme du plateau contenait des retraits mal formés ou en trop : ignorés.'));
+    }
+    return { retires: retires };
   }
 
   function normaliserTuile(brut, alertes) {
@@ -152,11 +173,13 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   function normaliserPlateau(brut, alertes) {
     var plateau = { forme: normaliserForme(brut.forme, alertes), tuiles: [], jetons: [] };
-    tab(brut.tuiles).forEach(function (t) {
+    if (tab(brut.tuiles).length > LIMITES.tuiles) alertes.push(erreur('tuiles_en_trop', 'Trop de tuiles posées : seules les ' + LIMITES.tuiles + ' premières sont lues.'));
+    tab(brut.tuiles).slice(0, LIMITES.tuiles).forEach(function (t) {
       var n = normaliserTuile(t, alertes);
       if (n) plateau.tuiles.push(n);
     });
-    tab(brut.jetons).forEach(function (j) {
+    if (tab(brut.jetons).length > LIMITES.jetons) alertes.push(erreur('jetons_en_trop', 'Trop de jetons : seuls les ' + LIMITES.jetons + ' premiers sont lus.'));
+    tab(brut.jetons).slice(0, LIMITES.jetons).forEach(function (j) {
       var n = normaliserJeton(j, alertes);
       if (n) plateau.jetons.push(n);
     });
@@ -171,6 +194,9 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function analyser(texte) {
     if (typeof texte !== 'string' || texte.trim() === '') {
       return { ok: false, erreurs: [erreur('vide', 'Le fichier est vide.')] };
+    }
+    if (texte.length > LIMITES.octets) {
+      return { ok: false, erreurs: [erreur('trop_gros', 'Le fichier est trop volumineux (plus de ' + Math.round(LIMITES.octets / 1e6) + ' Mo) pour être un plateau.')] };
     }
     var objet;
     try { objet = JSON.parse(texte); } catch (e) {
@@ -453,6 +479,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     FORMAT: FORMAT,
     VERSION: VERSION,
     CLE_AUTOSAVE: CLE_AUTOSAVE,
+    LIMITES: LIMITES,
     versJSON: versJSON,
     depuisJSON: depuisJSON,
     bibliothequeVersJSON: bibliothequeVersJSON,

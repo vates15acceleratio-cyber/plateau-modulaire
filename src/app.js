@@ -20,7 +20,11 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
         c.innerHTML = ''; var p = document.createElement('p'); p.className = 'pm-module-absent'; p.textContent = 'Erreur au chargement du module « ' + nom + ' » : ' + (e && e.message); c.appendChild(p);
       }
     } else {
-      c.innerHTML = '<p class="pm-module-absent">Module « ' + nom + ' » pas encore disponible.</p>';
+      c.innerHTML = '';
+      var vide = document.createElement('p');
+      vide.className = 'pm-module-absent';
+      vide.textContent = 'Module « ' + nom + ' » pas encore disponible.';
+      c.appendChild(vide);
     }
   }
 

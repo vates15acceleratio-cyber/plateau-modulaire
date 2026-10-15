@@ -14,7 +14,12 @@ const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
   '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.md': 'text/plain; charset=utf-8' };
 
 http.createServer((req, res) => {
-  const url = decodeURIComponent(req.url.split('?')[0]);
+  // Audit de sécurité : URL mal encodée → 400 (au lieu d'un plantage) ; octet nul refusé ;
+  // seul l'hôte local est accepté (protection contre le DNS rebinding) ; .git et .claude ne sont pas servis.
+  if (req.headers.host !== '127.0.0.1:' + port && req.headers.host !== 'localhost:' + port) { res.writeHead(403); res.end('Hôte refusé'); return; }
+  let url;
+  try { url = decodeURIComponent(req.url.split('?')[0]); } catch (e) { res.writeHead(400); res.end('Requête invalide'); return; }
+  if (url.includes('\0') || /^\/\.(git|claude)(\/|$)/i.test(url)) { res.writeHead(403); res.end('Interdit'); return; }
   const fichier = path.resolve(racine, '.' + (url === '/' ? '/index.html' : url));
   if (!fichier.startsWith(racine + path.sep) && fichier !== racine) { res.writeHead(403); res.end('Interdit'); return; }
   fs.readFile(fichier, (err, data) => {
