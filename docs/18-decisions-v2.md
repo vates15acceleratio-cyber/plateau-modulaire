@@ -39,3 +39,9 @@
 1. Règles de la version 2 sur le **4×4** (points ci-dessus).
 2. Format **5×5**.
 3. Format **hexagonal** à la fin.
+
+## Réponses de l'utilisateur à l'avis design v2 (`19-avis-design-v2.md`)
+- **5×5, « 4 contre 3 » structurel** : accepté, compensé par les distances (pas d'alerte) ; le générateur cherche à rendre la 7e ville équidistante.
+- **La case d'apparition est une vraie case** : elle compte dans les distances.
+- **Villes non traversables** : c'est la **règle du jeu** (on s'arrête dans une ville). L'option « traversables » peut disparaître de l'interface.
+- **Nombre de cases** : l'utilisateur préfère **viser environ 75 cases** (interprétation de l'orchestrateur, à confirmer : ≈ 75 pour le 5×5 au lieu de 80 à 90 ; ≈ 60 accepté pour le 4×4).
