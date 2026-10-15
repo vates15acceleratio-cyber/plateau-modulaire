@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Essai : compteurs et alertes</title>
+  <link rel="stylesheet" href="../styles/base.css">
+  <link rel="stylesheet" href="../styles/controles.css">
+  <style>
+    /* Mise en page de l'essai seulement : le panneau occupe une colonne de 300 px */
+    #controles { width: 300px; border: 1px solid #d9dcd5; background: #fff; }
+    #erreurs { color: #c0261a; font-weight: 600; }
+  </style>
+  <!-- Capture des erreurs JavaScript dans #erreurs (avant tout autre script). -->
+  <script>
+    window.onerror = function (message, source, ligne) {
+      var zone = document.getElementById('erreurs');
+      if (zone) zone.textContent += (zone.textContent ? '\n' : '') + 'Erreur : ' + message + ' (ligne ' + ligne + ')';
+    };
+  </script>
+</head>
+<body>
+  <p>Essai du module « compteurs et alertes » seul.</p>
+  <p id="erreurs"></p>
+  <p id="temoin">Surbrillance après clic : (aucune)</p>
+  <aside id="controles" class="pm-colonne-droite" aria-label="Compteurs et alertes"></aside>
+
+  <script src="../src/geometrie.js"></script>
+  <script src="../src/modele.js"></script>
+  <script src="../src/catalogue.js"></script>
+  <script src="../src/etat.js"></script>
+  <script src="../src/controles.js"></script>
+  <script>
+    (function () {
+      var PM_ = globalThis.PM;
+      var M = PM_.modele;
+      var doc = PM_.catalogue.nouveauDocument();
+
+      // Plateau 4x4 complet avec le premier modèle disponible pour chaque rôle, puis deux jetons pour produire des alertes
+      for (var lig = 0; lig < 4; lig++) {
+        for (var col = 0; col < 4; col++) {
+          var role = M.roleCellule(col, lig, doc.plateau.forme);
+          var modeles = doc.modeles.filter(function (m) { return m.role === role; });
+          for (var k = 0; k < modeles.length; k++) {
+            try { doc = M.poserTuile(doc, modeles[k].id, col, lig); break; } catch (e) { /* modèle épuisé ou incomplet : suivant */ }
+          }
+        }
+      }
+      [[1, 1, 'carrefour'], [3, 1, 'carrefour']].forEach(function (j) {
+        try { doc = M.poserJeton(doc, j[0], j[1], j[2]); } catch (e) { document.getElementById('erreurs').textContent += ' Jeton refusé : ' + e.message; }
+      });
+
+      var etat = PM_.etat.creer(doc);
+      PM_.controles.monter(document.getElementById('controles'), etat);
+
+      // Clic simulé sur la première alerte cliquable : la surbrillance doit être écrite dans l'état
+      var premier = document.querySelector('#controles .pm-controles-alerte');
+      if (premier) premier.click();
+      document.getElementById('temoin').textContent = 'Surbrillance après clic : ' +
+        JSON.stringify(etat.ui().surbrillance) + ' / onglet : ' + etat.ui().onglet;
+    })();
+  </script>
+</body>
+</html>

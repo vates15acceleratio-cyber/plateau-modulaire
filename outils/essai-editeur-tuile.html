@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Essai : éditeur de tuile</title>
+  <!-- Page d'essai : monte l'éditeur de tuile seul, avec le catalogue. Ouvrir en file://. -->
+  <link rel="stylesheet" href="../styles/base.css">
+  <link rel="stylesheet" href="../styles/editeur-tuile.css">
+  <style>
+    body { display: block; }
+    #erreurs { color: #c0261a; white-space: pre-wrap; font-family: monospace; padding: 4px 14px; }
+    #essai-resultat { font-family: monospace; font-size: 12px; white-space: pre-wrap; padding: 4px 14px; border-top: 1px solid #ccc; }
+    .essai-barre { display: flex; gap: 8px; align-items: center; padding: 8px 14px; background: #fff; border-bottom: 1px solid #d9dcd5; }
+  </style>
+</head>
+<body>
+  <div class="essai-barre">
+    <label>Modèle : <select id="essai-modele"></select></label>
+    <label><input type="checkbox" id="essai-onglet" checked> onglet « tuiles » visible</label>
+    <button type="button" id="essai-annuler">Annuler</button>
+    <button type="button" id="essai-retablir">Rétablir</button>
+    <span id="essai-etat" role="status"></span>
+  </div>
+  <div id="erreurs"></div>
+  <div id="editeur" class="pm-zone-editeur"></div>
+  <pre id="essai-resultat"></pre>
+
+  <script>
+    // les erreurs JavaScript sont écrites dans #erreurs (lues par le contrôle Edge sans fenêtre)
+    window.onerror = function (msg, src, ligne) {
+      document.getElementById('erreurs').textContent += msg + ' (' + String(src).split('/').pop() + ':' + ligne + ')\n';
+    };
+  </script>
+  <script src="../src/geometrie.js"></script>
+  <script src="../src/modele.js"></script>
+  <script src="../src/catalogue.js"></script>
+  <script src="../src/rendu.js"></script>
+  <script src="../src/etat.js"></script>
+  <script src="../src/editeur-tuile.js"></script>
+  <script>
+    var etat = PM.etat.creer(PM.catalogue.nouveauDocument());
+    var sel = document.getElementById('essai-modele');
+
+    function remplirListe() {
+      var courant = etat.ui().modeleSelectionne;
+      sel.innerHTML = '';
+      etat.doc().modeles.forEach(function (m) {
+        var o = document.createElement('option');
+        o.value = m.id; o.textContent = m.nom + ' (' + m.role + ')';
+        sel.appendChild(o);
+      });
+      if (courant) sel.value = courant;
+    }
+    sel.addEventListener('change', function () { etat.majUi({ modeleSelectionne: sel.value }); });
+    document.getElementById('essai-onglet').addEventListener('change', function (e) { etat.majUi({ onglet: e.target.checked ? 'tuiles' : 'plateau' }); });
+    document.getElementById('essai-annuler').addEventListener('click', function () { etat.annuler(); });
+    document.getElementById('essai-retablir').addEventListener('click', function () { etat.retablir(); });
+    etat.abonner(function () {
+      remplirListe();
+      var msg = etat.ui().message;
+      document.getElementById('essai-etat').textContent = msg ? msg.texte : '';
+    });
+
+    PM.editeurTuile.monter(document.getElementById('editeur'), etat);
+    etat.majUi({ modeleSelectionne: etat.doc().modeles[0].id, onglet: 'tuiles' });
+
+    /* ---------- auto-essai : gestes simulés par événements Pointer (lancé avec ?auto) ---------- */
+    function autoEssai() {
+      var E = PM.editeurTuile, sortie = [], ok = true;
+      function verif(nom, cond) { sortie.push((cond ? 'OK   ' : 'ECHEC ') + nom); if (!cond) ok = false; }
+      var svg = document.querySelector('.pm-editeur-canevas');
+      function pt(x, y) { var p = E.mmVersEcran(x, y, svg.getBoundingClientRect()); return { clientX: p.x, clientY: p.y }; }
+      function ev(type, x, y, extra) {
+        var p = pt(x, y);
+        var o = Object.assign({ bubbles: true, cancelable: true, button: 0, pointerId: 1, clientX: p.clientX, clientY: p.clientY }, extra || {});
+        svg.dispatchEvent(new PointerEvent(type, o));
+      }
+      function clic(x, y) { ev('pointerdown', x, y); ev('pointerup', x, y); }
+      function glisser(x1, y1, x2, y2) { ev('pointerdown', x1, y1); ev('pointermove', (x1 + x2) / 2, (y1 + y2) / 2); ev('pointermove', x2, y2); ev('pointerup', x2, y2); }
+      function touche(k) { document.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true })); }
+      function modele() { return PM.modele.modeleParId(etat.doc(), etat.ui().modeleSelectionne); }
+      function bouton(txt, parent) {
+        return Array.prototype.filter.call((parent || document).querySelectorAll('button'), function (b) { return b.textContent === txt; })[0];
+      }
+
+      try {
+        verif('rect du canevas non nul', svg.getBoundingClientRect().width > 0);
+        // Nouveau coin
+        bouton('Coin', document.querySelector('.pm-editeur-boutons-roles')).click();
+        var m = modele();
+        verif('Nouveau coin : 3 cases, rôle coin, 0 chemin', m.role === 'coin' && m.cases.length === 3 && m.chemins.length === 0);
+        verif('modèle incomplet affiché', /Incomplet/.test(document.querySelector('.pm-editeur-statut').textContent));
+        // Déplacer la case c1 (60,40) -> (80,40)
+        glisser(60, 40, 80, 40);
+        m = modele();
+        verif('glisser une case la déplace (80,40)', m.cases[0].x === 80 && m.cases[0].y === 40 && m.chemins.length === 0);
+        // Chemin case -> case : c2 (30,90) vers c3 (90,90)
+        glisser(30, 90, 90, 90);
+        verif('glisser case -> case trace un chemin', modele().chemins.length === 1 && modele().cases[1].x === 30);
+        // Chemin case -> coin SE (actif)
+        glisser(90, 90, 120, 120);
+        verif('glisser case -> coin SE trace un port', modele().chemins.some(function (c) { return c.b.coin === 2; }));
+        glisser(80, 40, 90, 90); // c1 -> c3
+        verif('3 chemins', modele().chemins.length === 3);
+        // Chemin case -> raccord EST pos 1 (120,60)
+        glisser(80, 40, 120, 60);
+        verif('glisser case -> raccord trace un chemin', modele().chemins.some(function (c) { return c.b.raccord && c.b.raccord.cote === 1; }));
+        // Raccord inactif (côté nord) : refusé
+        var n0 = modele().chemins.length;
+        glisser(80, 40, 60, 0);
+        verif('raccord extérieur refusé, case déplacée ou rien', modele().chemins.length === n0);
+        // Deux clics : case c2 puis raccord sud pos 1 (60,120)
+        clic(30, 90); clic(60, 120);
+        verif('deux clics case puis raccord trace un chemin', modele().chemins.some(function (c) { return c.b.raccord && c.b.raccord.cote === 2; }));
+        verif('modèle complet après ces gestes', PM.modele.validerModele(modele()).complet === true);
+        // Clic sur le fond : nouvelle case (aimantée), puis Suppr
+        var nc = modele().cases.length;
+        clic(60, 70);
+        verif('clic sur le fond ajoute une case', modele().cases.length === nc + 1);
+        verif('ajout signalé en erreur (4e case)', PM.modele.validerModele(modele()).complet === false);
+        touche('Delete');
+        verif('Suppr retire la case sélectionnée', modele().cases.length === nc);
+        // A bascule le type de la case sélectionnée
+        clic(80, 40); // sélectionne et arme
+        touche('Escape'); // désarme
+        clic(80, 40);
+        touche('a');
+        verif('A bascule en apparition', modele().cases[0].type === 'apparition');
+        touche('Escape');
+        // clic droit
+        svg.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: pt(80, 40).clientX, clientY: pt(80, 40).clientY }));
+        verif('clic droit rebascule en déplacement', modele().cases[0].type === 'deplacement');
+        // Échap en cours de glissement
+        var avant = JSON.stringify(modele());
+        ev('pointerdown', 80, 40); ev('pointermove', 100, 60); touche('Escape'); ev('pointerup', 100, 60);
+        verif('Échap annule le geste (modèle inchangé)', JSON.stringify(modele()) === avant);
+        // Erreur cliquable : halo
+        m = modele();
+        etat.appliquer(function (d) { return PM.modele.remplacerModele(d, m.id, E.deplacerCase(m, 'c1', 30, 90)); }, 'chevauchement');
+        var b = document.querySelector('.pm-editeur-erreur-bouton');
+        verif('chevauchement : erreur listée', !!b);
+        if (b) { b.click(); verif('clic sur une erreur : halo présent', document.querySelectorAll('.pm-editeur-halo').length > 0); }
+        verif('vignettes : 4 rotations', document.querySelectorAll('.pm-editeur-vignette').length === 4);
+        // Clavier hors onglet
+        clic(90, 90); touche('Escape'); clic(90, 90); // sélectionne la case c3, sans armer
+        var nb = modele().cases.length;
+        etat.majUi({ onglet: 'plateau' });
+        touche('Delete');
+        verif('Suppr inactif hors onglet tuiles', modele().cases.length === nb);
+        etat.majUi({ onglet: 'tuiles' });
+      } catch (e) { verif('exception : ' + e.message, false); }
+      document.getElementById('essai-resultat').textContent = (ok ? 'AUTO-ESSAI : TOUT OK' : 'AUTO-ESSAI : ECHECS') + '\n' + sortie.join('\n');
+    }
+    if (/[?&]auto/.test(location.search)) autoEssai();
+  </script>
+</body>
+</html>

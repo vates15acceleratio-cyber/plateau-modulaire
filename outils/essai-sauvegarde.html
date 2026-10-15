@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Essai sauvegarde</title>
+</head>
+<body>
+  <h1>Essai du module sauvegarde</h1>
+  <pre id="resultat">…</pre>
+  <pre id="erreurs"></pre>
+  <!-- Page d'essai : charge le module sans interface. Sortie lisible dans le DOM (contrôle dans Edge sans fenêtre). -->
+  <script src="../src/geometrie.js"></script>
+  <script src="../src/modele.js"></script>
+  <script src="../src/sauvegarde.js"></script>
+  <script>
+    // Capte les erreurs JavaScript non rattrapées et les affiche dans #erreurs.
+    window.onerror = function (message, source, ligne) {
+      document.getElementById('erreurs').textContent += 'Erreur : ' + message + ' (ligne ' + ligne + ')\n';
+    };
+
+    var lignes = [];
+    function ligne(texte) { lignes.push(texte); }
+
+    try {
+      var M = PM.modele;
+      var S = PM.sauvegarde;
+
+      // 1. Aller-retour JSON sur un document construit avec les exemples.
+      var doc = M.nouveauDocument();
+      doc.modeles = M.copieExemples();
+      doc = M.poserTuile(doc, 'ex-centrale', 1, 1);
+      var texte = S.versJSON(doc);
+      var relu = S.depuisJSON(texte);
+      var identique = relu.ok && JSON.stringify(relu.doc) === JSON.stringify(doc);
+      ligne('Aller-retour JSON : ' + (identique ? 'identique' : 'DIFFERENT') +
+        ' (ok=' + relu.ok + ', alertes=' + relu.alertes.length + ')');
+
+      // 2. Fichier corrompu : refusé sans exception.
+      var corrompu = S.depuisJSON('{"format":"plateau-modulaire","version":99');
+      ligne('Fichier corrompu : ok=' + corrompu.ok + ' - ' + (corrompu.erreurs[0] && corrompu.erreurs[0].message));
+
+      // 3. Sauvegarde automatique puis restauration (localStorage réel du navigateur).
+      S.effacerAutosave();
+      var ecrit = S.autosave(doc);
+      var restaure = S.restaurerAutosave();
+      var autosaveOk = !!(restaure && restaure.ok && JSON.stringify(restaure.doc) === JSON.stringify(doc));
+      ligne('Autosave : ' + (ecrit ? 'écrit immédiatement' : 'non écrit') +
+        ' ; restauration : ' + (autosaveOk ? 'identique' : (restaure ? 'DIFFERENTE' : 'indisponible (null)')));
+      S.effacerAutosave();
+      ligne('Après effacement : restauration = ' + (S.restaurerAutosave() === null ? 'null' : 'NON NULL'));
+    } catch (e) {
+      ligne('ECHEC : ' + (e && e.message));
+      document.getElementById('erreurs').textContent += 'Exception : ' + (e && e.stack) + '\n';
+    }
+
+    document.getElementById('resultat').textContent = lignes.join('\n');
+  </script>
+</body>
+</html>

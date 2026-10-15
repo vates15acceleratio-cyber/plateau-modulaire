@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "plateau",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["outils/serveur.js", "8765"],
+      "port": 8765
+    }
+  ]
+}

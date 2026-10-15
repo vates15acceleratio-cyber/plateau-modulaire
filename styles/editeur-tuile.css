@@ -1,0 +1,84 @@
+/* editeur-tuile.css : écran d'édition de tuile. Classes préfixées pm-editeur-. */
+.pm-editeur { padding: 12px 16px; max-width: 1100px; margin: 0 auto; }
+.pm-editeur [hidden] { display: none !important; }
+
+/* Invite */
+.pm-editeur-invite { padding: 32px 8px; text-align: center; color: var(--pm-discret, #6b7068); }
+.pm-editeur-invite-boutons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 12px; }
+
+/* Barre d'outils */
+.pm-editeur-barre { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; padding-bottom: 10px; border-bottom: 1px solid var(--pm-bord, #d9dcd5); }
+.pm-editeur-groupe { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pm-editeur-groupe-titre { color: var(--pm-discret, #6b7068); }
+.pm-editeur-boutons-roles { display: flex; flex-wrap: wrap; gap: 4px; }
+.pm-editeur-champ { display: flex; flex-direction: column; gap: 2px; }
+.pm-editeur-champ-texte { font-size: 12px; color: var(--pm-discret, #6b7068); }
+.pm-editeur-saisie { font: inherit; min-height: 32px; padding: 4px 8px; border: 1px solid var(--pm-bord, #d9dcd5); border-radius: var(--pm-rayon, 6px); background: #fff; }
+.pm-editeur-saisie-court { width: 6em; }
+.pm-editeur-saisie:focus-visible { outline: 2px solid var(--pm-accent, #007A4D); outline-offset: 1px; }
+
+.pm-editeur-avertissement { margin-top: 10px; padding: 8px 12px; border-radius: var(--pm-rayon, 6px); background: #fff3e0; color: var(--pm-alerte, #c46a00); font-weight: 600; }
+
+/* Zone principale : canevas + colonne latérale (empilées sur écran étroit) */
+.pm-editeur-zone { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(240px, 320px); gap: 16px; margin-top: 12px; align-items: start; }
+@media (max-width: 760px) { .pm-editeur-zone { grid-template-columns: 1fr; } }
+
+.pm-editeur-canevas { display: block; width: 100%; max-width: 680px; aspect-ratio: 1; height: auto; background: #fff; border: 1px solid var(--pm-bord, #d9dcd5); border-radius: var(--pm-rayon, 6px); touch-action: none; user-select: none; cursor: crosshair; }
+.pm-editeur-canevas:focus-visible { outline: 2px solid var(--pm-accent, #007A4D); outline-offset: 2px; }
+.pm-editeur-canevas.pm-editeur-sur-cible { cursor: pointer; }
+.pm-editeur-canevas > g { pointer-events: none; }
+.pm-editeur-aide { margin: 8px 0 2px; min-height: 1.4em; }
+.pm-editeur-info { margin: 0; min-height: 1.4em; color: var(--pm-discret, #6b7068); }
+
+/* Surcouches du canevas */
+.pm-editeur-grille line { stroke: #000; stroke-opacity: .09; stroke-width: .25; }
+.pm-editeur-zones-coin path { fill: #007A4D; fill-opacity: .08; stroke: #007A4D; stroke-opacity: .35; stroke-width: .4; stroke-dasharray: 2 2; }
+
+.pm-editeur-raccord { stroke-width: .8; }
+.pm-editeur-raccord.pm-editeur-actif { fill: #fff; stroke: #007A4D; fill-opacity: .9; }
+.pm-editeur-raccord.pm-editeur-actif.pm-editeur-utilise { fill: #007A4D; }
+.pm-editeur-raccord.pm-editeur-inactif { fill: #d9dcd5; stroke: #9a9f96; fill-opacity: .6; stroke-dasharray: 1.5 1.5; }
+.pm-editeur-raccord.pm-editeur-en-erreur { stroke: #c0261a; stroke-width: 1.6; }
+
+.pm-editeur-coin { stroke-width: .8; }
+.pm-editeur-coin.pm-editeur-actif { fill: #fff; stroke: #007A4D; stroke-width: 1.4; }
+.pm-editeur-coin.pm-editeur-actif.pm-editeur-utilise { fill: #007A4D; }
+.pm-editeur-coin.pm-editeur-inactif { fill: #d9dcd5; stroke: #9a9f96; stroke-dasharray: 1.5 1.5; fill-opacity: .6; }
+.pm-editeur-coin.pm-editeur-en-erreur { stroke: #c0261a; stroke-width: 1.8; }
+.pm-editeur-coin.pm-editeur-pulse { stroke: #c0261a; stroke-width: 1.8; animation: pm-editeur-pulse 1s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes pm-editeur-pulse { 0%, 100% { transform: scale(1); fill: #fff; } 50% { transform: scale(1.5); fill: #f6c9c4; } }
+
+.pm-editeur-case-erreur { fill: #c0261a; fill-opacity: .18; stroke: #c0261a; stroke-width: 1.4; }
+.pm-editeur-chemin-erreur { fill: none; stroke: #c0261a; stroke-opacity: .5; stroke-width: 11; stroke-linejoin: round; }
+
+.pm-editeur-halo { fill: none; stroke: #c0261a; stroke-width: 2; animation: pm-editeur-halo 1.1s ease-in-out infinite; }
+.pm-editeur-halo-ligne { stroke-width: 13; stroke-opacity: .45; stroke-linejoin: round; }
+@keyframes pm-editeur-halo { 0%, 100% { stroke-opacity: 1; } 50% { stroke-opacity: .35; } }
+.pm-editeur-selection { fill: none; stroke: #1b5fd1; stroke-width: 1.6; stroke-dasharray: 3 2; }
+.pm-editeur-selection.pm-editeur-halo-ligne { stroke-width: 11; stroke-opacity: .35; stroke-dasharray: none; }
+.pm-editeur-arme { fill: none; stroke: #1b5fd1; stroke-width: 1.2; stroke-dasharray: 2 2; }
+
+.pm-editeur-apercu-case { fill: #007A4D; fill-opacity: .15; stroke: #007A4D; stroke-width: .8; stroke-dasharray: 2 2; }
+.pm-editeur-apercu-chemin { stroke: #1b5fd1; stroke-width: 2; stroke-dasharray: 3 2; }
+.pm-editeur-apercu-libre { stroke-opacity: .5; }
+.pm-editeur-apercu-cible { fill: none; stroke: #1b5fd1; stroke-width: 1.6; }
+.pm-editeur-cote { font: 6px system-ui, sans-serif; fill: #1d1f1c; paint-order: stroke; stroke: #fff; stroke-width: 2px; }
+
+/* Colonne latérale */
+.pm-editeur-statut { padding: 8px 12px; border-radius: var(--pm-rayon, 6px); font-weight: 600; }
+.pm-editeur-complet { background: #e6f4ec; color: var(--pm-accent, #007A4D); }
+.pm-editeur-incomplet { background: #fdecea; color: var(--pm-erreur, #c0261a); }
+.pm-editeur-titre { font-size: 13px; margin: 14px 0 6px; text-transform: uppercase; letter-spacing: .04em; color: var(--pm-discret, #6b7068); }
+.pm-editeur-erreurs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pm-editeur-erreur-bouton { width: 100%; text-align: left; border-color: #f0c2bd; background: #fff8f7; }
+.pm-editeur-erreur-ok { color: var(--pm-accent, #007A4D); }
+.pm-editeur-vignettes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.pm-editeur-vignette { margin: 0; text-align: center; font-size: 12px; color: var(--pm-discret, #6b7068); }
+.pm-editeur-vignette-svg { width: 100%; height: auto; display: block; background: #fff; border: 1px solid var(--pm-bord, #d9dcd5); }
+.pm-editeur-repere-trait { stroke: #c0261a; stroke-width: 3; }
+.pm-editeur-repere-n { font: bold 14px system-ui, sans-serif; fill: #c0261a; }
+.pm-editeur-note { font-size: 12px; color: var(--pm-discret, #6b7068); margin-top: 14px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pm-editeur-coin.pm-editeur-pulse, .pm-editeur-halo { animation: none; }
+}

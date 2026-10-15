@@ -1,0 +1,37 @@
+/* controles.css : panneau de compteurs et d'alertes (sous-agent 4). Classes préfixées pm-controles-. */
+
+.pm-controles { display: grid; gap: 0; padding: 0; min-width: 0; }
+.pm-controles-bloc { padding: 12px 14px; border-bottom: 1px solid var(--pm-bord); min-width: 0; }
+.pm-controles-titre { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--pm-discret); text-transform: uppercase; letter-spacing: .04em; }
+
+/* Compteurs : texte neutre, jauge colorée seulement en cas d'écart */
+.pm-controles-compteurs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pm-controles-compteur { display: grid; grid-template-columns: 1fr auto; gap: 3px 8px; align-items: baseline; }
+.pm-controles-libelle { overflow-wrap: anywhere; }
+.pm-controles-valeur { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pm-controles-jauge { grid-column: 1 / -1; display: block; height: 6px; border-radius: 3px; background: #eceee9; overflow: hidden; }
+.pm-controles-jauge-remplissage { display: block; height: 100%; width: 0; background: #9aa096; border-radius: 3px; }
+.pm-controles-compteur--ecart .pm-controles-jauge-remplissage { background: var(--pm-alerte); }
+
+/* Erreurs et alertes */
+.pm-controles-vide { margin: 0; color: var(--pm-discret); font-style: italic; }
+.pm-controles-groupes, .pm-controles-elements { list-style: none; margin: 0; padding: 0; }
+.pm-controles-groupes { display: grid; gap: 6px; }
+.pm-controles-details { border: 1px solid var(--pm-bord); border-radius: var(--pm-rayon); background: var(--pm-panneau); }
+.pm-controles-groupe--erreur .pm-controles-details { border-color: var(--pm-erreur); }
+.pm-controles-groupe--alerte .pm-controles-details { border-color: var(--pm-alerte); }
+.pm-controles-sommaire { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 10px; cursor: pointer; font-weight: 600; list-style-position: inside; }
+.pm-controles-sommaire:focus-visible { outline: 2px solid var(--pm-accent); outline-offset: -2px; }
+.pm-controles-groupe--erreur .pm-controles-sommaire { color: var(--pm-erreur); }
+.pm-controles-groupe--alerte .pm-controles-sommaire { color: var(--pm-alerte); }
+.pm-controles-sommaire-libelle { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pm-controles-nombre { min-width: 24px; padding: 0 6px; border-radius: 999px; background: #eceee9; color: var(--pm-texte); text-align: center; font-variant-numeric: tabular-nums; }
+.pm-controles-elements { padding: 0 6px 6px; display: grid; gap: 4px; }
+.pm-controles-alerte { width: 100%; min-height: 44px; text-align: left; font-weight: 400; color: var(--pm-texte); overflow-wrap: anywhere; white-space: normal; }
+.pm-controles-sans-cible { margin: 0; padding: 8px 6px; color: var(--pm-discret); overflow-wrap: anywhere; }
+
+/* Emplacements réservés */
+.pm-controles-avenir { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pm-controles-avenir-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.pm-controles-avenir-bouton { flex: 1; min-width: 0; min-height: 44px; text-align: left; }
+.pm-controles-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #eceee9; color: var(--pm-discret); white-space: nowrap; }
