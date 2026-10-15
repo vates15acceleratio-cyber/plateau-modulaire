@@ -17,20 +17,42 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     if (PM[nom] && typeof PM[nom].monter === 'function') {
       try { PM[nom].monter(c, etat); } catch (e) {
         console.error(e);
-        c.innerHTML = '<p class="pm-module-absent">Erreur au chargement du module « ' + nom + ' » : ' + (e && e.message) + '</p>';
+        c.innerHTML = ''; var p = document.createElement('p'); p.className = 'pm-module-absent'; p.textContent = 'Erreur au chargement du module « ' + nom + ' » : ' + (e && e.message); c.appendChild(p);
       }
     } else {
       c.innerHTML = '<p class="pm-module-absent">Module « ' + nom + ' » pas encore disponible.</p>';
     }
   }
 
+  /** Le stockage local est-il utilisable ? (indisponible dans certains navigateurs en file://, ou désactivé) */
+  function stockageDisponible() {
+    try {
+      var cle = 'plateau-modulaire:test';
+      window.localStorage.setItem(cle, '1');
+      window.localStorage.removeItem(cle);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  /**
+   * Document de départ : la sauvegarde automatique si elle est lisible, sinon le catalogue.
+   * Une sauvegarde présente mais illisible est mise de côté (clé « …:autosave-illisible ») et signalée,
+   * au lieu d'être écrasée en silence (docs/11-revue-interface.md, I2).
+   */
   function documentInitial() {
-    var S = PM.sauvegarde;
+    var S = PM.sauvegarde, neuf = PM.catalogue ? PM.catalogue.nouveauDocument() : PM.modele.nouveauDocument();
+    if (!stockageDisponible()) return { doc: neuf, message: 'Sauvegarde automatique indisponible dans ce navigateur : pensez à Enregistrer votre travail.', niveau: 'alerte' };
     if (S && typeof S.restaurerAutosave === 'function') {
       var r = S.restaurerAutosave();
-      if (r && r.ok && r.doc) return { doc: r.doc, repris: true };
+      if (r && r.ok && r.doc) return { doc: r.doc, message: 'Travail précédent repris (sauvegarde automatique).', niveau: 'info' };
+      var brut = null;
+      try { brut = window.localStorage.getItem(S.CLE_AUTOSAVE); } catch (e) { brut = null; }
+      if (brut) {
+        try { window.localStorage.setItem(S.CLE_AUTOSAVE + '-illisible', brut); } catch (e) { /* rien de plus à faire */ }
+        return { doc: neuf, message: 'La sauvegarde automatique précédente est illisible : elle a été mise de côté (« ' + S.CLE_AUTOSAVE + '-illisible ») et un plateau neuf est ouvert.', niveau: 'alerte' };
+      }
     }
-    return { doc: PM.catalogue ? PM.catalogue.nouveauDocument() : PM.modele.nouveauDocument(), repris: false };
+    return { doc: neuf, message: 'Glissez une tuile de la bibliothèque vers une case du plateau.', niveau: 'info' };
   }
 
   function demarrer() {
@@ -63,8 +85,8 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       S.ouvrirFichier().then(function (r) {
         if (!r) return; // annulé
         if (!r.ok) { etat.signaler(r.erreurs && r.erreurs.length ? r.erreurs[0].message : 'Fichier illisible.', 'erreur'); return; }
-        etat.remplacer(r.doc);
-        etat.signaler('Fichier ouvert' + (r.alertes && r.alertes.length ? ' (' + r.alertes.length + ' alerte(s))' : '') + '.', r.alertes && r.alertes.length ? 'alerte' : 'info');
+        etat.remplacer(r.doc, 'ouverture du fichier');
+        etat.signaler('Fichier ouvert (Ctrl+Z pour revenir au plateau précédent)' + (r.alertes && r.alertes.length ? ' (' + r.alertes.length + ' alerte(s))' : '') + '.', r.alertes && r.alertes.length ? 'alerte' : 'info');
       }, function (e) { etat.signaler(e && e.message ? e.message : 'Ouverture impossible.', 'erreur'); });
     }
 
@@ -113,7 +135,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     });
 
     rafraichir();
-    etat.signaler(init.repris ? 'Travail précédent repris (sauvegarde automatique).' : 'Glissez une tuile de la bibliothèque vers une case du plateau.', 'info');
+    etat.signaler(init.message, init.niveau);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', demarrer);

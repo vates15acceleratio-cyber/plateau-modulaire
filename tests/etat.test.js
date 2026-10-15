@@ -54,9 +54,13 @@ test('remplacer vide l\'historique ; majUi et abonnés', () => {
   e.majUi({ onglet: 'tuiles', modeleSelectionne: 'ex-coin' });
   assert.equal(e.ui().onglet, 'tuiles');
   e.remplacer(M.nouveauDocument());
-  assert.equal(e.peutAnnuler(), false);
+  assert.equal(e.doc().plateau.tuiles.length, 0);
   assert.equal(e.ui().modeleSelectionne, null);
+  assert.ok(e.peutAnnuler());
+  e.annuler();
+  assert.equal(e.doc().plateau.tuiles.length, 1);
+  e.retablir();
   stop();
   e.majUi({ onglet: 'plateau' });
-  assert.deepEqual(vus, ['doc', 'ui', 'doc']);
+  assert.deepEqual(vus, ['doc', 'ui', 'doc', 'ui', 'doc', 'ui', 'doc']);
 });

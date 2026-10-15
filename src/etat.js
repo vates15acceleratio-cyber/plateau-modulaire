@@ -88,10 +88,15 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       peutAnnuler: function () { return passe.length > 0; },
       peutRetablir: function () { return futur.length > 0; },
 
-      /** Remplace tout le document (ouverture d'un fichier) : l'historique est vidé. */
-      remplacer: function (doc) {
+      /**
+       * Remplace tout le document (ouverture d'un fichier). Annulable : le document précédent est gardé
+       * dans l'historique (docs/11-revue-interface.md, I1 : un fichier ouvert par erreur ne fait rien perdre).
+       */
+      remplacer: function (doc, libelle) {
+        passe.push({ doc: courant, libelle: libelle || 'ouverture d’un fichier' });
+        if (passe.length > MAX_HISTORIQUE) passe.shift();
+        futur = [];
         courant = cloner(doc);
-        passe = []; futur = [];
         ui = Object.assign({}, ui, { modeleSelectionne: null, surbrillance: null });
         notifier('doc');
       },

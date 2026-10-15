@@ -471,7 +471,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         if (marques && marques.raccords.indexOf(cle) >= 0) cls += ' pm-editeur-en-erreur';
         // tracé sur le côté nord puis tourné autour du centre : même convention que les masques
         s += '<path class="' + cls + '" data-raccord="' + cle + '" transform="rotate(' + (90 * cote) + ' ' + (G.COTE / 2) + ' ' + (G.COTE / 2) + ')" d="M' +
-          (p.x - RR) + ' 0 A' + RR + ' ' + RR + ' 0 0 0 ' + (p.x + RR) + ' 0 Z"/>';
+          arrondi(p.x - RR) + ' 0 A' + RR + ' ' + RR + ' 0 0 0 ' + arrondi(p.x + RR) + ' 0 Z"/>';
       }
     }
     return s;
@@ -486,7 +486,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       if (util.indexOf(k) >= 0) cls += ' pm-editeur-utilise';
       if (marques && marques.coinsManquants.indexOf(k) >= 0) cls += ' pm-editeur-pulse';
       if (marques && marques.coinsErreur.indexOf(k) >= 0) cls += ' pm-editeur-en-erreur';
-      s += '<circle class="' + cls + '" data-coin="' + k + '" cx="' + p.x + '" cy="' + p.y + '" r="6"/>';
+      s += '<circle class="' + cls + '" data-coin="' + k + '" cx="' + arrondi(p.x) + '" cy="' + arrondi(p.y) + '" r="6"/>';
     }
     return s;
   }
@@ -499,7 +499,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     });
     tab(modele.cases).forEach(function (c) {
       if (c && marques.cases.indexOf(c.id) >= 0) {
-        s += '<circle class="pm-editeur-case-erreur" cx="' + c.x + '" cy="' + c.y + '" r="' + ((c.diametre || DIAMETRE_DEFAUT) / 2 + 1.5) + '"/>';
+        s += '<circle class="pm-editeur-case-erreur" cx="' + arrondi(c.x) + '" cy="' + arrondi(c.y) + '" r="' + arrondi((c.diametre || DIAMETRE_DEFAUT) / 2 + 1.5) + '"/>';
       }
     });
     return s;
@@ -510,7 +510,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     var s = '';
     classe = classe || 'pm-editeur-halo';
     if (halo.tuile) s += '<rect class="' + classe + '" x="1" y="1" width="' + (G.COTE - 2) + '" height="' + (G.COTE - 2) + '" rx="3"/>';
-    halo.cercles.forEach(function (c) { s += '<circle class="' + classe + '" cx="' + c.x + '" cy="' + c.y + '" r="' + c.r + '"/>'; });
+    halo.cercles.forEach(function (c) { s += '<circle class="' + classe + '" cx="' + arrondi(c.x) + '" cy="' + arrondi(c.y) + '" r="' + arrondi(c.r) + '"/>'; });
     halo.lignes.forEach(function (l) { s += '<polyline class="' + classe + ' pm-editeur-halo-ligne" points="' + pointsSvg(l) + '"/>'; });
     return s;
   }
@@ -760,9 +760,9 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       } else if (d && d.type === 'case') {
         var cc = caseParId(m, d.id), dec = geste.decalage || { dx: 0, dy: 0 };
         var q = aimanter(p.x + dec.dx, p.y + dec.dy, cc ? cc.diametre : DIAMETRE_DEFAUT);
-        s += '<circle class="pm-editeur-apercu-case" cx="' + q.x + '" cy="' + q.y + '" r="' + ((cc ? cc.diametre : DIAMETRE_DEFAUT) / 2) + '"/>';
+        s += '<circle class="pm-editeur-apercu-case" cx="' + arrondi(q.x) + '" cy="' + arrondi(q.y) + '" r="' + arrondi((cc ? cc.diametre : DIAMETRE_DEFAUT) / 2) + '"/>';
       } else if (depart) {
-        s += '<line class="pm-editeur-apercu-chemin pm-editeur-apercu-libre" x1="' + depart.x + '" y1="' + depart.y + '" x2="' + p.x + '" y2="' + p.y + '"/>';
+        s += '<line class="pm-editeur-apercu-chemin pm-editeur-apercu-libre" x1="' + arrondi(depart.x) + '" y1="' + arrondi(depart.y) + '" x2="' + arrondi(p.x) + '" y2="' + arrondi(p.y) + '"/>';
       }
       gApercu.innerHTML = s;
     }
@@ -1041,7 +1041,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       if (selection) s += svgHalo(haloDe(m, selection), 'pm-editeur-selection');
       if (arme) {
         var pt = typeExt(arme) === 'case' ? caseParId(m, arme['case']) : typeExt(arme) === 'raccord' ? G.pointRaccord(arme.raccord.cote, arme.raccord.pos) : G.pointCoin(arme.coin);
-        if (pt) s += '<circle class="pm-editeur-arme" cx="' + pt.x + '" cy="' + pt.y + '" r="' + (typeExt(arme) === 'case' ? ((caseParId(m, arme['case']).diametre || DIAMETRE_DEFAUT) / 2 + 5) : 10) + '"/>';
+        if (pt) s += '<circle class="pm-editeur-arme" cx="' + arrondi(pt.x) + '" cy="' + arrondi(pt.y) + '" r="' + arrondi(typeExt(arme) === 'case' ? ((caseParId(m, arme['case']).diametre || DIAMETRE_DEFAUT) / 2 + 5) : 10) + '"/>';
       }
       gSelection.innerHTML = s;
       gRaccords.innerHTML = svgRaccords(m, marques);

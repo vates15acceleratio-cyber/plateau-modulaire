@@ -109,9 +109,9 @@ test('paires de carrefours : même côté (alerte) et côtés opposés (aucune a
   assert.deepEqual(al[0].cible, { type: 'jonction', i: 3, j: 1 });
   assert.equal(al[0].niveau, 'alerte');
 
-  // deux carrefours sur la colonne ouest
+  // deux carrefours sur la colonne ouest : pas un camp de joueur, pas d'alerte (arbitrage I3)
   d = avecJetons(base, [[1, 1, 'carrefour'], [1, 3, 'carrefour'], ...villesRestantes([[1, 1], [1, 3]])]);
-  assert.equal(trouver(C.calculer(d).alertes, 'carrefours_meme_cote').length, 1);
+  assert.equal(trouver(C.calculer(d).alertes, 'carrefours_meme_cote').length, 0);
 
   // côtés opposés : (1,2)+(3,2) et (2,1)+(2,3)
   d = avecJetons(base, [[1, 2, 'carrefour'], [3, 2, 'carrefour'], ...villesRestantes([[1, 2], [3, 2]])]);
@@ -225,4 +225,18 @@ test('cibles selon la forme (intégration) : 4×4 complet = 2 carrefours / 50 ca
   assert.deepEqual(C.ciblesSelonForme({ retires: [{ col: 0, lig: 0 }] }), { carrefours: 1, casesDeplacement: 46 });
   // Sans deux coins : 7 jonctions → 0 carrefour.
   assert.deepEqual(C.ciblesSelonForme({ retires: [{ col: 0, lig: 0 }, { col: 3, lig: 3 }] }).carrefours, 0);
+});
+
+test('règle des carrefours identique dans les contrôles et l’assemblage (36 paires)', () => {
+  require('../src/assemblage.js');
+  const A = globalThis.PM.assemblage;
+  const base = plateauComplet();
+  for (let x = 0; x < TOUTES_JONCTIONS.length; x++) {
+    for (let y = x + 1; y < TOUTES_JONCTIONS.length; y++) {
+      const [a, b] = [TOUTES_JONCTIONS[x], TOUTES_JONCTIONS[y]];
+      const d = avecJetons(base, [[a[0], a[1], 'carrefour'], [b[0], b[1], 'carrefour']]);
+      const controle = trouver(C.calculer(d).alertes, 'carrefours_meme_cote').length > 0;
+      assert.equal(controle, A.carrefoursMemeCote(d) !== null, JSON.stringify([a, b]));
+    }
+  }
 });

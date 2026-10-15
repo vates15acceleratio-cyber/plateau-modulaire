@@ -76,7 +76,7 @@ test('les champs inconnus sont ignorés, les ids conservés', () => {
   const r = S.depuisJSON(JSON.stringify(objet));
   assert.strictEqual(r.ok, true);
   assert.strictEqual(r.doc.modeles[0].couleurBizarre, undefined);
-  assert.strictEqual(r.doc.modeles[0].cases[0].champInconnu, 1, 'les cases sont recopiées telles quelles');
+  assert.strictEqual(r.doc.modeles[0].cases[0].champInconnu, undefined, 'champs inconnus des cases écartés (revue B1)');
   assert.strictEqual(r.doc.plateau.tuiles[0].autre, undefined);
   assert.strictEqual(r.doc.modeles[0].id, doc.modeles[0].id);
 });
@@ -347,4 +347,21 @@ test('telecharger sous Node lève une Error explicite (pas de plantage silencieu
 
 test('ouvrirFichier sous Node résout null sans planter', async () => {
   assert.strictEqual(await S.ouvrirFichier(), null);
+});
+
+test('sécurité (revue B1) : un fichier piégé ne fait passer aucun balisage dans les cases ni les chemins', () => {
+  const S = globalThis.PM.sauvegarde;
+  const piege = '0"/><foreignObject><img src=x onerror=alert(1)></foreignObject><circle cx="0';
+  const m = { id: 'P', nom: 'piège', role: 'centrale', exemplaires: 1,
+    cases: [{ id: 'c1', x: piege, y: 10, diametre: 24, type: 'deplacement' }, { id: 'c2', x: 60, y: 60, diametre: piege, type: 'deplacement' },
+      { id: 'c3', x: 40, y: 40, type: 'deplacement', extra: piege }],
+    chemins: [{ id: 'k1', a: { case: 'c3' }, b: { raccord: { cote: piege, pos: 1 } } }, { id: 'k2', a: { case: 'c3' }, b: { coin: 0, extra: piege } }] };
+  const r = S.depuisJSON(JSON.stringify({ format: 'plateau-modulaire', version: 1, modeles: [m], plateau: { forme: { retires: [] }, tuiles: [], jetons: [] } }));
+  assert.equal(r.ok, true);
+  const texte = JSON.stringify(r.doc.modeles);
+  assert.ok(!texte.includes('onerror'), texte);
+  const mm = r.doc.modeles[0];
+  assert.deepEqual(mm.cases.map((c) => c.id), ['c3']);
+  assert.deepEqual(mm.chemins.map((c) => c.id), ['k2']);
+  assert.ok(r.alertes.some((a) => a.code === 'elements_ignores'));
 });

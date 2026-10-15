@@ -20,7 +20,7 @@ Socle commun écrit par l'orchestrateur (ne pas modifier) : `index.html`, `style
 - `etat.appliquer(fn, libelle)` : `fn(doc) → nouveau document`, avec une fonction **pure** de `PM.modele`. Gère l'historique (100 niveaux). Si `fn` lève une `Error`, le document ne change pas et la raison s'affiche dans la barre d'état. Renvoie `{ok}` ou `{ok:false, raison}`.
 - `etat.majUi(patch)` : état d'interface hors historique. Champs : `onglet` (`'plateau'|'tuiles'`), `modeleSelectionne` (id ou null), `surbrillance` (voir l'en-tête de `etat.js`), `message`.
 - `etat.signaler(texte, niveau)` : barre d'état (`'info'|'alerte'|'erreur'`). **Tout refus s'explique ici en une phrase** ; jamais de fenêtre modale ni d'`alert()`.
-- `etat.remplacer(doc)` : ouverture d'un fichier (vide l'historique).
+- `etat.remplacer(doc, libelle)` : ouverture d'un fichier ; **annulable** (le document précédent reste dans l'historique).
 - Annuler / rétablir, Ctrl+S et les onglets sont gérés par `app.js`. Les modules gèrent leurs propres raccourcis (R, Suppr, A, 1 à 5, Échap), seulement quand leur onglet est visible.
 
 ## Interactions entre modules

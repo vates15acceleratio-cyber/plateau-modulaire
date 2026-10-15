@@ -55,15 +55,39 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       alertes.push(erreur('exemplaires_invalides', 'Le modèle « ' + libelle + ' » : nombre d\'exemplaires invalide, ramené à 0.'));
     }
     var ignores = 0;
-    function gardeObjets(liste) {
-      return tab(liste).filter(function (x) {
-        if (estObjet(x)) return true;
-        ignores++;
-        return false;
-      }).map(cloner);
+    // Sécurité (docs/11-revue-interface.md, B1) : seuls les champs connus sont gardés, avec leur type
+    // attendu (nombres finis pour les coordonnées, textes pour les ids) ; un fichier piégé ne doit pas
+    // pouvoir glisser du balisage dans le SVG de l'interface.
+    function texteOuNul(v) { return typeof v === 'string' ? v : (typeof v === 'number' && isFinite(v) ? String(v) : null); }
+    function nombre(v) { return typeof v === 'number' && isFinite(v); }
+    function normaliserCase(c) {
+      if (!estObjet(c) || !nombre(c.x) || !nombre(c.y) || (c.diametre !== undefined && !nombre(c.diametre))) return null;
+      var n = { id: texteOuNul(c.id), x: c.x, y: c.y };
+      if (c.diametre !== undefined) n.diametre = c.diametre;
+      if (typeof c.type === 'string') n.type = c.type;
+      return n;
     }
-    var cases = gardeObjets(brut.cases);
-    var chemins = gardeObjets(brut.chemins);
+    function normaliserExtremite(e) {
+      if (!estObjet(e)) return null;
+      if (e['case'] !== undefined) { var id = texteOuNul(e['case']); return id === null ? null : { 'case': id }; }
+      if (estObjet(e.raccord) && estEntier(e.raccord.cote) && estEntier(e.raccord.pos)) return { raccord: { cote: e.raccord.cote, pos: e.raccord.pos } };
+      if (estEntier(e.coin)) return { coin: e.coin };
+      return null;
+    }
+    function normaliserChemin(c) {
+      if (!estObjet(c)) return null;
+      var a = normaliserExtremite(c.a), b = normaliserExtremite(c.b);
+      return a && b ? { id: texteOuNul(c.id), a: a, b: b } : null;
+    }
+    function garder(liste, normaliser) {
+      return tab(liste).map(function (x) {
+        var n = normaliser(x);
+        if (!n) ignores++;
+        return n;
+      }).filter(function (x) { return x; });
+    }
+    var cases = garder(brut.cases, normaliserCase);
+    var chemins = garder(brut.chemins, normaliserChemin);
     if (ignores) alertes.push(erreur('elements_ignores', 'Le modèle « ' + libelle + ' » : ' + ignores + ' case(s) ou chemin(s) mal formé(s) ignoré(s).'));
     var m = { id: brut.id, nom: nom, role: brut.role, exemplaires: exemplaires, cases: cases, chemins: chemins };
     if (!M.validerModele(m).complet) {

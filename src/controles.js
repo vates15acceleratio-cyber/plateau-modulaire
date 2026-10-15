@@ -87,13 +87,16 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /* Alertes propres au module : villes, carrefours                      */
   /* ------------------------------------------------------------------ */
 
-  /** Côtés intérieurs occupés par une jonction : rangée nord / sud (j = 1 / NL-1), colonne ouest / est (i = 1 / NC-1). */
+  /**
+   * Camp d'une jonction : rangée nord (j = 1, camp J1) ou rangée sud (j = NL-1, camp J2), sinon aucun.
+   * « Même côté » = même camp de joueur (docs/11-revue-interface.md, arbitrage I3 ; 1b D7 :
+   * deux carrefours dans un camp donnent 3 villes contre 1). Les colonnes ouest / est ne sont pas des camps.
+   * Même règle que `PM.assemblage.carrefoursMemeCote` (test de cohérence dans tests/controles.test.js).
+   */
   function cotesJonction(i, j) {
     var res = [];
     if (j === 1) res.push('rangée nord');
     if (j === NL - 1) res.push('rangée sud');
-    if (i === 1) res.push('colonne ouest');
-    if (i === NC - 1) res.push('colonne est');
     return res;
   }
 
