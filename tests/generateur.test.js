@@ -91,8 +91,26 @@ test('critère v2 vérifié indépendamment : 3 cases entre villes, connexe, pas
   }
 });
 
-test('catalogue de la version 1 : aucun plateau (villes toujours à moins de 3 cases), raison explicite', () => {
-  const r = GEN.generer(PM.catalogue.nouveauDocument(), { graine: 'v1', candidats: 10, essaisMax: 40 });
+test('catalogue v2 : plateaux valides sur plusieurs graines ; des centrales en anneau (R2 violée) : aucun plateau, raison explicite', () => {
+  for (const graine of ['v2-a', 'v2-b', 'v2-c']) {
+    const r = GEN.generer(PM.catalogue.nouveauDocument(), { graine, candidats: 10 });
+    assert.strictEqual(r.ok, true, r.raison);
+    assert.deepStrictEqual(M.validerPlateau(r.doc).erreurs, []);
+    // seules alertes possibles : des raccords morts (au plus 2 sans pénalité du classement)
+    assert.ok(M.validerPlateau(r.doc).alertes.every((a) => a.code === 'raccord_mort'));
+    assert.ok(r.score.raccordsMorts <= 2);
+  }
+  // anneau de 4 cases à port reliées : deux villes voisines à moins de 3 cases
+  const doc = PM.catalogue.nouveauDocument();
+  const c = (id, x, y) => ({ id, x, y, diametre: 24, type: 'deplacement' });
+  const lien = (id, a, b) => ({ id, a: { case: a }, b: { case: b } });
+  doc.modeles = doc.modeles.filter((m) => m.gabarit !== 'centrale').concat([{
+    id: 'C1', nom: 'Anneau', gabarit: 'centrale', grille: '4x4', exemplaires: 6,
+    cases: [c('c1', 36, 36), c('c2', 84, 36), c('c3', 84, 84), c('c4', 36, 84)],
+    chemins: [lien('h1', 'c1', 'c2'), lien('h2', 'c2', 'c3'), lien('h3', 'c3', 'c4'), lien('h4', 'c4', 'c1'),
+      ...[0, 1, 2, 3].map((k) => ({ id: 'p' + k, a: { case: 'c' + (k + 1) }, b: { coin: k } }))]
+  }]);
+  const r = GEN.generer(doc, { graine: 'anneaux', candidats: 10, essaisMax: 40 });
   assert.strictEqual(r.ok, false);
   assert.ok(r.rejets.villes_proches > 0);
   assert.match(r.raison, /Aucun plateau acceptable en 40 essais/);

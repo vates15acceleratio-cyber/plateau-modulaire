@@ -85,13 +85,39 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     }
   };
 
-  /**
-   * Bibliothèque de la version 1 (modèles A1 / A2) : le catalogue v2 n'existe pas encore, on garde la
-   * bibliothèque convertie et on le dit (plus tard : proposer de charger le catalogue v2).
-   */
+  /** Bibliothèque de la version 1 (modèles A1 / A2) : message de démarrage. */
   function avisBibliotheque(doc) {
     if (!PM.sauvegarde || typeof PM.sauvegarde.bibliothequeVersion1 !== 'function' || !PM.sauvegarde.bibliothequeVersion1(doc)) return '';
-    return ' Bibliothèque de la version 1 (modèles A1 / A2) conservée et convertie : le catalogue de la version 2 n\'est pas encore disponible.';
+    return ' Bibliothèque de la version 1 (modèles A1 / A2) conservée et convertie : le catalogue de la version 2 vous est proposé.';
+  }
+
+  /**
+   * Propose de remplacer une bibliothèque de la version 1 par le catalogue de la version 2.
+   * Le remplacement vide le plateau ; il est annulable (Ctrl+Z).
+   */
+  function proposerCatalogueV2(etat) {
+    if (!PM.catalogue || !PM.dialogue || !$('dialogue')) return;
+    var c = PM.dialogue.ouvrir('Catalogue de la version 2');
+    var p = document.createElement('p');
+    p.textContent = 'Ce document utilise encore les tuiles de la version 1, converties. Le catalogue de la version 2 (cases d’apparition sur tout le pourtour, raccourcis de coin, 3 cases entre villes) est disponible. Le charger remplace la bibliothèque et vide le plateau ; Ctrl+Z permet de revenir en arrière.';
+    var oui = document.createElement('button');
+    oui.type = 'button';
+    oui.textContent = 'Charger le catalogue v2';
+    oui.addEventListener('click', function () {
+      etat.remplacer(PM.catalogue.nouveauDocument(), 'catalogue de la version 2');
+      PM.dialogue.fermer();
+      etat.signaler('Catalogue de la version 2 chargé (Ctrl+Z pour revenir à l’ancien document).', 'info');
+    });
+    var non = document.createElement('button');
+    non.type = 'button';
+    non.textContent = 'Garder mes tuiles';
+    non.addEventListener('click', function () { PM.dialogue.fermer(); });
+    var actions = document.createElement('p');
+    actions.appendChild(oui);
+    actions.appendChild(document.createTextNode(' '));
+    actions.appendChild(non);
+    c.appendChild(p);
+    c.appendChild(actions);
   }
 
   function demarrer() {
@@ -184,6 +210,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
 
     rafraichir();
     etat.signaler(init.message, init.niveau);
+    if (avis) proposerCatalogueV2(etat);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', demarrer);

@@ -172,7 +172,7 @@
       titre('S0 chargement');
       ['bibliotheque', 'assemblage', 'controles', 'editeurTuile', 'sauvegarde', 'graphe', 'app'].forEach(function (n) { ctrl('module PM.' + n + ' présent', !!PM[n]); });
       ctrl('aucun module absent dans la coquille', !document.querySelector('.pm-module-absent'));
-      ctrl('bibliothèque : 18 vignettes (catalogue v1 converti)', document.querySelectorAll('.pm-biblio-vignette').length === 18, document.querySelectorAll('.pm-biblio-vignette').length);
+      ctrl('bibliothèque : 15 vignettes (catalogue v2)', document.querySelectorAll('.pm-biblio-vignette').length === 15, document.querySelectorAll('.pm-biblio-vignette').length);
       ctrl('bibliothèque : 3 groupes (Centrales, Bords, Coins)', Array.prototype.map.call(document.querySelectorAll('.pm-biblio-groupe-titre'), function (h) { return h.textContent.split(' ')[0]; }).join(',') === 'Centrales,Bords,Coins');
       ctrl('plateau : 16 cellules et 9 jonctions', document.querySelectorAll('[data-cellule]').length === 16 && document.querySelectorAll('[data-jonction]').length === 9);
       ctrl('plateau : camps vert (nord) et rouge (sud)', /Camp vert \(nord\)/.test(document.querySelector('#assemblage svg').textContent) && /Camp rouge \(sud\)/.test(document.querySelector('#assemblage svg').textContent));
@@ -180,8 +180,8 @@
       ctrl('onglet Plateau sélectionné, écran Tuiles caché', document.querySelector('[data-onglet="plateau"]').getAttribute('aria-selected') === 'true' && $('ecran-tuiles').hidden);
       ctrl('Annuler / Rétablir désactivés au départ', $('btn-annuler').disabled && $('btn-retablir').disabled);
       ctrl('pastille « Plateau incomplet » au départ', pastille() === 'Plateau incomplet', pastille());
-      ctrl('document initial = catalogue (pas de reprise), version 2, grille 4×4', etat.doc().modeles.length === 18 && nbTuiles() === 0 && etat.doc().version === 2 && etat.doc().grille === '4x4');
-      ctrl('barre d\'état : bibliothèque de la version 1 signalée (catalogue v2 pas encore disponible)', /version 1/.test(msg()) && /catalogue de la version 2/.test(msg()) && niveau() === 'alerte', msg());
+      ctrl('document initial = catalogue (pas de reprise), version 2, grille 4×4', etat.doc().modeles.length === 15 && nbTuiles() === 0 && etat.doc().version === 2 && etat.doc().grille === '4x4');
+      ctrl('barre d\'état : message d\'accueil (catalogue v2 chargé, rien à signaler)', /Glissez une tuile/.test(msg()) && niveau() === 'info', msg());
     }
 
     function s1_assemblage() {
@@ -227,15 +227,17 @@
       reset();
       g = glisser('K1', 0, 0);
       ctrl('pose K1 en (0,0) acceptée, rotation suggérée 0', nbTuiles() === 1 && M.tuileEn(etat.doc(), 0, 0).rot === 0, msg());
+      glisser('K1', 3, 0);
+      ctrl('2e exemplaire de K1 posé en (3,0) (K1 existe en 2 exemplaires)', nbTuiles() === 2 && M.tuileEn(etat.doc(), 3, 0).rot === 1, msg());
       var apres1 = docJ();
       glisser('K2', 0, 0);
       ctrl('cellule occupée : refusée, document inchangé, une phrase', docJ() === apres1 && /occupée/.test(msg()) && uneSeulePhrase(msg()) && niveau() === 'erreur', msg());
-      glisser('K1', 3, 0);
+      glisser('K1', 3, 3);
       ctrl('exemplaire épuisé : refusé, document inchangé', docJ() === apres1 && /exemplaire/.test(msg()) && uneSeulePhrase(msg()), msg());
       var vig = document.querySelector('[data-vignette="K1"]');
       ctrl('vignette K1 grisée (épuisée) et bouton Poser désactivé', vig.classList.contains('pm-biblio-epuise') && vig.querySelector('[data-action="poser"]').disabled);
       ctrl('libellé « ×0 restant » sur K1', /×0 restant/.test(vig.textContent), vig.textContent);
-      ctrl('badge d\'alertes sur K1 (catalogue v1 : pas de case d\'apparition)', /alerte/.test(vig.textContent), vig.textContent);
+      ctrl('aucun badge d\'alertes sur K1 (catalogue v2 : aucune alerte)', !/alerte/.test(vig.textContent), vig.textContent);
       etat.signaler('', 'info');
       glisser('K2', 0, 0, 0, true);
       ctrl('lâcher hors plateau : pose annulée avec message', docJ() === apres1 && /annulée/.test(msg()), msg());
@@ -264,13 +266,14 @@
       document.querySelector('[data-vignette="K3"] [data-action="moins"]').click();
       document.querySelector('[data-vignette="K3"] [data-action="moins"]').click();
       ctrl('bouton − : retour à ' + K3 + ' puis ' + (K3 - 1), M.modeleParId(etat.doc(), 'K3').exemplaires === K3 - 1);
+      document.querySelector('[data-vignette="K1"] [data-action="moins"]').click();   // 2 -> 1 exemplaire : accepté (1 tuile posée)
       document.querySelector('[data-vignette="K1"] [data-action="moins"]').click();
       ctrl('− sous le nombre de tuiles posées : refusé avec message', M.modeleParId(etat.doc(), 'K1').exemplaires === 1 && niveau() === 'erreur', msg());
       var sel = document.querySelector('[data-role="filtre"]');
       sel.value = 'coin'; sel.dispatchEvent(new Event('change', { bubbles: true }));
-      ctrl('filtre « Coins » : 5 vignettes', document.querySelectorAll('.pm-biblio-vignette').length === 5, document.querySelectorAll('.pm-biblio-vignette').length);
+      ctrl('filtre « Coins » : 3 vignettes', document.querySelectorAll('.pm-biblio-vignette').length === 3, document.querySelectorAll('.pm-biblio-vignette').length);
       sel.value = 'bord'; sel.dispatchEvent(new Event('change', { bubbles: true }));
-      ctrl('filtre « Bords » : 7 vignettes (B1 à B5, A1, A2)', document.querySelectorAll('.pm-biblio-vignette').length === 7, document.querySelectorAll('.pm-biblio-vignette').length);
+      ctrl('filtre « Bords » : 6 vignettes (B1 à B6)', document.querySelectorAll('.pm-biblio-vignette').length === 6, document.querySelectorAll('.pm-biblio-vignette').length);
       sel.value = 'tous'; sel.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
@@ -370,7 +373,7 @@
       });
       ctrl('statut « Incomplet (non posable) » et erreur « case reliée à rien » listée', /Incomplet/.test(document.querySelector('.pm-editeur-statut').textContent) && /reliée à rien/.test(document.querySelector('.pm-editeur-erreurs').textContent));
       etat.majUi({ modeleSelectionne: 'K1', onglet: 'tuiles' });
-      ctrl('K1 (catalogue v1) : posable, alerte « sans case d\'apparition » listée sans bloquer', /Complet/.test(document.querySelector('.pm-editeur-statut').textContent) && /Alerte : /.test(document.querySelector('.pm-editeur-erreurs').textContent), document.querySelector('.pm-editeur-statut').textContent);
+      ctrl('K1 (catalogue v2) : posable, aucune alerte listée', /Complet/.test(document.querySelector('.pm-editeur-statut').textContent) && !/Alerte : /.test(document.querySelector('.pm-editeur-erreurs').textContent), document.querySelector('.pm-editeur-statut').textContent);
       var nDoc = etat.doc().modeles.length, plateauAvant = J(etat.doc().plateau);
       Array.prototype.filter.call(document.querySelectorAll('.pm-editeur-bouton'), function (b) { return b.textContent === 'Dupliquer'; })[0].click();
       var copie = M.modeleParId(etat.doc(), etat.ui().modeleSelectionne);
@@ -385,13 +388,13 @@
       var svg = document.querySelector('.pm-editeur-canevas');
       var m0 = M.modeleParId(etat.doc(), id), cles0 = cheminsCles(m0);
       var nCases = m0.cases.length;
-      var pLibre = pointMm(svg, 60, 62);
+      var pLibre = pointMm(svg, 70, 100);   // fond libre de K1 : loin de la diagonale, des raccourcis et du port
       ptr('pointerdown', svg, pLibre.x, pLibre.y); ptr('pointerup', svg, pLibre.x, pLibre.y);
       var m1 = M.modeleParId(etat.doc(), id);
       ctrl('clic sur le fond : case ajoutée', m1.cases.length === nCases + 1, m1.cases.length);
       ctrl('case non reliée : le modèle est incomplet (case isolée), sans message « case en trop »', !M.validerModele(m1).complet && M.validerModele(m1).erreurs.some(function (e) { return e.code === 'case_isolee'; }) && !/en trop/.test(msg()), msg());
       var nid = m1.cases[m1.cases.length - 1].id, anc = m1.cases[m1.cases.length - 1];
-      glisserEditeur(svg, pointeCase(svg, m1, nid), pointMm(svg, 40, 60));
+      glisserEditeur(svg, pointeCase(svg, m1, nid), pointMm(svg, 100, 60));
       var m2 = M.modeleParId(etat.doc(), id), c2 = m2.cases.filter(function (c) { return c.id === nid; })[0];
       ctrl('glisser une case la déplace (aimantée sur 1 cm)', c2 && (c2.x !== anc.x || c2.y !== anc.y) && c2.x % 10 === 0 && c2.y % 10 === 0, J(c2));
       var pc = pointeCase(svg, m2, nid);
@@ -424,7 +427,7 @@
       ctrl('modèle de nouveau complet', M.validerModele(m7).complet);
       // côté extérieur (coin : nord et ouest) : le chemin est accepté avec une alerte
       var ext = pointMm(svg, G.pointRaccord(0, 1).x, G.pointRaccord(0, 1).y), av = docJ();
-      glisserEditeur(svg, pointeCase(svg, m7, 'c2'), ext);
+      glisserEditeur(svg, pointeCase(svg, m7, 'a'), ext);
       var m8 = M.modeleParId(etat.doc(), id);
       ctrl('chemin vers un raccord du côté extérieur : accepté, alerte « face au vide », modèle toujours posable',
         m8.chemins.length === m7.chemins.length + 1 && M.validerModele(m8).complet && /face au vide/.test(document.querySelector('.pm-editeur-erreurs').textContent), J(M.validerModele(m8).alertes.map(function (a) { return a.code; })));
@@ -456,7 +459,7 @@
       etat.majUi({ modeleSelectionne: 'K1', onglet: 'tuiles' });
       var svg2 = document.querySelector('.pm-editeur-canevas');
       ctrl('avertissement « Utilisé 1 fois »', /Utilisé 1 fois/.test(document.querySelector('.pm-editeur-avertissement').textContent), document.querySelector('.pm-editeur-avertissement').textContent);
-      var pl = pointMm(svg2, 60, 62);
+      var pl = pointMm(svg2, 70, 100);
       ptr('pointerdown', svg2, pl.x, pl.y); ptr('pointerup', svg2, pl.x, pl.y);
       ctrl('modèle posé rendu incomplet (case isolée)', !M.validerModele(M.modeleParId(etat.doc(), 'K1')).complet);
       ctrl('la tuile reste posée', nbTuiles() === 1);
@@ -589,8 +592,11 @@
     /** Document de la version 1 construit à partir du catalogue (rôles, carrefours, forme réduite). */
     function texteV1() {
       var d = PM.catalogue.nouveauDocument();
+      var nbApparitions = 0;   // le catalogue v2 n'a plus de modèles A1 / A2 : les deux premiers bords jouent leur rôle dans ce faux fichier de la version 1
       var modeles = d.modeles.map(function (m) {
-        var v = JSON.parse(J(m)); v.role = (m.id === 'A1' || m.id === 'A2') ? 'apparition' : m.gabarit; delete v.gabarit; delete v.grille; return v;
+        var v = JSON.parse(J(m));
+        if (m.gabarit === 'bord' && nbApparitions < 2) { nbApparitions++; v.id = 'A' + nbApparitions; v.role = 'apparition'; } else v.role = m.gabarit;
+        delete v.gabarit; delete v.grille; return v;
       });
       return J({ format: 'plateau-modulaire', version: 1, modeles: modeles,
         plateau: { forme: { retires: [{ col: 0, lig: 0 }] }, tuiles: [{ modeleId: 'C1', col: 1, lig: 1, rot: 1 }], jetons: [{ i: 1, j: 2, type: 'carrefour' }] } });

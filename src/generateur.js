@@ -4,8 +4,7 @@
  * Partie calcul (generer) : fonction pure, sans DOM, testée sous Node.
  * Partie interface (ouvrir) : remplit la boîte de dialogue commune PM.dialogue.
  *
- * Règles appliquées (adaptation minimale aux règles v2, docs/18 à docs/20 ; les vraies règles du
- * générateur v2 viendront avec le catalogue v2) :
+ * Règles appliquées (règles v2, docs/18 à docs/20 ; vérifié sur le catalogue v2, docs/21) :
  *  - grille pleine du format du document (4×4 ou 5×5) ;
  *  - tuiles tirées dans la bibliothèque du document (modèles complets, selon leurs exemplaires), selon le
  *    gabarit attendu à chaque position ; rotation suggérée des bords et coins, rotation aléatoire des centrales ;
@@ -261,7 +260,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       var detail = Object.keys(rejets).filter(function (k) { return rejets[k]; })
         .map(function (k) { return LIBELLES_CAUSE[k] + ' : ' + rejets[k]; }).join(', ');
       var conseil = rejets.villes_proches * 2 >= essais
-        ? ' Les tuiles de cette bibliothèque rapprochent toujours deux villes à moins de 3 cases (règles R1 à R4 non respectées, cas du catalogue de la version 1) : il faut des tuiles conformes, comme le futur catalogue v2.'
+        ? ' Les tuiles de cette bibliothèque rapprochent presque toujours deux villes à moins de 3 cases (règles R1 à R4 non respectées) : utilisez des tuiles conformes, comme celles du catalogue.'
         : ' Modifiez la bibliothèque ou essayez une autre graine.';
       return echec('Aucun plateau acceptable en ' + essais + ' essais' + (detail ? ' (' + detail + ')' : '') + '.' + conseil, essais);
     }

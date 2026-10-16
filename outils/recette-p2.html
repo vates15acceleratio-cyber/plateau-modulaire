@@ -195,7 +195,7 @@
       ctrl('boîte ouverte, titre « Exporter pour impression »', dialogueOuvert() && $('dialogue-titre').textContent === 'Exporter pour impression');
       ctrl('formulaire rempli (.pm-export)', !!contenu().querySelector('.pm-export .pm-export-formulaire'));
       var resume = contenu().querySelector('.pm-export-resume');
-      ctrl('résumé : 4 feuilles, 20 tuiles (catalogue, A3)', /4 feuille\(s\) : 20 tuile\(s\)/.test(resume.textContent), resume.textContent);
+      ctrl('résumé : 4 feuilles, 22 tuiles (catalogue, A3)', /4 feuille\(s\) : 22 tuile\(s\)/.test(resume.textContent), resume.textContent);
       ctrl('aucun avertissement avec le catalogue', contenu().querySelector('.pm-export-avertissement').textContent === '');
       var img = contenu().querySelector('img.pm-export-apercu');
       ctrl('aperçu : image avec adresse blob', img && /^blob:/.test(img.src) && !img.hidden, img && img.src.slice(0, 20));
@@ -206,7 +206,7 @@
         var bouton = contenu().querySelector('.pm-export-telecharger');
         ctrl('bouton Télécharger actif', bouton && !bouton.disabled);
         changer(radio('A4', 'format'), true);
-        ctrl('A4 : 10 feuilles, 20 tuiles', /10 feuille\(s\) : 20 tuile\(s\)/.test(resume.textContent), resume.textContent);
+        ctrl('A4 : 11 feuilles, 22 tuiles', /11 feuille\(s\) : 22 tuile\(s\)/.test(resume.textContent), resume.textContent);
         changer(radio('A3', 'format'), true);
         ctrl('retour A3 : 4 feuilles', /4 feuille\(s\)/.test(resume.textContent));
         changer(radio('posees', 'portee'), true);
@@ -240,9 +240,9 @@
       ctrl('modèle incomplet signalé dans la boîte', /1 modèle\(s\) incomplet\(s\) exclu\(s\)/.test(av.textContent), av.textContent);
       ctrl('le nom hostile est affiché comme texte (aucun élément injecté)', av.textContent.indexOf(hostile) >= 0 && av.children.length === 0);
       ctrl('aucun <script> ni <img> injecté, hormis l\'aperçu', contenu().querySelectorAll('script').length === 0 && contenu().querySelectorAll('img').length === 1 && !window.__pwn);
-      ctrl('résumé : 4 feuilles, 21 tuiles (exemplaires modifiés)', /4 feuille\(s\) : 21 tuile\(s\)/.test(resume.textContent), resume.textContent);
+      ctrl('résumé : 3 feuilles, 18 tuiles (exemplaires modifiés : C1 x3, K1 x0, B1 x2, C3 exclu)', /3 feuille\(s\) : 18 tuile\(s\)/.test(resume.textContent), resume.textContent);
       changer(radio('A4', 'format'), true);
-      ctrl('A4 : 11 feuilles (21 tuiles par 2)', /11 feuille\(s\) : 21 tuile\(s\)/.test(resume.textContent), resume.textContent);
+      ctrl('A4 : 9 feuilles (18 tuiles par 2)', /9 feuille\(s\) : 18 tuile\(s\)/.test(resume.textContent), resume.textContent);
       // les feuilles produites ne contiennent pas le modèle incomplet
       var sortie = E.preparerSorties(etat.doc(), { format: 'A4' });
       ctrl('preparerSorties : exclus = C3', J(sortie.exclus.map(function (x) { return x.id; })) === '["C3"]');
@@ -251,7 +251,7 @@
         var d = new DOMParser().parseFromString(s, 'image/svg+xml');
         return !d.querySelector('parsererror') && d.documentElement.getAttribute('width') === '210mm';
       });
-      ctrl('SVG des 11 feuilles bien formés (DOMParser)', tous);
+      ctrl('SVG des 9 feuilles bien formés (DOMParser)', tous);
     }
 
     function s1c_telechargements() {
@@ -412,15 +412,33 @@
         ctrlY();
         ctrl('Ctrl+Y : plateau généré rétabli', CJ(etat.doc().plateau) === CJ(attendu.doc.plateau));
         ctrlZ();
-        // catalogue de la version 1 : aucun plateau, raison explicite
+        // catalogue v2 : le générateur donne un plateau
         reset(PM.catalogue.nouveauDocument());
         cliquer(boutonParTexte($('controles'), 'Plateau aléatoire'));
-        contenu().querySelector('.pm-generateur-graine').value = 'v1';
+        contenu().querySelector('.pm-generateur-graine').value = 'v2';
         cliquer(boutonParTexte(contenu(), 'Générer'));
-        return attendre(50);
+        return attendre(300);
+      }).then(function () {
+        ctrl('catalogue v2 : plateau généré, aperçu affiché, Appliquer actif', !!contenu().querySelector('.pm-generateur-apercu') && !boutonParTexte(contenu(), 'Appliquer au plateau').disabled,
+          (contenu().querySelector('.pm-generateur-erreur') || {}).textContent);
+        PM.dialogue.fermer();
+        // centrales en anneau (cases à port reliées : R2 violée) : aucun plateau, raison explicite
+        var anneaux = PM.catalogue.nouveauDocument();
+        var cc = function (id, x, y) { return { id: id, x: x, y: y, diametre: 24, type: 'deplacement' }; };
+        var lien = function (id, a, b) { return { id: id, a: { 'case': a }, b: { 'case': b } }; };
+        anneaux.modeles = anneaux.modeles.filter(function (m) { return m.gabarit !== 'centrale'; }).concat([{
+          id: 'C1', nom: 'Anneau', gabarit: 'centrale', grille: '4x4', exemplaires: 6,
+          cases: [cc('c1', 36, 36), cc('c2', 84, 36), cc('c3', 84, 84), cc('c4', 36, 84)],
+          chemins: [lien('h1', 'c1', 'c2'), lien('h2', 'c2', 'c3'), lien('h3', 'c3', 'c4'), lien('h4', 'c4', 'c1')].concat([0, 1, 2, 3].map(function (k) { return { id: 'p' + k, a: { 'case': 'c' + (k + 1) }, b: { coin: k } }; }))
+        }]);
+        reset(anneaux);
+        cliquer(boutonParTexte($('controles'), 'Plateau aléatoire'));
+        contenu().querySelector('.pm-generateur-graine').value = 'anneaux';
+        cliquer(boutonParTexte(contenu(), 'Générer'));
+        return attendre(300);
       }).then(function () {
         var err = contenu().querySelector('.pm-generateur-erreur');
-        ctrl('catalogue v1 : « villes à moins de 3 cases » et renvoi au catalogue v2, Appliquer inactif', err && /villes à moins de 3 cases/.test(err.textContent) && /R1 à R4/.test(err.textContent) && boutonParTexte(contenu(), 'Appliquer au plateau').disabled, err && err.textContent);
+        ctrl('centrales en anneau : « villes à moins de 3 cases » et renvoi aux règles R1 à R4, Appliquer inactif', err && /villes à moins de 3 cases/.test(err.textContent) && /R1 à R4/.test(err.textContent) && boutonParTexte(contenu(), 'Appliquer au plateau').disabled, err && err.textContent);
         PM.dialogue.fermer();
         var sansCoins = libGenerateur();
         sansCoins.modeles.forEach(function (m) { if (m.gabarit === 'coin') m.exemplaires = 0; });

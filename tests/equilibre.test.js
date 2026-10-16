@@ -32,7 +32,7 @@ function melanger(t, rng) {
   return t;
 }
 /**
- * Plateau 4×4 plein tiré dans le catalogue (version 1 convertie : des tuiles variées et valides) : tuiles par
+ * Plateau 4×4 plein tiré dans le catalogue (version 2) : tuiles par
  * gabarit, rotation suggérée sur le pourtour, aléatoire au centre.
  */
 function tirerPlateau(rng) {
@@ -226,14 +226,15 @@ test('equilibre : cohérence avec un oracle indépendant (jonctions-cases, camps
   }
 });
 
-test('equilibre : catalogue v1 converti, seulement 4 cases d\'apparition : plateau complet si chaque camp en a une', () => {
+test('equilibre : catalogue v2, 6 cases d\'apparition par camp : plateau complet', () => {
   const doc = tirerPlateau(mulberry32(7));
   const e = GR.equilibre(doc, { jetons: villes7(MILIEU) });
   const g = GR.construire(doc);
-  // A1 et A2 (2 exemplaires chacune) sont les seuls bords à case d'apparition ; 9 bords pour 8 cellules
-  assert.ok(g.apparitions[1].length + g.apparitions[2].length <= 4);
-  assert.strictEqual(e.complet, g.apparitions[1].length > 0 && g.apparitions[2].length > 0);
-  assert.deepStrictEqual(e.apparitions, { 1: g.apparitions[1].length, 2: g.apparitions[2].length });
+  // chaque tuile du pourtour porte une case d'apparition : rangées 0 et 1 au vert, 2 et 3 au rouge
+  assert.strictEqual(g.apparitions[1].length, 6);
+  assert.strictEqual(g.apparitions[2].length, 6);
+  assert.strictEqual(e.complet, true);
+  assert.deepStrictEqual(e.apparitions, { 1: 6, 2: 6 });
 });
 
 test('equilibre : les villes du document sont lues, et option jetons les remplace', () => {

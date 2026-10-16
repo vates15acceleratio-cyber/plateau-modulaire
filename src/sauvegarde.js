@@ -207,7 +207,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return 'Document de la version 1 converti aux règles de la version 2 : ' + details.join(', ') + '.';
   }
 
-  /** Bibliothèque de la version 1 reconnue à ses modèles d'apparition A1 et A2 (le catalogue v2 la remplacera). */
+  /** Bibliothèque de la version 1 reconnue à ses modèles d'apparition A1 et A2 (le catalogue v2 est proposé à la place au démarrage). */
   function bibliothequeVersion1(doc) {
     var ids = tab(doc && doc.modeles).map(function (m) { return m && m.id; });
     return ids.indexOf('A1') >= 0 && ids.indexOf('A2') >= 0;

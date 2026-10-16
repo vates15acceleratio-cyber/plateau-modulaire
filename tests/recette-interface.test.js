@@ -37,15 +37,15 @@ test('plateau plein des exemples : 16 tuiles, 7 villes, compteurs tous ok, aucun
   assert.equal(A.compterJetons(d), 7);
 });
 
-test('catalogue v1 converti posé à plein : aucune erreur, mais alertes v2 (pourtour sans apparition, apparitions incomplètes)', () => {
+test('catalogue v2 posé à plein : aucune erreur, 6 apparitions par camp, seules alertes possibles : raccords morts', () => {
   let d = docVide();
   const F = M.formatDuDocument(d), stock = { centrale: [], bord: [], coin: [] };
   d.modeles.forEach((m) => { for (let k = 0; k < m.exemplaires; k++) stock[m.gabarit].push(m.id); });
   for (let lig = 0; lig < 4; lig++) for (let col = 0; col < 4; col++) d = A.poserTuileTournee(d, stock[M.gabaritCellule(col, lig, F)].shift(), col, lig);
   const r = C.calculer(d);
   assert.deepEqual(r.erreurs, []);
-  assert.ok(r.alertes.some((a) => a.code === 'pourtour_sans_apparition'));
-  assert.ok(r.compteurs.some((c) => c.cle === 'apparitions_vert' && c.etat === 'ecart'));
+  assert.ok(r.alertes.every((a) => a.code === 'raccord_mort'), r.alertes.map((a) => a.code).join(' '));
+  assert.ok(r.compteurs.some((c) => c.cle === 'apparitions_vert' && c.etat === 'ok'));
 });
 
 test('coordonnées : celluleSous et jonctionSous aux limites du plateau (D10)', () => {
@@ -206,11 +206,11 @@ test('bibliothèque : groupes par gabarit, filtre, posable / incomplet / épuis�
   assert.equal(v.complet, false); assert.equal(v.posable, false);
   assert.deepEqual(B.vignettesBibliotheque(d, 'bord').map((x) => x.gabarit), ['bord']);
   assert.deepEqual(B.vignettesBibliotheque(d, 'zzz'), []);
-  const p = A.poserTuileTournee(d, 'K1', 0, 0, 0);
+  const p = A.poserTuileTournee(A.poserTuileTournee(d, 'K1', 0, 0, 0), 'K1', 3, 0, 1);
   const k1 = B.vignettesBibliotheque(p, 'coin')[0].modeles.find((m) => m.id === 'K1');
-  assert.equal(k1.restants, 0);
+  assert.equal(k1.restants, 0); // K1 existe en 2 exemplaires
   assert.equal(k1.posable, false);
-  assert.ok(k1.alertes > 0, 'K1 (catalogue v1) : alerte sans case d\'apparition');
+  assert.equal(k1.alertes, 0, 'K1 (catalogue v2) : aucune alerte');
 });
 
 test('pose : refus en une phrase (incomplet, hors grille, introuvable, occupée, épuisée), sinon libre', () => {
@@ -232,9 +232,10 @@ test('pose : refus en une phrase (incomplet, hors grille, introuvable, occupée,
   assert.equal(M.peutPoserTuile(d, 'C1', 0, 0).ok, true);
   d = A.poserTuileTournee(d, 'K1', 0, 0, 0);
   assert.match(M.peutPoserTuile(d, 'K2', 0, 0).raison, /occupée/);
-  assert.match(M.peutPoserTuile(d, 'K1', 3, 0).raison, /exemplaire/);
+  d = A.poserTuileTournee(d, 'K1', 3, 0, 1); // 2e et dernier exemplaire de K1
+  assert.match(M.peutPoserTuile(d, 'K1', 3, 3).raison, /exemplaire/);
   const avant = copie(d);
-  assert.throws(() => A.poserTuileTournee(d, 'K1', 3, 0, 0), Error);
+  assert.throws(() => A.poserTuileTournee(d, 'K1', 3, 3, 0), Error);
   assert.deepEqual(d, avant, 'document inchangé après refus');
   assert.equal(A.poserTuileTournee(docVide(), 'K1', 0, 0, 3).plateau.tuiles[0].rot, 3, 'rotation choisie respectée');
   assert.equal(A.poserTuileTournee(docVide(), 'K1', 3, 3, null).plateau.tuiles[0].rot, 2, 'rotation suggérée du coin SE');
@@ -277,14 +278,14 @@ test('éditeur : ajouterChemin et supprimer (refus en phrase, modèle source int
   const k1 = copie(docVide().modeles.find((m) => m.id === 'K1'));
   const avant = copie(k1);
   assert.throws(() => E.ajouterChemin(k1, { 'case': 'c1' }, { 'case': 'c1' }), /lui-même/);
-  assert.throws(() => E.ajouterChemin(k1, { 'case': 'c1' }, { 'case': 'c2' }), /déjà reliés/);
+  assert.throws(() => E.ajouterChemin(k1, { 'case': 'a' }, { 'case': 'c1' }), /déjà reliés/);
   assert.throws(() => E.ajouterChemin(k1, { 'case': 'zz' }, { coin: 2 }), /n'existe pas/);
   assert.throws(() => E.ajouterChemin(k1, { coin: 2 }, { raccord: { cote: 1, pos: 1 } }), /case/);
   assert.throws(() => E.supprimer(k1, { type: 'case', id: 'zz' }), /introuvable/);
   assert.throws(() => E.supprimer(k1, { type: 'coin', id: 0 }), /Aucun chemin/);
   assert.throws(() => E.supprimer(k1, { type: 'zz' }), /non supprimable/);
   assert.deepEqual(k1, avant);
-  const ext = E.ajouterChemin(k1, { 'case': 'c2' }, { raccord: { cote: 0, pos: 1 } });
+  const ext = E.ajouterChemin(k1, { 'case': 'a' }, { raccord: { cote: 0, pos: 1 } });
   assert.ok(M.validerModele(ext).alertes.some((a) => a.code === 'raccord_exterieur'));
   const sansCase = E.supprimer(k1, { type: 'case', id: 'c1' });
   assert.ok(sansCase.chemins.every((h) => h.a['case'] !== 'c1' && h.b['case'] !== 'c1'), 'les chemins de la case disparaissent avec elle');

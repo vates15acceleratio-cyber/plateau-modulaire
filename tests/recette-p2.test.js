@@ -150,7 +150,7 @@ function docModifie() {
   const doc = docCatalogue();
   doc.modeles.find((m) => m.id === 'C1').exemplaires = 3;
   doc.modeles.find((m) => m.id === 'K1').exemplaires = 0;
-  doc.modeles.find((m) => m.id === 'B1').exemplaires = 2;
+  doc.modeles.find((m) => m.id === 'B1').exemplaires = 3;
   const inc = doc.modeles.find((m) => m.id === 'C3');
   inc.cases = []; // incomplet (brouillon)
   return doc;
@@ -182,17 +182,17 @@ function plateau(graine, options) {
 /* 1. EXPORT                                                           */
 /* ================================================================== */
 
-test('export : catalogue en A3 = 4 planches (6, 6, 6, 2) de 297 x 420 ; en A4 = 10 planches de 2, 210 x 297', () => {
+test('export : catalogue en A3 = 4 planches (6, 6, 6, 4) de 297 x 420 ; en A4 = 11 planches de 2, 210 x 297', () => {
   const doc = docCatalogue();
   const a3 = E.calepiner(doc, { format: 'A3' }), a4 = E.calepiner(doc, { format: 'A4' });
-  assert.deepStrictEqual(a3.map((p) => p.tuiles.length), [6, 6, 6, 2]);
+  assert.deepStrictEqual(a3.map((p) => p.tuiles.length), [6, 6, 6, 4]);
   assert.ok(a3.every((p) => p.largeur === 297 && p.hauteur === 420));
-  assert.strictEqual(a4.length, 10);
+  assert.strictEqual(a4.length, 11);
   assert.ok(a4.every((p) => p.tuiles.length === 2 && p.largeur === 210 && p.hauteur === 297));
-  // 20 tuiles du catalogue : 18 modèles, A1 et A2 en deux exemplaires
+  // 22 tuiles du catalogue : 15 modèles (B1 en 5 exemplaires, K1 à K3 en 2)
   const total = (ps) => ps.reduce((s, p) => s + p.tuiles.length, 0);
-  assert.strictEqual(total(a3), 20);
-  assert.strictEqual(total(a4), 20);
+  assert.strictEqual(total(a3), 22);
+  assert.strictEqual(total(a4), 22);
 });
 
 test('export : planche A3, une planche A4 ; marges, pas et gouttière du doc 6 (126 mm + 6 mm, marges >= 15 mm)', () => {
@@ -270,13 +270,13 @@ test('export : bibliothèque modifiée, exemplaires pris en compte, modèle inco
   const nb = (id) => liste.tuiles.filter((t) => t.modeleId === id).length;
   assert.strictEqual(nb('C1'), 3);
   assert.strictEqual(nb('K1'), 0);
-  assert.strictEqual(nb('B1'), 2);
-  assert.strictEqual(liste.tuiles.length, 20 - 1 /* C3 */ + 2 /* C1 */ - 1 /* K1 */ + 1 /* B1 */);
+  assert.strictEqual(nb('B1'), 3);
+  assert.strictEqual(liste.tuiles.length, 22 - 1 /* C3 */ + 2 /* C1 */ - 2 /* K1 */ - 2 /* B1 : 5 -> 3 */);
   const a3 = E.calepiner(doc, { format: 'A3' });
-  assert.deepStrictEqual(a3.map((p) => p.tuiles.length), [6, 6, 6, 3]);
+  assert.deepStrictEqual(a3.map((p) => p.tuiles.length), [6, 6, 6, 1]);
   // suffixe -n seulement pour les modèles à plusieurs exemplaires
   const etiq = a3.flatMap((p) => p.tuiles.map((t) => t.etiquette));
-  assert.ok(etiq.includes('C1-1') && etiq.includes('C1-3') && etiq.includes('B1-2'));
+  assert.ok(etiq.includes('C1-1') && etiq.includes('C1-3') && etiq.includes('B1-3'));
   assert.ok(etiq.includes('C2') && !etiq.includes('C2-1'));
   assert.ok(!etiq.some((e) => e.startsWith('K1')));
   // signalé par preparerSorties (c'est ce que la boîte affiche)
@@ -453,11 +453,11 @@ test('export : PDF du catalogue en A3 valide et lisible (PyMuPDF) : 4 pages 297 
   assert.ok(fs.existsSync(png) && fs.statSync(png).size > 5000);
 });
 
-test('export : PDF A4 du catalogue (10 pages 210 x 297) et PDF de la bibliothèque modifiée (modèle incomplet absent)', { skip: SANS_PYMUPDF }, () => {
+test('export : PDF A4 du catalogue (11 pages 210 x 297) et PDF de la bibliothèque modifiée (modèle incomplet absent)', { skip: SANS_PYMUPDF }, () => {
   const doc = docCatalogue();
   const p4 = E.calepiner(doc, { format: 'A4' });
   const r4 = analysePdf(E.pdfDepuisPlanches(p4, doc), 'catalogue-A4', p4);
-  assert.strictEqual(r4.n, 10);
+  assert.strictEqual(r4.n, 11);
   assert.strictEqual(r4['reparé'], false);
   r4.tailles.forEach((t) => assert.ok(Math.abs(t[0] - 210) < 0.1 && Math.abs(t[1] - 297) < 0.1, 'taille ' + t));
   p4.forEach((p, k) => {
@@ -810,12 +810,29 @@ test('générateur : critère v2 vérifié indépendamment (3 cases entre villes
   }
 });
 
-test('générateur : catalogue de la version 1 refusé avec une raison qui nomme le problème (villes à moins de 3 cases)', () => {
-  const r = GEN.generer(docCatalogue(), { graine: 'v1', candidats: 10, essaisMax: 30 });
+/** Bibliothèque du catalogue dont les centrales sont des anneaux de 4 cases à port reliées (R2 violée). */
+function docCatalogueAnneaux() {
+  const doc = docCatalogue();
+  const c = (id, x, y) => ({ id, x, y, diametre: 24, type: 'deplacement' });
+  const lien = (id, a, b) => ({ id, a: { case: a }, b: { case: b } });
+  const anneau = {
+    id: 'C1', nom: 'Anneau', gabarit: 'centrale', grille: '4x4', exemplaires: 6,
+    cases: [c('c1', 36, 36), c('c2', 84, 36), c('c3', 84, 84), c('c4', 36, 84)],
+    chemins: [lien('h1', 'c1', 'c2'), lien('h2', 'c2', 'c3'), lien('h3', 'c3', 'c4'), lien('h4', 'c4', 'c1'),
+      ...[0, 1, 2, 3].map((k) => ({ id: 'p' + k, a: { case: 'c' + (k + 1) }, b: { coin: k } }))]
+  };
+  doc.modeles = doc.modeles.filter((m) => m.gabarit !== 'centrale').concat([anneau]);
+  return doc;
+}
+
+test('générateur : le catalogue v2 donne un plateau ; des centrales en anneau (R2 violée) sont refusées avec une raison qui nomme le problème', () => {
+  const bon = GEN.generer(docCatalogue(), { graine: 'v2', candidats: 10 });
+  assert.strictEqual(bon.ok, true, bon.raison);
+  const r = GEN.generer(docCatalogueAnneaux(), { graine: 'anneaux', candidats: 10, essaisMax: 30 });
   assert.strictEqual(r.ok, false);
   assert.strictEqual(r.doc, null);
   assert.match(r.raison, /villes à moins de 3 cases/);
-  assert.match(r.raison, /catalogue v2/);
+  assert.match(r.raison, /R1 à R4/);
 });
 
 test('générateur : bibliothèque insuffisante, raison claire et document inchangé', () => {
