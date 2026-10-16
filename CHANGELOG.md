@@ -1,5 +1,53 @@
 # Journal des modifications
 
+## [3.00.0] - 2026-10-16
+
+Majeure
+
+Retouches après l'essai du 4×4 et interface 5×5. Le niveau majeure vient de trois éléments réunis dans cette version : un nouvel espace de l'application (le choix de la grille 4×4 ou 5×5 au bouton « Nouveau »), plusieurs capacités liées d'un coup (poses illimitées, bibliothèque refaite, clic droit, export du jeu complet), et une perte pour l'utilisateur (le rôle imposé à la pose remplace la pose libre de la 2.00.0 ; le bouton « Poser », le compteur d'exemplaires et les coins K1 et K3 disparaissent). Ouvrir `README.md` pour la marche à suivre. Le format des documents reste compatible avec la 2.00.0.
+
+### Ajouté
+- Bouton « Nouveau » avec le choix de la grille 4×4 ou 5×5. Le choix 5×5 est proposé, mais il est refusé tant que son catalogue n'existe pas : le plateau actuel est conservé.
+- Indicateur de grille dans la barre du haut.
+- Rangée neutre du 5×5 à l'écran : bande et repère permanents, pour la rangée dont les cases d'apparition ne servent à personne.
+- Refus de mélange 4×4 / 5×5 : une tuile dessinée pour l'autre grille est grisée, badgée et ne se pose pas, avec une phrase qui l'explique.
+- Clic droit sur une tuile posée pour la retirer (annulable avec Ctrl+Z).
+- Coin K4 (losange) dans le catalogue 4×4.
+- Alerte « poche » dans l'éditeur de tuile : une case en impasse est signalée.
+- Export : le jeu complet, avec un nombre d'exemplaires réglable pour chaque modèle, ou les tuiles posées sur le plateau.
+- Politique de sécurité (CSP) dans `index.html`.
+- Audit de sécurité de la version 2 (`docs/23-audit-securite-v2.md`).
+- `CLAUDE.md` : consignes de méthode de travail et repères pour reprendre le projet.
+
+### Modifié
+- Poses illimitées : un modèle se pose autant de fois qu'on veut.
+- Rôle respecté à la pose : un coin se pose dans un coin, un bord sur le pourtour, une centrale au centre, avec un refus expliqué.
+- Bibliothèque élargie sur plusieurs colonnes. Un clic sur une tuile la choisit pour la pose, puis un clic sur une cellule la pose ; le glisser-déposer reste possible ; un double-clic l'ouvre dans l'éditeur.
+- Générateur : la répétition d'un modèle est possible, avec une pénalité qui favorise la variété.
+- Tuile B4 refaite en losange : deux routes de même longueur, sans impasse.
+- Catalogue 4×4 sans poche : aucune tuile ne comporte de case en impasse.
+- Environ 63 cases par plateau en moyenne, au-dessus de la cible de 60 : effet du tirage avec répétition, à trancher.
+- Mesures d'équilibre refaites avec le tirage avec répétition (`docs/21-mesures-catalogue-v2.md`).
+- Fichier `.gitignore` complété (environnements Python, binaires, dossier `build/`).
+
+### Supprimé
+- Coins K1 (coin direct) et K3 (coin à poche) du catalogue.
+- Bouton « Poser » : la pose se fait par un clic sur la vignette.
+- Compteur d'exemplaires restants (« ×N restants ») dans la bibliothèque.
+
+### Corrigé
+- Corrections de l'audit de sécurité v2 : longueur des identifiants, types et messages plafonnés ; fichier refusé avant lecture au-delà de 5 Mo ; un raccord vers une case absente est ignoré au lieu de faire planter le calcul du graphe ; dictionnaire d'export sans prototype.
+- Chemin personnel retiré de `docs/0-brief.md`.
+
+### Limites connues
+- Catalogue 5×5 à venir : le choix 5×5 existe, mais aucun plateau 5×5 ne peut encore être créé.
+- Hexagonal en attente du feu vert de l'utilisateur ; aucun travail engagé.
+- Seuils d'équilibre à revoir avec les mesures (63 cases par plateau, nouveau tirage).
+- Tactile non testé.
+- Impression réelle et mesure de la barre de 100 mm à la règle non faites.
+- Politique CSP non vérifiée dans Firefox et Safari en `file://`.
+- Pages d'essai `essai-controles.html`, `essai-export.html` et `essai-equilibre.html` à remettre à jour.
+
 ## [2.00.0] - 2026-10-16
 
 Majeure
