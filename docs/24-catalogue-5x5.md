@@ -76,3 +76,10 @@ La répartition A suppose des coins à 2 cases (apparition + case à port), c'es
 2. Sous-agent catalogue (production) : modèles 5×5 dans `src/catalogue.js` (`modelesParGrille`, `nouveauDocument('5x5')`) et tests, périmètre limité à ces fichiers.
 3. Mesures sur 1000 plateaux → rapport de mesures dans `docs/` (numéro suivant libre) ; validation des seuils par l'advisor design de jeu.
 4. Testeur, relecteur, puis versionneur.
+
+## 8. Arbitrage (orchestrateur, après avis 28 et 29 et décisions de l'utilisateur, `docs/18`)
+- Retenu : **B′** (78 cases, 40 ports), **K2 seul**, villes par défaut **2-3-2**, pas de C5, aucun raccord latéral hors du raccourci, B7 + B7m.
+- La répartition B et la liste du § 5 sont remplacées. Catalogue de départ pour le sous-agent : K2 ; B1, B7, B7m ; C7, C8 (coordonnées validées dans `29-avis-geometrie-5x5.md`). B3, B5, B8, C1, C4, C9 : 0 ou 1 exemplaire au plus, seulement si les mesures le permettent (chacun coûte un port ou des cases).
+- Contradiction entre advisors tranchée par l'utilisateur : l'advisor design de jeu jugeait « ≥ 3 ports aux villes » inatteignable sur son modèle abstrait (catalogue P5, avec C9 et C4) ; l'advisor géométrie le tient avec B′ (recherche sur des poses réelles : 8 jonctions à ≥ 3 ports). À confirmer par les mesures sur 1000 plateaux.
+- Le générateur 5×5 devra : orienter les centrales (pas de rotation au hasard), placer les villes en 2-3-2, garantir ≥ 2 ports par jonction et ≥ 3 aux villes, préférer B1 sur les bords de la rangée neutre.
+- La remarque du relecteur sur K4 en (82, 60) / (60, 82) concerne le **4×4** (voir `27-revue-retroactive-pr1-pr2.md` et la note en tête de `29`).

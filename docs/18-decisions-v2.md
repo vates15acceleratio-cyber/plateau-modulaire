@@ -71,3 +71,11 @@
 - Appliqué aux cases du catalogue 4×4, aux jonctions-cases et aux cases neuves de l'éditeur. Le diamètre **maximal** permis dans l'éditeur ne change pas (Ø 30 en 4×4, Ø 24 en 5×5) ; les documents déjà enregistrés gardent leurs diamètres. Le jeton ville reste Ø 30.
 - Conséquence : deux modèles retouchés pour garder 8 mm entre les chemins qui partent d'une même case, sans changer leurs liaisons (donc sans effet sur les mesures d'équilibre de `21-mesures-catalogue-v2.md`) : B5, case à port est de (92, 90) à (96, 90) ; K4, relais de (82, 56) / (56, 82) à (82, 62) / (62, 82).
 - À vérifier à l'impression : taille des pions (Ø 20 mm au plus pour tenir sur une case).
+
+## Décisions de l'utilisateur pour le catalogue 5×5 (2026-10-16)
+Après les avis `28-avis-design-5x5.md` (design de jeu) et `29-avis-geometrie-5x5.md` (géométrie), sur le cahier `24-catalogue-5x5.md`.
+- **Répartition B′, ≈ 78 cases** (avis géométrie) : 4 coins K2, 6 B1 + 6 B7 / B7m sur le pourtour, 9 centrales à 3 cases (C7 Pont, C8 Équerre), 9 jonctions-cases ; 40 ports. La garantie **≥ 3 ports aux villes** est conservée (≥ 2 à chaque jonction).
+- **Coins : K2 seul** en 5×5 (K4 trop serré dans 100 mm).
+- **Placement par défaut des 7 villes : « 2-3-2 »** : 2 villes sur la rangée de jonctions côté vert (j = 1), 3 sur les deux rangées du milieu (j = 2 et 3), 2 côté rouge (j = 4). Remplace le « 3 + 1 + 3 » proposé par l'advisor design de jeu ; à mesurer sur le vrai catalogue.
+- **Pions : Ø 20 au plus** (consigne maintenue ; l'advisor prépresse, `26-avis-prepresse-cases-20.md`, conseillait Ø 16 à 18).
+- Acceptés par défaut, sans objection de l'utilisateur : pas de mur (C5) en 5×5 ; aucun raccord latéral hors du raccourci sur les bords et les coins ; B7 et son miroir B7m sont deux modèles ; le générateur oriente les centrales pour nourrir les jonctions ; tempo plus lent qu'en 4×4, à confirmer à la mesure.
