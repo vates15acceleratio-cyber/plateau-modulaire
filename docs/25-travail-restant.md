@@ -7,7 +7,7 @@ L'utilisateur a marqué une pause ; il reprendra **après discussion**. Rien ne 
 ### 1.1 Catalogue 5×5 — en pause, attend le feu vert de l'utilisateur
 - L'interface 5×5 est prête (bouton « Nouveau », choix de la grille, rangée neutre, refus de mélange, export en tuiles de 100 mm, générateur en tirage libre) ; **il manque le catalogue** : « Nouveau → 5×5 » est refusé tant qu'il n'existe pas.
 - Consigne prête (voir l'historique de la session) : environ 30 modèles, **≈ 75 cases par plateau**, cases Ø 20 (décision du 2026-10-16, docs/18), raccords à 30 / 50 / 70 mm, cases d'apparition sur tout le pourtour, raccourcis de coin, **aucune poche**, coins dans l'esprit de K2 / K4, règles R1 à R4 respectées, écart minimal de 4 pas entre jonctions vérifié sur 1000 plateaux ; exposer `PM.catalogue.nouveauDocument('5x5')` et `PM.catalogue.modelesParGrille`.
-- Mesures à faire (1000 plateaux, docs/22 §5) puis rapport `docs/24-mesures-catalogue-5x5.md` : cases, S, écart par rang, « 5 contre 2 », « 4 contre 3 », tempo, pourtour, goulets, raccords morts, meilleurs placements des villes / jonctions-cases.
+- Mesures à faire (1000 plateaux, docs/22 §5) puis rapport de mesures dans `docs/` (prochain numéro libre ; le n° 24 est le cahier des charges `docs/24-catalogue-5x5.md`) : cases, S, écart par rang, « 5 contre 2 », « 4 contre 3 », tempo, pourtour, goulets, raccords morts, meilleurs placements des villes / jonctions-cases.
 - Brouillon inachevé d'un premier essai (règles plus anciennes : poches permises, coins K1 / K3) : `docs/brouillons/catalogue-5x5-inacheve.patch` — à consulter seulement, **ne pas l'appliquer tel quel**.
 
 ### 1.2 Seuils et placement par défaut du 5×5
@@ -26,7 +26,8 @@ L'utilisateur a marqué une pause ; il reprendra **après discussion**. Rien ne 
 - Phrases d'aide en haut de la bibliothèque et dans l'éditeur qui recoupent la légende « Commandes » : à retirer si l'utilisateur le souhaite.
 - Onglet Tuiles : rendu de la légende non vérifié à l'œil.
 - Tactile non testé (double-tap, appui long qui déclenche le clic droit).
-- Documents anciens : ils gardent leurs copies de K1, K3 et de l'ancien B4 (proposer le catalogue à jour à l'ouverture d'une bibliothèque v2 antérieure ?).
+- Documents anciens : ils gardent leurs copies de K1, K3 et de l'ancien B4 (proposer le catalogue à jour à l'ouverture d'une bibliothèque v2 antérieure ?) ; leurs copies de B5 et K4 restent en Ø 24.
+- La règle des 8 mm entre chemins n'est vérifiée que par les tests du catalogue, pas par `validerModele` : une tuile créée par l'utilisateur peut avoir des chemins qui se touchent sans alerte.
 - À valider en conditions réelles : impression et mesure de la barre de 100 mm à la règle ; CSP sous Firefox et Safari.
 
 ### 1.6 Format hexagonal

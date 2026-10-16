@@ -49,6 +49,10 @@ test('case d\'apparition : carré inscrit dans le disque (côté ≤ D/√2), ce
     assert.ok(Math.abs(Number(r[1]) + cote / 2 - c.x) < 1e-3 && Math.abs(Number(r[2]) + cote / 2 - c.y) < 1e-3);
     // les 4 coins du carré sont dans le disque
     assert.ok(Math.hypot(cote / 2, cote / 2) <= c.diametre / 2 + 1e-9);
+    // jeu d’au moins 0,9 mm aux coins, traits déduits : le carré ne touche pas le contour du disque
+    const trait = Number(/stroke-width="([\d.]+)" data-apparition/.exec(svg)[1]);
+    assert.ok(trait >= 1, grille + ' trait ' + trait);
+    assert.ok(c.diametre / 2 - Math.hypot(cote / 2, cote / 2) - trait / 2 - 0.3 >= 0.9, grille + ' jeu aux coins');
   }
 });
 

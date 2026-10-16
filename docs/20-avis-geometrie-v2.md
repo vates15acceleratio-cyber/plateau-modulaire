@@ -4,7 +4,7 @@ Entrées : `18-decisions-v2.md`, `19-avis-design-v2.md`. Cas de test T2 recalcul
 
 ## D1. Jonction-case
 - **Modèle** : chaque jonction intérieure est un nœud du graphe, avec ou sans jeton (9 en 4×4, 16 en 5×5), état `case` ou `ville`, relié aux cases porteuses des ports qui y aboutissent ; compte comme une case ; ville non traversable. Le jeton `carrefour` disparaît : `jetons: [{i, j, type: 'capture'}]`. Un port vers un coin du pourtour ne crée aucun nœud (alerte).
-- **Impression** : quart de **disque Ø 24 centré sur le coin**, prolongé dans le fond perdu, fond blanc, contour noir 0,6 mm sur l'arc seulement, dessiné par-dessus l'amorce du port ; imprimé sur **les coins intérieurs du gabarit**, même sans port (les 4 quarts reforment toujours la case).
+- **Impression** : quart de **disque Ø 24 (→ Ø 20, voir `18-decisions-v2.md`, « Taille des cases ») centré sur le coin**, prolongé dans le fond perdu, fond blanc, contour noir 0,6 mm sur l'arc seulement, dessiné par-dessus l'amorce du port ; imprimé sur **les coins intérieurs du gabarit**, même sans port (les 4 quarts reforment toujours la case).
 - **Jeton ville** : Ø 30 sur les deux formats (Ø 24 = 30 − 2 × 3 mm de tolérance de pose).
 - Code : `graphe.construire` crée tous les nœuds de jonction ; `rendu.contenuQuartJonction` ; `sauvegarde` supprime les jetons `carrefour` au chargement ; `DIAMETRE_CASE_JONCTION` ; `ECART_MIN_CAPTURES` (3 pas) devient `ECART_MIN_VILLES = 3` cases (4 pas).
 
@@ -26,7 +26,7 @@ Case normale `type: 'apparition'` (même Ø), placée librement dans le respect 
 | Côté de tuile | 120 | 100 (plateau 500) |
 | Raccords | 30 / 60 / 90 | **30 / 50 / 70** |
 | Zone de coin R ; jeton | 20 ; Ø 30 | 20 ; Ø 30 |
-| Case max ; jonction-case | Ø 30 ; Ø 24 | **Ø 24** ; Ø 24 |
+| Case max ; jonction-case | Ø 30 ; Ø 24 | **Ø 24** ; Ø 24 (jonction-case → Ø 20, voir `18-decisions-v2.md`, « Taille des cases ») |
 | Chemin ; amorce raccord ; amorce port | 8 ; 10 ; 28 | 8 ; 10 ; 28 |
 | Marge de coupe ; fond perdu | 4 ; 3 | 4 ; 3 |
 

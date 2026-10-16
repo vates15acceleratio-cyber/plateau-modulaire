@@ -6,7 +6,7 @@ Mis à jour le 2026-10-16 (version 3.01.0). L'ancienne version de ce document d�
 - Page web unique, ouverte en `file://`, hors ligne, sans installation, sans build.
 - Chrome bloque les modules ES (`<script type="module">`) en `file://` : **pas de modules ES, pas d'`import`**.
 - CSP stricte dans `index.html` (voir `CLAUDE.md`) : aucun script, style ou attribut `style=` en ligne.
-- Aucune dépendance (ni à l'exécution, ni pour les tests). Node ≥ 20 sert seulement aux tests et aux outils de mesure.
+- Aucune dépendance à l'exécution. Node ≥ 20 sert aux tests et aux outils de mesure. Python et PyMuPDF sont facultatifs : sans eux, 7 tests (rendu des PDF) sont sautés ; la CI les installe.
 
 ## Arborescence
 
@@ -33,24 +33,24 @@ docs/brouillons/    travaux inachevés, à consulter sans les appliquer
 | `etat.js` | état partagé, historique annuler / rétablir | non |
 | `sauvegarde.js` | JSON, migration des documents v1, sauvegarde automatique | oui (stockage, fichiers) |
 | `graphe.js` | graphe des cases, plus courts chemins, analyse d'équilibre | non |
-| `equilibre.js` | rapport d'équilibre | non |
-| `generateur.js` | plateau aléatoire reproductible | non |
+| `equilibre.js` | rapport d'équilibre | partiel (calcul pur + boîte de dialogue) |
+| `generateur.js` | plateau aléatoire reproductible | partiel (calcul pur + boîte de dialogue) |
 | `export.js` | planches PDF / SVG / PNG | oui |
-| `controles.js` | compteurs et alertes | oui |
+| `controles.js` | compteurs et alertes | partiel (calcul pur + boîte de dialogue) |
 | `bibliotheque.js` | colonne bibliothèque de modèles | oui |
 | `assemblage.js` | écran Plateau | oui |
 | `editeur-tuile.js` | écran Tuiles | oui |
 | `aide.js` | aide et légende « Commandes » | oui |
 | `app.js` | colle les écrans entre eux | oui |
 
-Règle : les modules « non » ne touchent jamais au DOM, ce qui les rend testables sous Node et réutilisables côté serveur le jour venu.
+Règle : les modules « non » ne touchent jamais au DOM, ce qui les rend testables sous Node et réutilisables côté serveur le jour venu. Les modules « partiel » ont un calcul pur testable sous Node et ne touchent au DOM que pour leur boîte de dialogue ; `PM.dialogue` est défini dans `app.js`.
 
 ## Conventions
 - **Espace de noms global unique** : chaque fichier commence par
   `var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});`
   puis expose son module (`PM.geometrie = { ... }`) et, sous Node, `module.exports`.
 - Les tests chargent les fichiers avec `require('../src/xxx.js')` puis lisent `globalThis.PM`.
-- **Unité interne : le millimètre.** Conversion en pt / px seulement dans `export.js`.
+- **Unité interne : le millimètre.** Conversion en pt / px dans `export.js` ; la conversion px ↔ mm de l'écran se fait aussi dans `assemblage.js` et `editeur-tuile.js`.
 - Code et identifiants en français sans accents ; commentaires en français.
 - Les fonctions de modification du document (`poserTuile`, `poserJeton`, …) sont **pures** et **lèvent une `Error`** si l'action est refusée ; l'interface appelle d'abord `peutPoser…`.
 - Dans une chaîne JS entre apostrophes droites, une apostrophe française casse la syntaxe : utiliser `’`, puis `node --check`.
@@ -60,6 +60,8 @@ Règle : les modules « non » ne touchent jamais au DOM, ce qui les rend testab
 - Recettes navigateur manuelles : `outils/recette-interface.html`, `outils/recette-p2.html` (procédure dans `CLAUDE.md`).
 
 ## Où lire ensuite
+Encore en vigueur malgré l'archivage : `archives/2` (conventions côtés / coins, D3 / D4 / D10), `archives/6` (prépresse, palette), `archives/16` (critère d'équilibre), `archives/11` (B1 sécurité, I1, I2).
+
 `docs/18-decisions-v2.md` (prioritaire), `docs/10-contrats-interface.md` (montage, état partagé, interactions), `docs/25-travail-restant.md`.
 
 ## Évolution prévue (non engagée)

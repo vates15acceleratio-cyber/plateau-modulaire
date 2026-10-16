@@ -74,12 +74,12 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
    * `camp` ('vert' | 'rouge' | 'neutre') ajoute la couleur et une forme propre au camp.
    */
   function caseApparition(c, p, r, camp) {
-    var cote = r * Math.SQRT2 - 1.2, h = cote / 2, s = [];
+    var cote = r * Math.SQRT2 - 3, h = cote / 2, s = [];
     var couleur = camp === 'vert' ? COULEURS.vert : camp === 'rouge' ? COULEURS.rouge : camp === 'neutre' ? COULEURS.neutre : COULEURS.noir;
     s.push('<circle cx="' + f(p.x) + '" cy="' + f(p.y) + '" r="' + f(r) + '" fill="' + COULEURS.blanc +
       '" stroke="' + COULEURS.noir + '" stroke-width="0.6" data-case="' + echapper(c.id) + '"/>');
     s.push('<rect x="' + f(p.x - h) + '" y="' + f(p.y - h) + '" width="' + f(cote) + '" height="' + f(cote) + '" fill="none" stroke="' + couleur +
-      '" stroke-width="' + (camp ? 1.2 : 0.6) + '"' + (camp === 'neutre' ? ' stroke-dasharray="1.5 1.5"' : '') + ' data-apparition="' + (camp || 'impression') + '"/>');
+      '" stroke-width="' + (camp ? 1.2 : 1.0) + '"' + (camp === 'neutre' ? ' stroke-dasharray="1.5 1.5"' : '') + ' data-apparition="' + (camp || 'impression') + '"/>');
     if (camp === 'vert' || camp === 'rouge') {
       var t = h * 0.6, sens = camp === 'vert' ? -1 : 1; // pointe vers le camp : nord pour le vert, sud pour le rouge
       s.push('<path d="M' + f(p.x) + ' ' + f(p.y + sens * t) + ' L' + f(p.x + t) + ' ' + f(p.y - sens * t * 0.7) + ' L' + f(p.x - t) + ' ' +
@@ -117,7 +117,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     if (gabarit) gabarit.coinsInterieurs.forEach(function (k) { s.push(quartJonction(k, rot, fp, F)); });
     (m && Array.isArray(m.cases) ? m.cases : []).forEach(function (c) {
       if (!c || typeof c !== 'object' || typeof c.x !== 'number' || typeof c.y !== 'number') return;
-      var p = F.tournerPoint({ x: c.x, y: c.y }, rot), r = (c.diametre || F.DIAMETRE_CASE_MAX) / 2;
+      var p = F.tournerPoint({ x: c.x, y: c.y }, rot), r = (c.diametre || F.DIAMETRE_CASE) / 2;
       if (c.type === 'apparition') {
         s.push(caseApparition(c, p, r, camp));
       } else {
