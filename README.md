@@ -21,7 +21,7 @@ Ouvrir `index.html` dans un navigateur récent (Chrome, Edge, Firefox). Aucune i
 - Deux joueurs, **vert** (nord) et **rouge** (sud) : les 2 rangées les plus proches de chaque joueur lui appartiennent.
 - **Toutes les tuiles du pourtour** (bords et coins) portent une case d'apparition, imprimée neutre et colorée à l'écran selon le camp. Les coins ont un raccourci vers la tuile de bord voisine.
 - **7 villes**, sous forme de jetons posés aux jonctions de 4 tuiles ; les autres jonctions sont des cases chemin. Au moins 3 cases entre deux villes. On s'arrête dans une ville (elle ne se traverse pas).
-- Catalogue de 14 modèles (22 tuiles) : 6 centrales, 5 modèles de bord (10 tuiles), 3 modèles de coin (6 tuiles).
+- Catalogue 4×4 de 13 modèles (22 tuiles à imprimer) : 6 centrales, 5 modèles de bord, 2 modèles de coin (K2, K4) ; aucune case en impasse. Chaque modèle se pose autant de fois qu'on veut ; le coin se pose dans un coin, le bord sur un bord, la centrale au centre.
 - Équilibre mesuré depuis les cases d'apparition de chaque camp : blocage si « 5 villes contre 2 » ou écart de plus de 3 cases entre joueurs ; alerte au-delà de 2 cases d'écart ou si le score d'équilibre atteint 5.
 - Couleurs d'impression : vert, rouge, noir, blanc, avec des codes de forme lisibles sans la couleur.
 
@@ -50,7 +50,7 @@ Les pages `outils/recette-interface.html` et `outils/recette-p2.html` jouent des
 
 ## État
 
-Version 2.00.0 : règles de la version 2 sur la grille 4×4 (grilles pleines, apparitions sur tout le pourtour, jonctions-cases, tuiles et pose libres, nouveau catalogue). Un document de la version 1 se rouvre converti, et le nouveau catalogue est proposé. À venir : le format 5×5. Restent à valider en conditions réelles : une impression et la mesure de la barre de 100 mm à la règle, l'usage au doigt sur tablette, et l'équilibre ressenti en parties réelles.
+Version 3.00.0 : règles de la version 2 sur la grille 4×4 (grilles pleines, apparitions sur tout le pourtour, jonctions-cases, tuiles libres, nouveau catalogue), poses illimitées, bibliothèque élargie, choix de la grille au bouton « Nouveau ». Un document de la version 1 se rouvre converti, et le nouveau catalogue est proposé. À venir : le catalogue 5×5 (l'interface 5×5 est prête). Restent à valider en conditions réelles : une impression et la mesure de la barre de 100 mm à la règle, l'usage au doigt sur tablette, et l'équilibre ressenti en parties réelles.
 
 ## Droits
 
