@@ -58,7 +58,7 @@ function distPointPolyligne(p, P) {
  * (lien = segment ; raccord = amorce perpendiculaire de 10 mm puis segment ; port = amorce de 28 mm
  * sur la bissectrice puis segment).
  */
-function traces(m) { return R.tracesModele(m); }
+function traces(m, format) { return R.tracesModele(m, format || '4x4'); }
 
 /** Retire d'un tracé la partie couverte par ses cases d'extrémité (rayon + 4 mm pour la case commune). */
 function rogner(t, commun) {
@@ -73,14 +73,15 @@ function rogner(t, commun) {
 }
 
 /**
- * Contrôles de tracé anticipant la règle « chevauchement chemin / case » :
+ * Contrôles de tracé (format 4×4 par défaut, ou `format` : '5x5') anticipant la règle « chevauchement chemin / case » :
  *  - un chemin reste à r + 4 mm au moins des cases qui ne sont pas ses extrémités ;
  *  - un chemin (hors son propre port) reste à 24 mm au moins de chaque coin (zone du jeton + 4 mm) ;
  *  - deux chemins ne se touchent pas (axes à 8 mm au moins), hors des disques de leurs cases
  *    (la case commune à deux chemins est élargie de 4 mm : les chemins peuvent s'y rejoindre).
  */
-function problemesTrace(m) {
-  const pb = [], ts = traces(m);
+function problemesTrace(m, format) {
+  const F = G.format(format || '4x4');
+  const pb = [], ts = traces(m, F);
   for (const t of ts) {
     for (const c of m.cases) {
       if (t.cases.includes(c)) continue;
@@ -89,15 +90,15 @@ function problemesTrace(m) {
     }
     for (let k = 0; k < 4; k++) {
       if (t.type === 'port' && t.coin === k) continue;
-      const d = distPointPolyligne(G.pointCoin(k), t.pts);
-      if (d < G.RAYON_ZONE_COIN + 4 - 1e-9) pb.push(`${m.id} ${t.id} entre dans la zone du coin ${k} (${d.toFixed(1)} mm)`);
+      const d = distPointPolyligne(F.pointCoin(k), t.pts);
+      if (d < F.RAYON_ZONE_COIN + 4 - 1e-9) pb.push(`${m.id} ${t.id} entre dans la zone du coin ${k} (${d.toFixed(1)} mm)`);
     }
   }
   for (let i = 0; i < ts.length; i++) {
     for (let j = i + 1; j < ts.length; j++) {
       const commun = ts[i].cases.find((c) => ts[j].cases.includes(c));
       const d = distPolylignes(rogner(ts[i], commun), rogner(ts[j], commun));
-      if (d < G.LARGEUR_CHEMIN - 1e-9) pb.push(`${m.id} ${ts[i].id} et ${ts[j].id} se touchent (${d.toFixed(1)} mm)`);
+      if (d < F.LARGEUR_CHEMIN - 1e-9) pb.push(`${m.id} ${ts[i].id} et ${ts[j].id} se touchent (${d.toFixed(1)} mm)`);
     }
   }
   return pb;
@@ -293,7 +294,7 @@ test('variété : aucune centrale n\'est la copie tournée d\'une autre, aucun d
 });
 
 test('tracés : pas de chemin sur une case, dans une zone de coin, ou contre un autre chemin', () => {
-  const pb = [].concat(...CAT.modeles.map(problemesTrace));
+  const pb = [].concat(...CAT.modeles.map((m) => problemesTrace(m, '4x4')));
   assert.deepStrictEqual(pb, []);
 });
 
@@ -647,4 +648,11 @@ test('nouveauDocument : le catalogue se pose à plein sans erreur, apparitions c
   const e = GR.equilibre(doc, { jetons: MS.PAIRES[0].jetons });
   assert.strictEqual(e.complet, true);
   assert.deepStrictEqual(e.apparitions, { 1: 6, 2: 6 });
+});
+
+test('nouveauDocument : la grille 4×4 est celle par défaut, modeles est le catalogue 4×4 de modelesParGrille, grille inconnue refusée', () => {
+  assert.strictEqual(CAT.modelesParGrille['4x4'], CAT.modeles);
+  assert.deepStrictEqual(CAT.nouveauDocument('4x4').modeles, JSON.parse(JSON.stringify(CAT.modeles)));
+  assert.strictEqual(CAT.nouveauDocument('5x5').grille, '5x5');   // catalogue 5×5 : tests/catalogue-5x5.test.js
+  assert.throws(() => CAT.nouveauDocument('3x3'), /Grille inconnue/);
 });
