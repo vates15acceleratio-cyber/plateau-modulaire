@@ -95,7 +95,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       if (!estObjet(c) || !nombre(c.x) || !nombre(c.y) || (c.diametre !== undefined && !nombre(c.diametre))) return null;
       var n = { id: texteOuNul(c.id), x: c.x, y: c.y };
       if (c.diametre !== undefined) n.diametre = c.diametre;
-      if (typeof c.type === 'string') n.type = c.type;
+      if (typeof c.type === 'string') n.type = c.type.slice(0, LIMITES.texte); // audit v2, M2
       return n;
     }
     function normaliserExtremite(e) {
@@ -123,7 +123,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     if (tronques) ignores += tronques;
     if (ignores) alertes.push(erreur('elements_ignores', 'Le modèle « ' + libelle + ' » : ' + ignores + ' case(s) ou chemin(s) mal formé(s) ignoré(s).'));
     var m = {
-      id: brut.id, nom: nom.slice(0, LIMITES.texte), gabarit: gabaritLu(brut),
+      id: typeof brut.id === 'string' ? brut.id.slice(0, LIMITES.texte) : brut.id, nom: nom.slice(0, LIMITES.texte), gabarit: gabaritLu(brut),
       grille: FORMATS.indexOf(brut.grille) >= 0 ? brut.grille : grille, exemplaires: exemplaires, cases: cases, chemins: chemins
     };
     if (!M.validerModele(m, grille).complet) {
@@ -169,7 +169,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       alertes.push(erreur('tuile_ignoree', 'Une tuile posée mal formée a été ignorée.'));
       return null;
     }
-    return { modeleId: brut.modeleId, col: brut.col, lig: brut.lig, rot: estEntier(brut.rot) ? brut.rot : 0 };
+    return { modeleId: brut.modeleId.slice(0, LIMITES.texte), col: brut.col, lig: brut.lig, rot: estEntier(brut.rot) ? brut.rot : 0 };
   }
 
   /** Jeton lu : une ville ; un carrefour de la version 1 est retiré (compté dans `conversion`), sans alerte propre. */
@@ -236,7 +236,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       return { ok: false, erreurs: [erreur('format', 'Ce fichier n\'est pas un fichier Plateau modulaire (format inconnu).')] };
     }
     if (VERSIONS_LUES.indexOf(objet.version) < 0) {
-      return { ok: false, erreurs: [erreur('version', 'Version de fichier absente ou inconnue : ' + String(objet.version) + '.')] };
+      return { ok: false, erreurs: [erreur('version', 'Version de fichier absente ou inconnue : ' + String(objet.version).slice(0, 40) + '.')] };
     }
     if (objet.grille !== undefined && FORMATS.indexOf(objet.grille) < 0) {
       return { ok: false, erreurs: [erreur('grille', 'Format de grille inconnu : ' + String(objet.grille).slice(0, LIMITES.texte) + '.')] };
@@ -390,6 +390,10 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       }
 
       function lireFichier(fichier) {
+        if (fichier && fichier.size > LIMITES.octets) { // audit v2, M3 : avant la lecture
+          finir(echecLecture('trop_gros', 'Le fichier est trop volumineux (plus de ' + Math.round(LIMITES.octets / 1e6) + ' Mo) pour être un plateau.'));
+          return;
+        }
         var lecteur = new FileReader();
         lecteur.onload = function () { finir(depuisJSON(String(lecteur.result))); };
         lecteur.onerror = function () { finir(echecLecture('lecture', 'Lecture du fichier impossible.')); };

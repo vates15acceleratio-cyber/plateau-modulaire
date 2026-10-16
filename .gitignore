@@ -29,3 +29,13 @@ ehthumbs.db
 *.sqlite3
 *.log
 npm-debug.log*
+
+# Prudence (audit v2)
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.p12
+bin/
+obj/
+build/

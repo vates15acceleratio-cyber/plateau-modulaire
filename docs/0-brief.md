@@ -93,7 +93,7 @@ Boardgame Lab (boardgamelab.app) a été écarté : l'application n'est pas sort
 - **Forme des tuiles : on part de formes de base** (pas de dessin point par point).
 - **Valeurs par défaut de la section 7 (questions 2 à 5) : acceptées.**
 - **Équipe d'agents complète dès le départ.**
-- **Dossier de travail : `C:\Users\EQC\Documents\Claude\PlateauModulaire`.**
+- **Dossier de travail : `<dossier du projet>`.**
 - **Villes : version B retenue** (`docs/1b-avis-design-jeu-variante-jonctions.md`) : grille 4×4 de tuiles de 12 cm, villes = jetons de 3 cm posés sur les 9 jonctions intérieures (7 villes + 2 carrefours). La version A (`docs/1-avis-design-jeu.md`) est écartée.
 - **Écart entre captures : 3 pas** (au moins 2 cases intermédiaires), confirmé par l'utilisateur ; paramètre réglable.
 - **Forme du plateau : 4×4 complet, ou 4×4 avec 1 ou 2 coins retirés** (confirmé par l'utilisateur ; remplace les modes rectangle / silhouette libre).

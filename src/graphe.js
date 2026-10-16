@@ -100,7 +100,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       x.e.raccords.forEach(function (r) {
         var d = G.coteVoisin(r.cote), f = G.raccordEnFace(r.cote, r.pos);
         var autre = parRaccord.get((x.t.col + d.dc) + ',' + (x.t.lig + d.dl) + ',' + f.cote + ',' + f.pos);
-        if (autre) lier(r.caseId, autre);
+        // Un modèle invalide peut désigner une case absente : on ignore ce raccord (audit v2, M1).
+        if (autre && voisins.has(r.caseId) && voisins.has(autre)) lier(r.caseId, autre);
       });
       x.e.ports.forEach(function (p) {
         var id = idJonction(p.i, p.j);

@@ -251,7 +251,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     var F = M.formatDuDocument(doc), f = FORMATS[nomFormat], marges = margesFormat(nomFormat, F), pas = pasPlanche(F);
     var liste = listeTuiles(doc, options).tuiles;
     var parPlanche = f.colonnes * f.lignes, nbPlanches = Math.ceil(liste.length / parPlanche);
-    var exemplairesDe = {};
+    var exemplairesDe = Object.create(null);
     tab(doc && doc.modeles).forEach(function (m) { if (m) exemplairesDe[m.id] = M.exemplairesValides(m); });
     var planches = [];
     for (var p = 0; p < nbPlanches; p++) {
