@@ -36,7 +36,7 @@ Socle commun écrit par l'orchestrateur (ne pas modifier) : `index.html`, `style
 - Couleurs d'impression (vert / rouge / noir / blanc) pour les tuiles et jetons ; l'interface peut utiliser les variables CSS de `base.css` (`--pm-accent`, `--pm-alerte`, `--pm-erreur`…).
 
 ## Fichiers par module (périmètre d'écriture)
-Chaque sous-agent écrit **seulement** : son `src/<module>.js`, sa feuille `styles/<module>.css` (classes préfixées `pm-<module>-`), son fichier de tests `tests/<module>.test.js`, et une page d'essai `outils/essai-<module>.html` qui monte son module seul (avec `PM.catalogue.nouveauDocument()`). Jamais `index.html`, `app.js`, `base.css`, `etat.js`, `rendu.js`, `modele.js`, ni les fichiers d'un autre module.
+Chaque sous-agent écrit **seulement** : son `src/<module>.js`, sa feuille `styles/<module>.css` (classes préfixées `pm-<module>-`), son fichier de tests `tests/<module>.test.js`, et une page d'essai `outils/essai-<module>.html` qui monte son module seul (avec `PM.catalogue.nouveauDocument()`, ou `PM.catalogue.nouveauDocument('5x5')` pour le catalogue 5×5). Jamais `index.html`, `app.js`, `base.css`, `etat.js`, `rendu.js`, `modele.js`, ni les fichiers d'un autre module.
 
 ## Vérifications à faire par chaque sous-agent
 1. `node --test tests/<module>.test.js` (seulement son fichier : les autres modules sont en cours d'écriture et peuvent être rouges).

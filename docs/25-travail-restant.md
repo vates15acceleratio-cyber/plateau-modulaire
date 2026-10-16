@@ -1,23 +1,29 @@
 # Travail restant et idées à étudier (point d'arrêt du 2026-10-16)
 
-L'utilisateur a marqué une pause ; il reprendra **après discussion**. Rien ne doit être lancé sans son accord. État au moment de l'arrêt : version 3.01.0 (voir `CHANGELOG.md`), tout est sur GitHub, `node --test` et les deux recettes navigateur passent.
+L'utilisateur a marqué une pause ; il reprendra **après discussion**. Rien ne doit être lancé sans son accord. État au moment de l'arrêt : version 3.02.0 (voir `CHANGELOG.md`), tout est sur GitHub, `node --test` et les deux recettes navigateur passent.
 
 ## 1. À faire (dans l'ordre prévu)
 
-### 1.1 Catalogue 5×5 — en pause, attend le feu vert de l'utilisateur
-- L'interface 5×5 est prête (bouton « Nouveau », choix de la grille, rangée neutre, refus de mélange, export en tuiles de 100 mm, générateur en tirage libre) ; **il manque le catalogue** : « Nouveau → 5×5 » est refusé tant qu'il n'existe pas.
-- Consigne prête (voir l'historique de la session) : environ 30 modèles, **≈ 75 cases par plateau**, cases Ø 20 (décision du 2026-10-16, docs/18), raccords à 30 / 50 / 70 mm, cases d'apparition sur tout le pourtour, raccourcis de coin, **aucune poche**, coins dans l'esprit de K2 / K4, règles R1 à R4 respectées, écart minimal de 4 pas entre jonctions vérifié sur 1000 plateaux ; exposer `PM.catalogue.nouveauDocument('5x5')` et `PM.catalogue.modelesParGrille`.
-- Mesures à faire (1000 plateaux, docs/22 §5) puis rapport de mesures dans `docs/` (prochain numéro libre ; le n° 24 est le cahier des charges `docs/24-catalogue-5x5.md`) : cases, S, écart par rang, « 5 contre 2 », « 4 contre 3 », tempo, pourtour, goulets, raccords morts, meilleurs placements des villes / jonctions-cases.
-- Brouillon inachevé d'un premier essai (règles plus anciennes : poches permises, coins K1 / K3) : `docs/brouillons/catalogue-5x5-inacheve.patch` — à consulter seulement, **ne pas l'appliquer tel quel**.
+### 1.1 Catalogue 5×5 — fait (branche `catalogue-5x5`)
+- **Fait** : cahier des charges et arbitrage (`docs/24`), avis design et géométrie (`docs/28`, `docs/29`), catalogue de 6 modèles et 30 tuiles (K2 5, B1 6, B7 4, B7m 4, C7 6, C8 5) dans `src/catalogue.js`, recette (`docs/32`), revue (`docs/33`). « Nouveau → 5×5 » crée un plateau ; la pose à la main est utilisable.
+- ~~Ancienne consigne au sous-agent~~ (environ 30 modèles, coins K1 / K3, etc.) : **obsolète**, remplacée par `docs/24` § 8.
+- ~~Brouillon inachevé `docs/brouillons/catalogue-5x5-inacheve.patch`~~ (règles plus anciennes : poches permises, coins K1 / K3) : **obsolète**, ne pas l'appliquer.
 
-### 1.2 Seuils et placement par défaut du 5×5
-- L'advisor design de jeu valide les seuils d'équilibre 5×5 et le placement par défaut des jonctions-cases (équivalent de la rangée centrale du 4×4), puis le générateur les applique (`pairesJonctionsCases` renvoie aujourd'hui `null` en 5×5).
+### 1.2 Générateur 5×5, mesures, seuils (à faire, dans cet ordre)
+1. **Générateur 5×5** (provisoire aujourd'hui : villes tirées librement, centrales tournées au hasard, jonctions mal reliées en simple pénalité). Il doit :
+   - **orienter les centrales** (pas de rotation au hasard) ;
+   - imposer **5 ou 6 B1** (cases = 72 + nB1, ports = 34 + nB1 avec 4 K2 et 9 centrales à 3 cases), avec les B1 de préférence sur la rangée neutre ;
+   - placer les **villes en 2-3-2** sur des jonctions à au moins 3 ports ;
+   - faire de « **au moins 2 ports par jonction** » une condition de **rejet**, et non plus une pénalité ;
+   - `pairesJonctionsCases` renvoie aujourd'hui `null` en 5×5 (placement par défaut des jonctions-cases à définir).
+2. **Mesures sur 1000 plateaux** : les 12 points de `docs/28`, puis rapport de mesures dans `docs/` (prochain numéro libre).
+3. **Seuils d'équilibre 5×5** : validés par l'advisor design de jeu, puis appliqués.
 
 ### 1.3 Seuils du 4×4 à revoir
 - Les mesures ont changé avec le tirage avec répétition (63 cases ; « 5 contre 2 » 4,1 % ; S ≥ 5 : 4,3 % ; première ville inégale 0,2 % ; goulet à un chemin 0,4 %) : faire revalider les seuils de `src/graphe.js` par l'advisor design de jeu (`docs/21-mesures-catalogue-v2.md`).
 
 ### 1.4 Recette, relecture, sécurité, version
-- Testeur et relecteur sur les derniers ajouts (interface 5×5, retouches du 4×4, suppression des tuiles, légende illustrée, puis catalogue 5×5).
+- Testeur et relecteur sur les derniers ajouts (interface 5×5, retouches du 4×4, suppression des tuiles, légende illustrée). Le catalogue 5×5 est recetté (`docs/32`) et relu (`docs/33`) ; reste la recette du générateur 5×5 une fois fait.
 - Audit de sécurité ciblé sur ces ajouts (le dernier, `docs/23`, porte sur la 2.00.0).
 - Version, puis envoi sur GitHub.
 

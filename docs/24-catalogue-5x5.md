@@ -1,6 +1,6 @@
 # Cahier des charges : catalogue 5×5 (orchestrateur), 2026-10-16
 
-Statut : **projet**, soumis aux advisors géométrie et design de jeu avant toute production. Sources : `18-decisions-v2.md` (prioritaire, dont « Taille des cases »), `19-avis-design-v2.md`, `20-avis-geometrie-v2.md` (D4, D5, cible de cases), `22-avis-seuils-v2.md` § 5, `25-travail-restant.md` § 1.1, catalogue 4×4 `src/catalogue.js`.
+Statut : **arbitré (§ 8), réalisé** (catalogue 5×5 dans `src/catalogue.js`, branche `catalogue-5x5` ; le § 5 est remplacé par le § 8). Historique : projet soumis aux advisors géométrie et design de jeu avant toute production. Sources : `18-decisions-v2.md` (prioritaire, dont « Taille des cases »), `19-avis-design-v2.md`, `20-avis-geometrie-v2.md` (D4, D5, cible de cases), `22-avis-seuils-v2.md` § 5, `25-travail-restant.md` § 1.1, catalogue 4×4 `src/catalogue.js`.
 
 ## 1. Intention de l'utilisateur
 « S'inspirer du 4×4, refaire des tuiles et garder une certaine harmonie. » Le 5×5 est la famille sœur du 4×4 : mêmes noms de familles, mêmes formes reconnaissables, mêmes règles ; seules les cotes et la densité changent.
@@ -39,6 +39,8 @@ Deux répartitions candidates (cases des tuiles, hors 9 jonctions-cases) :
 La répartition A suppose des coins à 2 cases (apparition + case à port), c'est-à-dire un coin direct comme K1, **retiré par l'utilisateur** (`docs/18` : « K2 est le bon modèle »). L'orchestrateur propose donc **B** : coins K2 / K4 à 3 et 4 cases, et des centrales plus légères, dont deux à 2 cases (une case à port et un relais).
 
 ## 5. Liste provisoire des modèles
+
+> **Remplacé par le § 8** (arbitrage final) : cette liste n'est conservée que pour l'historique.
 
 ### Coins (2 modèles, 5 tuiles)
 | Id | Inspiré de | Cases | Ports | Exemplaires | Premier jet |
@@ -79,6 +81,7 @@ La répartition A suppose des coins à 2 cases (apparition + case à port), c'es
 
 ## 8. Arbitrage (orchestrateur, après avis 28 et 29 et décisions de l'utilisateur, `docs/18`)
 - Retenu : **B′** (78 cases, 40 ports), **K2 seul**, villes par défaut **2-3-2**, pas de C5, aucun raccord latéral hors du raccourci, B7 + B7m.
+- Exemplaires imprimés : **K2 5, B1 6, B7 4, B7m 4, C7 6, C8 5 (30 tuiles)**.
 - La répartition B et la liste du § 5 sont remplacées. Catalogue de départ pour le sous-agent : K2 ; B1, B7, B7m ; C7, C8 (coordonnées validées dans `29-avis-geometrie-5x5.md`). B3, B5, B8, C1, C4, C9 : 0 ou 1 exemplaire au plus, seulement si les mesures le permettent (chacun coûte un port ou des cases).
 - Contradiction entre advisors tranchée par l'utilisateur : l'advisor design de jeu jugeait « ≥ 3 ports aux villes » inatteignable sur son modèle abstrait (catalogue P5, avec C9 et C4) ; l'advisor géométrie le tient avec B′ (recherche sur des poses réelles : 8 jonctions à ≥ 3 ports). À confirmer par les mesures sur 1000 plateaux.
 - Le générateur 5×5 devra : orienter les centrales (pas de rotation au hasard), placer les villes en 2-3-2, garantir ≥ 2 ports par jonction et ≥ 3 aux villes, préférer B1 sur les bords de la rangée neutre.

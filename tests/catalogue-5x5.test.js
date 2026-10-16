@@ -31,59 +31,8 @@ const modele = (id) => C5.find((m) => m.id === id);
 const parGabarit = (g) => C5.filter((m) => m.gabarit === g);
 const copie = (o) => JSON.parse(JSON.stringify(o));
 
-/* ---------------------------- géométrie des tracés ---------------------------- */
-function distPointSegment(p, a, b) {
-  const dx = b.x - a.x, dy = b.y - a.y, l = dx * dx + dy * dy;
-  const t = l ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l)) : 0;
-  return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
-}
-function orient(a, b, c) { return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x); }
-function distSegments(a, b, c, d) {
-  if (orient(a, b, c) * orient(a, b, d) < 0 && orient(c, d, a) * orient(c, d, b) < 0) return 0;
-  return Math.min(distPointSegment(a, c, d), distPointSegment(b, c, d), distPointSegment(c, a, b), distPointSegment(d, a, b));
-}
-function distPolylignes(P, Q) {
-  let m = Infinity;
-  for (let i = 0; i + 1 < P.length; i++) for (let j = 0; j + 1 < Q.length; j++) m = Math.min(m, distSegments(P[i], P[i + 1], Q[j], Q[j + 1]));
-  return m;
-}
-function distPointPolyligne(p, P) {
-  let m = Infinity;
-  for (let i = 0; i + 1 < P.length; i++) m = Math.min(m, distPointSegment(p, P[i], P[i + 1]));
-  return m;
-}
-function rogner(t, commun) {
-  const coupe = (c, vers) => {
-    const r = c.diametre / 2 + (c === commun ? 4 : 0), d = Math.hypot(vers.x - c.x, vers.y - c.y), k = Math.min(1, r / d);
-    return { x: c.x + (vers.x - c.x) * k, y: c.y + (vers.y - c.y) * k };
-  };
-  const pts = t.pts.map((p) => ({ x: p.x, y: p.y }));
-  if (t.type === 'lien') return [coupe(t.cases[0], t.pts[1]), coupe(t.cases[1], t.pts[0])];
-  pts[pts.length - 1] = coupe(t.cases[0], t.pts[t.pts.length - 2]);
-  return pts;
-}
-/** Mêmes contrôles que problemesTrace de tests/catalogue.test.js, au format 5×5 (cotes lues dans G.format('5x5')). */
-function problemesTrace(m) {
-  const pb = [], ts = R.tracesModele(m, F5);
-  for (const t of ts) {
-    for (const c of m.cases) {
-      if (t.cases.includes(c)) continue;
-      const d = distPointPolyligne(c, t.pts);
-      if (d < c.diametre / 2 + 4 - 1e-9) pb.push(`${m.id} ${t.id} passe à ${d.toFixed(1)} mm de ${c.id}`);
-    }
-    for (let k = 0; k < 4; k++) {
-      if (t.type === 'port' && t.coin === k) continue;
-      const d = distPointPolyligne(F5.pointCoin(k), t.pts);
-      if (d < F5.RAYON_ZONE_COIN + 4 - 1e-9) pb.push(`${m.id} ${t.id} entre dans la zone du coin ${k} (${d.toFixed(1)} mm)`);
-    }
-  }
-  for (let i = 0; i < ts.length; i++) for (let j = i + 1; j < ts.length; j++) {
-    const commun = ts[i].cases.find((c) => ts[j].cases.includes(c));
-    const d = distPolylignes(rogner(ts[i], commun), rogner(ts[j], commun));
-    if (d < F5.LARGEUR_CHEMIN - 1e-9) pb.push(`${m.id} ${ts[i].id} et ${ts[j].id} se touchent (${d.toFixed(1)} mm)`);
-  }
-  return pb;
-}
+const { problemesTrace: tracesPb } = require('./aides-trace.js');
+const problemesTrace = (m) => tracesPb(m, '5x5');
 
 const porteuses = (m) => m.chemins.filter((ch) => ch.b.coin !== undefined).map((ch) => ch.a['case']);
 const liens = (m) => m.chemins.filter((ch) => ch.b['case'] !== undefined);
@@ -113,8 +62,6 @@ test('catalogue 5×5 : 30 exemplaires (5 coins, 14 bords, 11 centrales), coordon
   assert.deepEqual([total('coin'), total('bord'), total('centrale')], [5, 14, 11]);
   assert.deepEqual(Object.fromEntries(C5.map((m) => [m.id, m.exemplaires])), { C7: 6, C8: 5, B1: 6, B7: 4, B7m: 4, K2: 5 });
   assert.equal(C5.reduce((s, m) => s + m.exemplaires, 0), 30);
-  // de quoi remplir 4 coins, 12 bords et 9 centrales
-  assert.ok(total('coin') >= 4 && total('bord') >= 12 && total('centrale') >= 9);
   const pos = (m) => Object.fromEntries(m.cases.map((c) => [c.id, [c.x, c.y]]));
   assert.deepEqual(pos(modele('K2')), { a: [32, 32], r: [53, 53], c1: [74, 74] });
   assert.deepEqual(pos(modele('B1')), { a: [50, 40], c1: [82, 66], c2: [18, 66] });
@@ -124,10 +71,8 @@ test('catalogue 5×5 : 30 exemplaires (5 coins, 14 bords, 11 centrales), coordon
   assert.deepEqual(pos(modele('C8')), { c0: [50, 50], c1: [28, 28], c2: [72, 28] });
 });
 
-test('catalogue 5×5 : nombre de cases par tuile (K2, B1, C7, C8 : 3 ; B7, B7m : 2), 69 cases pour un plateau plein', () => {
+test('catalogue 5×5 : nombre de cases par tuile (K2, B1, C7, C8 : 3 ; B7, B7m : 2)', () => {
   assert.deepEqual(Object.fromEntries(C5.map((m) => [m.id, m.cases.length])), { C7: 3, C8: 3, B1: 3, B7: 2, B7m: 2, K2: 3 });
-  // 4 coins + 6 B1 + 6 B7 / B7m + 9 centrales (+ 9 jonctions-cases = 78)
-  assert.equal(4 * 3 + 6 * 3 + 6 * 2 + 9 * 3, 69);
 });
 
 test('catalogue 5×5 : aucune erreur ni alerte de validerModele(m, 5x5) ; aucune poche, par la règle et par un calcul indépendant', () => {
@@ -135,7 +80,6 @@ test('catalogue 5×5 : aucune erreur ni alerte de validerModele(m, 5x5) ; aucune
     const v = M.validerModele(m, '5x5');
     assert.deepEqual(v.erreurs, [], m.id);
     assert.deepEqual(v.alertes, [], m.id);
-    assert.ok(!v.alertes.some((a) => a.code === 'poche'), m.id);
     for (const c of m.cases.filter((x) => x.type !== 'apparition')) {
       const touches = m.chemins.filter((ch) => ch.a['case'] === c.id || ch.b['case'] === c.id);
       const sorties = touches.filter((ch) => ch.b['case'] === undefined || ch.a['case'] === undefined);
@@ -305,7 +249,7 @@ test('API : modeles reste le 4×4 ; modelesParGrille gelé { 4x4, 5x5 }', () => 
   assert.equal(CAT.modelesParGrille['4x4'], CAT.modeles);
   assert.deepEqual(Object.keys(CAT.modelesParGrille), ['4x4', '5x5']);
   assert.ok(Object.isFrozen(CAT.modelesParGrille) && Object.isFrozen(C5));
-  assert.ok(Object.isFrozen(C5[0].cases[0]) && Object.isFrozen(C5[0].chemins[0].b));
+  assert.ok(Object.isFrozen(modele('C7').cases[0]) && Object.isFrozen(modele('C7').chemins[0].b));
   assert.ok(CAT.modeles.every((m) => m.grille === '4x4'));
 });
 
@@ -316,9 +260,9 @@ test('nouveauDocument(\'5x5\') : document 5×5 vide avec une copie modifiable de
   assert.deepEqual(doc.plateau, M.nouveauDocument('5x5').plateau);
   assert.deepEqual(doc.modeles, copie(C5));
   doc.modeles.forEach((m) => assert.deepEqual(M.validerModele(m, '5x5').erreurs, []));
-  doc.modeles[0].cases[0].x = 1;
+  M.modeleParId(doc, 'C7').cases[0].x = 1;
   doc.modeles.pop();
-  assert.equal(C5[0].cases[0].x, 50);
+  assert.equal(modele('C7').cases[0].x, 50);
   assert.equal(C5.length, 6);
   assert.notEqual(CAT.nouveauDocument('5x5').modeles, CAT.nouveauDocument('5x5').modeles);
   assert.equal(CAT.nouveauDocument().grille, '4x4');
@@ -339,7 +283,7 @@ test('interface : documentPourGrille(\'5x5\') accepte le document du catalogue ;
   assert.equal(PM.nouveau.documentPourGrille('7x7').ok, false);
   // la bibliothèque reconnaît les modèles livrés de chaque grille
   assert.equal(PM.bibliotheque.estTuileUtilisateur(r.doc, 'K2'), false);
-  const ajoute = M.ajouterModele(r.doc, Object.assign(copie(C5[0]), { id: 'Z9' }));
+  const ajoute = M.ajouterModele(r.doc, Object.assign(copie(modele('C7')), { id: 'Z9' }));
   assert.equal(PM.bibliotheque.estTuileUtilisateur(ajoute, 'Z9'), true);
 });
 
@@ -398,7 +342,6 @@ test('plateau 5×5 complet : 78 cases (69 des tuiles + 9 jonctions-cases), 40 po
   assert.equal(Math.max(...ports), 3);
   // chaque ville (2-3-2) a au moins 3 ports
   for (const j of g.jonctions.filter((x) => x.type === 'ville')) assert.ok(j.ports >= 3, `ville (${j.i},${j.j})`);
-  assert.deepEqual([1, 2, 3, 4].map((r) => VILLES.filter(([, j]) => j === r).length), [2, 1, 2, 2]); // rangées 2 et 3 : 3 villes
   // même décompte par PM.modele.portsJonction (indépendant du graphe)
   for (const j of g.jonctions) assert.equal(M.portsJonction(doc, j.i, j.j).ports, j.ports, `(${j.i},${j.j})`);
   assert.ok(GR.connexe(g));
@@ -501,8 +444,7 @@ test('chaîne : annuler / rétablir sur un document 5×5 (pose, remplacement), g
   etat.annuler();
   assert.equal(etat.doc().grille, '5x5');
   assert.equal(etat.doc().plateau.tuiles.length, 3);
-  assert.equal(C5.length, 6);
-  assert.equal(C5[5].cases[0].x, 32);
+  assert.equal(modele('K2').cases[0].x, 32);
 });
 
 test('chaîne : PM.controles.calculer sur le plateau 5×5 complet (7 villes) : aucune erreur ni alerte, compteurs 5×5 à leur cible', () => {
@@ -627,19 +569,20 @@ test('nouveauDocument : copies indépendantes entre elles, du catalogue gelé et
   const a = CAT.nouveauDocument('5x5'), b = CAT.nouveauDocument('5x5'), c4 = CAT.nouveauDocument('4x4');
   const instantane = JSON.stringify(C5);
   const instantane4 = JSON.stringify(CAT.modelesParGrille['4x4']);
-  for (const [i, m] of a.modeles.entries()) {
-    assert.notEqual(m, b.modeles[i]); assert.notEqual(m, C5[i]);
-    assert.notEqual(m.cases, b.modeles[i].cases); assert.notEqual(m.cases[0], C5[i].cases[0]);
-    assert.notEqual(m.chemins, C5[i].chemins); assert.notEqual(m.chemins[0].b, C5[i].chemins[0].b);
+  for (const m of a.modeles) {
+    const mb = M.modeleParId(b, m.id), mc = modele(m.id);
+    assert.notEqual(m, mb); assert.notEqual(m, mc);
+    assert.notEqual(m.cases, mb.cases); assert.notEqual(m.cases[0], mc.cases[0]);
+    assert.notEqual(m.chemins, mc.chemins); assert.notEqual(m.chemins[0].b, mc.chemins[0].b);
     assert.ok(!Object.isFrozen(m) && !Object.isFrozen(m.cases) && !Object.isFrozen(m.cases[0]), m.id + ' : copie gelée');
   }
   assert.notEqual(a.plateau, b.plateau);
   assert.notEqual(a.plateau.tuiles, b.plateau.tuiles);
-  a.modeles[0].cases[0].x = 1; a.modeles[0].nom = 'X'; a.modeles[0].chemins.length = 0; a.modeles[1].exemplaires = 99;
+  const a7 = M.modeleParId(a, 'C7'); a7.cases[0].x = 1; a7.nom = 'X'; a7.chemins.length = 0; M.modeleParId(a, 'C8').exemplaires = 99;
   a.plateau.tuiles.push({ modeleId: 'K2', col: 0, lig: 0, rot: 0 }); a.plateau.jetons.push({ i: 1, j: 1, type: 'capture' });
-  assert.equal(b.modeles[0].cases[0].x, 50);
-  assert.equal(b.modeles[0].nom, 'Pont');
-  assert.equal(b.modeles[1].exemplaires, 5);
+  assert.equal(M.modeleParId(b, 'C7').cases[0].x, 50);
+  assert.equal(M.modeleParId(b, 'C7').nom, 'Pont');
+  assert.equal(M.modeleParId(b, 'C8').exemplaires, 5);
   assert.deepEqual(b.plateau, { tuiles: [], jetons: [] });
   assert.deepEqual(CAT.nouveauDocument('5x5').plateau, { tuiles: [], jetons: [] });
   assert.equal(JSON.stringify(C5), instantane);
@@ -654,8 +597,8 @@ test('nouveauDocument : copies indépendantes entre elles, du catalogue gelé et
 test('nouveauDocument : un document réouvert via JSON reste indépendant du catalogue ; les changements purs ne touchent pas l\'original', () => {
   const doc = CAT.nouveauDocument('5x5');
   const r = PM.sauvegarde.depuisJSON(PM.sauvegarde.versJSON(doc));
-  r.doc.modeles[2].cases[0].x = 3;
-  assert.equal(C5[2].cases[0].x, 50);
+  M.modeleParId(r.doc, 'B1').cases[0].x = 3;
+  assert.equal(modele('B1').cases[0].x, 50);
   const apres = M.changerExemplaires(doc, 'K2', 9);
   assert.equal(M.modeleParId(apres, 'K2').exemplaires, 9);
   assert.equal(M.modeleParId(doc, 'K2').exemplaires, 5);

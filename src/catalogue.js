@@ -1,7 +1,8 @@
 /*
  * catalogue.js : catalogues des tuiles des formats 4×4 et 5×5, version 2 (orientation canonique, mm).
- * Le catalogue 5×5 (répartition B′, docs/18 « Décisions de l'utilisateur pour le catalogue 5×5 », docs/24 § 8, coordonnées
- * validées dans docs/29) est décrit plus bas ; PM.catalogue.modeles reste le catalogue 4×4 décrit ici.
+ * Le texte de cet en-tête décrit le catalogue 4×4 (PM.catalogue.modeles, testé par tests/catalogue.test.js). Le catalogue 5×5
+ * (répartition B′, docs/18 « Décisions de l’utilisateur pour le catalogue 5×5 », docs/24 § 8, coordonnées validées dans docs/29 ;
+ * tests/catalogue-5x5.test.js) est décrit plus bas ; les deux sont servis par PM.catalogue.modelesParGrille.
  * Aucun accès au DOM. Règles : docs/18-decisions-v2.md, docs/19-avis-design-v2.md (R1 à R4, § 5),
  * docs/20-avis-geometrie-v2.md (cotes, D5 raccourci de coin) ; mesures : docs/21-mesures-catalogue-v2.md.
  *
@@ -12,9 +13,9 @@
  *  - 2 modèles de coin K2 (4 exemplaires) et K4 (1 exemplaire), 3 ou 4 cases, une case d'apparition ; K1 (direct, une seule
  *    case avant la jonction) et K3 (poche) sont retirés, K4 est la seule autre forme de coin qui respecte tout (voir K4).
  *  Aucun modèle n'a de poche (case en impasse, alerte `poche` de validerModele).
- *  Environ 60 à 63 cases par plateau (cases des 16 tuiles + 2 jonctions-cases), voir tests/catalogue.test.js.
+ *  Environ 60 à 63 cases par plateau 4×4 (cases des 16 tuiles + 2 jonctions-cases), voir tests/catalogue.test.js.
  *
- * Règles que tous les modèles respectent (aucune erreur ni alerte de PM.modele.validerModele) :
+ * Règles que tous les modèles (4×4 et 5×5) respectent (aucune erreur ni alerte de PM.modele.validerModele) :
  *  - R1 une case porte au plus un port de coin ; R2 deux cases porteuses ne sont jamais reliées directement ;
  *  - R3 aucun raccord latéral sur une case porteuse ; R4 la case d'apparition ne porte jamais de port.
  *  Conséquence : sur tout trajet ville - ville, case porteuse, case sans port, case porteuse :
@@ -41,7 +42,7 @@
  *
  * Tracés : segments droits, amorce perpendiculaire de 10 mm à chaque raccord, amorce de 28 mm sur la
  * bissectrice à chaque port ; à 14 mm au moins des autres cases, 24 mm des coins (sauf le port), sans
- * contact entre chemins (contrôlé par tests/catalogue.test.js).
+ * contact entre chemins (contrôlé par tests/catalogue.test.js et tests/catalogue-5x5.test.js, via tests/aides-trace.js).
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
 
@@ -162,14 +163,16 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   }
 
   /*
-   * Catalogue 5×5 (tuiles de 100 mm, positions de raccord 30 / 50 / 70, cases Ø 20), répartition B′ : 30 tuiles, 78 cases
-   * environ par plateau avec 9 jonctions-cases, 40 ports. Coordonnées de docs/29 (marge de tracé >= 2,7 mm).
+   * Catalogue 5×5 (tuiles de 100 mm, positions de raccord 30 / 50 / 70, cases Ø 20), répartition B′ : 30 tuiles. « 78 cases, 40 ports »
+   * est la pose de référence avec 6 B1 et 9 jonctions-cases. Le nombre de B1 posés (nB1) change le décompte : avec 4 K2 et 9 centrales
+   * à 3 cases, cases = 72 + nB1 et ports = 34 + nB1 ; la garantie de 39 ports au moins impose nB1 >= 5 et les 6 B1 imprimés nB1 <= 6 :
+   * le générateur 5×5 devra imposer 5 ou 6 B1. Coordonnées de docs/29 (marge de tracé >= 2,7 mm).
    *  - 1 coin K2 (5 exemplaires) ; K4 est écarté (trop serré dans 100 mm) ;
    *  - 3 bords B1 « en V » (6), B7 « simple » (4, port SE) et son miroir B7m (4, port SO) : le carton ne se retourne pas ;
    *  - 2 centrales à 3 cases C7 « Pont » (6) et C8 « Équerre » (5) : le relais central tient les 4 raccords au milieu.
-   * Mêmes règles qu'en 4×4 (R1 à R4, aucune poche) ; pas de mur (C5) ; aucun raccord latéral hors du raccourci
-   * (bord : E pos 0 + O pos 2 ; coin : E pos 0 + S pos 2) et du raccord S au milieu des bords, tous tirés de la case d'apparition.
-   * Les ids (K2, B1, C7…) peuvent recouper ceux du 4×4 : le champ `grille` et le document les distinguent.
+   * Mêmes règles qu'en 4×4 (R1 à R4, aucune poche) ; pas de mur (C5) ; sur les bords et les coins, aucun raccord hors du raccourci
+   * (bord : E pos 0 + O pos 2 ; coin : E pos 0 + S pos 2) et, pour un bord, du raccord S au milieu tiré de la case d'apparition.
+   * Les ids communs avec le 4×4 sont K2 et B1 seulement (C7, C8, B7 et B7m n'existent qu'en 5×5) : le champ `grille` et le document les distinguent.
    */
   function construire5() {
     function m5(id, nom, gabarit, exemplaires, cases, chemins) { return modeleGrille('5x5', id, nom, gabarit, exemplaires, cases, chemins); }

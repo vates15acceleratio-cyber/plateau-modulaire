@@ -94,6 +94,7 @@
   <script src="../src/etat.js"></script>
   <script src="../src/sauvegarde.js"></script>
   <script src="../src/graphe.js"></script>
+  <script src="../src/generateur.js"></script>
   <script src="../src/controles.js"></script>
   <script src="../src/bibliotheque.js"></script>
   <script src="../src/assemblage.js"></script>
@@ -838,6 +839,29 @@
       ctrl('fin du scénario : retour à un plateau 4×4', etat.doc().grille === '4x4' && $('indicateur-grille').textContent === 'Grille 4×4 · 48 × 48 cm');
     }
 
+    /** Nouveau → 5×5 avec le VRAI catalogue (aucun faux catalogue) : 6 vignettes, une pose valide, « Plateau aléatoire » sans exception. */
+    function s8b_catalogue5x5_reel() {
+      titre('S9b Nouveau → 5×5 avec le vrai catalogue 5×5');
+      reset(PM.catalogue.nouveauDocument('4x4'));
+      $('btn-nouveau').click();
+      var radio = document.querySelector('#dialogue-contenu input[name="pm-nouveau-grille"][value="5x5"]');
+      radio.checked = true;
+      document.querySelector('#dialogue-contenu .pm-nouveau-creer').click();
+      ctrl('vrai catalogue : Créer 5×5 ferme la boîte et crée un document 5×5 sans tuile', !$('dialogue').open && etat.doc().grille === '5x5' && nbTuiles() === 0);
+      ctrl('vrai catalogue : 6 vignettes en bibliothèque (K2, B1, B7, B7m, C7, C8)', document.querySelectorAll('.pm-biblio-vignette').length === 6 && ['K2', 'B1', 'B7', 'B7m', 'C7', 'C8'].every(function (id) { return !!document.querySelector('[data-vignette="' + id + '"]'); }));
+      // une pose valide : coin K2 en (0,0), bord B1 en (1,0), centrale C7 en (1,1)
+      var g1 = glisser('K2', 0, 0, 0), g2 = glisser('B1', 1, 0, 0), g3 = glisser('C7', 1, 1, 0);
+      ctrl('vrai catalogue : pose d’un coin, d’un bord et d’une centrale', g1.demarre && g2.demarre && g3.demarre && nbTuiles() === 3, nbTuiles() + ' ' + msg());
+      ctrl('vrai catalogue : aucune erreur sur ce début de plateau', niveau() !== 'erreur', msg());
+      var c = compteurs();
+      ctrl('vrai catalogue : compteur « Tuiles posées » 3 / 25', c['Tuiles posées'].v === '3 / 25', J(c));
+      var r = null, exception = null;
+      try { r = PM.generateur.generer(etat.doc(), { graine: 'recette-5x5' }); } catch (e) { exception = e; }
+      ctrl('vrai catalogue : « Plateau aléatoire » (graine fixée) ne lève aucune exception', exception === null && !!r, exception && exception.message);
+      ctrl('vrai catalogue : le plateau aléatoire 5×5 a 25 tuiles et 7 villes', !!r && r.ok === true && r.doc.plateau.tuiles.length === 25 && r.doc.plateau.jetons.length === 7, r && (r.raison || J(r.rapport)));
+      reset(docExemples('4x4'));
+    }
+
     /* ============================================================== */
     /** S9 : suppression d'une tuile utilisateur (confirmation, historique) et bloc « Commandes » qui suit l'onglet. */
     function s9_suppression_aide() {
@@ -960,7 +984,7 @@
     function etape(f) { chaine = chaine.then(function () { try { return f(); } catch (e) { nEchec++; rapportEl.textContent += 'ÉCHEC  exception dans ' + f.name + ' : ' + (e && e.stack || e) + '\n'; } }); }
     if (!etat) { rapportEl.textContent = 'ÉCHEC  application non démarrée (PM.app.etat absent)\n'; nEchec++; }
     else {
-      [s0_chargement, s1_assemblage, s2_refus, s2b_clic_droit, s3_historique, s4_editeur, s5_controles, s7_raccourcis, robustesse, s8_nouveau5x5, s9_suppression_aide, s6_sauvegarde].forEach(etape);
+      [s0_chargement, s1_assemblage, s2_refus, s2b_clic_droit, s3_historique, s4_editeur, s5_controles, s7_raccourcis, robustesse, s8_nouveau5x5, s8b_catalogue5x5_reel, s9_suppression_aide, s6_sauvegarde].forEach(etape);
     }
     chaine.then(function () {
       var nErr = (document.getElementById('erreurs').textContent.match(/ERREUR JS/g) || []).length;

@@ -94,7 +94,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
 
   /**
    * Identifiants des modèles du catalogue livré pour la grille du document : PM.catalogue.modelesParGrille[grille] si le
-   * catalogue la fournit, sinon PM.catalogue.modeles pour la grille 4×4 (le seul catalogue livré à ce jour), sinon rien.
+   * catalogue la fournit, sinon PM.catalogue.modeles pour la grille 4×4 (repli quand le catalogue ne fournit pas modelesParGrille), sinon rien.
    * Sans catalogue chargé (tests Node qui ne le chargent pas), aucun modèle n'est du catalogue : tous sont supprimables.
    */
   function idsCatalogue(doc) {
