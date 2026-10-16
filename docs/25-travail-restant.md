@@ -6,7 +6,7 @@ L'utilisateur a marqué une pause ; il reprendra **après discussion**. Rien ne 
 
 ### 1.0 Tuiles « organiques » — en cours (branche `tuiles-organiques`)
 - Fait : décision (docs/18, « Orientation après essai du 5×5 »), cahier `docs/34`, avis géométrie `docs/35`, croquis `docs/croquis/croquis-organiques.png` montrés à l’utilisateur.
-- **À faire à la reprise** : avis design de jeu (lancé le 2026-10-16 au soir, résultat non consigné : le relancer sur `docs/34` § 5 « Design de jeu » s’il manque, et le consigner en `docs/36`) ; retours de l’utilisateur sur les croquis ; décisions (tuiles retenues, appariement des bords en alerte ou en refus de pose, règle M4, nombre de tuiles à deux réseaux, retouches du 4×4 pour l’harmonie) ; puis production, testeur, relecteur, versionneur.
+- **À faire à la reprise** : avis design de jeu consigné (`docs/36` : budget = 1 tuile à deux réseaux au plus, pourtour fixe ou libre, alerte plutôt que refus, M4 obligatoire aux villes, proportions V 30-45 % / T 35-45 % / D 10-15 % / X ≈ 10 %) ; retours de l’utilisateur sur les croquis ; décisions (tuiles retenues, appariement des bords en alerte ou en refus de pose, règle M4, nombre de tuiles à deux réseaux, retouches du 4×4 pour l’harmonie) ; puis production, testeur, relecteur, versionneur.
 - Remarque de l’orchestrateur sur le plateau témoin : 4 villes empilées dans une même colonne ; à soumettre à l’advisor design.
 - Le générateur 5×5 (§ 1.2) devra intégrer l’appariement des bords et le budget de ports de `docs/35` § 4.
 
