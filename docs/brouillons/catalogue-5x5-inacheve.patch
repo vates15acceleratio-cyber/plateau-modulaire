@@ -1,0 +1,970 @@
+diff --git a/outils/mesures-equilibre.js b/outils/mesures-equilibre.js
+index f7e8ce8..973e4ac 100644
+--- a/outils/mesures-equilibre.js
++++ b/outils/mesures-equilibre.js
+@@ -1,10 +1,12 @@
+ 'use strict';
+ /*
+- * mesures-equilibre.js : mesures d'équilibre du catalogue 4×4 de la version 2 (docs/19, docs/20, docs/21).
++ * mesures-equilibre.js : mesures d'équilibre des catalogues 4×4 et 5×5 de la version 2 (docs/19, docs/20, docs/21, docs/24).
+  *
+- * Lancement : node outils/mesures-equilibre.js [nbPlateaux=1000] [graine=20261015] [fichierRapport]
++ * Lancement 4×4 : node outils/mesures-equilibre.js [nbPlateaux=1000] [graine=20261015] [fichierRapport]
+  *   -> écrit docs/21-mesures-catalogue-v2.md (tableaux), précédé du texte de outils/constats-catalogue-v2.md s'il existe
+  *      (constats et seuils rédigés à la main pour le tirage de référence : 1000 plateaux, graine 20261015).
++ * Lancement 5×5 : node outils/mesures-equilibre.js --grille=5x5 [--plateaux=1000] [--graine=20261016] [--sortie=fichier]
++ *   -> écrit docs/24-mesures-catalogue-5x5.md, précédé de outils/constats-catalogue-5x5.md (voir la partie « 5×5 » plus bas).
+  *
+  * Vocabulaire de la version 2 : une jonction sans ville est une « jonction-case » (case chemin) ; 7 villes et
+  * 2 jonctions-cases par plateau, donc C(9, 2) = 36 combinaisons par plateau. Villes non traversables (règle du jeu,
+@@ -46,11 +48,11 @@ function melanger(t, rng) {
+   return t;
+ }
+ /**
+- * Plateau 4×4 complet : modèles tirés sans remise selon les exemplaires et le gabarit de chaque cellule,
++ * Plateau complet de la grille `grille` ('4x4' par défaut, ou '5x5') : modèles tirés sans remise selon les exemplaires et le gabarit de chaque cellule,
+  * rotation suggérée (bords et coins tournés vers l'extérieur), rotation aléatoire des centrales.
+  */
+-function tirerPlateau(rng) {
+-  let doc = CAT.nouveauDocument();
++function tirerPlateau(rng, grille) {
++  let doc = CAT.nouveauDocument(grille);
+   const F = M.formatDuDocument(doc);
+   const stock = {};
+   for (const m of doc.modeles) {
+@@ -67,10 +69,10 @@ function tirerPlateau(rng) {
+   }
+   return doc;
+ }
+-function tirerPlateaux(nb, graine) {
++function tirerPlateaux(nb, graine, grille) {
+   const rng = mulberry32(graine);
+   const res = [];
+-  for (let n = 0; n < nb; n++) res.push({ doc: tirerPlateau(rng) });
++  for (let n = 0; n < nb; n++) res.push({ doc: tirerPlateau(rng, grille) });
+   return res;
+ }
+ 
+@@ -503,14 +505,777 @@ function rediger(stats, meta) {
+   return L.join('\n') + '\n';
+ }
+ 
++/* ====================================================================== */
++/* 5×5 : tirage, réparation des rotations, évaluation rapide, mesures       */
++/* (docs/22 § 5 ; rapport docs/24-mesures-catalogue-5x5.md)                 */
++/* ====================================================================== */
++
++const G = PM.geometrie;
++const F5 = G.format('5x5');
++const GRILLE5 = '5x5';
++const NB_VILLES5 = 7;
++
++/** Placement par défaut des 7 villes du 5×5 (masque de 16 bits, voir docs/24) : fixé après la mesure des 11 440 placements. */
++let PLACEMENT_DEFAUT_5X5 = null;
++
++/** Les 16 jonctions intérieures du 5×5 : indice k = (j - 1) * 4 + (i - 1), i = colonne, j = ligne (1 à 4). */
++const JONCTIONS5 = [];
++for (let j = 1; j <= 4; j++) for (let i = 1; i <= 4; i++) JONCTIONS5.push({ i, j });
++const indiceJ5 = (i, j) => (j - 1) * 4 + (i - 1);
++const cleJ5 = (k) => `(${JONCTIONS5[k].i},${JONCTIONS5[k].j})`;
++/** Texte d'un masque de 16 bits : liste des jonctions-ville, par ligne puis colonne. */
++function cleVilles5(masque) { return JONCTIONS5.map((_, k) => k).filter((k) => (masque >> k) & 1).map(cleJ5).join(' '); }
++const bitsMasque = (m) => { let n = 0; for (let x = m; x; x &= x - 1) n++; return n; };
++/** Masque dont les bits sont les jonctions données [{i, j}]. */
++function masqueDeVilles5(liste) { return liste.reduce((m, v) => m | (1 << indiceJ5(v.i, v.j)), 0); }
++/** Jetons du document pour un masque de villes. */
++function jetonsDuMasque5(masque) {
++  return JONCTIONS5.filter((_, k) => (masque >> k) & 1).map((jn) => ({ i: jn.i, j: jn.j, type: 'capture' }));
++}
++/** Toutes les parties à 7 villes parmi 16 jonctions : C(16, 7) = 11 440 masques. */
++const COMBINAISONS5 = [];
++for (let m = 0; m < (1 << 16); m++) if (bitsMasque(m) === NB_VILLES5) COMBINAISONS5.push(m);
++
++/** Image d'un masque par la symétrie gauche-droite (i devient 5 - i) ou haut-bas (j devient 5 - j : échange des joueurs). */
++function imageMasque5(masque, miroirColonnes, miroirLignes) {
++  let r = 0;
++  for (let k = 0; k < 16; k++) {
++    if (!((masque >> k) & 1)) continue;
++    const { i, j } = JONCTIONS5[k];
++    r |= 1 << indiceJ5(miroirColonnes ? 5 - i : i, miroirLignes ? 5 - j : j);
++  }
++  return r;
++}
++/** Classe de symétrie d'un masque (plus petit masque parmi ses 4 images) : S est identique pour les 4 images. */
++function classeMasque5(masque) {
++  return Math.min(masque, imageMasque5(masque, true, false), imageMasque5(masque, false, true), imageMasque5(masque, true, true));
++}
++
++/* ---------------------------------------------------------------------- */
++/* Ports par jonction ; réparation des rotations des centrales             */
++/* ---------------------------------------------------------------------- */
++
++/** Grille 5×5 des masques de ports (4 bits) des tuiles d'un document, après rotation. */
++function grillePorts5(doc) {
++  const grille = [];
++  for (let l = 0; l < 5; l++) grille.push([0, 0, 0, 0, 0]);
++  for (const t of doc.plateau.tuiles) grille[t.lig][t.col] = M.masquesTuilePosee(doc, t).portsCoin;
++  return grille;
++}
++const bit = (m, k) => (m >> k) & 1;
++/** Nombre de ports qui aboutissent à la jonction (i, j) : coins SE, SO, NE et NO des quatre tuiles autour. */
++function portsJ5(g, i, j) { return bit(g[j - 1][i - 1], 2) + bit(g[j - 1][i], 3) + bit(g[j][i - 1], 1) + bit(g[j][i], 0); }
++/** Manque de ports : somme sur les jonctions de max(0, besoin - ports), besoin = 3 pour les jonctions de `cibles` (masque), 2 sinon. */
++function manque5(g, cibles) {
++  let d = 0;
++  for (let k = 0; k < 16; k++) {
++    const need = (cibles >> k) & 1 ? 3 : 2, p = portsJ5(g, JONCTIONS5[k].i, JONCTIONS5[k].j);
++    if (p < need) d += need - p;
++  }
++  return d;
++}
++
++/**
++ * Répare par recherche locale les rotations des centrales d'un plateau 5×5 pour que chaque jonction ait au moins 2 ports
++ * (3 pour celles de `cibles`, masque de villes). Les bords et les coins restent tournés vers l'extérieur. Modifie `doc`.
++ * Renvoie le manque restant (0 = réussi).
++ */
++function reparerRotations5(doc, rng, cibles) {
++  cibles = cibles || 0;
++  const centrales = doc.plateau.tuiles.filter((t) => M.gabaritCellule(t.col, t.lig, F5) === 'centrale');
++  const g = grillePorts5(doc);
++  const portsModele = new Map(doc.modeles.map((m) => [m.id, M.masquesDuModele(m).portsCoin]));
++  let cur = manque5(g, cibles);
++  for (let passe = 0; passe < 12 && cur > 0; passe++) {
++    for (const t of melanger(centrales, rng)) {
++      let meilleure = t.rot, md = Infinity;
++      for (let r = 0; r < 4; r++) {
++        g[t.lig][t.col] = G.tournerPorts(portsModele.get(t.modeleId), r);
++        const d = manque5(g, cibles);
++        if (d < md || (d === md && rng() < 0.5)) { md = d; meilleure = r; }
++      }
++      t.rot = meilleure;
++      g[t.lig][t.col] = G.tournerPorts(portsModele.get(t.modeleId), meilleure);
++      cur = md;
++    }
++  }
++  return cur;
++}
++
++/**
++ * Plateau 5×5 « façon générateur » : tirage comme tirerPlateau, puis rotations des centrales réparées (2 ports au moins par
++ * jonction, 3 aux jonctions de `cibles`). Jusqu'à `essaisMax` tirages ; si aucun ne réussit, le moins mauvais.
++ * Renvoie { doc, essais, manque }.
++ */
++function tirerPlateauRepare5(rng, cibles, essaisMax) {
++  let meilleur = null;
++  for (let essai = 1; essai <= (essaisMax || 100); essai++) {
++    const doc = tirerPlateau(rng, GRILLE5);
++    const manque = reparerRotations5(doc, rng, cibles);
++    if (!meilleur || manque < meilleur.manque) meilleur = { doc, essais: essai, manque };
++    if (manque === 0) break;
++  }
++  return meilleur;
++}
++
++/* ---------------------------------------------------------------------- */
++/* Évaluation rapide d'un placement de villes (même critère que graphe.equilibre) */
++/* ---------------------------------------------------------------------- */
++
++/** Contexte d'évaluation d'un plateau : graphe sans ville transformé en tableaux d'entiers. */
++function contexteRapide5(g0) {
++  const idx = new Map();
++  g0.noeuds.forEach((id, n) => idx.set(id, n));
++  const N = g0.noeuds.length;
++  return {
++    N,
++    adj: g0.noeuds.map((id) => Array.from(g0.voisins.get(id), (v) => idx.get(v))),
++    junc: JONCTIONS5.map((jn) => idx.get(`J${jn.i},${jn.j}`)),
++    app: { 1: g0.apparitions[1].map((id) => idx.get(id)), 2: g0.apparitions[2].map((id) => idx.get(id)) },
++    dist: { 1: new Int16Array(N), 2: new Int16Array(N) },
++    file: new Int32Array(N),
++    ville: new Uint8Array(N)
++  };
++}
++/** Parcours en largeur depuis les apparitions d'un joueur ; une ville n'est qu'une destination (règle du jeu). */
++function largeur5(ctx, joueur) {
++  const d = ctx.dist[joueur], file = ctx.file, adj = ctx.adj, ville = ctx.ville;
++  d.fill(-1);
++  let tete = 0, queue = 0;
++  for (const s of ctx.app[joueur]) if (d[s] < 0) { d[s] = 0; file[queue++] = s; }
++  while (tete < queue) {
++    const x = file[tete++], dx = d[x];
++    if (dx > 0 && ville[x]) continue;
++    const voisins = adj[x];
++    for (let k = 0; k < voisins.length; k++) { const y = voisins[k]; if (d[y] < 0) { d[y] = dx + 1; file[queue++] = y; } }
++  }
++}
++function trierPetit(t) {
++  for (let i = 1; i < t.length; i++) { const v = t[i]; let j = i - 1; while (j >= 0 && t[j] > v) { t[j + 1] = t[j]; j--; } t[j + 1] = v; }
++  return t;
++}
++/**
++ * Évalue le placement `masque` (7 villes) : { ok, S, ecartMax, cinq, bloque, egale, n1, n2, t1, t2 } avec les mêmes
++ * définitions que PM.graphe.equilibre (ok = false si une ville est inaccessible). Seuils de blocage : ceux de graphe.js.
++ */
++function evaluerRapide5(ctx, masque) {
++  const villesNoeud = [];
++  for (let k = 0; k < 16; k++) if ((masque >> k) & 1) villesNoeud.push(ctx.junc[k]);
++  ctx.ville.fill(0);
++  for (const n of villesNoeud) ctx.ville[n] = 1;
++  largeur5(ctx, 1);
++  largeur5(ctx, 2);
++  const d1 = [], d2 = [];
++  let n1 = 0, n2 = 0, ok = true;
++  for (const n of villesNoeud) {
++    const a = ctx.dist[1][n], b = ctx.dist[2][n];
++    if (a < 0 || b < 0) { ok = false; continue; }
++    d1.push(a); d2.push(b);
++    if (a < b) n1++; else if (b < a) n2++;
++  }
++  if (!ok) return { ok: false };
++  const s1 = trierPetit(d1.slice()), s2 = trierPetit(d2.slice());
++  let S = 0, ecartMax = 0, t1 = 0, t2 = 0;
++  for (let k = 0; k < s1.length; k++) {
++    const e = Math.abs(s1[k] - s2[k]);
++    S += e;
++    if (e > ecartMax) ecartMax = e;
++    if (s1[k] <= 3) t1++;
++    if (s2[k] <= 3) t2++;
++  }
++  const cinq = Math.max(n1, n2) >= GR.SEUIL_CINQ_CONTRE_DEUX;
++  return {
++    ok: true, S, ecartMax, cinq, n1, n2, t1, t2, egale: s1[0] === s2[0],
++    bloque: (cinq && GR.CINQ_CONTRE_DEUX_BLOQUANT) || ecartMax > GR.SEUIL_BLOCAGE_ECART
++  };
++}
++
++/** Copie légère d'un graphe sans ville avec les villes du masque (équivalent de construire(doc, {jetons})). */
++function grapheAvecVilles5(g0, masque) {
++  const ids = JONCTIONS5.filter((_, k) => (masque >> k) & 1).map((jn) => `J${jn.i},${jn.j}`);
++  const villes = new Set(ids);
++  return Object.assign({}, g0, {
++    villes, jonctions: g0.jonctions.map((jn) => Object.assign({}, jn, { type: villes.has(jn.id) ? 'ville' : 'case' }))
++  });
++}
++
++/* ---------------------------------------------------------------------- */
++/* Contrôles géométriques des tracés d'un modèle (jeux en mm)              */
++/* ---------------------------------------------------------------------- */
++
++function distPS(p, a, b) {
++  const dx = b.x - a.x, dy = b.y - a.y, l = dx * dx + dy * dy;
++  const t = l ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l)) : 0;
++  return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
++}
++function orient(a, b, c) { return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x); }
++function distSS(a, b, c, d) {
++  if (orient(a, b, c) * orient(a, b, d) < 0 && orient(c, d, a) * orient(c, d, b) < 0) return 0;
++  return Math.min(distPS(a, c, d), distPS(b, c, d), distPS(c, a, b), distPS(d, a, b));
++}
++function distPolylignes(P, Q) {
++  let m = Infinity;
++  for (let i = 0; i + 1 < P.length; i++) for (let j = 0; j + 1 < Q.length; j++) m = Math.min(m, distSS(P[i], P[i + 1], Q[j], Q[j + 1]));
++  return m;
++}
++function distPointPolyligne(p, P) {
++  let m = Infinity;
++  for (let i = 0; i + 1 < P.length; i++) m = Math.min(m, distPS(p, P[i], P[i + 1]));
++  return m;
++}
++/** Retire d'un tracé la partie couverte par ses cases d'extrémité (rayon, + 4 mm pour la case commune à deux chemins). */
++function rogner(t, commun) {
++  const coupe = (c, vers) => {
++    const r = c.diametre / 2 + (c === commun ? 4 : 0), d = Math.hypot(vers.x - c.x, vers.y - c.y), k = Math.min(1, r / d);
++    return { x: c.x + (vers.x - c.x) * k, y: c.y + (vers.y - c.y) * k };
++  };
++  if (t.type === 'lien') return [coupe(t.cases[0], t.pts[1]), coupe(t.cases[1], t.pts[0])];
++  const pts = t.pts.map((p) => ({ x: p.x, y: p.y }));
++  pts[pts.length - 1] = coupe(t.cases[0], t.pts[t.pts.length - 2]);
++  return pts;
++}
++/**
++ * Jeux d'un modèle (tracés de PM.geometrie.tracesModele, format `F` : objet ou identifiant) :
++ *  - jeuChemins : plus petite distance entre les axes de deux chemins, hors du disque de leur case commune (exigé : 8 mm, la largeur d'un chemin) ;
++ *  - margeCase : plus petite distance d'un chemin à une case qu'il ne relie pas, moins (rayon + 4 mm) (exigé : >= 0) ;
++ *  - margeCoin : plus petite distance d'un chemin à un coin (hors son propre port), moins 24 mm = zone de coin + 4 mm (exigé : >= 0).
++ * `problemes` : liste de textes, vide si les trois exigences sont tenues.
++ */
++function controlesTrace(m, F) {
++  F = F && typeof F === 'object' ? F : G.format(F || '4x4');
++  const ts = G.tracesModele(m, F), pb = [];
++  let jeuChemins = Infinity, margeCase = Infinity, margeCoin = Infinity;
++  for (const t of ts) {
++    for (const c of m.cases) {
++      if (t.cases.includes(c)) continue;
++      const d = distPointPolyligne(c, t.pts) - (c.diametre / 2 + 4);
++      margeCase = Math.min(margeCase, d);
++      if (d < -1e-9) pb.push(`${m.id} ${t.id} passe à ${(d + c.diametre / 2 + 4).toFixed(1)} mm de ${c.id}`);
++    }
++    for (let k = 0; k < 4; k++) {
++      if (t.type === 'port' && t.coin === k) continue;
++      const d = distPointPolyligne(F.pointCoin(k), t.pts) - (F.RAYON_ZONE_COIN + 4);
++      margeCoin = Math.min(margeCoin, d);
++      if (d < -1e-9) pb.push(`${m.id} ${t.id} entre dans la zone du coin ${k} (${(d + F.RAYON_ZONE_COIN + 4).toFixed(1)} mm)`);
++    }
++  }
++  for (let i = 0; i < ts.length; i++) {
++    for (let j = i + 1; j < ts.length; j++) {
++      const commun = ts[i].cases.find((c) => ts[j].cases.includes(c));
++      const d = distPolylignes(rogner(ts[i], commun), rogner(ts[j], commun));
++      jeuChemins = Math.min(jeuChemins, d);
++      if (d < F.LARGEUR_CHEMIN - 1e-9) pb.push(`${m.id} ${ts[i].id} et ${ts[j].id} se touchent (${d.toFixed(1)} mm)`);
++    }
++  }
++  return { jeuChemins, margeCase, margeCoin, problemes: pb };
++}
++
++/* ---------------------------------------------------------------------- */
++/* Mesures 5×5                                                             */
++/* ---------------------------------------------------------------------- */
++
++const surPourtour5 = (t) => t.col === 0 || t.col === 4 || t.lig === 0 || t.lig === 4;
++const surCentre5 = (t) => t.col >= 1 && t.col <= 3;
++
++/** Propriétés d'un plateau qui ne dépendent pas des villes, cumulées dans `s` (histogrammes). Renvoie le graphe sans ville. */
++function proprietesPlateau5(doc, s) {
++  const g0 = GR.construire(doc, { jetons: [] });
++  ajouterHist(s.casesPlateau, g0.cases.size + g0.jonctions.length - NB_VILLES5);   // cases des tuiles + 9 jonctions-cases
++  ajouterHist(s.mortsPlateau, M.raccordsMorts(doc).filter((r) => r.raison === 'mort').length);
++  ajouterHist(s.malReliees, M.jonctionsMalReliees(doc).length);
++  let total = 0, a3 = 0;
++  for (const jn of g0.jonctions) { ajouterHist(s.portsJonction, jn.ports); total += jn.ports; if (jn.ports >= 3) a3++; }
++  ajouterHist(s.portsPlateau, total);
++  ajouterHist(s.jonctionsA3, a3);
++  let mini = Infinity;
++  for (const a of g0.jonctions) {
++    const d = GR.distances(g0, a.id);
++    for (const b of g0.jonctions) if (a !== b && d.has(b.id)) mini = Math.min(mini, d.get(b.id));
++  }
++  ajouterHist(s.ecartVillesGarantie, Number.isFinite(mini) ? mini : 'n/a');
++  ajouterHist(s.ecartApparitions, ecartApparitions(g0));
++  for (const p of [1, 2]) {
++    for (const [nom, filtre] of [['pourtourAdverse', surPourtour5], ['centreAdverse', surCentre5]]) {
++      const g = GR.construire(doc, { jetons: [], filtreTuile: filtre });
++      const d = GR.distancesJoueur(g, p);
++      let m = Infinity;
++      for (const jn of g.jonctions) if (jn.j === (p === 1 ? 4 : 1) && d.has(jn.id)) m = Math.min(m, d.get(jn.id));
++      ajouterHist(s[nom][p], m);
++    }
++  }
++  const nbApp = { 1: g0.apparitions[1].length, 2: g0.apparitions[2].length };
++  ajouterHist(s.apparitions, `${nbApp[1]}+${nbApp[2]}`);
++  return g0;
++}
++function nouvellesProprietes5() {
++  return {
++    n: 0, casesPlateau: {}, mortsPlateau: {}, malReliees: {}, portsJonction: {}, portsPlateau: {}, jonctionsA3: {},
++    ecartVillesGarantie: {}, ecartApparitions: {}, pourtourAdverse: { 1: {}, 2: {} }, centreAdverse: { 1: {}, 2: {} },
++    apparitions: {}
++  };
++}
++
++/**
++ * Évalue des placements de villes sur des plateaux : pour chaque plateau, `masques(index)` donne les placements à essayer.
++ * Renvoie { acc, accepteS (histogramme de S des configurations non bloquées), portsVilles (histogramme du plus petit nombre
++ * de ports sur les 7 villes), villesA3 (histogramme du nombre de villes à 3 ports ou plus), n }.
++ */
++function evaluerPlateaux5(docs, masques, options) {
++  options = options || {};
++  const r = { acc: nouvelAcc(), accepteS: {}, portsVilles: {}, villesA3: {}, n: 0, goulets: nouveauxGoulets(), parPlateau: [] };
++  docs.forEach((doc, index) => {
++    const g0 = options.graphes ? options.graphes[index] : GR.construire(doc, { jetons: [] });
++    const rec = { n: 0, sommeS: 0, bloquees: 0 };
++    for (const masque of masques(index)) {
++      const g = grapheAvecVilles5(g0, masque);
++      const e = GR.equilibre(doc, { graphe: g });
++      cumuler(r.acc, e, g);
++      r.n++;
++      rec.n++;
++      if (e.S !== null) rec.sommeS += e.S;
++      if (e.tresDesequilibre) rec.bloquees++;
++      if (!e.tresDesequilibre && e.S !== null) ajouterHist(r.accepteS, e.S);
++      let mini = Infinity, a3 = 0;
++      g.jonctions.forEach((jn) => { if (jn.type === 'ville') { mini = Math.min(mini, jn.ports); if (jn.ports >= 3) a3++; } });
++      ajouterHist(r.portsVilles, mini);
++      ajouterHist(r.villesA3, a3);
++      if (options.goulets && index < options.goulets) cumulerGoulets(r.goulets, g);
++    }
++    r.parPlateau.push(rec);
++  });
++  return r;
++}
++
++/** Percentile (0 à 1) d'un histogramme de valeurs numériques : plus petite valeur dont la part cumulée atteint p. */
++function percentileHist(h, p) {
++  const ks = cles(h).filter((k) => k !== 'n/a').map(Number), tot = ks.reduce((s, k) => s + h[String(k)], 0);
++  let cum = 0;
++  for (const k of ks) { cum += h[String(k)]; if (cum / tot >= p - 1e-12) return k; }
++  return NaN;
++}
++
++/**
++ * Mesure exhaustive des 11 440 placements sur `docs` (plateaux déjà réparés) avec l'évaluation rapide, regroupés par
++ * classe de symétrie. Renvoie une liste triée du meilleur au moins bon :
++ * { cle, masque, images, n, sMoyen, bloque, cinq, ecart3, s5, egale, inegaleN, villes (liste) }.
++ */
++function classerPlacements5(docs) {
++  const classes = new Map();
++  const contextes = docs.map((doc) => contexteRapide5(GR.construire(doc, { jetons: [] })));
++  for (const masque of COMBINAISONS5) {
++    const cl = classeMasque5(masque);
++    let c = classes.get(cl);
++    if (!c) { c = { masque: cl, images: new Set(), n: 0, sommeS: 0, bloque: 0, cinq: 0, ecart3: 0, s5: 0, inegale: 0, inaccessible: 0, t: 0 }; classes.set(cl, c); }
++    c.images.add(masque);
++    for (const ctx of contextes) {
++      const e = evaluerRapide5(ctx, masque);
++      c.n++;
++      if (!e.ok) { c.inaccessible++; continue; }
++      c.sommeS += e.S;
++      if (e.bloque) c.bloque++;
++      if (e.cinq) c.cinq++;
++      if (e.ecartMax > 2) c.ecart3++;
++      if (e.S >= GR.SEUIL_S) c.s5++;
++      if (!e.egale) c.inegale++;
++      c.t += e.t1 + e.t2;
++    }
++  }
++  const liste = [];
++  for (const c of classes.values()) {
++    const ok = c.n - c.inaccessible;
++    liste.push({
++      cle: cleVilles5(c.masque), masque: c.masque, images: c.images.size, n: c.n,
++      sMoyen: c.sommeS / ok, bloque: c.bloque / c.n, cinq: c.cinq / c.n, ecart3: c.ecart3 / c.n, s5: c.s5 / c.n,
++      inegale: c.inegale / c.n, inaccessible: c.inaccessible / c.n, tempo3: c.t / (2 * ok)
++    });
++  }
++  liste.sort((a, b) => a.bloque - b.bloque || a.sMoyen - b.sMoyen || a.masque - b.masque);
++  return liste;
++}
++
++/** Répartition des villes par ligne de jonctions (j = 1 à 4) : texte « 2-2-2-1 ». */
++function repartitionLignes5(masque) {
++  const n = [0, 0, 0, 0];
++  JONCTIONS5.forEach((jn, k) => { if ((masque >> k) & 1) n[jn.j - 1]++; });
++  return n.join('-');
++}
++
++/**
++ * Mesure complète du catalogue 5×5. options : nb (plateaux, 1000), graine (20261016), combos (placements au hasard par
++ * plateau, 40), exhaustif (plateaux de la mesure des 11 440 placements, 1000), goulets (plateaux, 300), defaut (masque).
++ * Les tirages utilisent des flux séparés issus de la graine : « brut » (rotations quelconques), « réparé » (2 ports par
++ * jonction), « réparé pour le placement par défaut » (3 ports aux villes si possible).
++ */
++function mesurer5(options) {
++  const o = Object.assign({ nb: 1000, graine: 20261016, combos: 40, exhaustif: 1000, goulets: 300, defaut: PLACEMENT_DEFAUT_5X5 }, options);
++  const res = { options: o };
++
++  // 1. brut
++  res.brut = nouvellesProprietes5();
++  const brut = tirerPlateaux(o.nb, o.graine, GRILLE5);
++  brut.forEach((x) => { res.brut.n++; proprietesPlateau5(x.doc, res.brut); });
++  res.brutDocs = brut.map((x) => x.doc);
++
++  // 2. réparé (2 ports par jonction)
++  res.repare = nouvellesProprietes5();
++  const rngR = mulberry32(o.graine + 1);
++  const essais = {}, manques = {};
++  const docsR = [];
++  for (let n = 0; n < o.nb; n++) {
++    const t = tirerPlateauRepare5(rngR, 0, 100);
++    ajouterHist(essais, t.essais); ajouterHist(manques, t.manque);
++    docsR.push(t.doc);
++  }
++  res.essais = essais; res.manques = manques;
++  res.docsR = docsR;
++  const graphesR = docsR.map((doc) => { res.repare.n++; return proprietesPlateau5(doc, res.repare); });
++  res.graphesR = graphesR;
++
++  // 3. flancs (graphe.flancs, villes non traversables), sur le tirage réparé
++  res.flancs = { plusCourt: 0, n: 0, diff: [] };
++  docsR.slice(0, Math.min(o.nb, 300)).forEach((doc) => {
++    for (const f of GR.flancs(doc, { villesTraversables: false })) {
++      res.flancs.n++;
++      if (f.flanc < f.centre) res.flancs.plusCourt++;
++      res.flancs.diff.push(f.flanc - f.centre);
++    }
++  });
++
++  // 4. équilibre sur des placements tirés au hasard (tous les placements possibles ont la même chance)
++  const rngC = mulberry32(o.graine + 2);
++  res.hasard = evaluerPlateaux5(docsR, () => {
++    const l = [];
++    for (let k = 0; k < o.combos; k++) l.push(COMBINAISONS5[Math.floor(rngC() * COMBINAISONS5.length)]);
++    return l;
++  }, { graphes: graphesR });
++
++  // 5. classement des 11 440 placements (évaluation rapide) sur les premiers plateaux réparés
++  const nbEx = Math.min(o.exhaustif, o.nb);
++  res.nbExhaustif = nbEx;
++  res.classement = classerPlacements5(docsR.slice(0, nbEx));
++  res.classementTotal = COMBINAISONS5.length;
++
++  // 6. placement par défaut : sauf indication contraire, parmi les classes sans blocage ni première ville inégale dont le
++  //    S moyen est le plus bas (40 candidates), celle dont les 3 ports aux villes se réparent le plus souvent
++  res.candidats = [];
++  if (o.defaut === null || o.defaut === undefined) {
++    const rngF = mulberry32(o.graine + 4);
++    const retenues = res.classement.filter((c) => c.bloque === 0 && c.inegale === 0).slice(0, 40);
++    for (const c of retenues) {
++      let ok = 0;
++      for (let n = 0; n < 60; n++) if (tirerPlateauRepare5(rngF, c.masque, 30).manque === 0) ok++;
++      res.candidats.push({ cle: c.cle, masque: c.masque, sMoyen: c.sMoyen, s5: c.s5, faisabilite: ok / 60 });
++    }
++    res.candidats.sort((a, b) => b.faisabilite - a.faisabilite || a.sMoyen - b.sMoyen);
++    res.defaut = res.candidats[0].masque;
++  } else {
++    res.defaut = o.defaut;
++  }
++  res.defautEntree = res.classement.find((c) => c.masque === classeMasque5(res.defaut));
++  res.surDefaut = evaluerPlateaux5(docsR, () => [res.defaut], { graphes: graphesR, goulets: o.goulets });
++  // 7. plateaux réparés pour ce placement (3 ports aux villes si possible)
++  const rngD = mulberry32(o.graine + 3);
++  const docsD = [], manquesD = {};
++  for (let n = 0; n < o.nb; n++) { const t = tirerPlateauRepare5(rngD, res.defaut, 100); docsD.push(t.doc); ajouterHist(manquesD, t.manque); }
++  res.manquesD = manquesD;
++  res.surDefautRepare = evaluerPlateaux5(docsD, () => [res.defaut], { goulets: o.goulets });
++  res.docsD = docsD;
++  return res;
++}
++
++/* ---------------------------------------------------------------------- */
++/* Rapport 5×5                                                             */
++/* ---------------------------------------------------------------------- */
++
++/** Description courte des modèles du catalogue 5×5 (table du rapport). */
++const IDEES5 = {
++  '5C1': 'Relais au centre relié aux 4 cases à port : tout est à 2 pas.',
++  '5C2': 'Étoile sans port au coin SE.',
++  '5C3': 'Port - relais - port, ports en coins opposés (NO et SE), les 4 raccords sur le relais.',
++  '5C4': 'Port - relais - port, ports en coins voisins (NO et NE), les 4 raccords sur le relais.',
++  '5C5': 'Deux relais reliés (N et E à gauche, S et O à droite), un port chacun : 4 cases pour 2 ports, le chemin le plus long du catalogue.',
++  '5B1': 'L\'apparition tient les deux ports (2 pas jusqu\'aux deux jonctions) et les trois raccords.',
++  '5B2': 'Un seul port (coin SE) : 2 pas jusqu\'à sa jonction, 3 pas jusqu\'à l\'autre par le raccourci voisin.',
++  '5B3': 'Image du précédent : un seul port, au coin SO.',
++  '5K1': 'L\'apparition touche la case à port (2 pas jusqu\'à la jonction).',
++  '5K2': 'Un relais entre l\'apparition et la case à port (3 pas).'
++};
++
++function masqueRaccords5(m) { return '0x' + M.masquesDuModele(m).raccords.toString(16).padStart(3, '0'); }
++function nbPortsModele(m) { return m.chemins.filter((ch) => ch.b.coin !== undefined).length; }
++
++/** Texte de l'histogramme d'une grandeur par plateau, sur deux colonnes (brut / réparé). */
++function tableauDeuxHist(titreCol, h1, h2, n1, n2) {
++  const ks = Array.from(new Set(cles(h1).concat(cles(h2)))).sort((a, b) => Number(a) - Number(b));
++  const L = [`| ${titreCol} | brut (n) | brut (%) | réparé (n) | réparé (%) |`, '|---|---|---|---|---|'];
++  for (const k of ks) L.push(`| ${k} | ${h1[k] || 0} | ${pc(h1[k] || 0, n1)} | ${h2[k] || 0} | ${pc(h2[k] || 0, n2)} |`);
++  return L.join('\n');
++}
++
++/** Rédige le rapport Markdown du 5×5 à partir de mesurer5(). */
++function rediger5(res, meta) {
++  meta = meta || {};
++  const o = res.options, L = [], out = (s) => L.push(s === undefined ? '' : s);
++  const NB = o.nb, A = res.hasard.acc, cat = CAT.modelesParGrille['5x5'];
++  const rep = res.repare, brut = res.brut;
++  out('# Mesures du catalogue 5×5 de la version 2');
++  out();
++  out(`Généré par \`outils/mesures-equilibre.js --grille=5x5\` (graine ${o.graine}) : ${NB} plateaux 5×5 tirés du catalogue réel \`PM.catalogue.nouveauDocument('5x5')\`, en trois familles.`);
++  out();
++  out('- **Brut** : modèles tirés sans remise selon les exemplaires et le gabarit de chaque cellule, bords et coins tournés vers l\'extérieur, centrales en rotation quelconque (comme tests/catalogue.test.js pour le 4×4). Sert à la garantie de l\'écart entre villes, au nombre de cases, aux ports.');
++  out(`- **Réparé** : même tirage, puis rotations des centrales corrigées par recherche locale pour que chaque jonction ait au moins 2 ports (ce que doit faire le générateur du 5×5). Sert à toutes les mesures d'équilibre. ${res.manques['0'] || 0} plateaux sur ${NB} y parviennent, en ${(Object.keys(res.essais).reduce((s, k) => s + Number(k) * res.essais[k], 0) / NB).toFixed(2)} tirage(s) en moyenne.`);
++  out(`- **Réparé pour le placement par défaut** : rotations corrigées pour que les 7 villes du placement par défaut aient au moins 3 ports (et les autres jonctions 2). ${res.manquesD['0'] || 0} plateaux sur ${NB} y parviennent.`);
++  out();
++  out(`Placements de villes : C(16, 7) = ${COMBINAISONS5.length} ; ${o.combos} placements tirés au hasard par plateau réparé (${res.hasard.n} configurations) pour les tableaux généraux, les ${COMBINAISONS5.length} placements sur ${res.nbExhaustif} plateaux réparés (évaluation rapide, vérifiée égale à \`PM.graphe.equilibre\` par tests/catalogue-5x5.test.js) pour le classement. Villes non traversables (règle du jeu). D(k), S, « écart max », « 5 contre 2 » : définitions de docs/21. Seuils codés dans \`src/graphe.js\` : blocage si « 5 contre 2 » ou écart max > ${GR.SEUIL_BLOCAGE_ECART} ; alerte si écart max > ${GR.SEUIL_ECART} ou S ≥ ${GR.SEUIL_S}.`);
++  out();
++
++  /* 1 */
++  out('### 1. Le catalogue');
++  out();
++  out('| Id | Nom | Gabarit | Tuiles | Cases | Ports | Raccords | Jeu entre chemins | Idée |\n|---|---|---|---|---|---|---|---|---|');
++  let tuiles = 0, casesTot = 0;
++  const jeux = {};
++  for (const m of cat) {
++    const c = controlesTrace(m, F5);
++    jeux[m.id] = c;
++    tuiles += m.exemplaires;
++    out(`| ${m.id} | ${m.nom} | ${m.gabarit} | ${m.exemplaires} | ${m.cases.length} | ${nbPortsModele(m)} | ${masqueRaccords5(m)} | ${Number.isFinite(c.jeuChemins) ? c.jeuChemins.toFixed(1) + ' mm' : 'n/a'} | ${IDEES5[m.id] || ''} |`);
++  }
++  out();
++  const parG = (g) => cat.filter((m) => m.gabarit === g).reduce((s, m) => s + m.exemplaires, 0);
++  const jeuMin = Math.min(...Object.values(jeux).map((c) => c.jeuChemins));
++  out(`${tuiles} tuiles (${parG('centrale')} centrales, ${parG('bord')} bords, ${parG('coin')} coins). Plus petit jeu entre deux chemins : ${jeuMin.toFixed(1)} mm (exigé : ${F5.LARGEUR_CHEMIN} mm) ; plus petite marge chemin - case : ${Math.min(...Object.values(jeux).map((c) => c.margeCase)).toFixed(1)} mm (exigé : 0) ; plus petite marge chemin - coin : ${Math.min(...Object.values(jeux).map((c) => c.margeCoin)).toFixed(1)} mm (exigé : 0).`);
++  out();
++
++  /* 2 */
++  out('### 2. Cases par plateau');
++  out();
++  out('Cases des 25 tuiles + 9 jonctions-cases (cible 75 ± 3, docs/18 et docs/20) :');
++  out();
++  out(tableauDeuxHist('Cases', brut.casesPlateau, rep.casesPlateau, NB, NB));
++  out();
++  out(`Moyenne : ${f2(moyHist(brut.casesPlateau))} (brut), ${f2(moyHist(rep.casesPlateau))} (réparé). Ports par plateau (somme des ports sur les 16 jonctions) : moyenne ${f2(moyHist(brut.portsPlateau))} (brut), ${f2(moyHist(rep.portsPlateau))} (réparé).`);
++  out();
++
++  /* 3 */
++  out('### 3. Écart entre villes (garantie du catalogue)');
++  out();
++  out('Plus petit écart (en pas) entre deux jonctions quelconques, toutes les jonctions étant des cases : minorant de l\'écart entre deux villes quel que soit le choix des 7 villes. Exigence : 4 pas (3 cases entre deux villes).');
++  out();
++  out('Brut :'); out(texteHist(brut.ecartVillesGarantie));
++  out('Réparé :'); out(texteHist(rep.ecartVillesGarantie));
++  out('Même mesure sur les configurations réelles (7 villes, non traversables), placements tirés au hasard :');
++  out(texteHist(A.ecartVilles));
++
++  /* 4 */
++  out('### 4. Ports par jonction');
++  out();
++  out(tableauDeuxHist('Ports', brut.portsJonction, rep.portsJonction, NB * 16, NB * 16));
++  out();
++  out('Jonctions reliées par moins de 2 ports, par plateau (alerte `jonction_ports`) :');
++  out();
++  out(tableauDeuxHist('Jonctions', brut.malReliees, rep.malReliees, NB, NB));
++  out();
++  out('Jonctions à 3 ports ou plus, par plateau :');
++  out();
++  out(tableauDeuxHist('Jonctions', brut.jonctionsA3, rep.jonctionsA3, NB, NB));
++  out();
++  const a7 = (h) => Object.keys(h).filter((k) => Number(k) >= 7).reduce((s, k) => s + h[k], 0);
++  out(`Plateaux ayant au moins 7 jonctions à 3 ports ou plus (de quoi mettre 7 villes à 3 ports) : ${pc(a7(brut.jonctionsA3), NB)} (brut), ${pc(a7(rep.jonctionsA3), NB)} (réparé).`);
++  out();
++  out('Tirages nécessaires à la réparation (2 ports par jonction) :'); out(texteHist(res.essais));
++
++  /* 5 */
++  out('### 5. Équilibre, placements tirés au hasard (plateaux réparés)');
++  out();
++  out(`${A.n} configurations. Score S : moyenne ${f2(moyHist(A.S))}.`);
++  out(texteHist(A.S));
++  out('| S ≥ | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 10 |\n|---|---|---|---|---|---|---|---|---|');
++  out('| Configurations | ' + [2, 3, 4, 5, 6, 7, 8, 10].map((k) => pc(partHist(A.S, k), A.n)).join(' | ') + ' |');
++  out();
++  out('Écart |D1(k) − D2(k)| au rang k :');
++  out();
++  out('| Rang | Écart moyen | = 0 | = 1 | = 2 | = 3 | ≥ 4 |\n|---|---|---|---|---|---|---|');
++  A.rang.forEach((h, k) => {
++    const t = totalHist(h);
++    out(`| ${k + 1} | ${f2(moyHist(h))} | ${pc(h['0'] || 0, t)} | ${pc(h['1'] || 0, t)} | ${pc(h['2'] || 0, t)} | ${pc(h['3'] || 0, t)} | ${pc(partHist(h, 4), t)} |`);
++  });
++  out();
++  out('Écart max (rangs 1 à 7) :'); out(texteHist(A.ecartMax));
++  out(`« 5 contre 2 » (ou pire) : ${pc(A.cinqDeux, A.n)}. « 4 contre 3 » : ${pc(A.quatreTrois, A.n)}. Villes à égalité de distance : ${f2(moy(A.egalite))} en moyenne sur 7. Plateaux « très déséquilibrés » (blocage) : ${pc(A.bloquees, A.n)}.`);
++  out();
++  out('Partage (plus proches du joueur le mieux placé contre l\'autre) :'); out(texteHist(A.partage));
++  out('Première ville (distance, joueur vert) :'); out(texteHist(A.ville1[1]));
++  out('Écart sur la première ville (|D1(1) − D2(1)|) :'); out(texteHist(A.ecartPremiere));
++  out('Nombre moyen de villes atteignables en au plus n pas (tempo) :');
++  out();
++  out('| Pas | Vert | Rouge |\n|---|---|---|');
++  for (const k of [3, 4, 5]) out(`| ≤ ${k} | ${f2(moy(A.tempo[1][k]))} | ${f2(moy(A.tempo[2][k]))} |`);
++  out();
++  out('Plus petit nombre de ports sur les 7 villes (placements au hasard, plateaux réparés) :'); out(texteHist(res.hasard.portsVilles));
++
++  /* 6 */
++  out('### 6. Les 11 440 placements de villes');
++  out();
++  const cl = res.classement;
++  out(`${COMBINAISONS5.length} placements, ${cl.length} classes de symétrie (gauche-droite, et haut-bas qui échange les joueurs : S est le même). Mesure sur ${res.nbExhaustif} plateaux réparés, soit ${res.nbExhaustif * COMBINAISONS5.length} évaluations. Tri : part bloquée, puis S moyen. « Lignes » = nombre de villes sur les lignes de jonctions j = 1, 2, 3, 4.`);
++  out();
++  const ligne = (c) => `| ${c.cle} | ${repartitionLignes5(c.masque)} | ${c.images} | ${f2(c.sMoyen)} | ${pc(c.s5 * 1e4, 1e4)} | ${pc(c.cinq * 1e4, 1e4)} | ${pc(c.bloque * 1e4, 1e4)} | ${pc(c.inegale * 1e4, 1e4)} | ${f2(c.tempo3)} |`;
++  const enTete = '| Villes | Lignes | Images | S moyen | S ≥ 5 | 5 contre 2 | Bloqué | 1re ville inégale | Villes à ≤ 3 pas |\n|---|---|---|---|---|---|---|---|---|';
++  out('Les 20 meilleures classes :'); out(); out(enTete);
++  cl.slice(0, 20).forEach((c) => out(ligne(c)));
++  out();
++  out('Les 5 moins bonnes :'); out(); out(enTete);
++  cl.slice(-5).forEach((c) => out(ligne(c)));
++  out();
++  // par répartition des villes entre les lignes (symétrie haut-bas : 2-2-2-1 et 1-2-2-2 sont la même)
++  const canon = (s) => { const r = s.split('-').reverse().join('-'); return s < r ? s : r; };
++  const groupes = new Map();
++  for (const c of cl) {
++    const k = canon(repartitionLignes5(c.masque)), g = groupes.get(k) || { k, n: 0, s: 0, meilleur: Infinity, pire: -Infinity, bloque: 0, cinq: 0 };
++    g.n++; g.s += c.sMoyen; g.meilleur = Math.min(g.meilleur, c.sMoyen); g.pire = Math.max(g.pire, c.sMoyen); g.bloque += c.bloque; g.cinq += c.cinq;
++    groupes.set(k, g);
++  }
++  out('Par répartition des villes entre les 4 lignes de jonctions (moyenne sur les classes de la répartition) :');
++  out();
++  out('| Lignes | Classes | S moyen | Meilleure classe | Moins bonne | Bloqué (moyenne) |\n|---|---|---|---|---|---|');
++  Array.from(groupes.values()).sort((a, b) => a.s / a.n - b.s / b.n).slice(0, 12)
++    .forEach((g) => out(`| ${g.k} | ${g.n} | ${f2(g.s / g.n)} | ${f2(g.meilleur)} | ${f2(g.pire)} | ${pc(g.bloque / g.n * 1e4, 1e4)} |`));
++  out();
++  // présence de chaque jonction parmi les 100 meilleures classes
++  const top = cl.slice(0, 100), freq = JONCTIONS5.map(() => 0);
++  top.forEach((c) => JONCTIONS5.forEach((_, k) => { if ((c.masque >> k) & 1) freq[k]++; }));
++  out('Fréquence de chaque jonction parmi les villes des 100 meilleures classes (colonnes i = 1 à 4, lignes j = 1 à 4) :');
++  out();
++  out('| j \\ i | 1 | 2 | 3 | 4 |\n|---|---|---|---|---|');
++  for (let j = 1; j <= 4; j++) out(`| ${j} | ${[1, 2, 3, 4].map((i) => freq[indiceJ5(i, j)] + ' %').join(' | ')} |`);
++  out();
++  if (res.candidats.length) {
++    out('Choix du placement par défaut : parmi les 40 meilleures classes sans blocage et sans première ville inégale, celles dont les 3 ports aux 7 villes se réparent (rotations des centrales) sur 60 plateaux :');
++    out();
++    out('| Villes | Lignes | S moyen | S ≥ 5 | Faisabilité des 3 ports |\n|---|---|---|---|---|');
++    res.candidats.slice(0, 12).forEach((c) => out(`| ${c.cle} | ${repartitionLignes5(c.masque)} | ${f2(c.sMoyen)} | ${pc(c.s5 * 1e4, 1e4)} | ${pc(c.faisabilite * 60, 60)} |`));
++    out();
++  }
++  const bloquees = cl.filter((c) => c.bloque > 0).length;
++  out(`Classes sans aucun plateau bloqué : ${cl.length - bloquees} sur ${cl.length}. Classes avec un S moyen ≤ 2 : ${cl.filter((c) => c.sMoyen <= 2).length}.`);
++  out();
++
++  /* 7 */
++  const D = res.surDefaut, Dr = res.surDefautRepare;
++  out('### 7. Placement par défaut');
++  out();
++  const e = res.defautEntree;
++  out(`Placement mesuré : villes en ${cleVilles5(res.defaut)} (lignes ${repartitionLignes5(res.defaut)}), jonctions-cases ailleurs. Classe de symétrie : ${e.images} placement(s) équivalent(s). Sur les ${res.nbExhaustif} plateaux du classement : S moyen ${f2(e.sMoyen)}, bloqué ${pc(e.bloque * 1e4, 1e4)}, première ville inégale ${pc(e.inegale * 1e4, 1e4)}.`);
++  out();
++  for (const [nom, X] of [['plateaux réparés (2 ports par jonction)', D], ['plateaux réparés pour ce placement (3 ports aux villes)', Dr]]) {
++    const a = X.acc;
++    out(`**${nom}** : ${X.n} configurations. S moyen ${f2(moyHist(a.S))} ; S ≥ 5 : ${pc(partHist(a.S, 5), a.n)} ; S ≥ 4 : ${pc(partHist(a.S, 4), a.n)} ; écart max ≥ 2 : ${pc(partHist(a.ecartMax, 2), a.n)} ; écart max ≥ 3 : ${pc(partHist(a.ecartMax, 3), a.n)} ; « 5 contre 2 » : ${pc(a.cinqDeux, a.n)} ; « 4 contre 3 » : ${pc(a.quatreTrois, a.n)} ; blocage : ${pc(a.bloquees, a.n)} ; première ville inégale : ${pc(a.premiereInegale, a.n)} ; villes à ≤ 3 pas : ${f2(moy(a.tempo[1][3]))} (vert), ${f2(moy(a.tempo[2][3]))} (rouge).`);
++    out();
++    out('S :'); out(texteHist(a.S));
++    out('Plus petit nombre de ports sur les 7 villes :'); out(texteHist(X.portsVilles));
++    out('Nombre de villes à 3 ports ou plus :'); out(texteHist(X.villesA3));
++  }
++  out('Partage des villes (plateaux réparés, 2 ports) :'); out(texteHist(D.acc.partage));
++  out('Écart par rang (plateaux réparés, 2 ports) :');
++  out();
++  out('| Rang | Écart moyen | = 0 | = 1 | = 2 | ≥ 3 |\n|---|---|---|---|---|---|');
++  D.acc.rang.forEach((h, k) => {
++    const t = totalHist(h);
++    out(`| ${k + 1} | ${f2(moyHist(h))} | ${pc(h['0'] || 0, t)} | ${pc(h['1'] || 0, t)} | ${pc(h['2'] || 0, t)} | ${pc(partHist(h, 3), t)} |`);
++  });
++  out();
++
++  /* 8 */
++  out('### 8. Autoroute du pourtour');
++  out();
++  out('**a.** Distance minimale (en pas) entre une case d\'apparition verte et une rouge (graphe complet, sans ville) ; la rangée centrale porte deux apparitions neutres, qui servent de relais :');
++  out(texteHist(rep.ecartApparitions));
++  out('Apparitions par joueur (vert + rouge), sans les neutres :'); out(texteHist(rep.apparitions));
++  out('**b.** Distance d\'une case d\'apparition d\'un joueur à la rangée de jonctions la plus éloignée (j = 4 pour le vert, j = 1 pour le rouge), sans ville, par les seules tuiles du pourtour ou par les seules colonnes 1 à 3 (« centre ») :');
++  out();
++  out('| Joueur | Voie | Moyenne | Minimum | Maximum |\n|---|---|---|---|---|');
++  for (const p of [1, 2]) {
++    for (const [nom, h] of [['pourtour', rep.pourtourAdverse[p]], ['centre', rep.centreAdverse[p]]]) {
++      const ks = cles(h).filter((k) => k !== 'Infinity').map(Number);
++      out(`| ${p === 1 ? 'vert' : 'rouge'} | ${nom} | ${f2(moyHist(h))} | ${ks.length ? Math.min(...ks) : 'n/a'} | ${ks.length ? Math.max(...ks) : 'n/a'} |`);
++    }
++  }
++  out();
++  const fl = res.flancs;
++  out(`**c.** \`PM.graphe.flancs\` (toutes les jonctions portent une ville, non traversables) sur ${fl.n / 2} plateaux : le pourtour est plus court que le centre dans ${fl.plusCourt} mesures sur ${fl.n} (${pc(fl.plusCourt, fl.n)}), différence moyenne ${f2(moyFinis(fl.diff))} pas. Attention : \`flancs\` définit le centre comme les colonnes 1 et ${F5.GRILLE.colonnes - 2}, sans la colonne 2 (hors périmètre).`);
++  out();
++
++  /* 9 */
++  out('### 9. Raccords morts');
++  out();
++  out('Raccords morts par plateau (voisin posé sans raccord en face), brut puis réparé :');
++  out(texteHist(brut.mortsPlateau)); out(texteHist(rep.mortsPlateau));
++
++  /* 10 */
++  {
++    const g = D.goulets;
++    out('### 10. Goulets (placement par défaut)');
++    out();
++    out(`${g.n} cas (un par joueur et par plateau réparé). Chemins sans case commune (hors cases d'apparition) entre les apparitions d'un joueur et chaque ville, villes non traversables.`);
++    out();
++    out('Minimum, sur les 7 villes, du nombre de chemins disjoints :'); out(texteHist(g.minParJoueur));
++    out('Nombre de chemins disjoints, toutes villes :'); out(texteHist(g.chemins));
++    out(`Points d'articulation : au moins un dans ${pc(g.articulation, g.n)} des cas ; un point qui coupe au moins 2 villes dans ${pc(g.articulationDouble, g.n)} ; nombre moyen par cas ${f2(moy(g.nbArticulations))}.`);
++    out();
++  }
++
++  /* 11 */
++  out('### 11. Seuils : ce que chaque seuil attraperait');
++  out();
++  const Dacc = D.acc;
++  out('Part des configurations touchées par chaque critère, pour des placements tirés au hasard (général) et pour le placement par défaut :');
++  out();
++  out('| Critère | Au hasard | Placement par défaut |\n|---|---|---|');
++  out(`| « 5 contre 2 » | ${pc(A.cinqDeux, A.n)} | ${pc(Dacc.cinqDeux, Dacc.n)} |`);
++  for (const k of [2, 3, 4]) out(`| Écart max ≥ ${k} | ${pc(partHist(A.ecartMax, k), A.n)} | ${pc(partHist(Dacc.ecartMax, k), Dacc.n)} |`);
++  for (const k of [4, 5, 6, 7, 8]) out(`| S ≥ ${k} | ${pc(partHist(A.S, k), A.n)} | ${pc(partHist(Dacc.S, k), Dacc.n)} |`);
++  out(`| Blocage actuel (« 5 contre 2 » ou écart max > ${GR.SEUIL_BLOCAGE_ECART}) | ${pc(A.bloquees, A.n)} | ${pc(Dacc.bloquees, Dacc.n)} |`);
++  out(`| Première ville inégale | ${pc(A.premiereInegale, A.n)} | ${pc(Dacc.premiereInegale, Dacc.n)} |`);
++  out();
++  out('S des configurations acceptées (non bloquées) :');
++  out();
++  out('| Centile | Au hasard | Placement par défaut | Défaut, 3 ports aux villes |\n|---|---|---|---|');
++  for (const p of [0.5, 0.75, 0.9, 0.95, 0.99]) out(`| ${Math.round(p * 100)} % | ${percentileHist(res.hasard.accepteS, p)} | ${percentileHist(D.accepteS, p)} | ${percentileHist(Dr.accepteS, p)} |`);
++  out();
++  return L.join('\n') + '\n';
++}
++
+ /* ---------------------------------------------------------------------- */
+ /* Lancement                                                               */
+ /* ---------------------------------------------------------------------- */
++/** Lancement du rapport 5×5 : node outils/mesures-equilibre.js --grille=5x5 [--plateaux=1000] [--graine=20261016] [--sortie=fichier]. */
++function principal5(flags) {
++  const nb = Number(flags.plateaux) || 1000;
++  const graine = Number(flags.graine) || 20261016;
++  const sortie = flags.sortie || path.join(__dirname, '..', 'docs', '24-mesures-catalogue-5x5.md');
++  const constats = path.join(__dirname, 'constats-catalogue-5x5.md');
++  const t0 = Date.now();
++  const res = mesurer5({ nb, graine });
++  let texte = rediger5(res, { graine });
++  if (fs.existsSync(constats) && nb === 1000 && graine === 20261016) {
++    texte = fs.readFileSync(constats, 'utf8').replace(/\s*$/, '\n') + '\n---\n\n## Tableaux de mesure\n\n' + texte.replace(/^# .*\n/, '');
++  }
++  fs.writeFileSync(sortie, texte, 'utf8');
++  console.log(`Rapport 5x5 écrit : ${sortie} (${((Date.now() - t0) / 1000).toFixed(1)} s) ; placement par défaut mesuré : ${cleVilles5(res.defaut)} (masque ${res.defaut})`);
++}
++
+ 
+ function principal() {
+-  const nb = Number(process.argv[2]) || 1000;
+-  const graine = Number(process.argv[3]) || 20261015;
+-  const sortie = process.argv[4] || path.join(__dirname, '..', 'docs', '21-mesures-catalogue-v2.md');
++  const drapeaux = {}, positionnels = [];
++  process.argv.slice(2).forEach((a) => {
++    const m = /^--([a-z0-9]+)=(.*)$/.exec(a);
++    if (m) drapeaux[m[1]] = m[2]; else positionnels.push(a);
++  });
++  if (drapeaux.grille === '5x5') return principal5(drapeaux);
++  const nb = Number(positionnels[0]) || 1000;
++  const graine = Number(positionnels[1]) || 20261015;
++  const sortie = positionnels[2] || path.join(__dirname, '..', 'docs', '21-mesures-catalogue-v2.md');
+   const constats = path.join(__dirname, 'constats-catalogue-v2.md');
+   const t0 = Date.now();
+   const stats = mesurer(tirerPlateaux(nb, graine), { paires: 'toutes' });
+@@ -522,6 +1287,12 @@ function principal() {
+   console.log(`Rapport écrit : ${sortie} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+ }
+ 
+-module.exports = { mulberry32, tirerPlateau, tirerPlateaux, PAIRES, PAIRES_DEFAUT, PAIRES_VARIEES, CLE_DEFAUT, villes9sauf, mesurer, rediger };
++module.exports = {
++  mulberry32, tirerPlateau, tirerPlateaux, PAIRES, PAIRES_DEFAUT, PAIRES_VARIEES, CLE_DEFAUT, villes9sauf, mesurer, rediger,
++  // 5×5
++  JONCTIONS5, COMBINAISONS5, cleVilles5, masqueDeVilles5, jetonsDuMasque5, classeMasque5, imageMasque5, repartitionLignes5,
++  reparerRotations5, tirerPlateauRepare5, contexteRapide5, evaluerRapide5, grapheAvecVilles5, controlesTrace,
++  evaluerPlateaux5, classerPlacements5, mesurer5, rediger5, percentileHist, PLACEMENT_DEFAUT_5X5: () => PLACEMENT_DEFAUT_5X5
++};
+ 
+ if (require.main === module) principal();
+diff --git a/src/catalogue.js b/src/catalogue.js
+index 3b5dd43..e506aa9 100644
+--- a/src/catalogue.js
++++ b/src/catalogue.js
+@@ -1,9 +1,10 @@
+ /*
+- * catalogue.js : catalogue des tuiles du format 4×4, version 2 (orientation canonique, mm).
++ * catalogue.js : catalogues des tuiles des formats 4×4 et 5×5, version 2 (orientation canonique, mm).
+  * Aucun accès au DOM. Règles : docs/18-decisions-v2.md, docs/19-avis-design-v2.md (R1 à R4, § 5),
+- * docs/20-avis-geometrie-v2.md (cotes, D5 raccourci de coin) ; mesures : docs/21-mesures-catalogue-v2.md.
++ * docs/20-avis-geometrie-v2.md (cotes, D5 raccourci de coin) ; mesures : docs/21-mesures-catalogue-v2.md (4×4)
++ * et docs/24-mesures-catalogue-5x5.md (5×5). Le catalogue 5×5 est décrit plus bas, après celui du 4×4.
+  *
+- * 22 tuiles physiques, 14 modèles :
++ * Catalogue 4×4 : 22 tuiles physiques, 14 modèles :
+  *  - 6 centrales C1..C6 (1 exemplaire), 4 à 6 cases ;
+  *  - 5 modèles de bord B1, B3..B6 (10 tuiles dont 6 exemplaires de B1), 3 ou 4 cases, une case d'apparition ;
+  *  - 3 modèles de coin K1..K3 (2 exemplaires chacun), 2 ou 3 cases, une case d'apparition.
+@@ -155,6 +156,80 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
+     ];
+   }
+ 
++  /* ------------------------------------------------------------------------------------------------ */
++  /* Catalogue 5×5 (docs/19 § Catalogues, docs/20 D4 et « Cible de cases », docs/22 § 5)                 */
++  /* Tuile de 100 mm, raccords à 30 / 50 / 70, cases de Ø 24, zone de coin R 20 (PM.geometrie.format).   */
++  /* ------------------------------------------------------------------------------------------------ */
++
++  /** Modèle du catalogue 5×5 : ids « 5C… » (centrales), « 5B… » (bords), « 5K… » (coins), sans trait d'union. */
++  function modele5(id, nom, gabarit, exemplaires, cases, chemins) {
++    return { id: id, nom: nom, gabarit: gabarit, grille: '5x5', exemplaires: exemplaires, cases: cases, chemins: chemins };
++  }
++
++  /** Cases à port d'une centrale : à 28 mm des deux côtés du coin k (0 = NO, 1 = NE, 2 = SE, 3 = SO). */
++  var PORTEUSE_CENTRALE = [{ x: 28, y: 28 }, { x: 72, y: 28 }, { x: 72, y: 72 }, { x: 28, y: 72 }];
++
++  /**
++   * Centrale « en étoile » : un relais au centre (50, 50), relié aux cases à port des coins `coins`, et tenant les
++   * quatre raccords au milieu des côtés (à 30 ou 70 mm, le chemin frôlerait une case à port : docs/20 T3).
++   * Cases = ports + 1, le minimum que permettent R1 à R4.
++   */
++  function etoile5(id, nom, exemplaires, coins) {
++    var cases = [kase('c0', 50, 50)], chemins = [];
++    coins.forEach(function (k, n) {
++      cases.push(kase('c' + (n + 1), PORTEUSE_CENTRALE[k].x, PORTEUSE_CENTRALE[k].y));
++      chemins.push(lien('h' + (n + 1), 'c0', 'c' + (n + 1)));
++    });
++    coins.forEach(function (k, n) { chemins.push(port('p' + (n + 1), 'c' + (n + 1), k)); });
++    [0, 1, 2, 3].forEach(function (cote) { chemins.push(raccord('r' + (cote + 1), 'c0', cote, 1)); });
++    return modele5(id, nom, 'centrale', exemplaires, cases, chemins);
++  }
++
++  /**
++   * Bord (extérieur N) : case d'apparition à (50, 34) qui tient le raccourci (E pos 0, O pos 2, à 30 mm du bord
++   * extérieur) et le raccord du côté intérieur (S pos 1) ; cases à port aux coins SE (25 mm du bord) et SO.
++   * `coins` : coins qui portent un port (2 = SE, 3 = SO).
++   */
++  function bord5(id, nom, exemplaires, coins) {
++    var cases = [appar('a', 50, 34)], chemins = [];
++    coins.forEach(function (k, n) {
++      cases.push(kase('c' + (n + 1), k === 2 ? 75 : 25, 72));
++      chemins.push(lien('h' + (n + 1), 'a', 'c' + (n + 1)));
++      chemins.push(port('p' + (n + 1), 'c' + (n + 1), k));
++    });
++    return modele5(id, nom, 'bord', exemplaires, cases, chemins.concat(raccourciBord('a'), [raccord('r3', 'a', 2, 1)]));
++  }
++
++  function construire5x5() {
++    return [
++      /* ---------------- Centrales : 11 tuiles, 3 à 5 cases (relais central, raccords au milieu) ---------------- */
++      etoile5('5C1', 'Étoile', 1, [0, 1, 2, 3]),         // 5 cases, 4 ports : tout est à 2 pas
++      etoile5('5C2', 'Trident', 1, [0, 1, 3]),           // 4 cases, 3 ports
++      etoile5('5C3', 'Diagonale', 4, [0, 2]),            // 3 cases, 2 ports en coins opposés : port - relais - port
++      etoile5('5C4', 'Fourche', 4, [0, 1]),              // 3 cases, 2 ports en coins voisins
++      // zigzag : deux relais reliés (n : raccords N et E, port NO ; s : raccords S et O, port SE), 4 cases pour 2 ports
++      modele5('5C5', 'Zigzag', 'centrale', 1,
++        [kase('c1', 28, 28), kase('c2', 72, 72), kase('n', 66, 34), kase('s', 34, 66)], [
++          lien('h1', 'n', 'c1'), lien('h2', 's', 'c2'), lien('h3', 'n', 's'),
++          port('p1', 'c1', 0), port('p2', 'c2', 2),
++          raccord('r1', 'n', 0, 1), raccord('r2', 'n', 1, 1), raccord('r3', 's', 2, 1), raccord('r4', 's', 3, 1)
++        ]),
++
++      /* ---------------- Bords : 14 tuiles, 2 ou 3 cases, une apparition (sans port) et le raccourci ---------------- */
++      bord5('5B1', 'Bord en V', 4, [2, 3]),              // 3 cases, 2 ports : l'apparition est à 2 pas des deux jonctions
++      bord5('5B2', 'Bord à port est', 5, [2]),           // 2 cases, 1 port (coin SE)
++      bord5('5B3', 'Bord à port ouest', 5, [3]),         // 2 cases, 1 port (coin SO)
++
++      /* ---------------- Coins : 5 tuiles, 2 ou 3 cases, apparition sur la diagonale extérieure ---------------- */
++      modele5('5K1', 'Coin direct', 'coin', 4,
++        [appar('a', 36, 36), kase('c1', 70, 70)], [lien('h1', 'a', 'c1'), port('p1', 'c1', 2)].concat(raccourciCoin('a', 'a'))),
++      modele5('5K2', 'Coin à relais', 'coin', 1,
++        [appar('a', 34, 34), kase('r', 54, 54), kase('c1', 74, 74)], [
++          lien('h1', 'a', 'r'), lien('h2', 'r', 'c1'), port('p1', 'c1', 2)
++        ].concat(raccourciCoin('a', 'a')))
++    ];
++  }
++
+   /** Gèle récursivement un objet (le catalogue partagé ne doit pas être modifié). */
+   function geler(o) {
+     if (o && typeof o === 'object' && !Object.isFrozen(o)) {
+@@ -165,17 +240,23 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
+   }
+ 
+   var MODELES = geler(construire());
++  var MODELES_5X5 = geler(construire5x5());
++  var MODELES_PAR_GRILLE = geler({ '4x4': MODELES, '5x5': MODELES_5X5 });
+ 
+-  /** Document neuf du format 4×4 (PM.modele.nouveauDocument) contenant une copie modifiable des 14 modèles. */
+-  function nouveauDocument() {
+-    var doc = PM.modele.nouveauDocument('4x4');
+-    doc.modeles = JSON.parse(JSON.stringify(MODELES));
++  /**
++   * Document neuf contenant une copie modifiable du catalogue de la grille `grille` ('4x4' par défaut, ou '5x5').
++   * Lève une Error si la grille est inconnue (PM.modele.nouveauDocument).
++   */
++  function nouveauDocument(grille) {
++    var doc = PM.modele.nouveauDocument(grille === undefined ? '4x4' : grille);
++    doc.modeles = JSON.parse(JSON.stringify(MODELES_PAR_GRILLE[doc.grille]));
+     return doc;
+   }
+ 
+   PM.catalogue = {
+     version: 2,
+-    modeles: MODELES,                 // tableau gelé (lecture seule)
++    modeles: MODELES,                 // catalogue 4×4 (tableau gelé, lecture seule) : compatibilité
++    modelesParGrille: MODELES_PAR_GRILLE,   // { '4x4': [...], '5x5': [...] }
+     nouveauDocument: nouveauDocument
+   };
+ 

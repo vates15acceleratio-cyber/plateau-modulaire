@@ -60,3 +60,8 @@
 - **Plus de poches** (case en impasse) dans les tuiles du catalogue (4×4 et 5×5) ; l'éditeur signale une poche par une alerte. B4 (« bord en fourche ») est à revoir.
 - **Autre poste** : tout est envoyé sur GitHub, avec un `CLAUDE.md` qui résume la méthode et où trouver les décisions.
 - **Cases par plateau 4×4 : ≈ 63 accepté** (effet du tirage avec répétition ; plus de retour vers 60).
+
+## Point d'arrêt du 2026-10-16
+- **Pause** à la demande de l'utilisateur ; reprise après discussion.
+- **Suppression des tuiles utilisateur** (avec confirmation) et **légende « Commandes » illustrée** (souris et touches dessinées, à droite du plateau à partir de 1600 px de large) ajoutées.
+- **Idée nouvelle, non définie : les régions thématiques** (une tuile représente une région ; une région a une thématique, ex. C3 = Montagne) : à étudier avec l'utilisateur. Questions préparées dans `docs/25-travail-restant.md`.
