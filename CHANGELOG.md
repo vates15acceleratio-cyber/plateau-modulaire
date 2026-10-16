@@ -1,5 +1,20 @@
 # Journal des modifications
 
+## [3.03.0] - 2026-10-16
+
+Mineure
+
+Le bouton « Nouveau → 5×5 » crée enfin un plateau, avec un catalogue de 6 modèles (30 tuiles) utilisable en pose à la main ; le générateur 5×5 reste provisoire. Documents compatibles avec la 3.02.0.
+
+### Ajouté
+- Catalogue 5×5 (répartition B′, docs/18 et docs/24 § 8) : coin K2 ; bords B1, B7 et son miroir B7m ; centrales C7 « Pont » et C8 « Équerre » ; 30 tuiles (5 coins, 14 bords, 11 centrales) ; ≈ 78 cases et 40 ports par plateau avec 6 B1 ; coordonnées validées par l'advisor géométrie (docs/29).
+- `PM.catalogue.modelesParGrille` et `nouveauDocument(grille)` ; « Nouveau → 5×5 » n'est plus refusé (la mention « refusé tant que son catalogue n'existe pas » de la 3.01.0 est caduque).
+- Tests du catalogue 5×5 (`tests/catalogue-5x5.test.js`, aides communes `tests/aides-trace.js`) et étape de recette navigateur avec le vrai catalogue 5×5.
+- Documentation : cahier des charges (docs/24), avis design de jeu et géométrie (docs/28, docs/29), recette (docs/32), revue (docs/33).
+
+### Connu
+- Générateur 5×5 provisoire : centrales tournées au hasard, villes tirées librement (pas encore en 2-3-2), jonctions souvent reliées par un seul port (alerte) ; il ne tient pas encore les garanties décidées (5 ou 6 B1, ≥ 2 ports par jonction, ≥ 3 aux villes). Seuils d'équilibre 5×5 provisoires (ceux du 4×4).
+
 ## [3.02.0] - 2026-10-16
 
 Mineure

@@ -28,7 +28,7 @@ docs/brouillons/    travaux inachevés, à consulter sans les appliquer
 |---|---|---|
 | `geometrie.js` | constantes (mm), côtés et coins, masques, rotation, appariement | non |
 | `modele.js` | structures Tuile / Case / Chemin / Jeton / Plateau et validation | non |
-| `catalogue.js` | catalogue 4×4 (13 modèles, 22 tuiles), `nouveauDocument` | non |
+| `catalogue.js` | catalogues 4×4 (13 modèles, 22 tuiles) et 5×5 (6 modèles, 30 tuiles), `modelesParGrille`, `nouveauDocument(grille)` | non |
 | `rendu.js` | tracé SVG des tuiles et des jetons | non |
 | `etat.js` | état partagé, historique annuler / rétablir | non |
 | `sauvegarde.js` | JSON, migration des documents v1, sauvegarde automatique | oui (stockage, fichiers) |

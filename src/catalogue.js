@@ -1,5 +1,8 @@
 /*
- * catalogue.js : catalogue des tuiles du format 4×4, version 2 (orientation canonique, mm).
+ * catalogue.js : catalogues des tuiles des formats 4×4 et 5×5, version 2 (orientation canonique, mm).
+ * Le texte de cet en-tête décrit le catalogue 4×4 (PM.catalogue.modeles, testé par tests/catalogue.test.js). Le catalogue 5×5
+ * (répartition B′, docs/18 « Décisions de l’utilisateur pour le catalogue 5×5 », docs/24 § 8, coordonnées validées dans docs/29 ;
+ * tests/catalogue-5x5.test.js) est décrit plus bas ; les deux sont servis par PM.catalogue.modelesParGrille.
  * Aucun accès au DOM. Règles : docs/18-decisions-v2.md, docs/19-avis-design-v2.md (R1 à R4, § 5),
  * docs/20-avis-geometrie-v2.md (cotes, D5 raccourci de coin) ; mesures : docs/21-mesures-catalogue-v2.md.
  *
@@ -10,9 +13,9 @@
  *  - 2 modèles de coin K2 (4 exemplaires) et K4 (1 exemplaire), 3 ou 4 cases, une case d'apparition ; K1 (direct, une seule
  *    case avant la jonction) et K3 (poche) sont retirés, K4 est la seule autre forme de coin qui respecte tout (voir K4).
  *  Aucun modèle n'a de poche (case en impasse, alerte `poche` de validerModele).
- *  Environ 60 à 63 cases par plateau (cases des 16 tuiles + 2 jonctions-cases), voir tests/catalogue.test.js.
+ *  Environ 60 à 63 cases par plateau 4×4 (cases des 16 tuiles + 2 jonctions-cases), voir tests/catalogue.test.js.
  *
- * Règles que tous les modèles respectent (aucune erreur ni alerte de PM.modele.validerModele) :
+ * Règles que tous les modèles (4×4 et 5×5) respectent (aucune erreur ni alerte de PM.modele.validerModele) :
  *  - R1 une case porte au plus un port de coin ; R2 deux cases porteuses ne sont jamais reliées directement ;
  *  - R3 aucun raccord latéral sur une case porteuse ; R4 la case d'apparition ne porte jamais de port.
  *  Conséquence : sur tout trajet ville - ville, case porteuse, case sans port, case porteuse :
@@ -39,7 +42,7 @@
  *
  * Tracés : segments droits, amorce perpendiculaire de 10 mm à chaque raccord, amorce de 28 mm sur la
  * bissectrice à chaque port ; à 14 mm au moins des autres cases, 24 mm des coins (sauf le port), sans
- * contact entre chemins (contrôlé par tests/catalogue.test.js).
+ * contact entre chemins (contrôlé par tests/catalogue.test.js et tests/catalogue-5x5.test.js, via tests/aides-trace.js).
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
 
@@ -56,8 +59,11 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function port(id, c, coin) { return { id: id, a: { 'case': c }, b: { coin: coin } }; }
   function raccord(id, c, cote, pos) { return { id: id, a: { 'case': c }, b: { raccord: { cote: cote, pos: pos } } }; }
   function appar(id, x, y) { return kase(id, x, y, 'apparition'); }
+  function modeleGrille(grille, id, nom, gabarit, exemplaires, cases, chemins) {
+    return { id: id, nom: nom, gabarit: gabarit, grille: grille, exemplaires: exemplaires, cases: cases, chemins: chemins };
+  }
   function modele(id, nom, gabarit, exemplaires, cases, chemins) {
-    return { id: id, nom: nom, gabarit: gabarit, grille: '4x4', exemplaires: exemplaires, cases: cases, chemins: chemins };
+    return modeleGrille('4x4', id, nom, gabarit, exemplaires, cases, chemins);
   }
   /** Raccourci d'un bord (E pos 0 et O pos 2) tiré de la case d'apparition `c`. */
   function raccourciBord(c) { return [raccord('r1', c, 1, 0), raccord('r2', c, 3, 2)]; }
@@ -156,6 +162,59 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     ];
   }
 
+  /*
+   * Catalogue 5×5 (tuiles de 100 mm, positions de raccord 30 / 50 / 70, cases Ø 20), répartition B′ : 30 tuiles. « 78 cases, 40 ports »
+   * est la pose de référence avec 6 B1 et 9 jonctions-cases. Le nombre de B1 posés (nB1) change le décompte : avec 4 K2 et 9 centrales
+   * à 3 cases, cases = 72 + nB1 et ports = 34 + nB1 ; la garantie de 39 ports au moins impose nB1 >= 5 et les 6 B1 imprimés nB1 <= 6 :
+   * le générateur 5×5 devra imposer 5 ou 6 B1. Coordonnées de docs/29 (marge de tracé >= 2,7 mm).
+   *  - 1 coin K2 (5 exemplaires) ; K4 est écarté (trop serré dans 100 mm) ;
+   *  - 3 bords B1 « en V » (6), B7 « simple » (4, port SE) et son miroir B7m (4, port SO) : le carton ne se retourne pas ;
+   *  - 2 centrales à 3 cases C7 « Pont » (6) et C8 « Équerre » (5) : le relais central tient les 4 raccords au milieu.
+   * Mêmes règles qu'en 4×4 (R1 à R4, aucune poche) ; pas de mur (C5) ; sur les bords et les coins, aucun raccord hors du raccourci
+   * (bord : E pos 0 + O pos 2 ; coin : E pos 0 + S pos 2) et, pour un bord, du raccord S au milieu tiré de la case d'apparition.
+   * Les ids communs avec le 4×4 sont K2 et B1 seulement (C7, C8, B7 et B7m n'existent qu'en 5×5) : le champ `grille` et le document les distinguent.
+   */
+  function construire5() {
+    function m5(id, nom, gabarit, exemplaires, cases, chemins) { return modeleGrille('5x5', id, nom, gabarit, exemplaires, cases, chemins); }
+    var racCentre = [raccord('r1', 'c0', 0, 1), raccord('r2', 'c0', 1, 1), raccord('r3', 'c0', 2, 1), raccord('r4', 'c0', 3, 1)];
+    return [
+      /* Centrales : relais au centre (50, 50), 4 raccords au milieu des côtés, 2 ports sur les bissectrices */
+      // pont : ports NO et SE
+      m5('C7', 'Pont', 'centrale', 6,
+        [kase('c0', 50, 50), kase('c1', 28, 28), kase('c3', 72, 72)], [
+          lien('h1', 'c0', 'c1'), lien('h3', 'c0', 'c3'), port('p1', 'c1', 0), port('p3', 'c3', 2)
+        ].concat(racCentre)),
+      // équerre : ports NO et NE
+      m5('C8', 'Équerre', 'centrale', 5,
+        [kase('c0', 50, 50), kase('c1', 28, 28), kase('c2', 72, 28)], [
+          lien('h1', 'c0', 'c1'), lien('h2', 'c0', 'c2'), port('p1', 'c1', 0), port('p2', 'c2', 1)
+        ].concat(racCentre)),
+
+      /* Bords (extérieur N, ports SE et / ou SO, raccourci E pos 0 + O pos 2, raccord S au milieu depuis l'apparition) */
+      // V : l'apparition tient les deux ports, un port par jonction voisine
+      m5('B1', 'Bord en V', 'bord', 6,
+        [appar('a', 50, 40), kase('c1', 82, 66), kase('c2', 18, 66)], [
+          lien('h1', 'a', 'c1'), lien('h2', 'a', 'c2'), port('p1', 'c1', 2), port('p2', 'c2', 3)
+        ].concat(raccourciBord('a'), [raccord('r3', 'a', 2, 1)])),
+      // simple : un seul port, SE
+      m5('B7', 'Bord simple', 'bord', 4,
+        [appar('a', 56, 38), kase('c1', 84, 64)], [
+          lien('h1', 'a', 'c1'), port('p1', 'c1', 2)
+        ].concat(raccourciBord('a'), [raccord('r3', 'a', 2, 1)])),
+      // miroir de B7 (x -> 100 - x) : port SO
+      m5('B7m', 'Bord simple miroir', 'bord', 4,
+        [appar('a', 44, 38), kase('c1', 16, 64)], [
+          lien('h1', 'a', 'c1'), port('p1', 'c1', 3)
+        ].concat(raccourciBord('a'), [raccord('r3', 'a', 2, 1)])),
+
+      /* Coin (extérieurs N et O, port SE, raccourci E pos 0 + S pos 2) */
+      m5('K2', 'Coin à relais', 'coin', 5,
+        [appar('a', 32, 32), kase('r', 53, 53), kase('c1', 74, 74)], [
+          lien('h1', 'a', 'r'), lien('h2', 'r', 'c1'), port('p1', 'c1', 2)
+        ].concat(raccourciCoin('a', 'a')))
+    ];
+  }
+
   /** Gèle récursivement un objet (le catalogue partagé ne doit pas être modifié). */
   function geler(o) {
     if (o && typeof o === 'object' && !Object.isFrozen(o)) {
@@ -166,17 +225,25 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   }
 
   var MODELES = geler(construire());
+  var MODELES_5X5 = geler(construire5());
+  var PAR_GRILLE = geler({ '4x4': MODELES, '5x5': MODELES_5X5 });
 
-  /** Document neuf du format 4×4 (PM.modele.nouveauDocument) contenant une copie modifiable des 13 modèles. */
-  function nouveauDocument() {
-    var doc = PM.modele.nouveauDocument('4x4');
-    doc.modeles = JSON.parse(JSON.stringify(MODELES));
+  /**
+   * Document neuf de la grille demandée ('4x4' par défaut) contenant une copie modifiable de ses modèles
+   * (13 en 4×4, 6 en 5×5). Lève une Error pour une grille inconnue.
+   */
+  function nouveauDocument(grille) {
+    var g = grille === undefined || grille === null ? '4x4' : grille;
+    if (typeof g !== 'string' || !Object.prototype.hasOwnProperty.call(PAR_GRILLE, g)) throw new Error('Grille inconnue : ' + String(grille) + '.');
+    var doc = PM.modele.nouveauDocument(g);
+    doc.modeles = JSON.parse(JSON.stringify(PAR_GRILLE[g]));
     return doc;
   }
 
   PM.catalogue = {
     version: 2,
-    modeles: MODELES,                 // tableau gelé (lecture seule)
+    modeles: MODELES,                 // tableau gelé (lecture seule) : catalogue 4×4, gardé pour la compatibilité
+    modelesParGrille: PAR_GRILLE,     // { '4x4': [...], '5x5': [...] } gelé
     nouveauDocument: nouveauDocument
   };
 

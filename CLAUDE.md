@@ -37,5 +37,5 @@ Toujours répondre à l'utilisateur **en français**. Code, identifiants et comm
 
 ## État (2026-10-16) — PAUSE
 - **L'utilisateur a marqué une pause et reprendra après discussion : ne rien lancer sans son accord.**
-- Dernière version : voir `CHANGELOG.md` (3.x). Tout est sur GitHub ; `node --test` et les deux recettes passent.
-- **Travail restant et idées à étudier : `docs/25-travail-restant.md`** (catalogue 5×5 en pause, seuils, recette / sécurité, petites dettes, hexagonal en attente, idée nouvelle des **régions thématiques** à discuter).
+- Version 3.02.0 en PR. Le **catalogue 5×5 est fait** sur la branche `catalogue-5x5` (6 modèles, 30 tuiles, `docs/24`, `29`, `32`, `33`) : pose à la main utilisable. À faire : **générateur 5×5** (provisoire aujourd’hui), mesures sur 1000 plateaux, seuils 5×5. Méthode du brief §8 appliquée avec agents (advisors, production, testeur, relecteur, versionneur). `node --test` et les deux recettes passent.
+- **Travail restant et idées à étudier : `docs/25-travail-restant.md`** (générateur 5×5, mesures et seuils 5×5, recette / sécurité, petites dettes, hexagonal en attente, idée nouvelle des **régions thématiques** à discuter).
