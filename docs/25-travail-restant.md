@@ -6,7 +6,7 @@ L'utilisateur a marqué une pause ; il reprendra **après discussion**. Rien ne 
 
 ### 1.1 Catalogue 5×5 — en pause, attend le feu vert de l'utilisateur
 - L'interface 5×5 est prête (bouton « Nouveau », choix de la grille, rangée neutre, refus de mélange, export en tuiles de 100 mm, générateur en tirage libre) ; **il manque le catalogue** : « Nouveau → 5×5 » est refusé tant qu'il n'existe pas.
-- Consigne prête (voir l'historique de la session) : environ 30 modèles, **≈ 75 cases par plateau**, cases Ø 24, raccords à 30 / 50 / 70 mm, cases d'apparition sur tout le pourtour, raccourcis de coin, **aucune poche**, coins dans l'esprit de K2 / K4, règles R1 à R4 respectées, écart minimal de 4 pas entre jonctions vérifié sur 1000 plateaux ; exposer `PM.catalogue.nouveauDocument('5x5')` et `PM.catalogue.modelesParGrille`.
+- Consigne prête (voir l'historique de la session) : environ 30 modèles, **≈ 75 cases par plateau**, cases Ø 20 (décision du 2026-10-16, docs/18), raccords à 30 / 50 / 70 mm, cases d'apparition sur tout le pourtour, raccourcis de coin, **aucune poche**, coins dans l'esprit de K2 / K4, règles R1 à R4 respectées, écart minimal de 4 pas entre jonctions vérifié sur 1000 plateaux ; exposer `PM.catalogue.nouveauDocument('5x5')` et `PM.catalogue.modelesParGrille`.
 - Mesures à faire (1000 plateaux, docs/22 §5) puis rapport `docs/24-mesures-catalogue-5x5.md` : cases, S, écart par rang, « 5 contre 2 », « 4 contre 3 », tempo, pourtour, goulets, raccords morts, meilleurs placements des villes / jonctions-cases.
 - Brouillon inachevé d'un premier essai (règles plus anciennes : poches permises, coins K1 / K3) : `docs/brouillons/catalogue-5x5-inacheve.patch` — à consulter seulement, **ne pas l'appliquer tel quel**.
 

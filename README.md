@@ -17,7 +17,7 @@ Ouvrir `index.html` dans un navigateur récent (Chrome, Edge, Firefox). Aucune i
 
 ## Principes de conception
 
-- Grille 4×4 de tuiles carrées de 12 cm (environ 60 à 63 cases par plateau, cases de 3 cm de diamètre au plus). Un format 5×5 est en préparation.
+- Grille 4×4 de tuiles carrées de 12 cm (environ 60 à 63 cases par plateau, cases de 2 cm de diamètre). Un format 5×5 est en préparation.
 - Deux joueurs, **vert** (nord) et **rouge** (sud) : les 2 rangées les plus proches de chaque joueur lui appartiennent.
 - **Toutes les tuiles du pourtour** (bords et coins) portent une case d'apparition, imprimée neutre et colorée à l'écran selon le camp. Les coins ont un raccourci vers la tuile de bord voisine.
 - **7 villes**, sous forme de jetons posés aux jonctions de 4 tuiles ; les autres jonctions sont des cases chemin. Au moins 3 cases entre deux villes. On s'arrête dans une ville (elle ne se traverse pas).

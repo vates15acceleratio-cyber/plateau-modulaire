@@ -32,7 +32,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   /* ------------------------------------------------------------------ */
 
   /** Diamètre d'une case neuve (mm), identique à celui du catalogue. */
-  var DIAMETRE_DEFAUT = 24;
+  var DIAMETRE_DEFAUT = 20;
   /** Format de grille à partir d'un objet format, d'un identifiant ou de rien (4×4). */
   function leFormat(f) {
     if (f && typeof f === 'object') return f;
