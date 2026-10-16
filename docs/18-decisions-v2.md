@@ -59,3 +59,4 @@
 - **Coins** : **K1 et K3 retirés** ; K2 est le bon modèle (2 cases avant la ville la plus proche, déplacement rapide le long du bord) : chercher d'autres coins du même esprit, sinon garder K2 seul.
 - **Plus de poches** (case en impasse) dans les tuiles du catalogue (4×4 et 5×5) ; l'éditeur signale une poche par une alerte. B4 (« bord en fourche ») est à revoir.
 - **Autre poste** : tout est envoyé sur GitHub, avec un `CLAUDE.md` qui résume la méthode et où trouver les décisions.
+- **Cases par plateau 4×4 : ≈ 63 accepté** (effet du tirage avec répétition ; plus de retour vers 60).
