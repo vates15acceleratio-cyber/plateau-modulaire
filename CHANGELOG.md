@@ -1,5 +1,46 @@
 # Journal des modifications
 
+## [2.00.0] - 2026-10-16
+
+Majeure
+
+Règles de la version 2 sur la grille 4×4 : grilles toujours pleines, cases d'apparition sur tout le pourtour, jonctions sans ville comptées comme cases, tuiles et pose libres, nouveau catalogue de 22 tuiles. Le changement des règles du jeu et de la structure des documents n'est pas compatible avec la version 1.x sans conversion : un document de la 1.x se rouvre converti, avec une phrase qui le signale. Le niveau majeure vient de cette rupture de compatibilité et du changement de règles. Ouvrir `README.md` pour la marche à suivre.
+
+### Ajouté
+- Formats de grille paramétrés (4×4 et 5×5) dans le code (`src/geometrie.js`, `src/modele.js`) ; le catalogue et l'interface du 5×5 restent à faire.
+- Cases d'apparition sur tout le pourtour (bords et coins), colorées vert ou rouge à l'écran selon le camp de leur position ; imprimées en neutre.
+- Jonctions-cases : une jonction sans ville est une case chemin, qui compte dans les distances.
+- Raccourcis de coin : depuis la case d'apparition d'un coin, un raccord mène à la tuile de bord voisine.
+- Catalogue 4×4 v2 de 22 tuiles (14 modèles, environ 60 cases par plateau) dans `src/catalogue.js`.
+- Règles physiques des tuiles dans l'éditeur : chemins, marges de coupe, zone de coin, chevauchement et case isolée bloquent l'enregistrement de la tuile.
+- Conversion des documents de la version 1 à l'ouverture, avec une phrase d'information ; proposition au démarrage de charger le nouveau catalogue.
+- Mesures du catalogue v2 : `outils/mesures-equilibre.js` et `docs/21-mesures-catalogue-v2.md`.
+
+### Modifié
+- Tuiles et pose libres : les rôles imposés par la position disparaissent autant que possible ; une tuile de bord peut prendre la place d'une autre, et la rotation est libre (seulement suggérée sur le pourtour).
+- Les règles R1 à R4, qui garantissent l'écart entre villes, sont signalées en alertes et ne bloquent plus la pose.
+- Au moins 3 cases entre deux villes (4 pas), au lieu de 2.
+- Villes non traversables : c'est la règle du jeu, on s'arrête dans une ville.
+- Seuils d'équilibre : blocage si « 5 villes contre 2 » ou écart de plus de 3 cases entre joueurs, avec un plateau complet concerné qui devient une erreur (l'export de l'aperçu est refusé) ; alertes si écart de plus de 2 cases ou score S d'au moins 5.
+- Générateur : les jonctions-cases sont placées par défaut sur la rangée centrale (aucun « 5 villes contre 2 » mesuré) ; option « jonctions variées ».
+
+### Supprimé
+- Formes réduites du plateau : la grille est toujours pleine.
+- Jeton carrefour : une jonction sans ville devient une case chemin ; un document de la version 1 perd ses carrefours à l'ouverture.
+- Tuiles et rôle « apparition » : la case d'apparition devient une case normale de la tuile.
+- Rotation imposée par le rôle de la tuile.
+- Option « villes traversables » de l'interface.
+
+### Corrigé
+- Case d'apparition : le carré dessiné ne dépasse plus du disque.
+- Case d'apparition sans joueur : le liseré n'est plus imprimé en vert.
+
+### Limites connues
+- Format 5×5 à venir : catalogue et interface restent à faire, et ses seuils d'équilibre sont provisoires.
+- Hexagonal en attente du feu vert de l'utilisateur ; aucun travail engagé.
+- Impression réelle et mesure de la barre de 100 mm à la règle non faites.
+- Audit de sécurité dédié à la version 2 à faire.
+
 ## [1.00.0] - 2026-10-15
 
 Majeure
