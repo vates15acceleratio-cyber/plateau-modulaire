@@ -50,3 +50,12 @@
 ## Réponses de l'utilisateur aux mesures du catalogue 4×4 v2 (`21-mesures-catalogue-v2.md`)
 - **Anneau du pourtour** (raccourcis qui relient toutes les apparitions, contact vert / rouge en 1 pas sur les flancs) : **accepté**, aucun changement.
 - **Tempo** (première ville à 2 pas, 5,7 villes sur 7 à 3 pas au plus) : **voulu**, aucun changement.
+
+## Retours de l'utilisateur après essai du plateau 4×4 (2026-10-16)
+- **Poses illimitées** : chaque modèle peut être posé autant de fois qu'on veut ; le compteur « ×N restants » disparaît de la bibliothèque. Les exemplaires ne servent plus qu'à l'**impression** (l'export imprime les tuiles posées, ou un nombre d'exemplaires choisi dans sa fenêtre) et au **générateur**, qui peut réutiliser un modèle **en favorisant la variété**.
+- **Bibliothèque** : plus large, tuiles sur plusieurs colonnes, catégories bien visibles. **Clic = armer la pose** (puis clic sur une cellule ; le glisser-déposer reste), **double-clic = ouvrir dans l'éditeur**. Le bouton « Poser » disparaît.
+- **Clic droit sur une tuile posée = la retirer** (annulable).
+- **Rôle respecté à la pose** : coin dans un coin, bord sur un bord, centrale au centre (refus expliqué). Remplace la « pose libre » des décisions précédentes.
+- **Coins** : **K1 et K3 retirés** ; K2 est le bon modèle (2 cases avant la ville la plus proche, déplacement rapide le long du bord) : chercher d'autres coins du même esprit, sinon garder K2 seul.
+- **Plus de poches** (case en impasse) dans les tuiles du catalogue (4×4 et 5×5) ; l'éditeur signale une poche par une alerte. B4 (« bord en fourche ») est à revoir.
+- **Autre poste** : tout est envoyé sur GitHub, avec un `CLAUDE.md` qui résume la méthode et où trouver les décisions.
