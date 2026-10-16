@@ -1,7 +1,7 @@
 'use strict';
 /*
  * Recette des modules de priorité 2 et de l'export (testeur, sous-agent 9), adaptée aux règles de la version 2.
- * Référence : la documentation (docs/14-export.md, 6-avis-prepresse.md, 16-avis-mesures-equilibre.md,
+ * Référence : la documentation (docs/archives/14-export.md, 6-avis-prepresse.md, 16-avis-mesures-equilibre.md,
  * 18-decisions-v2.md, 19-avis-design-v2.md, 20-avis-geometrie-v2.md, 10-contrats-interface.md), pas les tests existants.
  * Plateaux générés : bibliothèque d'exemples conformes à R1 à R4 (le catalogue v1 ne permet aucun plateau v2).
  *
@@ -944,7 +944,7 @@ test.after(() => { try { fs.rmSync(TMP, { recursive: true, force: true }); } cat
 /* Défauts constatés autrefois (non-régression)                         */
 /* ================================================================== */
 
-test('rapport d\'équilibre : les rangs 5 à 7 comptent comme les rangs 1 à 4 (docs/16 b)', () => {
+test('rapport d\'équilibre : les rangs 5 à 7 comptent comme les rangs 1 à 4 (docs/archives/16 b)', () => {
   const g = grapheDistances([[2, 2], [3, 3], [4, 4], [5, 5], [6, 9], [7, 10], [8, 11]]);
   const analyse = { graphe: g, resultat: GR.equilibre(VIDE(), { graphe: g }), goulets: { 1: GR.goulets(g, 1), 2: GR.goulets(g, 2) } };
   assert.deepStrictEqual(PM.equilibre.rapport(analyse).rangs.map((x) => x.compte), [true, true, true, true, true, true, true]);

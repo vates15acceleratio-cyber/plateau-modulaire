@@ -18,7 +18,7 @@
  *  Conséquence : sur tout trajet ville - ville, case porteuse, case sans port, case porteuse :
  *  au moins 3 cases entre deux villes (4 pas), quelles que soient la pose et les villes.
  *
- * Rappels de géométrie (docs/2-avis-geometrie.md, docs/20) :
+ * Rappels de géométrie (docs/archives/2-avis-geometrie.md, docs/20) :
  *  - côtés 0 = N, 1 = E, 2 = S, 3 = O ; coins 0 = NO, 1 = NE, 2 = SE, 3 = SO ;
  *  - position de raccord 0 = début, 1 = milieu, 2 = fin, en lecture horaire
  *    (N d'ouest en est, E du nord au sud, S d'est en ouest, O du sud au nord) ;

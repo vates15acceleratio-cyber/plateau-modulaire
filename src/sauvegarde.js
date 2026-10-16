@@ -83,7 +83,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       alertes.push(erreur('exemplaires_invalides', 'Le modèle « ' + libelle + ' » : nombre d\'exemplaires invalide, ramené à 0.'));
     }
     var ignores = 0;
-    // Sécurité (docs/11-revue-interface.md, B1) : seuls les champs connus sont gardés, avec leur type
+    // Sécurité (docs/archives/11-revue-interface.md, B1) : seuls les champs connus sont gardés, avec leur type
     // attendu (nombres finis pour les coordonnées, textes pour les ids) ; un fichier piégé ne doit pas
     // pouvoir glisser du balisage dans le SVG de l'interface.
     function texteOuNul(v) {

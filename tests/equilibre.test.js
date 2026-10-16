@@ -171,7 +171,7 @@ test('equilibre : écart de 3 à un rang = alerte ; plus de 3 (SEUIL_BLOCAGE_ECA
   assert.deepStrictEqual(e.blocages.map((b) => b.code), ['cinq_contre_deux', 'ecart_bloquant']);
   assert.match(e.blocages[1].message, /4 pas d'écart .*plus de 3/);
   assert.strictEqual(e.tresDesequilibre, true);
-  // écart de 3 seulement au rang 5 : compte aussi (docs/16 b)
+  // écart de 3 seulement au rang 5 : compte aussi (docs/archives/16 b)
   e = GR.equilibre(DOC_VIDE, { graphe: grapheDistances([2, 3, 3, 4, 5, 6, 6], [2, 3, 3, 4, 8, 8, 8]) });
   assert.strictEqual(e.ecartRang, 0);
   assert.strictEqual(e.parRang[4].ecart, 3);

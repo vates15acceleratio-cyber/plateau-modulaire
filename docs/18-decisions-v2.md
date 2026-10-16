@@ -1,6 +1,6 @@
 # Décisions de la version 2 (utilisateur), 2026-10-15
 
-> **Ce document prime sur tous les précédents** (brief, synthèse `3-synthese.md`, avis) là où ils se contredisent. Il décrit ce que l'utilisateur a demandé après avoir utilisé la version 1.00.0.
+> **Ce document prime sur tous les précédents** (brief, synthèse `archives/3-synthese.md`, avis) là où ils se contredisent. Il décrit ce que l'utilisateur a demandé après avoir utilisé la version 1.00.0.
 
 ## Formats de grille
 - **Grilles toujours pleines** : le choix « 4×4 avec coins ou bords retirés » est **supprimé**.

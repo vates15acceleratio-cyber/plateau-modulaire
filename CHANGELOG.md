@@ -1,5 +1,9 @@
 # Journal des modifications
 
+## [Non publié] - 2026-10-16
+
+Consolidation sans changement de comportement : historique de la version 1 déplacé dans `docs/archives/` (références mises à jour), `docs/4-architecture.md` réécrit d’après l’état réel, CI GitHub (`node --test`), retrait de trois pages d’essai cassées et de `outils/mesures-generateur.js`.
+
 ## [3.01.0] - 2026-10-16
 
 Mineure
@@ -115,13 +119,13 @@ Export pour impression, rapport d'équilibre et générateur de plateau aléatoi
 - Export pour impression : planches A3 et A4 avec jetons et aperçu, en PDF vectoriel (écrit sans bibliothèque externe), en SVG et en PNG 300 dpi (`src/export.js`, `styles/export.css`).
 - Graphe et rapport d'équilibre (`src/graphe.js`, `src/equilibre.js`) : score S, écart entre joueurs sur 7 rangs, alerte « 5 contre 2 » (villes non traversables par défaut).
 - Générateur de plateau aléatoire (`src/generateur.js`) : graine reproductible, option « carrefours variés ». Plafond de 200 tuiles pour l'export et le générateur.
-- Mesures d'équilibre et du générateur (`outils/mesures-equilibre.js`, `outils/mesures-generateur.js`) ; documentation dans `docs/12-mesures-equilibre.md` et `docs/15-mesures-generateur.md`.
+- Mesures d'équilibre et du générateur (`outils/mesures-equilibre.js`, `outils/mesures-generateur.js`) ; documentation dans `docs/archives/12-mesures-equilibre.md` et `docs/archives/15-mesures-generateur.md`.
 - Boîte de dialogue commune pour les trois nouveaux outils.
 - Recette `outils/recette-p2.html` et `tests/recette-p2.test.js`.
 - `README.md` : présentation, lancement et tests de la version.
 
 ### Modifié
-- Critère d'équilibre de l'advisor (`docs/16-avis-mesures-equilibre.md`) appliqué au rapport, aux contrôles et au générateur.
+- Critère d'équilibre de l'advisor (`docs/archives/16-avis-mesures-equilibre.md`) appliqué au rapport, aux contrôles et au générateur.
 - Règle des camps de carrefours unique (`PM.modele.campJonction`), au lieu de trois copies dans les contrôles, l'assemblage et le générateur.
 - Tests du catalogue (`tests/catalogue.test.js`) reposent sur `PM.graphe`.
 
@@ -132,7 +136,7 @@ Export pour impression, rapport d'équilibre et générateur de plateau aléatoi
 - URL d'aperçu libérée après usage (fuite de mémoire).
 - Page de recette : ne touche plus à la sauvegarde automatique de l'utilisateur.
 - Fonctions pures robustes aux entrées nulles, au lieu de lever une erreur native.
-- Sécurité : l'audit de l'agent sécurité (`docs/13-audit-securite.md`) couvrait la version 0.03.0. Les nouveaux modules (export, équilibre, générateur) ont été vérifiés par la relecture (`docs/17-revue-p2.md`, point 3) : injection dans les SVG et PDF, échappement PDF, absence de métadonnées et de ressources externes. Un audit dédié reste à faire.
+- Sécurité : l'audit de l'agent sécurité (`docs/archives/13-audit-securite.md`) couvrait la version 0.03.0. Les nouveaux modules (export, équilibre, générateur) ont été vérifiés par la relecture (`docs/archives/17-revue-p2.md`, point 3) : injection dans les SVG et PDF, échappement PDF, absence de métadonnées et de ressources externes. Un audit dédié reste à faire.
 
 ### Limites connues
 - Impression réelle et mesure de la barre de 100 mm à la règle non faites.
@@ -180,7 +184,7 @@ Première version utilisable de l'interface : ouvrir `index.html` dans le naviga
 ### Ajouté
 - Catalogue réel des tuiles (`src/catalogue.js`) : 18 modèles, 20 tuiles (6 centrales, 5 coins, 5 bords neutres, 2 modèles d'apparition en double), tous valides.
 - Tests du catalogue (`tests/catalogue.test.js`) avec simulation de 1000 plateaux 4×4 aléatoires : connexité, écart entre villes, 50 cases de déplacement, raccords morts, équilibre.
-- `docs/8-catalogue.md` : description des modèles et mesures de la simulation.
+- `docs/archives/8-catalogue.md` : description des modèles et mesures de la simulation.
 
 ## [0.01.0] - 2026-10-15
 

@@ -28,7 +28,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   /** Nombre de segments du polygone qui approche l'arc d'un quart de case de jonction (le PDF ne lit que M L H V Z). */
   var SEGMENTS_ARC = 16;
 
-  /** Palette d'impression (docs/6-avis-prepresse.md) ; `neutre` sert seulement à l'écran. */
+  /** Palette d'impression (docs/archives/6-avis-prepresse.md) ; `neutre` sert seulement à l'écran. */
   var COULEURS = { vert: '#007A4D', rouge: '#D8321C', noir: '#111111', blanc: '#FFFFFF', neutre: '#7A7F76' };
 
   /** Format de grille à partir d'un objet format, d'un identifiant ou de rien (4×4). */

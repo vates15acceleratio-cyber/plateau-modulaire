@@ -1,6 +1,6 @@
 /*
  * geometrie.js : constantes (mm), côtés / coins, masques, rotation, appariement.
- * Aucun accès au DOM. Voir docs/2-avis-geometrie.md (D3, D4) ; formats 4×4 et 5×5 :
+ * Aucun accès au DOM. Voir docs/archives/2-avis-geometrie.md (D3, D4) ; formats 4×4 et 5×5 :
  * docs/20-avis-geometrie-v2.md (D4). PM.geometrie.format(id) décrit un format ; PM.geometrie.* = format 4×4.
  *
  * Conventions
@@ -193,7 +193,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   function estCase(e) { return !!e && typeof e === 'object' && e['case'] !== undefined; }
 
   /**
-   * Tracés de tous les chemins d'un modèle, en coordonnées locales canoniques (convention de docs/2 et de
+   * Tracés de tous les chemins d'un modèle, en coordonnées locales canoniques (convention de docs/archives/2-avis-geometrie.md et de
    * rendu.js) : chemin case-case = segment entre les centres ; vers un raccord = amorce perpendiculaire
    * (AMORCE_RACCORD) puis segment vers la case ; vers un port = amorce sur la bissectrice (AMORCE_PORT) puis
    * segment vers la case. Renvoie [{id, type: 'lien'|'raccord'|'port', cases: [case...], pts: [{x,y}...],

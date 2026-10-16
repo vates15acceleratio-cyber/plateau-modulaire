@@ -1,6 +1,6 @@
 /*
  * export.js : export pour impression (planches de tuiles, planche de jetons, aperçu du plateau).
- * Voir docs/6-avis-prepresse.md. Unité interne : le millimètre.
+ * Voir docs/archives/6-avis-prepresse.md. Unité interne : le millimètre.
  *
  * Architecture : une seule source, le SVG.
  *  - calepiner() produit des planches en données pures (tuiles, repères de coupe, textes, barre de contrôle) ;

@@ -93,7 +93,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
 
       /**
        * Remplace tout le document (ouverture d'un fichier). Annulable : le document précédent est gardé
-       * dans l'historique (docs/11-revue-interface.md, I1 : un fichier ouvert par erreur ne fait rien perdre).
+       * dans l'historique (docs/archives/11-revue-interface.md, I1 : un fichier ouvert par erreur ne fait rien perdre).
        */
       remplacer: function (doc, libelle) {
         passe.push({ doc: courant, libelle: libelle || 'ouverture d’un fichier' });
