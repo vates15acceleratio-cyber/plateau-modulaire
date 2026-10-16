@@ -117,7 +117,7 @@ test('ajouterCase / deplacerCase / basculerType : purs et aimantés', () => {
   assert.equal(m2.cases.length, 5);
   const n = m2.cases[4];
   assert.equal(n.id, 'c5');
-  assert.deepEqual([n.x, n.y, n.diametre, n.type], [60, 60, 24, 'deplacement']);
+  assert.deepEqual([n.x, n.y, n.diametre, n.type], [60, 60, 20, 'deplacement']);
   const m3 = E.deplacerCase(gele(m2), 'c5', 83, 31);
   assert.deepEqual([m3.cases[4].x, m3.cases[4].y], [80, 30]);
   assert.throws(() => E.deplacerCase(m2, 'zzz', 0, 0), /introuvable/);

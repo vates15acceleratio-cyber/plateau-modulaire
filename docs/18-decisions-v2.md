@@ -65,3 +65,9 @@
 - **Pause** à la demande de l'utilisateur ; reprise après discussion.
 - **Suppression des tuiles utilisateur** (avec confirmation) et **légende « Commandes » illustrée** (souris et touches dessinées, à droite du plateau à partir de 1600 px de large) ajoutées.
 - **Idée nouvelle, non définie : les régions thématiques** (une tuile représente une région ; une région a une thématique, ex. C3 = Montagne) : à étudier avec l'utilisateur. Questions préparées dans `docs/25-travail-restant.md`.
+
+## Taille des cases (2026-10-16)
+- **Cases à Ø 20 mm dans tous les formats** : 4×4, 5×5 et, le jour venu, hexagonal (simple consigne pour ce format, qui reste en attente du feu vert). Les tuiles gardent leur taille (120 mm en 4×4, 100 mm en 5×5). But : plus de place sur les tuiles 5×5 et la même apparence d'un format à l'autre.
+- Appliqué aux cases du catalogue 4×4, aux jonctions-cases et aux cases neuves de l'éditeur. Le diamètre **maximal** permis dans l'éditeur ne change pas (Ø 30 en 4×4, Ø 24 en 5×5) ; les documents déjà enregistrés gardent leurs diamètres. Le jeton ville reste Ø 30.
+- Conséquence : deux modèles retouchés pour garder 8 mm entre les chemins qui partent d'une même case, sans changer leurs liaisons (donc sans effet sur les mesures d'équilibre de `21-mesures-catalogue-v2.md`) : B5, case à port est de (92, 90) à (96, 90) ; K4, relais de (82, 56) / (56, 82) à (82, 62) / (62, 82).
+- À vérifier à l'impression : taille des pions (Ø 20 mm au plus pour tenir sur une case).

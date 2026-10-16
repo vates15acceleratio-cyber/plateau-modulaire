@@ -8,7 +8,7 @@
  *  - chemin vers un raccord : amorce perpendiculaire de 10 mm depuis le bord, puis segment vers la case ;
  *  - chemin vers un port de coin : amorce de 28 mm sur la bissectrice depuis le coin, puis segment vers la case.
  * Sur la tuile imprimée, raccords et ports sont prolongés jusqu'au bord (et dans le fond perdu).
- * Quart de case de jonction (docs/20 D1) : quart de disque Ø 24 centré sur chaque coin intérieur du gabarit,
+ * Quart de case de jonction (docs/20 D1) : quart de disque Ø 20 centré sur chaque coin intérieur du gabarit,
  * fond blanc, contour noir sur l'arc seulement, par-dessus l'amorce du port.
  * Case d'apparition (docs/20 D3) : carré inscrit dans le disque, noir et blanc à l'impression ; à l'écran,
  * option `camp` : couleur du camp ET forme distincte (triangle vers le nord pour le vert, vers le sud pour le

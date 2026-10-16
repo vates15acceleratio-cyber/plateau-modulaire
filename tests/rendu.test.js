@@ -66,18 +66,18 @@ test('case d\'apparition à l\'écran : couleur du camp ET forme distincte (vert
   assert.ok(R.contenuTuile(m, { camp: 'bleu' }).includes('data-apparition="impression"'));
 });
 
-test('quarts de case de jonction (Ø 24) sur les coins intérieurs du gabarit, même sans port', () => {
+test('quarts de case de jonction (Ø 20) sur les coins intérieurs du gabarit, même sans port', () => {
   const ex = M.copieExemples();
   const nb = (m, o) => (R.contenuTuile(m, o).match(/data-quart-jonction=/g) || []).length;
   assert.deepEqual(ex.map((m) => nb(m)), [4, 2, 1]);
   const sansPort = Object.assign({}, ex[1], { chemins: ex[1].chemins.filter((c) => !c.b.coin && c.b.coin !== 0) });
   assert.equal(nb(sansPort), 2);
   assert.equal(nb(Object.assign({}, ex[1], { gabarit: undefined })), 0);
-  // coin canonique : quart centré sur le coin SE (120, 120), rayon 12 ; tourné d'un quart : coin SO (0, 120)
+  // coin canonique : quart centré sur le coin SE (120, 120), rayon 10 ; tourné d'un quart : coin SO (0, 120)
   const arc = (svg) => /<path d="([^"]+)" fill="none" stroke="#111111" stroke-width="0.6" data-quart-jonction/.exec(svg)[1]
     .split(/[ML]/).filter(Boolean).map((p) => p.trim().split(' ').map(Number));
   for (const [rot, cx, cy] of [[0, 120, 120], [1, 0, 120]]) {
-    arc(R.contenuTuile(ex[2], { rot })).forEach(([x, y]) => assert.ok(Math.abs(Math.hypot(x - cx, y - cy) - 12) < 1e-2, rot + ' ' + x + ',' + y));
+    arc(R.contenuTuile(ex[2], { rot })).forEach(([x, y]) => assert.ok(Math.abs(Math.hypot(x - cx, y - cy) - 10) < 1e-2, rot + ' ' + x + ',' + y));
   }
   // fond perdu : le quart se prolonge au-delà du bord
   assert.match(R.contenuTuile(ex[2], { fondPerdu: 3 }), /123 123 Z" fill="#FFFFFF"/);

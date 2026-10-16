@@ -256,9 +256,9 @@ test('diamètre : Ø 30 max en 4×4, Ø 24 max en 5×5 ; 0 / négatif / NaN inva
 });
 test('chevauchement : tangentes acceptées, recouvrement refusé', () => {
   const m = exemple('centrale');
-  Object.assign(m.cases[1], { x: 36, y: 60 }); // centre c0 en (60, 60) : centres à 24 = d, tangentes
+  Object.assign(m.cases[1], { x: 40, y: 60 }); // centre c0 en (60, 60) : centres à 20 = d, tangentes
   assert.ok(!codes(m).includes('chevauchement'));
-  m.cases[1].x = 36.1;
+  m.cases[1].x = 40.1;
   assert.ok(codes(m).includes('chevauchement'));
 });
 test('chemin contre une case : distance r + L/2 pile acceptée, en dessous refusée', () => {

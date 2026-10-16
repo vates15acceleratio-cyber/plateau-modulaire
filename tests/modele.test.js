@@ -72,7 +72,7 @@ const ECHECS = [
   ['type de case inconnu', 'bord', (m) => { m.cases[0].type = 'capture'; }, 'type_case'],
   ['case invalide', 'bord', (m) => { m.cases[0].x = 'a'; }, 'case_invalide'],
   ['diamètre trop grand', 'bord', (m) => { m.cases[0].diametre = 34; }, 'diametre'],
-  ['hors tuile (marge 4 mm)', 'bord', (m) => { m.cases[2].y = 15; }, 'hors_tuile'],
+  ['hors tuile (marge 4 mm)', 'bord', (m) => { m.cases[2].y = 13; }, 'hors_tuile'],
   ['chevauchement', 'bord', (m) => { m.cases[1].x = 70; m.cases[1].y = 50; }, 'chevauchement'],
   ['zone de coin', 'centrale', (m) => { m.cases[1].x = 20; m.cases[1].y = 20; }, 'zone_coin'],
   ['raccord utilisé deux fois', 'bord', (m) => { m.chemins.push({ id: 'r9', a: { case: 'c1' }, b: { raccord: { cote: 1, pos: 0 } } }); }, 'raccord_double'],
@@ -107,7 +107,7 @@ for (const [nom, gabarit, mutation, attendu] of ECHECS) {
 
 test('validerModele : marge exactement 4 mm acceptée', () => {
   const m = exemple('bord');
-  m.cases[2].y = 16;
+  m.cases[2].y = 14;
   assert.deepStrictEqual(codes(m), []);
 });
 

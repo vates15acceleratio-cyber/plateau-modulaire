@@ -29,7 +29,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   /** Cotes et règles identiques sur tous les formats. */
   var COMMUNES = {
     RAYON_ZONE_COIN: 20,
-    DIAMETRE_CASE_JONCTION: 24,
+    DIAMETRE_CASE_JONCTION: 20,
     DIAMETRE_JETON: 30,
     MARGE_COUPE_CASE: 4,             // bord du disque à >= 4 mm du bord de tuile
     LARGEUR_CHEMIN: 8,

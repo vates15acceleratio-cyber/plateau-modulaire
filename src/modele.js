@@ -477,7 +477,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   /** Exemples d'un format : cotes de docs/20 (D4, vérifications de l'étoile, du bord et du coin). */
   function construireExemples(grille) {
     var F = resoudreFormat(grille), C = F.COTE, cinq = F.id === '5x5';
-    var D = 24;                         // Ø des cases (≤ Ø max des deux formats)
+    var D = 20;                         // Ø des cases (≤ Ø max des deux formats)
     function kase(id, x, y, type) { return { id: id, x: x, y: y, diametre: D, type: type || 'deplacement' }; }
     function lien(id, a, b) { return { id: id, a: { 'case': a }, b: { 'case': b } }; }
     function port(id, c, coin) { return { id: id, a: { 'case': c }, b: { coin: coin } }; }

@@ -48,7 +48,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 (function () {
   'use strict';
 
-  var DIAMETRE = 24;
+  var DIAMETRE = 20;                 // Ø des cases du catalogue (docs/18, décision du 2026-10-16)
 
   /* Petits constructeurs pour garder les modèles lisibles. */
   function kase(id, x, y, type) { return { id: id, x: x, y: y, diametre: DIAMETRE, type: type || 'deplacement' }; }
@@ -131,7 +131,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         ].concat(raccourciBord('a'), [raccord('r3', 'r', 2, 1)])),
       // décalé : port est à 1 pas de l'apparition, port ouest à 2 pas (par un relais)
       modele('B5', 'Bord décalé', 'bord', 1,
-        [appar('a', 66, 38), kase('r', 38, 62), kase('c1', 92, 90), kase('c2', 28, 96)], [
+        [appar('a', 66, 38), kase('r', 38, 62), kase('c1', 96, 90), kase('c2', 28, 96)], [
           lien('h1', 'a', 'c1'), lien('h2', 'a', 'r'), lien('h3', 'r', 'c2'), port('p1', 'c1', 2), port('p2', 'c2', 3)
         ].concat(raccourciBord('a'), [raccord('r3', 'a', 2, 1)])),
       // triangle : l'apparition, le relais et le port est forment une boucle ; le port ouest passe par le relais
@@ -150,7 +150,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       // losange : deux relais symétriques entre l'apparition et la case à port, deux routes de même longueur
       // (toujours 2 cases avant la jonction, 3 pas)
       modele('K4', 'Coin en losange', 'coin', 1,
-        [appar('a', 40, 40), kase('s1', 82, 56), kase('s2', 56, 82), kase('c1', 92, 92)], [
+        [appar('a', 40, 40), kase('s1', 82, 62), kase('s2', 62, 82), kase('c1', 92, 92)], [
           lien('h1', 'a', 's1'), lien('h2', 'a', 's2'), lien('h3', 's1', 'c1'), lien('h4', 's2', 'c1'), port('p1', 'c1', 2)
         ].concat(raccourciCoin('a', 'a')))
     ];
