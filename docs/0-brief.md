@@ -2,7 +2,7 @@
 
 > **VERSION 2 : lire d'abord `docs/18-decisions-v2.md`, qui prime sur tout le reste.**
 >
-> **À LIRE EN PREMIER (2026-10-15).** Les décisions des advisors sont consolidées dans **`docs/3-synthese.md`**, qui **prime** sur les sections 2, 3, 5 (point 3), 6, 8.3 et 9 de ce brief. Principaux changements : grille 4×4 de tuiles de 12 cm ; captures = **jetons posés sur les jonctions de 4 tuiles** (plus sur des tuiles centrales) ; plus de contour libre ni d'identifiant de compatibilité ; cases de tuile `deplacement | apparition` uniquement. Les lignes caduques ci-dessous sont annotées « → voir synthèse ».
+> **À LIRE EN PREMIER (2026-10-15).** Les décisions des advisors sont consolidées dans **`docs/archives/3-synthese.md`**, qui **prime** sur les sections 2, 3, 5 (point 3), 6, 8.3 et 9 de ce brief. Principaux changements : grille 4×4 de tuiles de 12 cm ; captures = **jetons posés sur les jonctions de 4 tuiles** (plus sur des tuiles centrales) ; plus de contour libre ni d'identifiant de compatibilité ; cases de tuile `deplacement | apparition` uniquement. Les lignes caduques ci-dessous sont annotées « → voir synthèse ».
 
 ## 1. Objectif
 
@@ -68,7 +68,7 @@ Boardgame Lab (boardgamelab.app) a été écarté : l'application n'est pas sort
 
 ## 6. Modèle de données proposé
 
-> **Caduc en partie → voir `docs/3-synthese.md` et `docs/2-avis-geometrie.md` (D3, D4, D10).** Tuile = { `modeleId`, `role` (centrale | coin | bord | apparition), `raccords` (masque 12 bits), `portsCoin` (masque 4 bits), cases, chemins } ; plus de contour ni d'identifiant de compatibilité ; Case de type `deplacement | apparition` ; nouvelle entité Jeton / Jonction (`i`, `j`, `capture | carrefour`) ; Plateau = { mode, `tuiles: [{modeleId, col, lig, rot}]`, `jetons: [{i, j, type}]` }.
+> **Caduc en partie → voir `docs/archives/3-synthese.md` et `docs/archives/2-avis-geometrie.md` (D3, D4, D10).** Tuile = { `modeleId`, `role` (centrale | coin | bord | apparition), `raccords` (masque 12 bits), `portsCoin` (masque 4 bits), cases, chemins } ; plus de contour ni d'identifiant de compatibilité ; Case de type `deplacement | apparition` ; nouvelle entité Jeton / Jonction (`i`, `j`, `capture | carrefour`) ; Plateau = { mode, `tuiles: [{modeleId, col, lig, rot}]`, `jetons: [{i, j, type}]` }.
 
 - **Tuile** : `id`, type (`bord` | `centrale`), contour (polygone libre), liste de cases (2 minimum), liste de chemins, liste de points de raccord (3 à 4 pour une tuile centrale).
 - **Case** : `id`, position (x, y), diamètre (3 cm max), type (`deplacement` | `apparition` | `capture`), joueur propriétaire pour une apparition (joueur 1 / 2).
@@ -94,7 +94,7 @@ Boardgame Lab (boardgamelab.app) a été écarté : l'application n'est pas sort
 - **Valeurs par défaut de la section 7 (questions 2 à 5) : acceptées.**
 - **Équipe d'agents complète dès le départ.**
 - **Dossier de travail : `<dossier du projet>`.**
-- **Villes : version B retenue** (`docs/1b-avis-design-jeu-variante-jonctions.md`) : grille 4×4 de tuiles de 12 cm, villes = jetons de 3 cm posés sur les 9 jonctions intérieures (7 villes + 2 carrefours). La version A (`docs/1-avis-design-jeu.md`) est écartée.
+- **Villes : version B retenue** (`docs/archives/1b-avis-design-jeu-variante-jonctions.md`) : grille 4×4 de tuiles de 12 cm, villes = jetons de 3 cm posés sur les 9 jonctions intérieures (7 villes + 2 carrefours). La version A (`docs/archives/1-avis-design-jeu.md`) est écartée.
 - **Écart entre captures : 3 pas** (au moins 2 cases intermédiaires), confirmé par l'utilisateur ; paramètre réglable.
 - **Forme du plateau : 4×4 complet, ou 4×4 avec 1 ou 2 coins retirés** (confirmé par l'utilisateur ; remplace les modes rectangle / silhouette libre).
 

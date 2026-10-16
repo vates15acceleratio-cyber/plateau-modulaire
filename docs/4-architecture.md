@@ -1,60 +1,66 @@
-# Architecture du code (orchestrateur), 2026-10-15
+# Architecture du code
+
+Mis à jour le 2026-10-16 (version 3.01.0). L'ancienne version de ce document décrivait un projet de la version 1 (`dist/`, `vendor/`, `outils/build.js`, 18 modèles) : ces éléments n'existent pas.
 
 ## Contraintes
-- Page web unique, ouverte en `file://`, hors ligne, sans installation.
+- Page web unique, ouverte en `file://`, hors ligne, sans installation, sans build.
 - Chrome bloque les modules ES (`<script type="module">`) en `file://` : **pas de modules ES, pas d'`import`**.
-- Chaque sous-agent livre un module et ses tests, sans modifier les autres modules.
+- CSP stricte dans `index.html` (voir `CLAUDE.md`) : aucun script, style ou attribut `style=` en ligne.
+- Aucune dépendance (ni à l'exécution, ni pour les tests). Node ≥ 20 sert seulement aux tests et aux outils de mesure.
 
 ## Arborescence
 
 ```
-PlateauModulaire/
-  index.html            page de développement : charge src/*.js dans l'ordre par <script src>
-  src/
-    geometrie.js        constantes (mm), côtés/coins, masques, rotation, appariement  (sous-agent 1)
-    modele.js           structures Tuile / Case / Chemin / Jeton / Plateau + validation (sous-agent 1)
-    graphe.js           graphe global des cases + plus courts chemins                   (sous-agent 7)
-    editeur-tuile.js    écran d'édition de tuile                                        (sous-agent 2)
-    assemblage.js       écran de plateau                                                (sous-agent 3)
-    controles.js        compteurs et alertes                                            (sous-agent 4)
-    sauvegarde.js       JSON                                                            (sous-agent 5)
-    export.js           PDF / SVG / PNG                                                 (sous-agent 6)
-    generateur.js       plateau aléatoire                                               (sous-agent 8)
-    catalogue.js        catalogue réel des 18 modèles / 20 tuiles                       (sous-agent catalogue)
-    app.js              colle les écrans entre eux (orchestrateur)
-    etat.js             état partagé, historique annuler / rétablir (orchestrateur)
-    rendu.js            tracé des chemins et SVG des tuiles / jetons (orchestrateur)
-    bibliotheque.js     colonne bibliothèque de modèles                                 (sous-agent 3)
-  styles/               base.css (orchestrateur) + une feuille par module d'écran
-  vendor/               bibliothèques tierces embarquées (version figée), ex. jsPDF
-  tests/
-    *.test.js           tests Node (node:test + node:assert), un fichier par module
-  outils/
-    build.js            produit dist/plateau-modulaire.html (scripts et CSS inlinés, un seul fichier)
-  dist/                 livrable final
-  docs/                 brief, avis, synthèse, ce fichier
+index.html          page de l'application ; charge src/*.js dans l'ordre ci-dessous
+src/                modules JavaScript
+styles/             base.css + une feuille par module d'écran (préfixe de classe propre)
+tests/              tests Node (node:test), un fichier par module + recettes
+outils/             recettes navigateur, pages d'essai, mesures d'équilibre, serveur local
+docs/               décisions et références en vigueur (v2)
+docs/archives/      historique de la version 1 (contexte seulement)
+docs/brouillons/    travaux inachevés, à consulter sans les appliquer
+.github/workflows/  CI : node --test à chaque push
 ```
+
+## Modules de `src/` (ordre de chargement dans `index.html`)
+
+| Module | Rôle | DOM |
+|---|---|---|
+| `geometrie.js` | constantes (mm), côtés et coins, masques, rotation, appariement | non |
+| `modele.js` | structures Tuile / Case / Chemin / Jeton / Plateau et validation | non |
+| `catalogue.js` | catalogue 4×4 (13 modèles, 22 tuiles), `nouveauDocument` | non |
+| `rendu.js` | tracé SVG des tuiles et des jetons | non |
+| `etat.js` | état partagé, historique annuler / rétablir | non |
+| `sauvegarde.js` | JSON, migration des documents v1, sauvegarde automatique | oui (stockage, fichiers) |
+| `graphe.js` | graphe des cases, plus courts chemins, analyse d'équilibre | non |
+| `equilibre.js` | rapport d'équilibre | non |
+| `generateur.js` | plateau aléatoire reproductible | non |
+| `export.js` | planches PDF / SVG / PNG | oui |
+| `controles.js` | compteurs et alertes | oui |
+| `bibliotheque.js` | colonne bibliothèque de modèles | oui |
+| `assemblage.js` | écran Plateau | oui |
+| `editeur-tuile.js` | écran Tuiles | oui |
+| `aide.js` | aide et légende « Commandes » | oui |
+| `app.js` | colle les écrans entre eux | oui |
+
+Règle : les modules « non » ne touchent jamais au DOM, ce qui les rend testables sous Node et réutilisables côté serveur le jour venu.
 
 ## Conventions
 - **Espace de noms global unique** : chaque fichier commence par
   `var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});`
-  puis expose son module : `PM.geometrie = { ... }`, `PM.modele = { ... }`.
-- Les modules logiques (`geometrie`, `modele`, `graphe`, `sauvegarde`, `generateur`, partie calcul de `controles`) **n'accèdent jamais au DOM**, pour être testables sous Node.
-- Les tests chargent les fichiers avec `require('../src/geometrie.js')` puis lisent `globalThis.PM`.
+  puis expose son module (`PM.geometrie = { ... }`) et, sous Node, `module.exports`.
+- Les tests chargent les fichiers avec `require('../src/xxx.js')` puis lisent `globalThis.PM`.
 - **Unité interne : le millimètre.** Conversion en pt / px seulement dans `export.js`.
-- Code et identifiants en français sans accents (`tuile`, `raccords`, `portsCoin`, `jetons`), commentaires en français.
-- Pas de dépendance npm à l'exécution ; Node (v24) sert seulement aux tests et au build.
-- Lancer les tests (depuis la racine du projet) : `node --test` (Node 24 refuse `node --test tests/`, qu'il prend pour un fichier).
-- Les fonctions de modification du document (`poserTuile`, `poserJeton`, …) sont **pures** et **lèvent une `Error`** si l'action est refusée : l'interface appelle toujours `peutPoser…` avant.
+- Code et identifiants en français sans accents ; commentaires en français.
+- Les fonctions de modification du document (`poserTuile`, `poserJeton`, …) sont **pures** et **lèvent une `Error`** si l'action est refusée ; l'interface appelle d'abord `peutPoser…`.
+- Dans une chaîne JS entre apostrophes droites, une apostrophe française casse la syntaxe : utiliser `’`, puis `node --check`.
 
-## État des modules
-| Module | État | Tests |
-|---|---|---|
-| `geometrie.js`, `modele.js` (sous-agent 1) | livré le 2026-10-15, corrigé après revue et recette le 2026-10-15 | 225 / 225 (dont recette du testeur) |
-| `catalogue.js` (sous-agent catalogue) | livré le 2026-10-15, 18 modèles / 20 tuiles, à charger après `modele.js` | 19 (simulation de 1000 plateaux) |
+## Tests
+- `node --test` à la racine (Node 24 refuse `node --test tests/`). Exécuté aussi par la CI GitHub.
+- Recettes navigateur manuelles : `outils/recette-interface.html`, `outils/recette-p2.html` (procédure dans `CLAUDE.md`).
 
-## Référence fonctionnelle
-`docs/3-synthese.md`, puis `docs/2-avis-geometrie.md` (conventions de côtés / coins, masques, cas de test T1 à T4).
+## Où lire ensuite
+`docs/18-decisions-v2.md` (prioritaire), `docs/10-contrats-interface.md` (montage, état partagé, interactions), `docs/25-travail-restant.md`.
 
-## Contrats des modules d'interface
-Voir `docs/10-contrats-interface.md` (montage, état partagé, interactions, périmètres d'écriture, vérification dans Edge sans fenêtre).
+## Évolution prévue (non engagée)
+Jeu à deux en ligne : le noyau sans DOM (`geometrie`, `modele`, `graphe`, `catalogue`) serait partagé avec un serveur. Cela demandera de le passer en modules ES ; l'éditeur actuel resterait en `file://`. Rien n'est préparé dans le code à ce jour.

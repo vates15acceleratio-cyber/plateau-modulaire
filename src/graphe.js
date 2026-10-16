@@ -1,5 +1,5 @@
 /*
- * graphe.js : graphe global du plateau et analyse d'équilibre (critère de docs/16-avis-mesures-equilibre.md,
+ * graphe.js : graphe global du plateau et analyse d'équilibre (critère de docs/archives/16-avis-mesures-equilibre.md,
  * seuils de blocage de docs/19-avis-design-v2.md et arbitrages de docs/20).
  * Aucun accès au DOM : toutes les fonctions sont pures et ne modifient pas le document.
  *
@@ -29,7 +29,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /** Nombre de villes et seuils (constantes uniques, lues aussi par controles.js et generateur.js). */
   var NB_VILLES = 7;
   var RANGS_COMPARES = 4;       // ancien D6 : écart aux rangs 1 à 4 (champ ecartRang, information seulement)
-  var SEUIL_ECART = 2;          // alerte si l'écart dépasse 2 à un rang de 1 à 7 (docs/16 b)
+  var SEUIL_ECART = 2;          // alerte si l'écart dépasse 2 à un rang de 1 à 7 (docs/archives/16 b)
   var SEUIL_CINQ_CONTRE_DEUX = 5;
   var SEUIL_APPARITION_LOINTAINE = 7;
   var SEUIL_S = 5;                 // alerte « à surveiller » à partir de S = 5 (docs/22 : S >= 4 touchait 11,6 % des configurations, S >= 5 : 2,7 %)
@@ -190,21 +190,21 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function distancesJoueur(g, joueur) { return parcours(g, g.apparitions[joueur] || [], null); }
 
   /* ------------------------------------------------------------------ */
-  /* Équilibre (critère de docs/16)                                       */
+  /* Équilibre (critère de docs/archives/16)                                       */
   /* ------------------------------------------------------------------ */
 
   function tri(t) { return t.slice().sort(function (a, b) { return a - b; }); }
   var estFini = function (x) { return x !== undefined && isFinite(x); };
 
   /**
-   * Analyse d'équilibre d'un document (critère de docs/16, seuils de docs/19).
+   * Analyse d'équilibre d'un document (critère de docs/archives/16, seuils de docs/19).
    * options : villesTraversables, jetons (voir construire), nbVilles (défaut 7), graphe (graphe déjà construit).
    * Joueurs : 1 = vert, 2 = rouge (distances depuis la case d'apparition la plus proche de chaque camp).
    * Renvoie :
    *  - villes : [{id, i, j}] ; D : {1: [distances triées], 2: [...]} (villes inaccessibles exclues) ;
    *  - parRang : [{rang, d1, d2, ecart, compte}] (compte = rang pris en compte dans S et l'écart, rangs 1 à 7) ;
    *  - ecartRang : plus grand |D1(k) - D2(k)| aux rangs 1 à 4 (ancien D6, information sans alerte), ou null ;
-   *  - S, ecartMax7 : somme et maximum des écarts aux rangs 1 à 7 (docs/16), null si un joueur a moins de
+   *  - S, ecartMax7 : somme et maximum des écarts aux rangs 1 à 7 (docs/archives/16), null si un joueur a moins de
    *    nbVilles distances (ville inaccessible ou manquante) ;
    *  - cinqContreDeux : un joueur strictement plus proche de 5 villes ou plus (7 villes posées) ;
    *  - premiereEgale : première ville à la même distance pour les deux joueurs (invariant d) ;

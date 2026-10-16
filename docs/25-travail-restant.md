@@ -22,8 +22,7 @@ L'utilisateur a marqué une pause ; il reprendra **après discussion**. Rien ne 
 - Version, puis envoi sur GitHub.
 
 ### 1.5 Petites dettes
-- Pages d'essai `outils/essai-controles.html`, `essai-export.html`, `essai-equilibre.html` cassées depuis la v2 (fonctions supprimées) : à remettre à jour ou à retirer.
-- `outils/mesures-generateur.js` : outil de la version 1, à mettre à jour ou à retirer.
+- ~~Pages d’essai cassées et `outils/mesures-generateur.js`~~ : retirées (consolidation du 2026-10-16). Restent `essai-assemblage`, `essai-editeur-tuile`, `essai-generateur`, `essai-sauvegarde` et `verif-chargement`, non revérifiées.
 - Phrases d'aide en haut de la bibliothèque et dans l'éditeur qui recoupent la légende « Commandes » : à retirer si l'utilisateur le souhaite.
 - Onglet Tuiles : rendu de la légende non vérifié à l'œil.
 - Tactile non testé (double-tap, appui long qui déclenche le clic droit).

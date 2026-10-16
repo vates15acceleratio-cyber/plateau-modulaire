@@ -25,7 +25,7 @@ Ouvrir `index.html` dans un navigateur récent (Chrome, Edge, Firefox). Aucune i
 - Équilibre mesuré depuis les cases d'apparition de chaque camp : blocage si « 5 villes contre 2 » ou écart de plus de 3 cases entre joueurs ; alerte au-delà de 2 cases d'écart ou si le score d'équilibre atteint 5.
 - Couleurs d'impression : vert, rouge, noir, blanc, avec des codes de forme lisibles sans la couleur.
 
-Les décisions et leurs raisons sont dans [`docs/`](docs/) : le brief d'origine (`0-brief.md`), les décisions de la version 2 (`18-decisions-v2.md`, prioritaires), la synthèse de la version 1 (`3-synthese.md`), les avis de conception (design de jeu, géométrie des raccords, ergonomie, prépresse), les mesures d'équilibre et les revues.
+Les décisions et leurs raisons sont dans [`docs/`](docs/) : le brief d'origine (`0-brief.md`), les décisions de la version 2 (`18-decisions-v2.md`, prioritaires), l’historique de la version 1 (synthèse, avis de conception, mesures, revues) dans `docs/archives/`.
 
 ## Structure
 
@@ -34,8 +34,8 @@ index.html        page de l'application
 src/              modules JavaScript (sans dépendance, sans modules ES)
 styles/           feuilles de style
 tests/            tests Node (node:test)
-outils/           pages d'essai et de recette, scripts de mesure, serveur local de test
-docs/             brief, décisions, avis, mesures, revues
+outils/           recettes navigateur, pages d’essai, mesures d’équilibre, serveur local de test
+docs/             décisions et références en vigueur (v2) ; docs/archives/ : historique de la version 1
 ```
 
 ## Tests

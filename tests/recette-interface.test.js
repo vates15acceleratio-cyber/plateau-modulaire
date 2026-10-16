@@ -1,8 +1,8 @@
 'use strict';
 /*
  * Recette indépendante des modules d'interface (fonctions pures exportées, sous Node), règles v2.
- * Référence : docs/10-contrats-interface.md, docs/5-avis-ergonomie.md, docs/18-decisions-v2.md,
- * docs/20-avis-geometrie-v2.md, docs/2-avis-geometrie.md (D10). Les scénarios navigateur sont dans
+ * Référence : docs/10-contrats-interface.md, docs/archives/5-avis-ergonomie.md, docs/18-decisions-v2.md,
+ * docs/20-avis-geometrie-v2.md, docs/archives/2-avis-geometrie.md (D10). Les scénarios navigateur sont dans
  * outils/recette-interface.html.
  */
 const test = require('node:test');

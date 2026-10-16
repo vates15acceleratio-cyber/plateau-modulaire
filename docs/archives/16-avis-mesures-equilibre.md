@@ -1,6 +1,6 @@
 # Avis de l'advisor design de jeu sur les mesures d'équilibre (Opus 5.5), 2026-10-15
 
-Source : `docs/12-mesures-equilibre.md`. **Ces décisions priment sur D6 de `1b-…` et sur `9-validation-catalogue.md` pour le critère d'équilibre.**
+Source : `docs/archives/12-mesures-equilibre.md`. **Ces décisions priment sur D6 de `1b-…` et sur `9-validation-catalogue.md` pour le critère d'équilibre.**
 
 ## Critère d'équilibre commun (rapport, contrôles, générateur)
 - **a) Alerte principale « 5 contre 2 »**, mesurée en **villes non traversables** : élimine la configuration dans le générateur ; alerte en mode manuel.

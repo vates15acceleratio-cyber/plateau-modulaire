@@ -41,7 +41,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   /**
    * Document de départ : la sauvegarde automatique si elle est lisible, sinon le catalogue.
    * Une sauvegarde présente mais illisible est mise de côté (clé « …:autosave-illisible ») et signalée,
-   * au lieu d'être écrasée en silence (docs/11-revue-interface.md, I2).
+   * au lieu d'être écrasée en silence (docs/archives/11-revue-interface.md, I2).
    */
   function documentInitial() {
     var S = PM.sauvegarde, neuf = PM.catalogue ? PM.catalogue.nouveauDocument() : PM.modele.nouveauDocument();

@@ -1,6 +1,6 @@
 # Contrats des modules d'interface (orchestrateur), 2026-10-15
 
-Socle commun écrit par l'orchestrateur (ne pas modifier) : `index.html`, `styles/base.css`, `src/app.js`, `src/etat.js`, `src/rendu.js`. Lire aussi `docs/4-architecture.md` (conventions) et `docs/5-avis-ergonomie.md` (parcours).
+Socle commun écrit par l'orchestrateur (ne pas modifier) : `index.html`, `styles/base.css`, `src/app.js`, `src/etat.js`, `src/rendu.js`. Lire aussi `docs/4-architecture.md` (conventions) et `docs/archives/5-avis-ergonomie.md` (parcours).
 
 ## Montage
 - Chaque module d'écran expose `PM.<module>.monter(conteneur, etat)` ; `app.js` l'appelle une fois au démarrage.

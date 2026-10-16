@@ -181,7 +181,7 @@
     var AV2 = PM.aidesV2;
     /** Bibliothèque d'exemples conformes v2 (3 modèles : ex-centrale, ex-bord, ex-coin). */
     function docExemples(grille) { return AV2.documentExemples(grille); }
-    // Rotations suggérées (oracle : docs/2-avis-geometrie.md, côté extérieur canonique au nord, coin N + O)
+    // Rotations suggérées (oracle : docs/archives/2-avis-geometrie.md, côté extérieur canonique au nord, coin N + O)
     var ORA_ROT = { '0,0': 0, '3,0': 1, '3,3': 2, '0,3': 3, '0,1': 3, '0,2': 3, '3,1': 1, '3,2': 1, '1,0': 0, '2,0': 0, '1,3': 2, '2,3': 2 };
     function idCellule(col, lig) { return { centrale: 'ex-centrale', bord: 'ex-bord', coin: 'ex-coin' }[M.gabaritCellule(col, lig)]; }
 

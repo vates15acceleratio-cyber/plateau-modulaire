@@ -2,9 +2,9 @@
 
 Généré par `outils/mesures-generateur.js` (300 graines « m8-1 » à « m8-300 », 200 plateaux par forme réduite). Catalogue réel `PM.catalogue.nouveauDocument()`.
 
-Critère d'équilibre de `docs/16-avis-mesures-equilibre.md` : S = Σ |D1(k) − D2(k)| sur les 7 rangs ; « D6 étendu » = écart > 2 à un rang de 1 à 7 ; « 5 contre 2 » ; invariant « première ville à la même distance ». N = villes non traversables (défaut de l'outil), T = traversables. Générateur : 200 candidats, élimination (5 contre 2 en N, D6 étendu, première ville, connexité, validation), tirage au hasard parmi les candidats de S ≤ Smin + 1 (tolérance 1, réglage par défaut) et, à S égal, de pénalité secondaire minimale (raccords morts au-delà de 2, ports morts, apparitions à moins de 2 sorties).
+Critère d'équilibre de `docs/archives/16-avis-mesures-equilibre.md` : S = Σ |D1(k) − D2(k)| sur les 7 rangs ; « D6 étendu » = écart > 2 à un rang de 1 à 7 ; « 5 contre 2 » ; invariant « première ville à la même distance ». N = villes non traversables (défaut de l'outil), T = traversables. Générateur : 200 candidats, élimination (5 contre 2 en N, D6 étendu, première ville, connexité, validation), tirage au hasard parmi les candidats de S ≤ Smin + 1 (tolérance 1, réglage par défaut) et, à S égal, de pénalité secondaire minimale (raccords morts au-delà de 2, ports morts, apparitions à moins de 2 sorties).
 
-Tirage uniforme de comparaison : `tirerPlateaux(300, 20261015)` de `outils/mesures-equilibre.js` (mêmes tirages que `docs/12-mesures-equilibre.md`, 300 premiers plateaux), carrefours (1,2)+(3,2).
+Tirage uniforme de comparaison : `tirerPlateaux(300, 20261015)` de `outils/mesures-equilibre.js` (mêmes tirages que `docs/archives/12-mesures-equilibre.md`, 300 premiers plateaux), carrefours (1,2)+(3,2).
 
 ## 1. Équilibre : générateur contre tirage uniforme
 

@@ -7,7 +7,7 @@ Livré : `src/export.js` (`PM.exportation`), `styles/export.css`, `tests/export.
 - Tuiles imprimées en orientation canonique (tournées à la pose) ; apparitions réparties 2 pour J1, 2 pour J2.
 - **PDF vectoriel maison** (PDF 1.4, sans dépendance) : une seule source, le SVG des planches, converti en flux PDF (sous-ensemble connu ; tout élément inconnu lève une erreur) ; SVG ; PNG 300 dpi par `canvas` (A3 3508 × 4961 px) avec chunk `pHYs`.
 - Noir de repérage `#000000` (RVB) pour les repères ; flux PDF non compressés.
-- **Identifiant du modèle imprimé seulement dans la marge (gouttière), pas au recto de la tuile** : repli permis par `docs/6-avis-prepresse.md`, §4 (revue `docs/17`, M8).
+- **Identifiant du modèle imprimé seulement dans la marge (gouttière), pas au recto de la tuile** : repli permis par `docs/archives/6-avis-prepresse.md`, §4 (revue `docs/17`, M8).
 - Corrections après revue (`docs/17`) : stock exporté plafonné à 200 tuiles au total (somme des exemplaires des modèles complets ; la portée « posées » n'est pas concernée) ; en portée « posées », une tuile dont le modèle est introuvable est signalée (`exclus`, raison `introuvable`) ; URL de l'aperçu libérée à la fermeture et à la réouverture de la boîte ; découpes résolues sans marqueur textuel (un identifiant contenant `%%CLIP:…%%` s'imprime tel quel).
 
 ## Vérification par l'orchestrateur
