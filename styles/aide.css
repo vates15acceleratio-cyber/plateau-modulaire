@@ -1,0 +1,17 @@
+/* aide.css : bloc « Commandes » (pm-aide-…), en bas de la colonne de gauche. */
+
+.pm-aide { border-top: 2px solid var(--pm-bord); background: #f9faf8; }
+.pm-aide-titre { display: flex; align-items: baseline; gap: 4px; padding: 8px 10px; font-weight: 700; font-size: 14px; cursor: pointer; user-select: none; }
+.pm-aide-titre:focus-visible { outline: 2px solid var(--pm-accent); outline-offset: -2px; }
+.pm-aide-onglet { font-weight: 400; color: var(--pm-discret); font-size: 12px; }
+/* Le bloc défile seul quand la liste dépasse : la bibliothèque garde la plus grande partie de la colonne */
+.pm-aide-corps { max-height: 32vh; overflow: auto; padding: 0 10px 10px; }
+.pm-aide-groupe-titre { margin: 6px 0 4px; padding: 2px 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--pm-accent); background: #e6f4ec; border-radius: 3px; }
+.pm-aide-liste { margin: 0; }
+.pm-aide-geste { margin: 6px 0 0; font-size: 12px; font-weight: 700; line-height: 1.3; }
+.pm-aide-effet { margin: 1px 0 0 10px; font-size: 12px; line-height: 1.35; color: var(--pm-texte); }
+
+/* Écran étroit : la colonne est limitée à 38 vh, la liste reste courte et défile */
+@media (max-width: 900px) {
+  .pm-aide-corps { max-height: 16vh; }
+}

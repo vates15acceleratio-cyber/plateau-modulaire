@@ -20,9 +20,9 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   var M = PM.modele;
 
-  /** Composition visée : 7 villes ; cases (cases des tuiles + cases de jonction) ≈ 60 en 4×4, ≈ 75 en 5×5 (docs/20). */
+  /** Composition visée : 7 villes ; cases (cases des tuiles + cases de jonction) ≈ 63 en 4×4 (accepté par l’utilisateur, docs/18), ≈ 75 en 5×5 (docs/20). */
   var NB_VILLES = 7;
-  var CIBLE_CASES = { '4x4': 60, '5x5': 75 };
+  var CIBLE_CASES = { '4x4': 63, '5x5': 75 };
 
   /** Dimensions du plateau (en cm) pour le format F. */
   function dimensions(F) { return (F.GRILLE.colonnes * F.COTE / 10) + ' × ' + (F.GRILLE.lignes * F.COTE / 10) + ' cm'; }

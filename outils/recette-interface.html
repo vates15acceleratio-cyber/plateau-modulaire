@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="../styles/editeur-tuile.css">
   <link rel="stylesheet" href="../styles/assemblage.css">
   <link rel="stylesheet" href="../styles/controles.css">
+  <link rel="stylesheet" href="../styles/aide.css">
   <style>
     #recette { position: fixed; right: 0; bottom: 0; width: 46vw; max-height: 45vh; overflow: auto; background: #fffbe6; border: 1px solid #999; font: 11px/1.3 monospace; z-index: 99999; pointer-events: none; padding: 4px; }
     #erreurs { color: #c0261a; white-space: pre-wrap; }
@@ -34,7 +35,10 @@
     <span id="pastille-alertes" class="pm-pastille" hidden></span>
   </header>
   <main class="pm-principal">
-    <aside id="bibliotheque" class="pm-colonne-gauche" aria-label="Bibliothèque de tuiles"></aside>
+    <div class="pm-colonne-gauche pm-colonne-pile">
+      <aside id="bibliotheque" class="pm-biblio-zone" aria-label="Bibliothèque de tuiles"></aside>
+      <aside id="aide" class="pm-aide-zone" aria-label="Commandes à la souris et au clavier"></aside>
+    </div>
     <section id="ecran-plateau" class="pm-ecran" data-ecran="plateau">
       <div id="assemblage" class="pm-zone-centrale"></div>
       <aside id="controles" class="pm-colonne-droite" aria-label="Compteurs et alertes"></aside>
@@ -72,6 +76,14 @@
         window.addEventListener('load', function () {
           window.addEventListener('pagehide', function remiseEnPlaceApresApp() { remettreAutosaveUtilisateur(); });
         });
+        // même précaution pour l'état replié / ouvert du bloc « Commandes » (la recette le modifie)
+        var cleAide = 'plateau-modulaire:aide', copieAide = localStorage.getItem(cleAide);
+        localStorage.removeItem(cleAide);
+        window.addEventListener('load', function () {
+          window.addEventListener('pagehide', function () {
+            try { if (copieAide !== null) localStorage.setItem(cleAide, copieAide); else localStorage.removeItem(cleAide); } catch (e) { /* rien */ }
+          });
+        });
       } catch (e) { noter('localStorage inaccessible : ' + e.message); }
     })();
   </script>
@@ -86,6 +98,7 @@
   <script src="../src/bibliotheque.js"></script>
   <script src="../src/assemblage.js"></script>
   <script src="../src/editeur-tuile.js"></script>
+  <script src="../src/aide.js"></script>
   <script src="../src/app.js"></script>
   <script src="../tests/aides-v2.js"></script>
   <script>
@@ -825,11 +838,126 @@
       ctrl('fin du scénario : retour à un plateau 4×4', etat.doc().grille === '4x4' && $('indicateur-grille').textContent === 'Grille 4×4 · 48 × 48 cm');
     }
 
+    /* ============================================================== */
+    /** S9 : suppression d'une tuile utilisateur (confirmation, historique) et bloc « Commandes » qui suit l'onglet. */
+    function s9_suppression_aide() {
+      titre('S9 suppression d\'une tuile utilisateur et bloc Commandes');
+      function dialogueOuvert() { return $('dialogue').open; }
+      function sup(id) { return document.querySelector('[data-vignette="' + id + '"] .pm-biblio-supprimer'); }
+      function aideTexte() { return $('aide').textContent; }
+      function aideOnglet() { var c = document.querySelector('#aide .pm-aide-corps'); return c && c.getAttribute('data-onglet'); }
+      function ouvrirOnglet(o) { document.querySelector('[data-onglet="' + o + '"]').click(); }
+
+      // Une tuile utilisateur par « Dupliquer » dans l'éditeur
+      reset(PM.catalogue.nouveauDocument());
+      etat.majUi({ modeleSelectionne: 'C1', onglet: 'tuiles' });
+      var btnSup = document.querySelector('.pm-editeur-bouton-supprimer');
+      ctrl('éditeur : « Supprimer cette tuile » absent pour une tuile du catalogue (C1)', btnSup && btnSup.hidden);
+      var dup = Array.prototype.filter.call(document.querySelectorAll('.pm-editeur-bouton'), function (b) { return b.textContent === 'Dupliquer'; })[0];
+      dup.click();
+      var uid = etat.ui().modeleSelectionne;
+      ctrl('Dupliquer crée une tuile utilisateur et l\'ouvre', !!uid && uid !== 'C1' && !!M.modeleParId(etat.doc(), uid), uid);
+      ctrl('éditeur : « Supprimer cette tuile » visible pour la tuile utilisateur', !btnSup.hidden && /Supprimer cette tuile/.test(btnSup.textContent));
+      etat.majUi({ onglet: 'plateau' });
+      ctrl('bibliothèque : pas de ✕ sur C1 ni sur le catalogue (13 tuiles livrées, 1 seul ✕)',
+        !sup('C1') && document.querySelectorAll('.pm-biblio-supprimer').length === 1);
+      var croix = sup(uid);
+      ctrl('bibliothèque : ✕ sur la tuile utilisateur, libellé accessible « Supprimer la tuile … »',
+        !!croix && /^Supprimer la tuile /.test(croix.getAttribute('aria-label')) && croix.getAttribute('aria-label').indexOf(uid) > 0, croix && croix.getAttribute('aria-label'));
+      ctrl('bibliothèque : ✕ cliquable (au moins 20 px) et frère du bouton de pose (pas de bouton dans un bouton)',
+        croix.getBoundingClientRect().width >= 20 && !croix.closest('[data-action="armer"]') && croix.previousElementSibling.getAttribute('data-action') === 'armer');
+
+      // Deux poses : la copie (1,1) et un C1 (2,1) ; une ville impossible (3 tuiles autour)
+      var g1 = glisser(uid, 1, 1, 0), g2 = glisser('C1', 2, 1, 0);
+      ctrl('pose de la copie (1,1) et de C1 (2,1)', g1.demarre && g2.demarre && nbTuiles() === 2, J(g1) + J(g2) + nbTuiles());
+
+      // Clic sur ✕ : n'arme rien, ouvre la confirmation ; Annuler ne change rien
+      var avant = docJ();
+      sup(uid).click(); // la bibliothèque a été redessinée par les poses : on retrouve le bouton
+      ctrl('✕ : n\'arme pas la pose et ne change pas d\'onglet', !etat.ui().aPoser && etat.ui().onglet === 'plateau');
+      var contenu = $('dialogue-contenu').textContent;
+      ctrl('confirmation dans la boîte commune : nom, identifiant et 1 tuile posée retirée avec elle',
+        dialogueOuvert() && contenu.indexOf(uid) > 0 && contenu.indexOf(M.modeleParId(etat.doc(), uid).nom) > 0 && /1 tuile posée/.test(contenu) && !!document.querySelector('.pm-biblio-confirmer'), contenu);
+      ctrl('confirmation : le focus est sur « Annuler » (action destructive)', document.activeElement && document.activeElement.className === 'pm-biblio-annuler');
+      document.querySelector('.pm-biblio-annuler').click();
+      ctrl('Annuler : boîte fermée, plateau et bibliothèque intacts', !dialogueOuvert() && docJ() === avant);
+
+      // Supprimer : modèle et tuile posée disparaissent, un seul Ctrl+Z remet tout
+      croix = sup(uid);
+      croix.click();
+      document.querySelector('.pm-biblio-confirmer').click();
+      ctrl('Supprimer : modèle et tuile posée disparus, C1 reste posé', !dialogueOuvert() && !M.modeleParId(etat.doc(), uid) && nbTuiles() === 1 && M.tuileEn(etat.doc(), 2, 1).modeleId === 'C1');
+      ctrl('Supprimer : la vignette disparaît de la bibliothèque', !document.querySelector('[data-vignette="' + uid + '"]') && document.querySelectorAll('.pm-biblio-vignette').length === 13);
+      ctrl('Supprimer : message dans la barre d\'état avec Ctrl+Z', new RegExp(uid).test(msg()) && /1 tuile posée/.test(msg()) && /Ctrl\+Z/.test(msg()), msg());
+      ctrlZ();
+      ctrl('Ctrl+Z (une seule fois) remet le modèle ET sa tuile posée', !!M.modeleParId(etat.doc(), uid) && nbTuiles() === 2 && !!M.tuileEn(etat.doc(), 1, 1) && !!sup(uid), nbTuiles());
+      ctrl('un second Ctrl+Z défait la pose précédente (une seule entrée pour la suppression)', (ctrlZ(), nbTuiles() === 1 && !!M.modeleParId(etat.doc(), uid)), nbTuiles());
+      ctrlY();
+      ctrlY();
+      ctrl('Ctrl+Y ×2 rétablit pose puis suppression', !M.modeleParId(etat.doc(), uid) && nbTuiles() === 1);
+      ctrlZ();
+
+      // Depuis l'éditeur : retour à l'invite après suppression
+      etat.majUi({ modeleSelectionne: uid, onglet: 'tuiles' });
+      btnSup = document.querySelector('.pm-editeur-bouton-supprimer');
+      ctrl('éditeur : bouton visible pour la tuile utilisateur rouverte', !btnSup.hidden);
+      btnSup.click();
+      ctrl('éditeur : la confirmation s\'ouvre (même boîte)', dialogueOuvert() && !!document.querySelector('.pm-biblio-confirmer'));
+      document.querySelector('.pm-biblio-confirmer').click();
+      ctrl('éditeur : tuile supprimée, retour à l\'invite et plus de tuile ouverte',
+        !M.modeleParId(etat.doc(), uid) && etat.ui().modeleSelectionne === null && !document.querySelector('.pm-editeur-invite').hidden && document.querySelector('.pm-editeur-corps').hidden);
+      ctrlZ();
+      ctrl('éditeur : Ctrl+Z remet la tuile', !!M.modeleParId(etat.doc(), uid));
+
+      // Une tuile du catalogue n'est pas supprimable (même par appel direct)
+      etat.majUi({ onglet: 'plateau' });
+      etat.signaler('', 'info');
+      var avant2 = docJ();
+      PM.bibliotheque.demanderSuppression(etat, 'C1');
+      ctrl('catalogue : suppression refusée sans boîte ni changement', !dialogueOuvert() && docJ() === avant2 && niveau() === 'erreur' && /catalogue/.test(msg()), msg());
+
+      // Bloc « Commandes »
+      reset(PM.catalogue.nouveauDocument());
+      var det = document.querySelector('#aide details');
+      ctrl('Commandes : bloc présent sous la bibliothèque, dans la colonne de gauche',
+        !!det && $('aide').getBoundingClientRect().top >= $('bibliotheque').getBoundingClientRect().bottom - 1 && $('aide').closest('.pm-colonne-gauche') === $('bibliotheque').closest('.pm-colonne-gauche'));
+      // sans état mémorisé : ouvert, sauf fenêtre étroite (900 px ou moins) où la colonne est courte
+      ctrl('Commandes : repliable (<details>), ouvert par défaut (replié sur écran étroit)', det.tagName === 'DETAILS' && det.open === !window.matchMedia('(max-width: 900px)').matches, window.innerWidth + ' px, open=' + det.open);
+      det.open = true;
+      ctrl('Commandes : visible à l\'écran (le bas du bloc est dans la fenêtre)', $('aide').getBoundingClientRect().bottom <= window.innerHeight + 1, $('aide').getBoundingClientRect().bottom + ' / ' + window.innerHeight);
+      ctrl('Commandes : onglet Plateau — souris et clavier dans le même bloc', aideOnglet() === 'plateau' && !!document.querySelector('#aide [data-groupe="souris"]') && !!document.querySelector('#aide [data-groupe="clavier"]'));
+      ctrl('Commandes (Plateau) : jonction, clic droit sur une tuile posée, alerte, ✕, Ctrl+Z',
+        /Clic sur une jonction/.test(aideTexte()) && /Clic droit sur une tuile posée/.test(aideTexte()) && /alerte/.test(aideTexte()) && /✕/.test(aideTexte()) && /Ctrl\+Z/.test(aideTexte()));
+      ctrl('Commandes (Plateau) : ni flèches ni gestes de l\'éditeur', !/Flèches/.test(aideTexte()) && !/Clic sur le fond/.test(aideTexte()));
+      ouvrirOnglet('tuiles');
+      ctrl('Commandes : le contenu change avec l\'onglet Tuiles', aideOnglet() === 'tuiles' && /Clic sur le fond du canevas/.test(aideTexte()) && /Clic droit sur une case/.test(aideTexte()) && /Flèches/.test(aideTexte()) && /Ctrl\+D/.test(aideTexte()) && /Ctrl\+Z/.test(aideTexte()));
+      ctrl('Commandes (Tuiles) : plus de geste propre au plateau', !/Clic sur une jonction/.test(aideTexte()) && !/Clic droit sur une tuile posée/.test(aideTexte()));
+      ctrl('Commandes : le <details> n\'a pas été recréé au changement d\'onglet', document.querySelector('#aide details') === det);
+      ouvrirOnglet('plateau');
+      ctrl('Commandes : retour à l\'onglet Plateau', aideOnglet() === 'plateau' && /Clic sur une jonction/.test(aideTexte()));
+      return attendre(40).then(function () {
+        det.open = false;
+        return attendre(40);
+      }).then(function () {
+        var m = null; try { m = localStorage.getItem('plateau-modulaire:aide'); } catch (e) { m = 'erreur'; }
+        ctrl('Commandes : replié, état mémorisé sous plateau-modulaire:aide', m === 'ferme', m);
+        ouvrirOnglet('tuiles');
+        ctrl('Commandes : replié, il le reste au changement d\'onglet', !det.open);
+        det.open = true;
+        return attendre(40);
+      }).then(function () {
+        var m = null; try { m = localStorage.getItem('plateau-modulaire:aide'); } catch (e) { m = 'erreur'; }
+        ctrl('Commandes : rouvert, état mémorisé « ouvert »', m === 'ouvert', m);
+        ouvrirOnglet('plateau');
+        reset(docExemples('4x4'));
+      });
+    }
+
     var chaine = Promise.resolve();
     function etape(f) { chaine = chaine.then(function () { try { return f(); } catch (e) { nEchec++; rapportEl.textContent += 'ÉCHEC  exception dans ' + f.name + ' : ' + (e && e.stack || e) + '\n'; } }); }
     if (!etat) { rapportEl.textContent = 'ÉCHEC  application non démarrée (PM.app.etat absent)\n'; nEchec++; }
     else {
-      [s0_chargement, s1_assemblage, s2_refus, s2b_clic_droit, s3_historique, s4_editeur, s5_controles, s7_raccourcis, robustesse, s8_nouveau5x5, s6_sauvegarde].forEach(etape);
+      [s0_chargement, s1_assemblage, s2_refus, s2b_clic_droit, s3_historique, s4_editeur, s5_controles, s7_raccourcis, robustesse, s8_nouveau5x5, s9_suppression_aide, s6_sauvegarde].forEach(etape);
     }
     chaine.then(function () {
       var nErr = (document.getElementById('erreurs').textContent.match(/ERREUR JS/g) || []).length;

@@ -5,7 +5,9 @@
  * Clic sur une vignette = armer la pose (puis clic sur une cellule du plateau, Échap annule) ; double-clic (ou touche E
  * sur la vignette qui a le focus) = ouvrir dans l'éditeur ; glisser = poser sur le plateau
  * (le glissement est confié à PM.assemblage.demarrerGlissement).
- * Les fonctions de calcul (vignettesBibliotheque, ...) n'accèdent pas au DOM : testables sous Node.
+ * Tuiles utilisateur (modèles absents du catalogue livré) : bouton ✕ sur la vignette, ou bouton de l'éditeur, puis confirmation
+ * dans la boîte de dialogue commune ; la suppression retire le modèle et ses tuiles posées en une seule entrée d'historique.
+ * Les fonctions de calcul (vignettesBibliotheque, estTuileUtilisateur, ...) n'accèdent pas au DOM : testables sous Node.
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
 
@@ -44,7 +46,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   /**
    * Données d'affichage de la bibliothèque (pure) : groupes par gabarit, filtrés.
    * filtre : 'tous' | un gabarit. Renvoie [{gabarit, titre, modeles: [{id, nom, gabarit, exemplaires,
-   * posees, complet, posable, alertes}]}] (groupes vides omis). Les gabarits inconnus vont dans « Autres ».
+   * posees, complet, posable, alertes, autreGrille, utilisateur}]}] (groupes vides omis). Les gabarits inconnus vont dans « Autres ».
    */
   function vignettesBibliotheque(doc, filtre) {
     var M = PM.modele, groupes = {}, ordre = GABARITS.concat(['autre']);
@@ -60,7 +62,8 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       groupes[gabarit].push({
         id: m.id, nom: m.nom || '', gabarit: gabarit, exemplaires: m.exemplaires, posees: nbPosees(doc, m.id),
         complet: v.complet, posable: v.complet, alertes: v.alertes.length,
-        autreGrille: phraseAutreGrille(m, doc) !== ''
+        autreGrille: phraseAutreGrille(m, doc) !== '',
+        utilisateur: idsCatalogue(doc).indexOf(m.id) < 0
       });
     });
     return ordre.filter(function (r) {
@@ -83,6 +86,124 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       return 'Ce modèle est incomplet : complétez-le dans l’éditeur avant de le poser.';
     }
     return '';
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Tuiles utilisateur : suppression                                    */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Identifiants des modèles du catalogue livré pour la grille du document : PM.catalogue.modelesParGrille[grille] si le
+   * catalogue la fournit, sinon PM.catalogue.modeles pour la grille 4×4 (le seul catalogue livré à ce jour), sinon rien.
+   * Sans catalogue chargé (tests Node qui ne le chargent pas), aucun modèle n'est du catalogue : tous sont supprimables.
+   */
+  function idsCatalogue(doc) {
+    var C = PM.catalogue;
+    if (!C) return [];
+    var grille = PM.modele.formatDuDocument(doc).id, liste;
+    if (C.modelesParGrille && Array.isArray(C.modelesParGrille[grille])) liste = C.modelesParGrille[grille];
+    else liste = grille === '4x4' && Array.isArray(C.modeles) ? C.modeles : [];
+    return liste.map(function (m) { return m && m.id; });
+  }
+
+  /** Le modèle `id` existe-t-il dans la bibliothèque sans faire partie du catalogue livré ? (pure) */
+  function estTuileUtilisateur(doc, id) {
+    return !!PM.modele.modeleParId(doc, id) && idsCatalogue(doc).indexOf(id) < 0;
+  }
+
+  /** Document sans les tuiles posées du modèle `id` (villes devenues invalides retirées par PM.modele.retirerTuile). */
+  function sansTuilesPosees(doc, id) {
+    var apres = doc;
+    doc.plateau.tuiles.filter(function (t) { return t && t.modeleId === id; }).forEach(function (t) {
+      apres = PM.modele.retirerTuile(apres, t.col, t.lig);
+    });
+    return apres;
+  }
+
+  /**
+   * Effets de la suppression de la tuile `id` (pure) : { tuilesRetirees: tuiles posées retirées, villesRetirees: villes
+   * retirées faute de tuiles autour }. Lève une Error si le modèle est inconnu.
+   */
+  function effetsSuppression(doc, id) {
+    if (!PM.modele.modeleParId(doc, id)) throw new Error('Modèle de tuile introuvable.');
+    var apres = sansTuilesPosees(doc, id);
+    return {
+      tuilesRetirees: doc.plateau.tuiles.length - apres.plateau.tuiles.length,
+      villesRetirees: doc.plateau.jetons.length - apres.plateau.jetons.length
+    };
+  }
+
+  /**
+   * Supprime une tuile utilisateur (pure) : retire ses tuiles posées (et les villes devenues invalides) puis le modèle.
+   * Lève une Error pour une tuile du catalogue livré ou inconnue. À appliquer par un seul etat.appliquer (une entrée d'historique).
+   */
+  function supprimerTuileUtilisateur(doc, id) {
+    if (!PM.modele.modeleParId(doc, id)) throw new Error('Modèle de tuile introuvable.');
+    if (!estTuileUtilisateur(doc, id)) throw new Error('La tuile « ' + id + ' » fait partie du catalogue livré : elle ne peut pas être supprimée.');
+    return PM.modele.supprimerModele(sansTuilesPosees(doc, id), id);
+  }
+
+  /** Effets en toutes lettres : « 2 tuiles posées et 1 ville » (pure). */
+  function phraseEffets(effets) {
+    var morceaux = [];
+    if (effets.tuilesRetirees) morceaux.push(effets.tuilesRetirees + ' tuile' + (effets.tuilesRetirees > 1 ? 's posées' : ' posée'));
+    if (effets.villesRetirees) morceaux.push(effets.villesRetirees + ' ville' + (effets.villesRetirees > 1 ? 's' : ''));
+    return morceaux.join(' et ');
+  }
+
+  /**
+   * Confirmation de suppression (DOM, boîte commune PM.dialogue). Le focus part sur « Annuler » (action destructive).
+   * « Supprimer » : une seule entrée d'historique, annulable par Ctrl+Z ; si la tuile était ouverte dans l'éditeur ou armée
+   * pour la pose, l'éditeur revient à l'invite et l'armement est levé.
+   */
+  function demanderSuppression(etat, id) {
+    var doc = etat.doc();
+    if (!estTuileUtilisateur(doc, id)) {
+      etat.signaler(PM.modele.modeleParId(doc, id) ? 'La tuile « ' + id + ' » fait partie du catalogue livré : elle ne peut pas être supprimée.' : 'Modèle de tuile introuvable.', 'erreur');
+      return;
+    }
+    if (!PM.dialogue) { etat.signaler('Boîte de dialogue indisponible : suppression impossible.', 'erreur'); return; }
+    var m = PM.modele.modeleParId(doc, id), effets = effetsSuppression(doc, id);
+    var c = PM.dialogue.ouvrir('Supprimer la tuile ?');
+    function el(tag, classe, texte) {
+      var e = document.createElement(tag);
+      if (classe) e.className = classe;
+      if (texte !== undefined) e.textContent = texte;
+      return e;
+    }
+    var racine = el('div', 'pm-biblio-confirmation');
+    var p = el('p', 'pm-biblio-confirmation-texte');
+    p.appendChild(document.createTextNode('Supprimer la tuile '));
+    p.appendChild(el('strong', '', '« ' + (m.nom || id) + ' »'));
+    p.appendChild(document.createTextNode(' (identifiant ' + id + ') de la bibliothèque ?'));
+    racine.appendChild(p);
+    if (effets.tuilesRetirees || effets.villesRetirees) {
+      var av = el('p', 'pm-biblio-confirmation-effets', 'Seront aussi retirées du plateau : ' + phraseEffets(effets) + '.');
+      av.setAttribute('role', 'note');
+      racine.appendChild(av);
+    }
+    racine.appendChild(el('p', 'pm-biblio-confirmation-note', 'Vous pourrez annuler avec Ctrl+Z.'));
+    var actions = el('p', 'pm-biblio-confirmation-actions');
+    var ok = el('button', 'pm-biblio-confirmer', 'Supprimer'); ok.type = 'button';
+    var non = el('button', 'pm-biblio-annuler', 'Annuler'); non.type = 'button';
+    actions.appendChild(ok); actions.appendChild(document.createTextNode(' ')); actions.appendChild(non);
+    racine.appendChild(actions);
+    c.appendChild(racine);
+    non.addEventListener('click', function () { PM.dialogue.fermer(); });
+    ok.addEventListener('click', function () {
+      PM.dialogue.fermer();
+      var finaux;
+      try { finaux = effetsSuppression(etat.doc(), id); } catch (e) { etat.signaler(e.message, 'erreur'); return; }
+      var r = etat.appliquer(function (d) { return supprimerTuileUtilisateur(d, id); }, 'suppression de la tuile ' + id);
+      if (!r.ok) return;
+      var patch = {};
+      if (etat.ui().modeleSelectionne === id) patch.modeleSelectionne = null;
+      if (etat.ui().aPoser === id) patch.aPoser = null;
+      if (Object.keys(patch).length) etat.majUi(patch);
+      var detail = phraseEffets(finaux);
+      etat.signaler('Tuile « ' + id + ' » supprimée' + (detail ? ' (' + detail + ' retirée' + (finaux.tuilesRetirees + finaux.villesRetirees > 1 ? 's' : '') + ' du plateau)' : '') + '. Ctrl+Z pour annuler.', detail ? 'alerte' : 'info');
+    });
+    non.focus();
   }
 
   /* ------------------------------------------------------------------ */
@@ -137,6 +258,9 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
             (v.complet && v.alertes ? '<span class="pm-biblio-badge" title="Alertes de l’éditeur (par exemple règles R1 à R4)">' + v.alertes + ' alerte' + (v.alertes > 1 ? 's' : '') + '</span>' : '') +
           '</span>' +
         '</button>' +
+        (v.utilisateur ? '<button type="button" class="pm-biblio-supprimer" data-action="supprimer" data-id="' + id + '"' +
+          ' aria-label="' + echapper('Supprimer la tuile ' + v.id + (v.nom ? ' (' + v.nom + ')' : '')) + '"' +
+          ' title="Supprimer cette tuile de la bibliothèque (avec confirmation)">✕</button>' : '') +
       '</li>';
     }
 
@@ -186,6 +310,8 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     document.addEventListener('pointercancel', function () { appui = null; });
 
     liste.addEventListener('click', function (ev) {
+      var sup = ev.target.closest('[data-action="supprimer"]');
+      if (sup) { demanderSuppression(etat, sup.getAttribute('data-id')); return; } // le ✕ n'arme jamais la pose
       var b = ev.target.closest('[data-action="armer"]');
       if (!b || b.disabled) return;
       // clic souris émis juste après le lâcher d'un glissement : ignoré (le clavier, detail = 0, ne l'est jamais)
@@ -227,6 +353,10 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   PM.bibliotheque = {
     vignettesBibliotheque: vignettesBibliotheque,
     refusArmement: refusArmement,
+    estTuileUtilisateur: estTuileUtilisateur,
+    effetsSuppression: effetsSuppression,
+    supprimerTuileUtilisateur: supprimerTuileUtilisateur,
+    demanderSuppression: demanderSuppression,
     phraseAutreGrille: phraseAutreGrille,
     SEUIL_GLISSEMENT: SEUIL_GLISSEMENT,
     monter: monter

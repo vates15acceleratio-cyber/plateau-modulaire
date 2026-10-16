@@ -82,3 +82,7 @@
 @media (prefers-reduced-motion: reduce) {
   .pm-editeur-halo { animation: none; }
 }
+
+/* Bouton « Supprimer cette tuile » (tuiles utilisateur seulement) */
+.pm-editeur-bouton-supprimer { color: var(--pm-erreur); border-color: var(--pm-erreur); }
+.pm-editeur-bouton-supprimer[hidden] { display: none; }

@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="styles/export.css">
   <link rel="stylesheet" href="styles/equilibre.css">
   <link rel="stylesheet" href="styles/generateur.css">
+  <link rel="stylesheet" href="styles/aide.css">
 </head>
 <body>
   <header id="barre" class="pm-barre">
@@ -35,7 +36,11 @@
   </header>
 
   <main class="pm-principal">
-    <aside id="bibliotheque" class="pm-colonne-gauche" aria-label="Bibliothèque de tuiles"></aside>
+    <!-- Colonne de gauche commune aux deux onglets : bibliothèque (défile) et, en bas, bloc « Commandes » (repliable) -->
+    <div class="pm-colonne-gauche pm-colonne-pile">
+      <aside id="bibliotheque" class="pm-biblio-zone" aria-label="Bibliothèque de tuiles"></aside>
+      <aside id="aide" class="pm-aide-zone" aria-label="Commandes à la souris et au clavier"></aside>
+    </div>
     <section id="ecran-plateau" class="pm-ecran" data-ecran="plateau">
       <div id="assemblage" class="pm-zone-centrale"></div>
       <aside id="controles" class="pm-colonne-droite" aria-label="Compteurs et alertes"></aside>
@@ -68,6 +73,7 @@
   <script src="src/bibliotheque.js"></script>
   <script src="src/assemblage.js"></script>
   <script src="src/editeur-tuile.js"></script>
+  <script src="src/aide.js"></script>
   <script src="src/app.js"></script>
 </body>
 </html>

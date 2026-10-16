@@ -34,6 +34,10 @@ button:focus-visible { outline: 2px solid var(--pm-accent); outline-offset: 1px;
 
 .pm-principal { display: grid; grid-template-columns: 360px 1fr; min-height: 0; }
 .pm-colonne-gauche { border-right: 1px solid var(--pm-bord); background: var(--pm-panneau); overflow: auto; min-height: 0; }
+/* Colonne de gauche en pile : la bibliothèque défile, le bloc « Commandes » reste en bas (la colonne ne défile pas elle-même) */
+.pm-colonne-pile { display: flex; flex-direction: column; overflow: hidden; }
+.pm-biblio-zone { flex: 1 1 auto; overflow: auto; min-height: 0; }
+.pm-aide-zone { flex: 0 0 auto; }
 .pm-ecran { display: grid; grid-template-columns: 1fr 260px; min-height: 0; }
 .pm-ecran[hidden] { display: none; }
 .pm-ecran[data-ecran="tuiles"] { grid-template-columns: 1fr; }

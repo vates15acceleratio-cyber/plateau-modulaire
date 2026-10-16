@@ -13,7 +13,7 @@
 .pm-biblio-nombre { font-size: 13px; font-weight: 600; color: var(--pm-accent); }
 /* Vignettes sur plusieurs colonnes : autant que la largeur de la colonne en permet */
 .pm-biblio-vignettes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
-.pm-biblio-vignette { border: 1px solid var(--pm-bord); border-radius: var(--pm-rayon); background: var(--pm-panneau); padding: 4px; min-width: 0; }
+.pm-biblio-vignette { position: relative; border: 1px solid var(--pm-bord); border-radius: var(--pm-rayon); background: var(--pm-panneau); padding: 4px; min-width: 0; }
 .pm-biblio-vignette.pm-biblio-selection { border-color: var(--pm-accent); box-shadow: 0 0 0 1px var(--pm-accent); }
 .pm-biblio-vignette.pm-biblio-arme { border-color: var(--pm-accent); background: #e6f4ec; box-shadow: 0 0 0 2px var(--pm-accent); }
 .pm-biblio-ouvrir { display: flex; flex-direction: column; gap: 4px; align-items: stretch; width: 100%; border: 0; padding: 2px; background: none; text-align: center; user-select: none; }
@@ -25,6 +25,22 @@
 .pm-biblio-nom { font-size: 12px; color: var(--pm-discret); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pm-biblio-badge { font-size: 11px; padding: 1px 6px; border-radius: 999px; background: #fff3e0; color: var(--pm-alerte); font-weight: 600; }
 .pm-biblio-incomplet .pm-biblio-image, .pm-biblio-autre-grille .pm-biblio-image { opacity: .55; filter: grayscale(1); }
+/* Bouton ✕ des tuiles utilisateur : petit, dans le coin de la vignette, frère (et non enfant) du bouton de pose */
+.pm-biblio-supprimer { position: absolute; top: 2px; right: 2px; width: 24px; height: 24px; min-width: 0; min-height: 0; padding: 0; line-height: 1; font-size: 13px; font-weight: 700; color: var(--pm-erreur); background: rgba(255, 255, 255, .92); border-color: var(--pm-bord); border-radius: 50%; }
+.pm-biblio-supprimer:hover:not(:disabled) { background: #fdecea; border-color: var(--pm-erreur); }
+.pm-biblio-supprimer:focus-visible { outline: 2px solid var(--pm-erreur); outline-offset: 1px; }
+@media (max-width: 900px) {
+  .pm-biblio-supprimer { width: 36px; height: 36px; min-width: 36px; min-height: 36px; }
+}
+
+/* Confirmation de suppression (boîte de dialogue commune) */
+.pm-biblio-confirmation { display: grid; gap: 10px; }
+.pm-biblio-confirmation p { margin: 0; }
+.pm-biblio-confirmation-effets { color: var(--pm-erreur); font-weight: 600; }
+.pm-biblio-confirmation-note { color: var(--pm-discret); }
+.pm-biblio-confirmer { color: #fff; background: var(--pm-erreur); border-color: var(--pm-erreur); }
+.pm-biblio-confirmer:hover:not(:disabled) { border-color: var(--pm-texte); }
+
 .pm-biblio-vide { color: var(--pm-discret); font-style: italic; padding: 12px 4px; }
 
 /* ---------------- Plateau ---------------- */

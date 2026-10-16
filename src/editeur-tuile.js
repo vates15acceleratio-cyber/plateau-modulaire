@@ -614,6 +614,14 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     barre.appendChild(groupeNouveau);
     var btnDupliquer = bouton('Dupliquer', 'Copier ce modèle (Ctrl+D)', function () { dupliquerCourant(); });
     barre.appendChild(btnDupliquer);
+    // Visible seulement pour une tuile utilisateur (hors catalogue livré) ; la confirmation est celle de la bibliothèque
+    var btnSupprimerTuile = bouton('Supprimer cette tuile', 'Supprimer cette tuile de la bibliothèque (avec confirmation, annulable par Ctrl+Z)', function () {
+      var m = modeleCourant();
+      if (m && PM.bibliotheque && typeof PM.bibliotheque.demanderSuppression === 'function') PM.bibliotheque.demanderSuppression(etat, m.id);
+    });
+    btnSupprimerTuile.classList.add('pm-editeur-bouton-supprimer');
+    btnSupprimerTuile.hidden = true;
+    barre.appendChild(btnSupprimerTuile);
     var inNom = el('input', 'pm-editeur-saisie'); inNom.type = 'text'; inNom.maxLength = 60;
     barre.appendChild(champ('Nom', inNom));
     var selGabarit = el('select', 'pm-editeur-saisie');
@@ -1019,6 +1027,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       }
       invite.hidden = true;
       corps.hidden = false;
+      btnSupprimerTuile.hidden = !(PM.bibliotheque && typeof PM.bibliotheque.estTuileUtilisateur === 'function' && PM.bibliotheque.estTuileUtilisateur(doc, m.id));
       if (modeleAffiche !== m.id) { selection = null; arme = null; haloLocal = null; survol = null; modeleAffiche = m.id; }
       // une sélection dont l'élément a disparu (annulation, suppression) est abandonnée
       if (selection && !elementExiste(m, selection)) selection = null;

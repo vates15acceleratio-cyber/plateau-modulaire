@@ -24,7 +24,7 @@ test('plateau vide : compteurs à zéro, aucune erreur ni alerte', () => {
   const par = parCle(r);
   assert.deepEqual(r.compteurs.map((c) => c.cle), ['villes', 'cases', 'tuiles', 'apparitions_vert', 'apparitions_rouge', 'dimensions', 'tuiles_petites']);
   assert.deepEqual([par.villes.valeur, par.villes.cible, par.villes.etat], [0, 7, 'ecart']);
-  assert.deepEqual([par.cases.valeur, par.cases.cible, par.cases.etat], [0, '≈ 60', 'ok']);
+  assert.deepEqual([par.cases.valeur, par.cases.cible, par.cases.etat], [0, '≈ 63', 'ok']);
   assert.deepEqual([par.tuiles.valeur, par.tuiles.cible], [0, 16]);
   assert.deepEqual([par.apparitions_vert.valeur, par.apparitions_vert.cible], [0, 6]);
   assert.deepEqual([par.apparitions_rouge.valeur, par.apparitions_rouge.cible], [0, 6]);

@@ -289,6 +289,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     monterModule('assemblage', 'assemblage', etat);
     monterModule('controles', 'controles', etat);
     monterModule('editeurTuile', 'editeur', etat);
+    monterModule('aide', 'aide', etat);
 
     // À la fermeture de la page, la sauvegarde automatique différée est écrite tout de suite.
     window.addEventListener('pagehide', function () {
