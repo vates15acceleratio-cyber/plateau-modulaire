@@ -6,29 +6,25 @@
 .pm-biblio-titre { font-size: 14px; margin: 0 0 6px; }
 .pm-biblio-filtre { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .pm-biblio-filtre select { flex: 1; font: inherit; min-height: 30px; }
-.pm-biblio-aide { margin: 6px 0 0; font-size: 11px; color: var(--pm-discret); }
-.pm-biblio-liste { padding: 4px 8px 12px; }
-.pm-biblio-groupe-titre { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--pm-discret); margin: 10px 2px 4px; }
-.pm-biblio-nombre { font-weight: normal; }
-.pm-biblio-vignettes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.pm-biblio-vignette { border: 1px solid var(--pm-bord); border-radius: var(--pm-rayon); background: var(--pm-panneau); padding: 4px; }
+.pm-biblio-aide { margin: 6px 0 0; font-size: 12px; color: var(--pm-discret); line-height: 1.35; }
+.pm-biblio-liste { padding: 4px 10px 14px; }
+/* Titres de catégorie : bandeau bien visible au-dessus de chaque groupe */
+.pm-biblio-groupe-titre { display: flex; align-items: baseline; gap: 6px; font-size: 15px; font-weight: 700; color: var(--pm-texte); margin: 14px 0 8px; padding: 6px 10px; background: #e6f4ec; border-left: 4px solid var(--pm-accent); border-radius: 0 var(--pm-rayon) var(--pm-rayon) 0; }
+.pm-biblio-nombre { font-size: 13px; font-weight: 600; color: var(--pm-accent); }
+/* Vignettes sur plusieurs colonnes : autant que la largeur de la colonne en permet */
+.pm-biblio-vignettes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.pm-biblio-vignette { border: 1px solid var(--pm-bord); border-radius: var(--pm-rayon); background: var(--pm-panneau); padding: 4px; min-width: 0; }
 .pm-biblio-vignette.pm-biblio-selection { border-color: var(--pm-accent); box-shadow: 0 0 0 1px var(--pm-accent); }
-.pm-biblio-vignette.pm-biblio-arme { border-color: var(--pm-accent); background: #e6f4ec; }
-.pm-biblio-ouvrir { display: flex; gap: 8px; align-items: center; width: 100%; border: 0; padding: 2px; background: none; text-align: left; user-select: none; }
-.pm-biblio-image { flex: 0 0 64px; width: 64px; height: 64px; display: block; }
+.pm-biblio-vignette.pm-biblio-arme { border-color: var(--pm-accent); background: #e6f4ec; box-shadow: 0 0 0 2px var(--pm-accent); }
+.pm-biblio-ouvrir { display: flex; flex-direction: column; gap: 4px; align-items: stretch; width: 100%; border: 0; padding: 2px; background: none; text-align: center; user-select: none; }
+.pm-biblio-image { display: block; width: 100%; aspect-ratio: 1; }
 .pm-biblio-glissable { cursor: grab; touch-action: none; }
 .pm-biblio-svg { width: 100%; height: 100%; display: block; }
-.pm-biblio-texte { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
-.pm-biblio-id { font-weight: 600; font-size: 13px; }
-.pm-biblio-nom { font-size: 12px; color: var(--pm-discret); overflow: hidden; text-overflow: ellipsis; }
-.pm-biblio-badge { align-self: flex-start; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: #fff3e0; color: var(--pm-alerte); font-weight: 600; }
-.pm-biblio-stock { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
-.pm-biblio-stock button { min-height: 28px; padding: 2px 8px; }
-.pm-biblio-restants { flex: 1; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
-.pm-biblio-epuise .pm-biblio-restants { color: var(--pm-discret); }
-.pm-biblio-epuise .pm-biblio-image { opacity: .4; }
+.pm-biblio-texte { display: flex; flex-direction: column; align-items: center; min-width: 0; gap: 2px; }
+.pm-biblio-id { font-weight: 700; font-size: 13px; }
+.pm-biblio-nom { font-size: 12px; color: var(--pm-discret); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-biblio-badge { font-size: 11px; padding: 1px 6px; border-radius: 999px; background: #fff3e0; color: var(--pm-alerte); font-weight: 600; }
 .pm-biblio-incomplet .pm-biblio-image, .pm-biblio-autre-grille .pm-biblio-image { opacity: .55; filter: grayscale(1); }
-.pm-biblio-poser[aria-pressed="true"] { background: var(--pm-accent); color: #fff; border-color: var(--pm-accent); }
 .pm-biblio-vide { color: var(--pm-discret); font-style: italic; padding: 12px 4px; }
 
 /* ---------------- Plateau ---------------- */

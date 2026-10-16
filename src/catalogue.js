@@ -3,11 +3,14 @@
  * Aucun accès au DOM. Règles : docs/18-decisions-v2.md, docs/19-avis-design-v2.md (R1 à R4, § 5),
  * docs/20-avis-geometrie-v2.md (cotes, D5 raccourci de coin) ; mesures : docs/21-mesures-catalogue-v2.md.
  *
- * 22 tuiles physiques, 14 modèles :
- *  - 6 centrales C1..C6 (1 exemplaire), 4 à 6 cases ;
- *  - 5 modèles de bord B1, B3..B6 (10 tuiles dont 6 exemplaires de B1), 3 ou 4 cases, une case d'apparition ;
- *  - 3 modèles de coin K1..K3 (2 exemplaires chacun), 2 ou 3 cases, une case d'apparition.
- *  Environ 60 cases par plateau (cases des 16 tuiles + 2 jonctions-cases), voir tests/catalogue.test.js.
+ * 13 modèles, 22 exemplaires à imprimer (les poses sont illimitées : l'exemplaire ne sert qu'à l'impression et de poids
+ * au générateur, docs/18, retours après essai) :
+ *  - 6 centrales C1..C6 (1 exemplaire, 2 pour C4), 4 à 6 cases ;
+ *  - 5 modèles de bord B1, B3..B6 (10 exemplaires dont 6 de B1), 3 ou 4 cases, une case d'apparition ;
+ *  - 2 modèles de coin K2 (4 exemplaires) et K4 (1 exemplaire), 3 ou 4 cases, une case d'apparition ; K1 (direct, une seule
+ *    case avant la jonction) et K3 (poche) sont retirés, K4 est la seule autre forme de coin qui respecte tout (voir K4).
+ *  Aucun modèle n'a de poche (case en impasse, alerte `poche` de validerModele).
+ *  Environ 60 à 63 cases par plateau (cases des 16 tuiles + 2 jonctions-cases), voir tests/catalogue.test.js.
  *
  * Règles que tous les modèles respectent (aucune erreur ni alerte de PM.modele.validerModele) :
  *  - R1 une case porte au plus un port de coin ; R2 deux cases porteuses ne sont jamais reliées directement ;
@@ -87,7 +90,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
           raccord('r1', 'n', 0, 1), raccord('r2', 'n', 1, 1), raccord('r3', 's', 2, 1), raccord('r4', 's', 3, 1)
         ]),
       // trois ports seulement (pas de port au coin SE) : étoile à 4 cases
-      modele('C4', 'Trident', 'centrale', 1,
+      modele('C4', 'Trident', 'centrale', 2,
         [kase('c0', 60, 60), kase('c1', 32, 32), kase('c2', 88, 32), kase('c4', 32, 88)], [
           lien('h1', 'c0', 'c1'), lien('h2', 'c0', 'c2'), lien('h4', 'c0', 'c4'),
           port('p1', 'c1', 0), port('p2', 'c2', 1), port('p4', 'c4', 3),
@@ -119,10 +122,12 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         [appar('a', 60, 34), kase('r', 60, 72), kase('c1', 90, 92), kase('c2', 30, 92)], [
           lien('h1', 'a', 'r'), lien('h2', 'r', 'c1'), lien('h3', 'r', 'c2'), port('p1', 'c1', 2), port('p2', 'c2', 3)
         ].concat(raccourciBord('a'), [raccord('r3', 'r', 2, 1)])),
-      // fourche : l'apparition tient les deux ports, le raccord central part d'un relais pendant
-      modele('B4', 'Bord en fourche', 'bord', 1,
-        [appar('a', 60, 46), kase('r', 60, 86), kase('c1', 98, 94), kase('c2', 22, 94)], [
-          lien('h1', 'a', 'c1'), lien('h2', 'a', 'c2'), lien('h3', 'a', 'r'), port('p1', 'c1', 2), port('p2', 'c2', 3)
+      // losange : l'apparition et un relais touchent chacun les deux cases à port (deux routes de même longueur),
+      // le raccord central part du relais, qui a donc deux chemins (ni impasse ni poche)
+      modele('B4', 'Bord en losange', 'bord', 1,
+        [appar('a', 60, 36), kase('r', 60, 80), kase('c1', 98, 94), kase('c2', 22, 94)], [
+          lien('h1', 'a', 'c1'), lien('h2', 'a', 'c2'), lien('h3', 'r', 'c1'), lien('h4', 'r', 'c2'),
+          port('p1', 'c1', 2), port('p2', 'c2', 3)
         ].concat(raccourciBord('a'), [raccord('r3', 'r', 2, 1)])),
       // décalé : port est à 1 pas de l'apparition, port ouest à 2 pas (par un relais)
       modele('B5', 'Bord décalé', 'bord', 1,
@@ -137,20 +142,16 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         ].concat(raccourciBord('a'), [raccord('r3', 'r', 2, 1)])),
 
       /* ---------------- Coins (extérieurs N et O, port SE, raccourci E pos 0 + S pos 2) ---------------- */
-      // direct : l'apparition touche la case à port
-      modele('K1', 'Coin direct', 'coin', 2,
-        [appar('a', 44, 44), kase('c1', 88, 88)], [
-          lien('h1', 'a', 'c1'), port('p1', 'c1', 2)
-        ].concat(raccourciCoin('a', 'a'))),
-      // relais : un relais entre l'apparition et la case à port
-      modele('K2', 'Coin à relais', 'coin', 2,
+      // relais : un relais entre l'apparition et la case à port (2 cases avant la jonction, 3 pas)
+      modele('K2', 'Coin à relais', 'coin', 4,
         [appar('a', 38, 38), kase('r', 63, 63), kase('c1', 88, 88)], [
           lien('h1', 'a', 'r'), lien('h2', 'r', 'c1'), port('p1', 'c1', 2)
         ].concat(raccourciCoin('a', 'a'))),
-      // poche : l'apparition tient le port et les deux raccords ; une case en impasse pend à la case à port
-      modele('K3', 'Coin à poche', 'coin', 2,
-        [appar('a', 44, 44), kase('c1', 88, 88), kase('r', 92, 56)], [
-          lien('h1', 'a', 'c1'), lien('h2', 'c1', 'r'), port('p1', 'c1', 2)
+      // losange : deux relais symétriques entre l'apparition et la case à port, deux routes de même longueur
+      // (toujours 2 cases avant la jonction, 3 pas)
+      modele('K4', 'Coin en losange', 'coin', 1,
+        [appar('a', 40, 40), kase('s1', 82, 56), kase('s2', 56, 82), kase('c1', 92, 92)], [
+          lien('h1', 'a', 's1'), lien('h2', 'a', 's2'), lien('h3', 's1', 'c1'), lien('h4', 's2', 'c1'), port('p1', 'c1', 2)
         ].concat(raccourciCoin('a', 'a')))
     ];
   }
@@ -166,7 +167,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   var MODELES = geler(construire());
 
-  /** Document neuf du format 4×4 (PM.modele.nouveauDocument) contenant une copie modifiable des 14 modèles. */
+  /** Document neuf du format 4×4 (PM.modele.nouveauDocument) contenant une copie modifiable des 13 modèles. */
   function nouveauDocument() {
     var doc = PM.modele.nouveauDocument('4x4');
     doc.modeles = JSON.parse(JSON.stringify(MODELES));

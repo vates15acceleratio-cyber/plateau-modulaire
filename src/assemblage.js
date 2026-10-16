@@ -8,8 +8,10 @@
  * 1 ≤ j ≤ lignes - 1 (1..3 en 4×4), en (i·COTE, j·COTE) mm.
  * Les fonctions sans document prennent un dernier paramètre `format` facultatif (4×4 par défaut).
  *
- * Règles v2 : grille pleine, pose libre (toute tuile sur toute cellule libre), rotation libre de toutes les
- * tuiles (R), rotation suggérée pour un bord ou un coin posé sur le pourtour ; jonction = case chemin ou ville.
+ * Règles v2 : grille pleine, poses illimitées (un modèle se pose autant de fois qu'on veut) mais rôle respecté (coin dans
+ * un coin, bord sur le pourtour hors coins, centrale au centre : les autres cellules sont grisées pendant l'armement et le
+ * glissement), rotation libre de toutes les tuiles (R), rotation suggérée pour un bord ou un coin sur le pourtour ;
+ * clic droit sur une tuile posée = la retirer (annulable) ; jonction = case chemin ou ville.
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
 
@@ -203,6 +205,23 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var m = M().modeleParId(doc, modeleId), B = PM.bibliotheque;
     var autre = m && B && typeof B.phraseAutreGrille === 'function' ? B.phraseAutreGrille(m, doc) : '';
     return autre || raison;
+  }
+
+  /**
+   * Retrait d'une tuile par clic droit (pure). Renvoie { ok, doc, tuile, phrase, niveau } ; ok = false (sans autre champ utile)
+   * si la cellule est vide ou hors grille. Les villes devenues invalides sont retirées avec la tuile et annoncées
+   * dans `phrase` (qui se termine alors par « Ctrl+Z pour annuler. »), comme pour la touche Suppr.
+   */
+  function retirerParClicDroit(doc, col, lig) {
+    var t = M().tuileEn(doc, col, lig);
+    if (!t) return { ok: false, doc: doc, tuile: null, phrase: '', niveau: 'info' };
+    var apres = M().retirerTuile(doc, col, lig);
+    var msg = messageEffets(effetsDeAction(doc, apres));
+    return {
+      ok: true, doc: apres, tuile: { modeleId: t.modeleId, col: t.col, lig: t.lig, rot: t.rot },
+      phrase: ('Tuile « ' + t.modeleId + ' » retirée de (' + col + ',' + lig + '). ' + (msg || '')).trim(),
+      niveau: msg ? 'alerte' : 'info'
+    };
   }
 
   /** Phrase pour la barre d'état décrivant les effets (null s'il n'y en a pas). Se termine par « Ctrl+Z pour annuler. ». */
@@ -486,8 +505,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       var t = selection && M().tuileEn(doc, selection.col, selection.lig);
       if (ui.aPoser) consigne.textContent = 'Pose de « ' + ui.aPoser + ' » : cliquez une cellule éclairée (Échap pour annuler).';
       else if (t) consigne.textContent = 'Tuile (' + t.col + ',' + t.lig + ') sélectionnée : ' +
-        'R ou clic pour pivoter, Suppr pour retirer, glisser pour déplacer.';
-      else consigne.textContent = 'Clic sur une jonction : case chemin ou ville.';
+        'R ou clic pour pivoter, Suppr ou clic droit pour retirer, glisser pour déplacer.';
+      else consigne.textContent = 'Clic sur une jonction : case chemin ou ville. Clic droit sur une tuile : la retirer.';
     }
 
     function faireClignoter(c) {
@@ -591,7 +610,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       dessiner();
       var et = etiquetteCellule(col, lig, formatDoc(doc));
       etat.signaler('Cellule (' + col + ',' + lig + ') : ' + (et || '').toLowerCase() +
-        '. Glissez-y n\'importe quelle tuile depuis la bibliothèque (pose libre).', 'info');
+        '. Choisissez dans la bibliothèque une tuile de ce rôle (clic puis clic ici, ou glisser).', 'info');
     }
 
     /* --- Glissement ------------------------------------------------- */
@@ -696,6 +715,20 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
     document.addEventListener('pointercancel', function () { appui = null; if (glissement) terminerGlissement(); });
 
+    // Clic droit : pas de menu du navigateur sur le plateau ; sur une tuile posée, elle est retirée (annulable)
+    scene.addEventListener('contextmenu', function (ev) {
+      ev.preventDefault();
+      if (glissement) return;
+      var ce = ev.target.closest('[data-cellule]'), jn = ev.target.closest('[data-jonction]');
+      if (!ce || jn) return;
+      var p = ce.getAttribute('data-cellule').split(',').map(Number);
+      var r = retirerParClicDroit(etat.doc(), p[0], p[1]);
+      if (!r.ok) return;
+      appui = null;
+      if (selection && selection.col === p[0] && selection.lig === p[1]) selection = null;
+      if (etat.appliquer(function () { return r.doc; }, 'retrait de tuile').ok) etat.signaler(r.phrase, r.niveau);
+    });
+
     // Clavier sur un élément du plateau qui a le focus : Entrée / Espace = clic
     scene.addEventListener('keydown', function (ev) {
       if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.closest('[data-cle]')) {
@@ -757,6 +790,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     deplacerTuile: deplacerTuile,
     effetsDeAction: effetsDeAction,
     messageEffets: messageEffets,
+    retirerParClicDroit: retirerParClicDroit,
     raisonRefus: raisonRefus,
     compterJetons: compterJetons,
     messageJeton: messageJeton,

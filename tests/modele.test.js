@@ -23,6 +23,13 @@ function documentVide(grille) {
   return doc;
 }
 
+/** Pose forcée (sans contrôle de rôle), comme dans un document ancien ou chargé : pour tester les alertes de place. */
+function forcer(doc, modeleId, col, lig, rot) {
+  const d = copie(doc);
+  d.plateau.tuiles.push({ modeleId, col, lig, rot: rot || 0 });
+  return d;
+}
+
 /** Pose toutes les tuiles de la grille avec les exemples, chacune à sa place (rotation suggérée). */
 function plateauComplet(grille) {
   let doc = documentVide(grille);
@@ -142,7 +149,11 @@ const ALERTES = [
   ['réseau sans sortie', 'bord', (m) => {
     m.cases.push({ id: 'c8', x: 100, y: 50, diametre: 10, type: 'deplacement' }, { id: 'c9', x: 100, y: 66, diametre: 10, type: 'deplacement' });
     m.chemins.push({ id: 'h9', a: { case: 'c8' }, b: { case: 'c9' } });
-  }, 'reseau_sans_sortie']
+  }, 'reseau_sans_sortie'],
+  ['poche : case en impasse accrochée à une case qui a une sortie', 'bord', (m) => {
+    m.cases.push({ id: 'c8', x: 100, y: 50, diametre: 10, type: 'deplacement' });
+    m.chemins.push({ id: 'h9', a: { case: 'c8' }, b: { case: 'c3' } });
+  }, 'poche']
 ];
 
 for (const [nom, gabarit, mutation, attendu] of ALERTES) {
@@ -156,6 +167,43 @@ for (const [nom, gabarit, mutation, attendu] of ALERTES) {
     r.alertes.forEach((e) => { assert.ok(e.message && typeof e.message === 'string'); assert.ok('ref' in e); });
   });
 }
+
+test('alerte `poche` : définition précise (un seul chemin, vers une case, ni raccord ni port, pas la case d\'apparition)', () => {
+  const avecPoche = (m) => {
+    m.cases.push({ id: 'c8', x: 100, y: 50, diametre: 10, type: 'deplacement' });
+    m.chemins.push({ id: 'h9', a: { case: 'c8' }, b: { case: 'c3' } });
+    return m;
+  };
+  // la poche est signalée, avec une phrase claire et la case en référence
+  const m = avecPoche(exemple('bord'));
+  const a = M.validerModele(m).alertes.filter((x) => x.code === 'poche');
+  assert.strictEqual(a.length, 1);
+  assert.deepStrictEqual(a[0].ref, { type: 'case', id: 'c8' });
+  assert.match(a[0].message, /^La case c8 est une poche : un seul chemin y mène et elle n'a ni raccord ni port/);
+  assert.strictEqual(M.validerModele(m).complet, true); // alerte, pas erreur
+  // pas une poche : une case en bout de chaîne qui porte un raccord, ou un port
+  const raccord = avecPoche(exemple('bord'));
+  raccord.chemins.push({ id: 'r9', a: { case: 'c8' }, b: { raccord: { cote: 3, pos: 1 } } });
+  assert.ok(!codesAlertes(raccord).includes('poche'));
+  const port = avecPoche(exemple('bord'));
+  port.chemins.push({ id: 'p9', a: { case: 'c8' }, b: { coin: 2 } });
+  assert.ok(!codesAlertes(port).includes('poche'));
+  // pas une poche : une case à deux chemins (boucle ou passage)
+  const boucle = avecPoche(exemple('bord'));
+  boucle.chemins.push({ id: 'h8', a: { case: 'c8' }, b: { case: 'c2' } });
+  assert.ok(!codesAlertes(boucle).includes('poche'));
+  // pas une poche : la case d'apparition en bout de chaîne (elle sert au jeu)
+  const appar = exemple('coin');
+  appar.chemins = appar.chemins.filter((c) => c.id !== 'r1' && c.id !== 'r2'); // c2 (apparition) n'a plus que le lien h1
+  assert.ok(!codesAlertes(appar).includes('poche'));
+  // un réseau entier sans sortie reste signalé par `reseau_sans_sortie` seulement
+  const reseau = exemple('bord');
+  reseau.cases.push({ id: 'c8', x: 100, y: 50, diametre: 10, type: 'deplacement' }, { id: 'c9', x: 100, y: 66, diametre: 10, type: 'deplacement' });
+  reseau.chemins.push({ id: 'h9', a: { case: 'c8' }, b: { case: 'c9' } });
+  assert.ok(codesAlertes(reseau).includes('reseau_sans_sortie') && !codesAlertes(reseau).includes('poche'));
+  // les exemples fournis n'ont aucune poche
+  for (const grille of ['4x4', '5x5']) for (const x of M.copieExemples(grille)) assert.ok(!codesAlertes(x, grille).includes('poche'), x.id);
+});
 
 test('R1 à R4 : la phrase explique le risque pour l\'écart entre villes', () => {
   const m = exemple('centrale');
@@ -233,26 +281,66 @@ test('nouveauDocument : version 2, grille pleine (pas de forme), champ grille lu
   assert.throws(() => M.nouveauDocument('6x6'), /inconnu/);
 });
 
-test('peutPoserTuile : pose libre, rotation suggérée sur le pourtour', () => {
+test('peutPoserTuile : rotation suggérée sur le pourtour, centrale au centre', () => {
   const d = documentVide();
   assert.deepStrictEqual(M.peutPoserTuile(d, 'ex-bord', 3, 2), { ok: true, raison: '', rot: 1 });
   assert.deepStrictEqual(M.peutPoserTuile(d, 'ex-coin', 0, 3), { ok: true, raison: '', rot: 3 });
-  // un bord sur une cellule centrale, une centrale sur un coin : permis (alertes de place seulement)
-  assert.deepStrictEqual(M.peutPoserTuile(d, 'ex-bord', 1, 1), { ok: true, raison: '', rot: 0 });
-  assert.strictEqual(M.peutPoserTuile(d, 'ex-centrale', 0, 0).ok, true);
+  assert.deepStrictEqual(M.peutPoserTuile(d, 'ex-centrale', 2, 1), { ok: true, raison: '', rot: 0 });
 });
 
-test('peutPoserTuile : refus seulement hors grille, occupée, incomplet, épuisé, introuvable', () => {
+test('peutPoserTuile : le rôle est respecté (coin dans un coin, bord sur le pourtour hors coins, centrale au centre), en 4×4 et en 5×5', () => {
+  for (const grille of ['4x4', '5x5']) {
+    const d = documentVide(grille), F = M.formatDuDocument(d), n = F.GRILLE.colonnes;
+    const nbOk = { 'ex-coin': 0, 'ex-bord': 0, 'ex-centrale': 0 };
+    for (let lig = 0; lig < n; lig++) {
+      for (let col = 0; col < n; col++) {
+        for (const id of Object.values(ID)) {
+          const t = M.peutPoserTuile(d, id, col, lig);
+          assert.strictEqual(t.ok, ID[M.gabaritCellule(col, lig, F)] === id, `${grille} ${id} en (${col},${lig})`);
+          if (t.ok) nbOk[id]++;
+          else assert.match(t.raison, /^Cette tuile est (un coin|un bord|une centrale) : elle se pose /);
+        }
+      }
+    }
+    assert.deepStrictEqual(nbOk, { 'ex-coin': 4, 'ex-bord': 4 * (n - 2), 'ex-centrale': (n - 2) * (n - 2) }, grille);
+  }
+  const d = documentVide();
+  assert.strictEqual(M.peutPoserTuile(d, 'ex-coin', 1, 0).raison, 'Cette tuile est un coin : elle se pose dans un coin du plateau.');
+  assert.strictEqual(M.peutPoserTuile(d, 'ex-bord', 0, 0).raison, 'Cette tuile est un bord : elle se pose sur le pourtour du plateau, hors des coins.');
+  assert.strictEqual(M.peutPoserTuile(d, 'ex-centrale', 1, 0).raison, 'Cette tuile est une centrale : elle se pose au centre du plateau.');
+  assert.throws(() => M.poserTuile(d, 'ex-bord', 1, 1), /Cette tuile est un bord/);
+  // un modèle sans gabarit connu n'a pas de rôle : il se pose partout (alerte `gabarit_inconnu` dans l'éditeur)
+  const libre = documentVide();
+  delete libre.modeles.find((m) => m.id === 'ex-bord').gabarit;
+  assert.strictEqual(M.peutPoserTuile(libre, 'ex-bord', 1, 1).ok, true);
+  assert.strictEqual(M.peutPoserTuile(libre, 'ex-bord', 0, 0).ok, true);
+});
+
+test('poses illimitées : un modèle se pose autant de fois qu\'on veut, même à 0 ou 1 exemplaire', () => {
+  let d = documentVide();
+  assert.strictEqual(M.exemplairesRestants, undefined);
+  d = M.changerExemplaires(d, 'ex-bord', 1);
+  for (const [c, l] of [[1, 0], [2, 0], [3, 1], [3, 2], [2, 3], [1, 3], [0, 1], [0, 2]]) d = M.poserTuile(d, 'ex-bord', c, l);
+  assert.strictEqual(d.plateau.tuiles.filter((t) => t.modeleId === 'ex-bord').length, 8);
+  assert.deepStrictEqual(M.validerPlateau(d).erreurs, []);
+  d = M.changerExemplaires(d, 'ex-bord', 0); // même sous le nombre de tuiles posées : seul l'entier positif est exigé
+  assert.strictEqual(M.modeleParId(d, 'ex-bord').exemplaires, 0);
+  assert.deepStrictEqual(M.validerPlateau(d).erreurs, []);
+  assert.strictEqual(M.peutPoserTuile(documentVide(), 'ex-coin', 0, 0).ok, true);
+  let z = M.changerExemplaires(documentVide(), 'ex-coin', 0);
+  z = M.poserTuile(z, 'ex-coin', 0, 0);
+  assert.strictEqual(M.tuileEn(z, 0, 0).modeleId, 'ex-coin');
+});
+
+test('peutPoserTuile : refus seulement hors grille, occupée, incomplet, rôle, introuvable', () => {
   let d = documentVide();
   assert.match(M.peutPoserTuile(d, 'zz', 0, 0).raison, /introuvable/);
   assert.match(M.peutPoserTuile(d, 'ex-bord', 4, 0).raison, /hors de la grille/);
   assert.match(M.peutPoserTuile(d, 'ex-bord', -1, 0).raison, /hors de la grille/);
   d = M.poserTuile(d, 'ex-bord', 1, 0);
-  assert.match(M.peutPoserTuile(d, 'ex-coin', 1, 0).raison, /occupée/);
+  assert.match(M.peutPoserTuile(d, 'ex-bord', 1, 0).raison, /occupée/);
   d.modeles[0].cases[0].diametre = 50;
   assert.match(M.peutPoserTuile(d, 'ex-centrale', 1, 1).raison, /incomplet/);
-  d = M.changerExemplaires(d, 'ex-coin', 0);
-  assert.match(M.peutPoserTuile(d, 'ex-coin', 0, 0).raison, /plus d'exemplaire/);
   // une alerte (R3) n'empêche pas la pose
   const d2 = documentVide();
   d2.modeles[0].chemins.push({ id: 'r9', a: { case: 'c1' }, b: { raccord: { cote: 0, pos: 0 } } });
@@ -266,7 +354,7 @@ test('poserTuile / tournerTuile : rotation choisie, toutes les tuiles tournent, 
   assert.strictEqual(M.tuileEn(d, 1, 0).rot, 0);
   d = M.poserTuile(d, 'ex-bord', 2, 0, 6);
   assert.strictEqual(M.tuileEn(d, 2, 0).rot, 2);
-  assert.throws(() => M.poserTuile(d, 'ex-bord', 1, 1, 1.5), /entier/);
+  assert.throws(() => M.poserTuile(d, 'ex-bord', 3, 1, 1.5), /entier/);
   d = M.tournerTuile(d, 1, 0, 3);
   assert.strictEqual(M.tuileEn(d, 1, 0).rot, 3);
   d = M.tournerTuile(d, 1, 0, -1);
@@ -290,8 +378,8 @@ test('plateau complet des exemples : aucune erreur ni alerte, en 4×4 et en 5×5
 
 test('validerPlateau : alertes de place (gabarit, pourtour sans apparition, apparition au centre)', () => {
   let d = documentVide();
-  d = M.poserTuile(d, 'ex-centrale', 1, 0);
-  d = M.poserTuile(d, 'ex-bord', 1, 1);
+  d = forcer(d, 'ex-centrale', 1, 0);   // posées hors rôle (document ancien ou chargé) : alertes, pas de blocage
+  d = forcer(d, 'ex-bord', 1, 1);
   const v = M.validerPlateau(d);
   assert.deepStrictEqual(v.erreurs, []);
   const c = v.alertes.map((a) => a.code);
@@ -302,15 +390,16 @@ test('validerPlateau : alertes de place (gabarit, pourtour sans apparition, appa
   assert.match(v.alertes.find((a) => a.code === 'gabarit_place').message, /une centrale, posée à la place d'un bord/);
 });
 
-test('validerPlateau et verifierTuilePosee : erreurs (modèle absent ou incomplet, rotation, doublon, exemplaires)', () => {
+test('validerPlateau et verifierTuilePosee : erreurs (modèle absent ou incomplet, rotation, doublon) ; plus d\'erreur d\'exemplaires', () => {
   let d = plateauComplet();
   d.plateau.tuiles.push({ modeleId: 'zz', col: 1, lig: 1, rot: 0 });
   d.plateau.tuiles[0].rot = 7;
   const c = M.validerPlateau(d).erreurs.map((e) => e.code);
   for (const k of ['modele_absent', 'rot_invalide', 'doublon']) assert.ok(c.includes(k), k);
   d = plateauComplet();
-  d.modeles[1].exemplaires = 2;
-  assert.ok(M.validerPlateau(d).erreurs.some((e) => e.code === 'exemplaires_depasses'));
+  d.modeles[1].exemplaires = 2;   // 8 bords posés pour 2 exemplaires : ce n'est plus une erreur (poses illimitées)
+  assert.ok(!M.validerPlateau(d).erreurs.some((e) => e.code === 'exemplaires_depasses'));
+  assert.deepStrictEqual(M.validerPlateau(d).erreurs, []);
   d.modeles[1].cases[0].diametre = 50;
   assert.ok(M.validerPlateau(d).erreurs.some((e) => e.code === 'modele_incomplet'));
   assert.deepStrictEqual(M.verifierTuilePosee(plateauComplet(), { modeleId: 'ex-bord', col: 9, lig: 0, rot: 0 }).map((e) => e.code), ['hors_grille']);
@@ -361,7 +450,7 @@ test('jetons : retirer une tuile retire les villes devenues invalides ; jetonsIn
 
 test('raccordsMorts : absent, vide (bord du plateau), mort ; portsVersPourtour', () => {
   let d = documentVide();
-  d = M.poserTuile(d, 'ex-bord', 1, 1, 2); // retourné : raccord S p1 au nord, vers la cellule (1,0) vide
+  d = forcer(d, 'ex-bord', 1, 1, 2); // retourné, hors rôle : raccord S p1 au nord, vers la cellule (1,0) vide
   const r = M.raccordsMorts(d);
   assert.ok(r.every((x) => x.raison === 'absent'));
   d = M.poserTuile(d, 'ex-bord', 1, 0, 2); // bord retourné en haut : raccord S p1 au nord (face au vide), rien au sud
@@ -413,7 +502,8 @@ test('ajouterModele / remplacerModele (gabarit modifiable même posé) / supprim
   assert.throws(() => M.supprimerModele(d, 'ex-bord'), /posé 8 fois/);
   d = M.supprimerModele(d, 'b2');
   assert.strictEqual(M.modeleParId(d, 'b2'), null);
-  assert.throws(() => M.changerExemplaires(d, 'ex-coin', 3), /déjà 4/);
+  assert.throws(() => M.changerExemplaires(d, 'ex-coin', -1), /entier positif/);
+  assert.strictEqual(M.modeleParId(M.changerExemplaires(d, 'ex-coin', 1), 'ex-coin').exemplaires, 1); // sous le nombre de tuiles posées : permis
   assert.throws(() => M.changerExemplaires(d, 'ex-coin', 1.5), /entier/);
   assert.strictEqual(M.modeleParId(M.changerExemplaires(d, 'ex-coin', 9), 'ex-coin').exemplaires, 9);
 });

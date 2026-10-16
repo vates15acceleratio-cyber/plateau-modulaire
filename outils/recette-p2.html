@@ -230,7 +230,7 @@
       var doc = PM.catalogue.nouveauDocument();
       var hostile = '"><img src=x onerror=window.__pwn=1><script>window.__pwn=2<\/script>';
       doc.modeles.find(function (m) { return m.id === 'C1'; }).exemplaires = 3;
-      doc.modeles.find(function (m) { return m.id === 'K1'; }).exemplaires = 0;
+      doc.modeles.find(function (m) { return m.id === 'K2'; }).exemplaires = 2;
       doc.modeles.find(function (m) { return m.id === 'B1'; }).exemplaires = 2;
       var inc = doc.modeles.find(function (m) { return m.id === 'C3'; });
       inc.cases = []; inc.nom = hostile;
@@ -240,7 +240,29 @@
       ctrl('modèle incomplet signalé dans la boîte', /1 modèle\(s\) incomplet\(s\) exclu\(s\)/.test(av.textContent), av.textContent);
       ctrl('le nom hostile est affiché comme texte (aucun élément injecté)', av.textContent.indexOf(hostile) >= 0 && av.children.length === 0);
       ctrl('aucun <script> ni <img> injecté, hormis l\'aperçu', contenu().querySelectorAll('script').length === 0 && contenu().querySelectorAll('img').length === 1 && !window.__pwn);
-      ctrl('résumé : 3 feuilles, 17 tuiles (exemplaires modifiés : C1 x3, K1 x0, B1 x2, C3 exclu)', /3 feuille\(s\) : 17 tuile\(s\)/.test(resume.textContent), resume.textContent);
+      ctrl('résumé : 3 feuilles, 17 tuiles (exemplaires modifiés : C1 x3, K2 x2, B1 x2, C3 exclu)', /3 feuille\(s\) : 17 tuile\(s\)/.test(resume.textContent), resume.textContent);
+      // jeu complet : un champ d'exemplaires par modèle complet, pré-rempli avec le champ `exemplaires`, modifiable dans la fenêtre
+      var champs = contenu().querySelectorAll('.pm-export-exemplaires .pm-export-exemplaire input');
+      ctrl('jeu complet : 12 champs d\'exemplaires (13 modèles, C3 incomplet exclu), pré-remplis', champs.length === 12 && Array.prototype.map.call(champs, function (c) { return c.value; }).join() === '2,1,1,1,1,3,1,2,1,1,2,1',
+        champs.length + ' : ' + Array.prototype.map.call(champs, function (c) { return c.value; }).join());
+      var noms = Array.prototype.map.call(contenu().querySelectorAll('.pm-export-exemplaire-nom'), function (e) { return e.textContent.split(' ')[0]; });
+      var champDe = function (id) { return champs[noms.indexOf(id)]; };
+      ctrl('pré-remplissage : B1 = 2, C1 = 3, K2 = 2, K4 = 1', champDe('B1').value === '2' && champDe('C1').value === '3' && champDe('K2').value === '2' && champDe('K4').value === '1', noms.join() + ' / ' + Array.prototype.map.call(champs, function (c) { return c.value; }).join());
+      champDe('B1').value = '5'; champDe('B1').dispatchEvent(new Event('input', { bubbles: true }));
+      ctrl('B1 à 5 exemplaires dans la fenêtre : 20 tuiles (17 + 3), 4 feuilles', /4 feuille\(s\) : 20 tuile\(s\)/.test(resume.textContent), resume.textContent);
+      ctrl('le champ du document n\'est pas modifié par la fenêtre (B1 reste à 2)', etat.doc().modeles.find(function (m) { return m.id === 'B1'; }).exemplaires === 2);
+      champDe('B1').value = '-3'; champDe('B1').dispatchEvent(new Event('input', { bubbles: true }));
+      ctrl('valeur invalide (-3) : signalée, valeur du modèle utilisée (17 tuiles)', /17 tuile\(s\)/.test(resume.textContent) && /invalide/.test(av.textContent) && champDe('B1').getAttribute('aria-invalid') === 'true', av.textContent + ' / ' + resume.textContent);
+      champDe('B1').value = '2'; champDe('B1').dispatchEvent(new Event('input', { bubbles: true }));
+      ctrl('retour à 2 : avertissement d\'invalidité levé, 17 tuiles', !/invalide/.test(av.textContent) && /17 tuile\(s\)/.test(resume.textContent));
+      changer(radio('posees', 'portee'), true);
+      ctrl('« tuiles posées » : champs d\'exemplaires masqués', contenu().querySelector('.pm-export-exemplaires').hidden === true);
+      changer(radio('stock', 'portee'), true);
+      ctrl('« jeu complet » : champs de nouveau visibles', contenu().querySelector('.pm-export-exemplaires').hidden === false);
+      champDe('C1').value = '200'; champDe('C1').dispatchEvent(new Event('input', { bubbles: true }));
+      ctrl('plafond de 200 tuiles : refus avec message, bouton Télécharger inactif', /200 au plus/.test(av.textContent) && contenu().querySelector('.pm-export-telecharger').disabled, av.textContent);
+      champDe('C1').value = '3'; champDe('C1').dispatchEvent(new Event('input', { bubbles: true }));
+      ctrl('retour sous le plafond : bouton actif', !contenu().querySelector('.pm-export-telecharger').disabled && /17 tuile\(s\)/.test(resume.textContent));
       changer(radio('A4', 'format'), true);
       ctrl('A4 : 9 feuilles (17 tuiles par 2)', /9 feuille\(s\) : 17 tuile\(s\)/.test(resume.textContent), resume.textContent);
       // les feuilles produites ne contiennent pas le modèle incomplet

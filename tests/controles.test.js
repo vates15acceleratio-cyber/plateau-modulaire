@@ -127,7 +127,7 @@ test('plus de 7 villes : alerte ; plateau non connexe : alerte une fois la grill
 
 test('alertes de place reprises de validerPlateau, avec leur cible de surbrillance', () => {
   let d = A.documentExemples();
-  d = M.poserTuile(d, 'ex-centrale', 1, 0);
+  d.plateau.tuiles.push({ modeleId: 'ex-centrale', col: 1, lig: 0, rot: 0 }); // hors rôle : possible dans un document ancien ou chargé
   const r = C.calculer(d);
   const a = trouver(r.alertes, 'gabarit_place')[0];
   assert.deepEqual(a.cible, { type: 'tuile', col: 1, lig: 0 });
@@ -148,13 +148,13 @@ test('raccord mort et port vers le bord : cibles de surbrillance ; ordre des gro
   assert.deepEqual(r.regroupees.map((g) => g.code).slice(0, 3), ['modele_absent', 'raccord_mort', 'port_pourtour']);
 });
 
-test('modèle incomplet posé et exemplaires dépassés : erreurs, cible = une tuile du modèle', () => {
+test('modèle incomplet posé : erreur ; exemplaires dépassés : plus d’erreur (poses illimitées)', () => {
   let d = A.plateauComplet('4x4');
   d.modeles[0].cases[0].diametre = 50;
   d.modeles[2].exemplaires = 1;
   const r = C.calculer(d);
   assert.ok(trouver(r.erreurs, 'modele_incomplet').length >= 1);
-  assert.deepEqual(trouver(r.erreurs, 'exemplaires_depasses')[0].cible, { type: 'tuile', col: 0, lig: 0 });
+  assert.equal(trouver(r.erreurs, 'exemplaires_depasses').length, 0);
 });
 
 test('revaliderPlateau = calculer(doc).erreurs ; calculer ne modifie pas le document ; document invalide refusé', () => {

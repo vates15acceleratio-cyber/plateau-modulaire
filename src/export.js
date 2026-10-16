@@ -99,13 +99,29 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   /* Liste des tuiles à imprimer                                         */
   /* ------------------------------------------------------------------ */
 
+  /** Nombre maximal d'exemplaires d'un modèle dans la fenêtre d'export (même borne que la sauvegarde). */
+  var MAX_EXEMPLAIRES = 999;
+
+  /** Valeur de remplacement valide (entier de 0 à MAX_EXEMPLAIRES) ? */
+  function exemplaireValide(n) { return typeof n === 'number' && isFinite(n) && Math.floor(n) === n && n >= 0 && n <= MAX_EXEMPLAIRES; }
+
   /**
-   * Tuiles à imprimer. options : { portee = 'stock' | 'posees' }.
+   * Nombre d'exemplaires imprimés pour le modèle `m` en « jeu complet » : la valeur choisie dans la fenêtre d'export
+   * (`options.exemplaires[m.id]`) si elle est un entier de 0 à 999, sinon le champ `exemplaires` du modèle.
+   */
+  function exemplairesImprimes(m, options) {
+    var choix = options && options.exemplaires && typeof options.exemplaires === 'object' ? options.exemplaires[m.id] : undefined;
+    return exemplaireValide(choix) ? choix : M.exemplairesValides(m);
+  }
+
+  /**
+   * Tuiles à imprimer. options : { portee = 'stock' | 'posees', exemplaires = { idModele: n } }.
    * Renvoie { tuiles: [{ modeleId, exemplaire, posee }], exclus: [{ id, nom, raison }] }.
-   *  - 'stock' : chaque exemplaire de chaque modèle complet ; les tuiles posées d'abord ; lève une Error
-   *    au-delà de PM.modele.PLAFOND_TUILES tuiles au total ;
-   *  - 'posees' : seulement les tuiles posées sur le plateau ; une tuile au modèle introuvable est listée
-   *    dans `exclus` (raison 'introuvable').
+   *  - 'stock' (jeu complet) : n exemplaires de chaque modèle complet, n = `options.exemplaires[id]` si fourni et valide, sinon
+   *    le champ `exemplaires` du modèle ; les tuiles posées d'abord ; lève une Error au-delà de PM.modele.PLAFOND_TUILES
+   *    tuiles au total ;
+   *  - 'posees' : une tuile imprimée par tuile posée sur le plateau (un modèle posé 3 fois sort 3 fois) ; une tuile au modèle
+   *    introuvable est listée dans `exclus` (raison 'introuvable').
    * Les modèles incomplets sont exclus et listés dans `exclus` (raison 'incomplet'). Tri par identifiant (ordre naturel).
    */
   function listeTuiles(doc, options) {
@@ -117,9 +133,9 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     var complets = modeles.filter(function (m) { return M.validerModele(m, F).complet; });
     if (portee === 'stock') {
       // plafond du stock (somme des exemplaires des modèles complets) : au-delà, l'export est refusé
-      var stockTotal = complets.reduce(function (s, m) { return s + M.exemplairesValides(m); }, 0);
+      var stockTotal = complets.reduce(function (s, m) { return s + exemplairesImprimes(m, options); }, 0);
       if (stockTotal > M.PLAFOND_TUILES) {
-        throw new Error('Le stock compte ' + stockTotal + ' tuiles (modèles complets, selon leurs exemplaires) : l\'export en accepte ' +
+        throw new Error('Le jeu complet compte ' + stockTotal + ' tuiles (modèles complets, selon les exemplaires choisis) : l\'export en accepte ' +
           M.PLAFOND_TUILES + ' au plus. Réduisez le nombre d\'exemplaires ou exportez seulement les tuiles posées.');
       }
     }
@@ -129,7 +145,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         return;
       }
       var posees = tuilesPosees.filter(function (t) { return t && t.modeleId === m.id; }).length;
-      var total = portee === 'posees' ? posees : M.exemplairesValides(m);
+      var total = portee === 'posees' ? posees : exemplairesImprimes(m, options);
+      // en jeu complet, les exemplaires dépassant le nombre de tuiles posées sont des « réserves » (posee = false)
       for (var k = 0; k < total; k++) entrees.push({ modeleId: m.id, exemplaire: k + 1, posee: k < posees });
     });
     if (portee === 'posees') {
@@ -239,7 +256,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
   /**
    * Répartit les tuiles en planches.
-   * options : { format = 'A3' | 'A4', portee = 'stock' | 'posees' }.
+   * options : { format = 'A3' | 'A4', portee = 'stock' | 'posees', exemplaires = { idModele: n } } (voir listeTuiles).
    * Une planche : { format, nom, titre, numero, total, largeur, hauteur, colonnes, lignes, margeX, margeY, pas,
    *   tuiles: [{ modeleId, exemplaire, posee, col, lig, rot, x, y, etiquette }], reperes, textes, barre }.
    * (x, y) = coin nord-ouest du carré de 126 mm en 4×4 (fond perdu compris), pas de la tuile coupée (qui est à +3 mm).
@@ -251,8 +268,9 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     var F = M.formatDuDocument(doc), f = FORMATS[nomFormat], marges = margesFormat(nomFormat, F), pas = pasPlanche(F);
     var liste = listeTuiles(doc, options).tuiles;
     var parPlanche = f.colonnes * f.lignes, nbPlanches = Math.ceil(liste.length / parPlanche);
+    // nombre de tuiles imprimées par modèle : l'étiquette porte un numéro d'exemplaire dès qu'il y en a plusieurs
     var exemplairesDe = Object.create(null);
-    tab(doc && doc.modeles).forEach(function (m) { if (m) exemplairesDe[m.id] = M.exemplairesValides(m); });
+    liste.forEach(function (t) { exemplairesDe[t.modeleId] = (exemplairesDe[t.modeleId] || 0) + 1; });
     var planches = [];
     for (var p = 0; p < nbPlanches; p++) {
       var planche = {
@@ -745,14 +763,14 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
   /**
    * Construit les feuilles demandées.
-   * choix : { tuiles = true, portee = 'stock'|'posees', format = 'A3'|'A4', jetons = false, apercu = false }.
+   * choix : { tuiles = true, portee = 'stock'|'posees', exemplaires = { idModele: n }, format = 'A3'|'A4', jetons = false, apercu = false }.
    * Renvoie { feuilles: [{ nom, type, largeur, hauteur, svg }], exclus, nbTuiles }.
    */
   function preparerSorties(doc, choix) {
     var c = choix || {}, feuilles = [], exclus = [], nbTuiles = 0;
     if (c.apercu) verifierEquilibre(doc);
     if (c.tuiles !== false) {
-      var options = { format: c.format || 'A3', portee: c.portee || 'stock' };
+      var options = { format: c.format || 'A3', portee: c.portee || 'stock', exemplaires: c.exemplaires };
       exclus = listeTuiles(doc, options).exclus;
       calepiner(doc, options).forEach(function (p) {
         nbTuiles += p.tuiles.length;
@@ -880,8 +898,26 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     var gContenu = groupe('Contenu');
     var iTuiles = ligne(gContenu, 'checkbox', 'tuiles', 'tuiles', 'Planches de tuiles', true);
     var gPortee = el('div', 'pm-export-sousgroupe');
-    var iStock = ligne(gPortee, 'radio', 'portee', 'stock', 'Toutes les tuiles du stock (selon leurs exemplaires)', true);
+    var iStock = ligne(gPortee, 'radio', 'portee', 'stock', 'Jeu complet (nombre d\'exemplaires de chaque modèle à régler ci-dessous)', true);
     var iPosees = ligne(gPortee, 'radio', 'portee', 'posees', 'Seulement les tuiles posées sur le plateau', false);
+    // Exemplaires du jeu complet : un champ par modèle complet, pré-rempli avec le champ `exemplaires` du modèle
+    // (réglage propre à cette fenêtre : le document n'est pas modifié)
+    var gExemplaires = el('div', 'pm-export-exemplaires');
+    gExemplaires.setAttribute('role', 'group');
+    gExemplaires.setAttribute('aria-label', 'Exemplaires à imprimer par modèle');
+    var champsExemplaires = [];
+    var F0 = M.formatDuDocument(etat.doc());
+    tab(etat.doc().modeles).filter(function (m) { return m && typeof m === 'object' && M.validerModele(m, F0).complet; })
+      .sort(function (a, b) { return compareId(a.id, b.id); }).forEach(function (m) {
+        var l = el('label', 'pm-export-exemplaire'), saisie = el('input');
+        saisie.type = 'number'; saisie.min = '0'; saisie.max = String(MAX_EXEMPLAIRES); saisie.step = '1';
+        saisie.value = String(M.exemplairesValides(m));
+        l.appendChild(el('span', 'pm-export-exemplaire-nom', m.id + ' ' + String(m.nom || '')));
+        l.appendChild(saisie);
+        gExemplaires.appendChild(l);
+        champsExemplaires.push({ id: m.id, saisie: saisie });
+      });
+    gPortee.appendChild(gExemplaires);
     gContenu.appendChild(gPortee);
     var iJetons = ligne(gContenu, 'checkbox', 'jetons', 'jetons', 'Planche des jetons (A4 : 7 villes)', false);
     var iApercu = ligne(gContenu, 'checkbox', 'apercu', 'apercu', 'Aperçu du plateau assemblé (A3, non imprimable)', false);
@@ -912,10 +948,19 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     cadre.appendChild(image);
     colonneApercu.appendChild(titreApercu); colonneApercu.appendChild(cadre);
 
-    var sortie = null;
+    var sortie = null, exemplairesInvalides = [];
 
     function relire() {
       choix.tuiles = iTuiles.checked; choix.portee = iPosees.checked ? 'posees' : 'stock';
+      // exemplaires choisis : un champ vide ou invalide est ignoré (valeur du modèle) et signalé
+      choix.exemplaires = {}; exemplairesInvalides = [];
+      champsExemplaires.forEach(function (c) {
+        var texte = c.saisie.value.trim(), n = texte === '' ? NaN : Number(texte), bon = exemplaireValide(n);
+        if (bon) choix.exemplaires[c.id] = n; else exemplairesInvalides.push(c.id);
+        c.saisie.setAttribute('aria-invalid', bon ? 'false' : 'true');
+        c.saisie.disabled = !choix.tuiles || choix.portee !== 'stock';
+      });
+      gExemplaires.hidden = choix.portee !== 'stock';
       choix.format = iA4.checked ? 'A4' : 'A3'; choix.jetons = iJetons.checked; choix.apercu = iApercu.checked;
       choix.fichier = iSvg.checked ? 'svg' : iPng.checked ? 'png' : 'pdf'; choix.unParFeuille = iSepare.checked;
       iStock.disabled = iPosees.disabled = iA3.disabled = iA4.disabled = !choix.tuiles;
@@ -938,6 +983,9 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       var incomplets = nomsDe('incomplet'), introuvables = nomsDe('introuvable'), phrases = [];
       if (incomplets.length) phrases.push('Attention : ' + incomplets.length + ' modèle(s) incomplet(s) exclu(s) de l\'export : ' + incomplets.join(', ') + '.');
       if (introuvables.length) phrases.push('Attention : ' + introuvables.length + ' tuile(s) posée(s) au modèle introuvable, non exportée(s) : ' + introuvables.join(', ') + '.');
+      if (choix.tuiles && choix.portee === 'stock' && exemplairesInvalides.length) {
+        phrases.push('Nombre d’exemplaires invalide (entier de 0 à ' + MAX_EXEMPLAIRES + ') pour ' + exemplairesInvalides.join(', ') + ' : le nombre du modèle est utilisé.');
+      }
       avertissement.textContent = phrases.join(' ');
       var n = sortie.feuilles.length;
       resume.textContent = n
@@ -954,6 +1002,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     [iTuiles, iStock, iPosees, iJetons, iApercu, iA3, iA4, iPdf, iSvg, iPng, iSepare].forEach(function (i) {
       i.addEventListener('change', mettreAJour);
     });
+    champsExemplaires.forEach(function (c) { c.saisie.addEventListener('input', mettreAJour); });
 
     bouton.addEventListener('click', function () {
       if (!sortie || !sortie.feuilles.length) return;
@@ -985,6 +1034,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     MARGE_MIN: MARGE_MIN,
     MARGE_IMPRIMABLE: MARGE_IMPRIMABLE,
     listeTuiles: listeTuiles,
+    MAX_EXEMPLAIRES: MAX_EXEMPLAIRES,
+    exemplairesImprimes: exemplairesImprimes,
     margesFormat: margesFormat,
     calepiner: calepiner,
     calculerReperes: calculerReperes,

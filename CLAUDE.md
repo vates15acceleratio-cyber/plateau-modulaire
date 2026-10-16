@@ -35,5 +35,6 @@ Toujours répondre à l'utilisateur **en français**. Code, identifiants et comm
 - Ne jamais modifier le fichier d'un sous-agent en cours avec une expression régulière large.
 
 ## État (2026-10-16)
-- Version **2.00.0** publiée : règles v2 sur la grille 4×4, catalogue 4×4 v2 (22 tuiles), interface 5×5 (bouton « Nouveau », choix de la grille, rangée neutre) déjà en place.
-- À faire, dans l'ordre : retouches du 4×4 demandées après essai (fin de `docs/18-decisions-v2.md`) ; puis **catalogue 5×5** (≈ 75 cases, cases Ø 24, sans poches, coins dans l'esprit de K2) et ses mesures ; puis seuils 5×5 par l'advisor design de jeu ; recette, version, publication.
+- Version **2.01.0** : règles v2 sur la grille 4×4, catalogue 4×4 v2 (13 modèles, 22 tuiles imprimées, coins K2 et K4, aucune poche), poses illimitées, rôle respecté à la pose, bibliothèque large (clic = poser, double-clic = modifier, clic droit = retirer), interface 5×5 (bouton « Nouveau », choix de la grille, rangée neutre).
+- Points ouverts à soumettre à l'utilisateur : 63 cases par plateau au lieu de ≈ 60 (effet du tirage avec répétition) ; seuils d'équilibre à revoir avec les nouvelles mesures (`docs/21-mesures-catalogue-v2.md`).
+- À faire ensuite : **catalogue 5×5** (≈ 75 cases, cases Ø 24, sans poches, coins dans l'esprit de K2 / K4) et ses mesures ; seuils 5×5 par l'advisor design de jeu ; recette, version, publication.

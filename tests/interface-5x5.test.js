@@ -147,10 +147,13 @@ test('l\'écran dessine l\'apparition de la rangée neutre en neutre, ni verte n
   assert.equal(camps['data-apparition="neutre"'], 2);
 });
 
-test('pose sur un plateau 5×5 : toutes les cellules, bord et coin tournés vers l\'extérieur', () => {
+test('pose sur un plateau 5×5 : rôle respecté (4 coins, 12 bords, 9 centrales), bord et coin tournés vers l’extérieur', () => {
   let doc = doc5();
-  doc.modeles.forEach((m) => { m.exemplaires = 99; });
-  assert.equal(A.cellulesCompatibles(doc, 'ex-bord').length, 25);
+  doc.modeles.forEach((m) => { m.exemplaires = 1; }); // poses illimitées : 1 exemplaire n'empêche rien
+  assert.equal(A.cellulesCompatibles(doc, 'ex-bord').length, 12);
+  assert.equal(A.cellulesCompatibles(doc, 'ex-coin').length, 4);
+  assert.equal(A.cellulesCompatibles(doc, 'ex-centrale').length, 9);
+  assert.match(M.peutPoserTuile(doc, 'ex-coin', 2, 0).raison, /^Cette tuile est un coin/);
   doc = A.poserTuileTournee(doc, 'ex-coin', 4, 4, null);
   assert.equal(doc.plateau.tuiles[0].rot, 2);
   doc = A.poserTuileTournee(doc, 'ex-bord', 0, 2, null);

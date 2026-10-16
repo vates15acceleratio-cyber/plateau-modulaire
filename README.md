@@ -8,16 +8,16 @@ Le périmètre est le **plateau** seulement : pas de règles, pas de tours de je
 
 Ouvrir `index.html` dans un navigateur récent (Chrome, Edge, Firefox). Aucune installation, aucun serveur, aucune connexion : tout fonctionne hors ligne, en local.
 
-- **Onglet Plateau** : glisser les tuiles de la bibliothèque sur la grille 4×4 (toujours pleine). La pose et la rotation (touche R) sont libres ; une rotation est suggérée pour les bords et les coins. Un clic sur une jonction y pose une ville ; une jonction sans ville est une case chemin. Les compteurs et les alertes sont à droite ; un clic sur une alerte montre l'élément concerné. Un plateau complet très déséquilibré est signalé en erreur.
+- **Onglet Plateau** : choisir une tuile dans la bibliothèque (clic, puis clic sur une cellule éclairée ; Échap annule) ou la glisser sur la grille 4×4 (toujours pleine). Un double-clic sur une vignette (ou la touche E) l'ouvre dans l'éditeur. Chaque modèle se pose autant de fois qu'on veut, mais le rôle est respecté : un coin dans un coin, un bord sur le pourtour, une centrale au centre. Un clic droit sur une tuile posée la retire (Ctrl+Z annule). La rotation (touche R) est libre ; une rotation est suggérée pour les bords et les coins. Un clic sur une jonction y pose une ville ; une jonction sans ville est une case chemin. Les compteurs et les alertes sont à droite ; un clic sur une alerte montre l'élément concerné. Un plateau complet très déséquilibré est signalé en erreur.
 - **Onglet Tuiles** : créer, dupliquer ou modifier une tuile (cases, chemins, raccords, ports de coin, case d'apparition), avec validation en direct et aperçu des 4 rotations. Seules les contraintes physiques bloquent ; les règles qui garantissent l'écart entre villes sont des alertes.
 - **Plateau aléatoire** : génère un plateau valide et équilibré à partir d'une graine reproductible (jonctions sans ville dans la rangée centrale par défaut, option « jonctions variées »).
 - **Rapport d'équilibre** : distances de chaque joueur aux villes, score d'équilibre, partage des villes, goulets.
-- **Exporter** : planches A3 (6 tuiles) ou A4 (2 tuiles) avec fond perdu, repères de coupe et barre de contrôle de 100 mm ; planche des jetons ; aperçu du plateau. Formats : PDF vectoriel à l'échelle exacte, SVG, PNG 300 dpi.
+- **Exporter** : planches A3 (6 tuiles) ou A4 (2 tuiles) avec fond perdu, repères de coupe et barre de contrôle de 100 mm, soit pour les tuiles posées sur le plateau, soit pour un jeu complet dont le nombre d'exemplaires de chaque modèle se règle dans la fenêtre (200 tuiles au plus) ; planche des jetons ; aperçu du plateau. Formats : PDF vectoriel à l'échelle exacte, SVG, PNG 300 dpi.
 - **Enregistrer / Ouvrir** : fichier JSON. Sauvegarde automatique dans le navigateur. Annuler / rétablir : Ctrl+Z / Ctrl+Y.
 
 ## Principes de conception
 
-- Grille 4×4 de tuiles carrées de 12 cm (environ 60 cases par plateau, cases de 3 cm de diamètre au plus). Un format 5×5 est en préparation.
+- Grille 4×4 de tuiles carrées de 12 cm (environ 60 à 63 cases par plateau, cases de 3 cm de diamètre au plus). Un format 5×5 est en préparation.
 - Deux joueurs, **vert** (nord) et **rouge** (sud) : les 2 rangées les plus proches de chaque joueur lui appartiennent.
 - **Toutes les tuiles du pourtour** (bords et coins) portent une case d'apparition, imprimée neutre et colorée à l'écran selon le camp. Les coins ont un raccourci vers la tuile de bord voisine.
 - **7 villes**, sous forme de jetons posés aux jonctions de 4 tuiles ; les autres jonctions sont des cases chemin. Au moins 3 cases entre deux villes. On s'arrête dans une ville (elle ne se traverse pas).

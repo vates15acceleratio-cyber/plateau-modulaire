@@ -22,3 +22,12 @@
   .pm-export { grid-template-columns: 1fr; }
   .pm-export-apercu { max-height: 45vh; }
 }
+
+/* Exemplaires du jeu complet : un champ par modèle, sur deux colonnes */
+.pm-export-exemplaires { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; margin: 4px 0 6px; }
+.pm-export-exemplaires[hidden] { display: none; }
+.pm-export-exemplaire { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+.pm-export-exemplaire-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-export-exemplaire input { width: 4.5em; flex: none; font: inherit; min-height: 28px; text-align: right; }
+.pm-export-exemplaire input[aria-invalid="true"] { border-color: var(--pm-erreur); outline: 1px solid var(--pm-erreur); }
+@media (max-width: 700px) { .pm-export-exemplaires { grid-template-columns: 1fr; } }

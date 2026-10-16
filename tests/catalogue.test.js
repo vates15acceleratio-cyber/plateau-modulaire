@@ -1,11 +1,11 @@
 'use strict';
 /*
- * Tests du catalogue 4×4 de la version 2 (src/catalogue.js) : contenu, validité (aucune erreur ni alerte),
+ * Tests du catalogue 4×4 de la version 2 (src/catalogue.js) : contenu, validité (aucune erreur ni alerte, aucune poche),
  * tracés, raccourci de coin, garantie de l'écart de 3 cases entre villes, cases d'apparition, nombre de cases,
  * équilibre et « autoroute » du pourtour mesurés sur des plateaux tirés au hasard.
  *
- * Les plateaux sont tirés par outils/mesures-equilibre.js (mêmes tirages que le rapport docs/21-mesures-catalogue-v2.md,
- * graine 20261015). Les seuils des tests de simulation sont les valeurs MESURÉES sur 1000 plateaux (écrites à côté de
+ * Les plateaux sont tirés par outils/mesures-equilibre.js (tirage du générateur : avec remise, poids = exemplaires,
+ * pénalité de répétition ; mêmes tirages que le rapport docs/21-mesures-catalogue-v2.md, graine 20261015). Les seuils des tests de simulation sont les valeurs MESURÉES sur 1000 plateaux (écrites à côté de
  * chaque assertion), avec une marge dite ; un seuil n'est jamais choisi pour que le test passe.
  */
 const test = require('node:test');
@@ -122,27 +122,49 @@ function nbReseaux(m) {
 const IDS_ATTENDUS = {
   centrale: ['C1', 'C2', 'C3', 'C4', 'C5', 'C6'],
   bord: ['B1', 'B3', 'B4', 'B5', 'B6'], // B2 (bord fermé) supprimé : docs/22
-  coin: ['K1', 'K2', 'K3']
+  coin: ['K2', 'K4']                   // K1 (direct) et K3 (poche) retirés : docs/18, retours après essai
 };
 
-test('catalogue : version 2, 14 modèles, ids attendus et uniques, gabarit et grille 4×4', () => {
+test('catalogue : version 2, 13 modèles, ids attendus et uniques, gabarit et grille 4×4', () => {
   assert.strictEqual(CAT.version, 2);
-  assert.strictEqual(CAT.modeles.length, 14);
-  assert.strictEqual(new Set(CAT.modeles.map((m) => m.id)).size, 14);
+  assert.strictEqual(CAT.modeles.length, 13);
+  assert.strictEqual(new Set(CAT.modeles.map((m) => m.id)).size, 13);
   for (const g of Object.keys(IDS_ATTENDUS)) {
     assert.deepStrictEqual(parGabarit(g).map((m) => m.id), IDS_ATTENDUS[g], g);
   }
   assert.ok(CAT.modeles.every((m) => m.grille === '4x4' && !('role' in m)));
 });
 
-test('catalogue : 22 tuiles physiques (6 centrales, 10 bords, 6 coins)', () => {
+test('catalogue : 22 exemplaires à imprimer (7 centrales, 10 bords, 5 coins), poids du générateur', () => {
+  // l'exemplaire n'est plus une limite de pose (poses illimitées) : il fixe l'impression et le poids du tirage
   const total = (g) => parGabarit(g).reduce((s, m) => s + m.exemplaires, 0);
-  assert.deepStrictEqual([total('centrale'), total('bord'), total('coin')], [6, 10, 6]);
-  assert.ok(parGabarit('centrale').every((m) => m.exemplaires === 1));
-  assert.ok(parGabarit('coin').every((m) => m.exemplaires === 2));
+  assert.deepStrictEqual([total('centrale'), total('bord'), total('coin')], [7, 10, 5]);
+  assert.deepStrictEqual(Object.fromEntries(CAT.modeles.map((m) => [m.id, m.exemplaires])),
+    { C1: 1, C2: 1, C3: 1, C4: 2, C5: 1, C6: 1, B1: 6, B3: 1, B4: 1, B5: 1, B6: 1, K2: 4, K4: 1 });
   assert.strictEqual(CAT.modeles.reduce((s, m) => s + m.exemplaires, 0), 22);
-  // de quoi remplir une grille 4×4 : 4 centrales, 8 bords, 4 coins
+  // de quoi remplir une grille 4×4 sans répéter un modèle : 4 centrales, 8 bords, 4 coins
   assert.ok(total('centrale') >= 4 && total('bord') >= 8 && total('coin') >= 4);
+});
+
+test('catalogue : K1 (coin direct) et K3 (coin à poche) sont retirés ; B4 n\'est plus un bord à relais pendant', () => {
+  assert.strictEqual(modele('K1'), undefined);
+  assert.strictEqual(modele('K3'), undefined);
+  // B4 : le relais touche les deux cases à port et l'apparition aussi (losange), il n'est donc jamais une impasse
+  const b4 = modele('B4'), liens = b4.chemins.filter((ch) => ch.b['case'] !== undefined);
+  const degre = (id) => liens.filter((ch) => ch.a['case'] === id || ch.b['case'] === id).length;
+  assert.deepStrictEqual(b4.cases.map((c) => degre(c.id)), [2, 2, 2, 2]);
+});
+
+test('catalogue : aucune poche (case en impasse sans raccord ni port) dans aucun modèle, par la règle et par un calcul indépendant', () => {
+  for (const m of CAT.modeles) {
+    assert.ok(!M.validerModele(m, '4x4').alertes.some((a) => a.code === 'poche'), m.id);
+    // calcul indépendant : toute case hors apparition touchée par un seul chemin porte un raccord ou un port
+    for (const c of m.cases.filter((x) => x.type !== 'apparition')) {
+      const touches = m.chemins.filter((ch) => ch.a['case'] === c.id || ch.b['case'] === c.id);
+      const sorties = touches.filter((ch) => ch.b['case'] === undefined || ch.a['case'] === undefined);
+      assert.ok(touches.length >= 2 || sorties.length >= 1, `${m.id} : ${c.id} est une impasse`);
+    }
+  }
 });
 
 test('catalogue : aucune erreur ni alerte de validerModele (R1 à R4, place, apparition, réseaux)', () => {
@@ -158,11 +180,11 @@ test('catalogue : noms courts et distincts, ids de cases et de chemins en chaîn
     assert.ok(typeof m.nom === 'string' && m.nom.length > 0 && m.nom.length <= 20, m.id);
     for (const el of m.cases.concat(m.chemins)) assert.strictEqual(typeof el.id, 'string', m.id);
   }
-  assert.strictEqual(new Set(CAT.modeles.map((m) => m.nom)).size, 14);
+  assert.strictEqual(new Set(CAT.modeles.map((m) => m.nom)).size, 13);
 });
 
-test('catalogue : nombre de cases par gabarit (centrales 4 à 6, bords 3 à 4, coins 2 à 3)', () => {
-  const bornes = { centrale: [4, 6], bord: [3, 4], coin: [2, 3] };
+test('catalogue : nombre de cases par gabarit (centrales 4 à 6, bords 3 à 4, coins 3 à 4)', () => {
+  const bornes = { centrale: [4, 6], bord: [3, 4], coin: [3, 4] };
   for (const m of CAT.modeles) {
     assert.ok(m.cases.length >= bornes[m.gabarit][0] && m.cases.length <= bornes[m.gabarit][1], `${m.id} : ${m.cases.length} cases`);
   }
@@ -333,7 +355,7 @@ test('raccourci de coin : coin et bord voisins reliés par leurs apparitions aux
       essais++;
     }
   }
-  assert.strictEqual(essais, 3 * 5 * 8);
+  assert.strictEqual(essais, 2 * 5 * 8);
 });
 
 test('raccourci de bord : deux bords voisins du pourtour reliés sur les 4 côtés, dans toutes les rotations', () => {
@@ -360,7 +382,7 @@ test('raccourci de bord : deux bords voisins du pourtour reliés sur les 4 côt�
 /* Plateaux tirés au hasard                                                */
 /* ====================================================================== */
 
-test('plateaux : tirage reproductible, 16 tuiles, aucune erreur, seules alertes possibles : raccords morts', () => {
+test('plateaux : tirage reproductible, 16 tuiles, aucune erreur, seules alertes possibles : raccords morts et (rarement) jonction à un seul port', () => {
   const codes = {};
   for (const doc of PLATEAUX) {
     assert.strictEqual(doc.plateau.tuiles.length, 16);
@@ -368,7 +390,10 @@ test('plateaux : tirage reproductible, 16 tuiles, aucune erreur, seules alertes 
     assert.deepStrictEqual(v.erreurs, []);
     v.alertes.forEach((a) => { codes[a.code] = (codes[a.code] || 0) + 1; });
   }
-  assert.deepStrictEqual(Object.keys(codes), ['raccord_mort']);   // mesuré : 0,79 par plateau (docs/21)
+  // mesuré sur 1000 plateaux (docs/21) : 0,60 raccord mort par plateau ; une jonction à un seul port sur 4 plateaux (trois centrales
+  // à 3 ports autour de la jonction centrale : C4 et C6 répétés, ce que le tirage avec remise permet)
+  assert.deepStrictEqual(Object.keys(codes).sort(), ['jonction_ports', 'raccord_mort']);
+  assert.ok(codes.jonction_ports <= NB_PLATEAUX * 0.02, 'jonctions mal reliées : ' + codes.jonction_ports);
   assert.deepStrictEqual(MS.tirerPlateaux(3, GRAINE).map((x) => JSON.stringify(x.doc.plateau)), PLATEAUX.slice(0, 3).map((d) => JSON.stringify(d.plateau)));
 });
 
@@ -448,38 +473,40 @@ test('garantie de l\'écart : témoin négatif, des centrales en anneau (R2 viol
   assert.ok(ecartMinJonctions(doc) < 4, 'écart mesuré ' + ecartMinJonctions(doc));
 });
 
-test('simulation : nombre de cases par plateau voisin de 60 (cases des tuiles + 2 jonctions-cases)', () => {
+test('simulation : nombre de cases par plateau, mesuré à 63,1 (cible ≈ 60 non tenue avec le tirage avec répétition, voir docs/21)', () => {
   const nb = PLATEAUX.map((doc) => GR.construire(doc, { jetons: [] }).cases.size + 2);
-  // mesuré sur 1000 plateaux : moyenne 60,5 ; minimum 57 ; maximum 64 (docs/21)
-  assert.ok(Math.abs(moy(nb) - 60.5) < 0.5, 'moyenne ' + moy(nb));
-  assert.ok(Math.min(...nb) >= 56 && Math.max(...nb) <= 65, `de ${Math.min(...nb)} à ${Math.max(...nb)}`);
-  // espérance exacte du tirage sans remise (4 centrales sur 6, 8 bords sur 10, 4 coins sur 6, 2 jonctions-cases)
-  const esp = (g, n) => n * moy([].concat(...parGabarit(g).map((m) => Array(m.exemplaires).fill(m.cases.length))));
-  const attendu = esp('centrale', 4) + esp('bord', 8) + esp('coin', 4) + 2;
-  assert.ok(Math.abs(attendu - 60.53) < 0.01, 'espérance ' + attendu);
-  assert.ok(attendu >= 59 && attendu <= 61.5, 'cible ≈ 60 : ' + attendu);
+  // mesuré sur 1000 plateaux : moyenne 63,1 ; minimum 57 ; maximum 69 (docs/21). Le tirage avec remise qui favorise la variété
+  // sort plus souvent les modèles à 4 ou 6 cases que l'ancien tirage sans remise (60,5) : écart à la cible ≈ 60 signalé dans docs/21.
+  assert.ok(Math.abs(moy(nb) - 63.1) < 0.6, 'moyenne ' + moy(nb));
+  assert.ok(Math.min(...nb) >= 55 && Math.max(...nb) <= 70, `de ${Math.min(...nb)} à ${Math.max(...nb)}`);
+  // cases d'un plateau = cases des 16 tuiles + 2 jonctions-cases, sans compter plus que ce que les modèles contiennent
+  for (const doc of PLATEAUX.slice(0, 20)) {
+    const somme = doc.plateau.tuiles.reduce((s, t) => s + modele(t.modeleId).cases.length, 0);
+    assert.strictEqual(GR.construire(doc, { jetons: [] }).cases.size, somme);
+  }
 });
 
-test('simulation : jonctions bien reliées (au moins 2 ports, au moins 3 le plus souvent) et chaque apparition a au moins 3 sorties', () => {
-  let nbJ = 0, deux = 0, mini = 9, sortiesMin = 99;
+test('simulation : jonctions bien reliées (au moins 2 ports, sauf cas rare) et chaque apparition a au moins 3 sorties', () => {
+  let nbJ = 0, une = 0, deux = 0, mini = 9, sortiesMin = 99, plateauxMal = 0;
   for (const doc of PLATEAUX) {
     const g = GR.construire(doc, { jetons: [] });
-    for (const jn of g.jonctions) { nbJ++; mini = Math.min(mini, jn.ports); if (jn.ports === 2) deux++; }
+    for (const jn of g.jonctions) { nbJ++; mini = Math.min(mini, jn.ports); if (jn.ports === 1) une++; if (jn.ports === 2) deux++; }
     for (const p of [1, 2]) for (const id of g.apparitions[p]) sortiesMin = Math.min(sortiesMin, g.voisins.get(id).size);
-    assert.deepStrictEqual(M.jonctionsMalReliees(doc), []);
+    if (M.jonctionsMalReliees(doc).length) plateauxMal++;
   }
-  // mesuré sur 1000 plateaux : minimum 2 ports (33 jonctions sur 9000 n'en ont que 2, soit 0,4 %) ; sorties d'une apparition : minimum 3
-  assert.ok(mini >= 2);
-  assert.ok(deux / nbJ < 0.01, 'jonctions à 2 ports : ' + (100 * deux / nbJ).toFixed(2) + ' %');
+  // mesuré sur 1000 plateaux : 4 plateaux (0,4 %) ont une jonction centrale à un seul port (C4 ou C6 répétés), sorties d'une apparition : minimum 3
+  assert.ok(mini >= 1);
+  assert.ok(plateauxMal / PLATEAUX.length < 0.02, 'plateaux avec une jonction mal reliée : ' + plateauxMal);
+  assert.ok(une / nbJ < 0.003 && deux / nbJ < 0.03, `jonctions à 1 port : ${une}, à 2 ports : ${deux} sur ${nbJ}`);
   assert.ok(sortiesMin >= 3, 'sorties minimales d\'une apparition : ' + sortiesMin);
 });
 
-test('simulation : peu de raccords morts (moyenne <= 0,8, au plus 1 par plateau), seulement chez le « mur » C5', () => {
+test('simulation : peu de raccords morts (moyenne <= 0,8), seulement chez le « mur » C5 (au plus un par exemplaire de C5 posé)', () => {
   const morts = (doc) => M.raccordsMorts(doc).filter((r) => r.raison === 'mort').length;
   const nb = PLATEAUX.map(morts);
-  // mesuré sur 1000 plateaux (docs/21) : moyenne ≈ 0,68 ; le côté fermé de C5 crée au plus un raccord mort
+  // mesuré sur 1000 plateaux (docs/21) : moyenne ≈ 0,60 ; maximum 3 (C5 peut être posé plusieurs fois) ; le côté fermé de C5 crée au plus un raccord mort
   assert.ok(moy(nb) <= 0.8, 'moyenne ' + moy(nb));
-  assert.ok(Math.max(...nb) <= 1, 'maximum ' + Math.max(...nb));
+  assert.ok(Math.max(...nb) <= 3, 'maximum ' + Math.max(...nb));
   for (const doc of PLATEAUX) {
     const murs = doc.plateau.tuiles.filter((t) => t.modeleId === 'C5').length;
     assert.ok(morts(doc) <= murs, `${morts(doc)} raccords morts pour ${murs} mur(s)`);
@@ -496,7 +523,7 @@ test('simulation : distance de chaque case d\'apparition à sa jonction, par mod
     return porteuses(m).map((p) => d.get(p) + 1).sort();
   };
   // mesuré (docs/21) : la 1re valeur est la jonction la plus proche
-  const attendu = { B1: [2, 2], B3: [3, 3], B4: [2, 2], B5: [2, 3], B6: [2, 3], K1: [2], K2: [3], K3: [2] };
+  const attendu = { B1: [2, 2], B3: [3, 3], B4: [2, 2], B5: [2, 3], B6: [2, 3], K2: [3], K4: [3] };
   for (const id of Object.keys(attendu)) assert.deepStrictEqual(pas(modele(id)), attendu[id], id);
 });
 
@@ -517,42 +544,47 @@ test('équilibre : 36 combinaisons de jonctions-cases par plateau, 7 villes, auc
   assert.deepStrictEqual(Object.keys(A.ecartVilles), ['4']);
 });
 
-test('équilibre : la première ville est à 2 pas des deux joueurs, toujours à égalité', () => {
-  // mesuré : 36000 configurations sur 36000 (docs/21). Constat de conception : tempo très rapide, voir docs/21 § 7.
-  assert.deepStrictEqual(Object.keys(A.ecartPremiere), ['0']);
-  assert.deepStrictEqual(Object.keys(A.ville1[1]), ['2']);
-  assert.deepStrictEqual(Object.keys(A.ville1[2]), ['2']);
-  assert.strictEqual(A.premiereInegale, 0);
+test('équilibre : la première ville est à 2 pas des deux joueurs, à égalité (sauf 0,2 % des tirages avec répétition)', () => {
+  // mesuré sur 1000 plateaux (36000 configurations, docs/21) : 2 pas dans 99,98 % (vert) et 99,8 % (rouge), égalité dans 99,8 % ;
+  // le tirage sans remise de la version précédente donnait 100 % ; le générateur écarte les cas inégaux (cause « première ville »)
+  assert.ok(Object.keys(A.ecartPremiere).every((k) => ['0', '1'].includes(k)));
+  assert.ok((A.ecartPremiere['0'] || 0) / A.n > 0.99, 'égalité sur la première ville : ' + (A.ecartPremiere['0'] || 0) / A.n);
+  for (const p of [1, 2]) {
+    assert.ok(Object.keys(A.ville1[p]).every((k) => ['2', '3'].includes(k)));
+    assert.ok((A.ville1[p]['2'] || 0) / A.n > 0.995);
+  }
+  assert.ok(A.premiereInegale / A.n < 0.006, 'première ville inégale : ' + A.premiereInegale / A.n);
 });
 
 test('équilibre : écart par rang et S mesurés (seuils = mesure + marge)', () => {
-  // mesuré sur 1000 plateaux (36000 configurations) : écart max >= 2 : 4,7 % ; jamais >= 3 (docs/21, sans B2)
+  // mesuré sur 1000 plateaux (36000 configurations, docs/21) : écart max >= 2 : 5,1 % ; >= 3 : 0,02 % (7 configurations) ; jamais >= 4
   assert.ok(part(A.ecartMax, 2) < 0.08, 'écart max >= 2 : ' + part(A.ecartMax, 2));
   assert.ok(part(A.ecartMax, 3) < 0.002, 'écart max >= 3 : ' + part(A.ecartMax, 3));
   assert.strictEqual(part(A.ecartMax, 4), 0);
-  // mesuré (docs/21, sans B2) : S moyen 2,09 ; S >= 4 : 11,6 % ; S >= 5 : 2,7 % ; S >= 7 : 0,03 % ; S maximum 7
+  // mesuré : S moyen 2,19 ; S >= 4 : 14,8 % ; S >= 5 : 4,3 % ; S >= 7 : 0,1 % ; S maximum 8
   const sMoy = Object.keys(A.S).reduce((s, k) => s + Number(k) * A.S[k], 0) / A.n;
-  assert.ok(sMoy > 1.8 && sMoy < 2.6, 'S moyen ' + sMoy);
-  assert.ok(part(A.S, 4) < 0.18, 'S >= 4 : ' + part(A.S, 4));
-  assert.ok(part(A.S, 5) < 0.06, 'S >= 5 : ' + part(A.S, 5));
-  assert.ok(part(A.S, 8) < 0.002, 'S >= 8 : ' + part(A.S, 8));
-  // aux rangs 1 et 2 l'écart est nul ou presque (mesuré : 100 % et 99,5 % à 0)
-  for (const k of [0, 1]) assert.ok((A.rang[k]['0'] || 0) / A.n > 0.98, 'rang ' + (k + 1));
+  assert.ok(sMoy > 1.8 && sMoy < 2.7, 'S moyen ' + sMoy);
+  assert.ok(part(A.S, 4) < 0.2, 'S >= 4 : ' + part(A.S, 4));
+  assert.ok(part(A.S, 5) < 0.07, 'S >= 5 : ' + part(A.S, 5));
+  assert.ok(part(A.S, 9) === 0, 'S >= 9 : ' + part(A.S, 9));
+  // aux rangs 1 et 2 l'écart est nul ou presque (mesuré : 99,8 % et 97,0 % à 0)
+  assert.ok((A.rang[0]['0'] || 0) / A.n > 0.99, 'rang 1');
+  assert.ok((A.rang[1]['0'] || 0) / A.n > 0.95, 'rang 2');
 });
 
 test('équilibre : « 5 contre 2 » rare et dépendant surtout du choix des jonctions-cases', () => {
-  // mesuré : 3,1 % des configurations ; 0 % pour (1,2)+(2,2), (1,2)+(3,2), (2,2)+(3,2) ; 8,6 % au plus pour deux jonctions-cases d'une même rangée extérieure
-  assert.ok(A.cinqDeux / A.n < 0.05, '5 contre 2 : ' + A.cinqDeux / A.n);
+  // mesuré (tirage avec répétition) : 4,1 % des configurations ; 0 % pour (1,2)+(2,2), (1,2)+(3,2), (2,2)+(3,2) ; 12,9 % au plus pour deux jonctions-cases d'une même rangée extérieure
+  assert.ok(A.cinqDeux / A.n < 0.06, '5 contre 2 : ' + A.cinqDeux / A.n);
   const sans = MS.PAIRES.filter((p) => STATS.parPaire[p.cle].cinqDeux === 0).map((p) => p.cle);
   assert.deepStrictEqual(sans, ['(1,2)+(2,2)', '(1,2)+(3,2)', '(2,2)+(3,2)']);
   // chaque plateau a au moins une combinaison sans blocage (mesuré : 1000 plateaux sur 1000)
   assert.ok(STATS.plateaux.every((p) => p.nbBloquees < p.n));
-  // « 4 contre 3 » est fréquent et sans conséquence (mesuré : 30 %) : le partage 7 = 4 + 3 est le cas normal
+  // « 4 contre 3 » est fréquent et sans conséquence (mesuré : 33 %) : le partage 7 = 4 + 3 est le cas normal
   assert.ok(A.quatreTrois / A.n > 0.22 && A.quatreTrois / A.n < 0.38);
 });
 
 test('équilibre : tempo, villes atteignables en au plus 3, 4 et 5 pas', () => {
-  // mesuré : 5,77 / 6,84 / 7,00 villes sur 7 (vert) et 5,75 / 6,84 / 7,00 (rouge) : le tempo est très rapide (docs/21 § 7)
+  // mesuré : 5,67 / 6,83 / 7,00 villes sur 7 (vert) et 5,65 / 6,80 / 7,00 (rouge) : le tempo est très rapide (docs/21 § 7)
   for (const p of [1, 2]) {
     assert.ok(moy(A.tempo[p][3]) > 5.3 && moy(A.tempo[p][3]) < 6.2, 'tempo 3 pas joueur ' + p);
     assert.ok(moy(A.tempo[p][4]) > 6.4 && moy(A.tempo[p][4]) < 7.0, 'tempo 4 pas joueur ' + p);
@@ -563,7 +595,7 @@ test('équilibre : tempo, villes atteignables en au plus 3, 4 et 5 pas', () => {
 
 test('autoroute du pourtour (constat, voir docs/21 § 8) : les apparitions de deux camps sont voisines, le pourtour est plus court que le centre', () => {
   // mesuré : une apparition verte et une rouge sont toujours à 1 pas (raccourci entre (0,1) et (0,2) et entre (3,1) et (3,2)) ;
-  // jusqu'à la rangée de jonctions adverse : 3,0 pas par le pourtour (minimum 3, maximum 4) contre 4,9 par les colonnes 1 et 2 (4 à 9)
+  // jusqu'à la rangée de jonctions adverse : 3,0 pas par le pourtour (minimum 3, maximum 4) contre 4,8 à 5,0 par les colonnes 1 et 2 (4 à 10)
   assert.deepStrictEqual(Object.keys(STATS.ecartApparitions), ['1']);
   for (const p of [1, 2]) {
     const m = (h) => Object.keys(h).reduce((s, k) => s + Number(k) * h[k], 0) / NB_PLATEAUX;
@@ -571,20 +603,20 @@ test('autoroute du pourtour (constat, voir docs/21 § 8) : les apparitions de de
     assert.ok(m(STATS.centreAdverse[p]) > 4.6 && m(STATS.centreAdverse[p]) < 5.5, 'centre ' + m(STATS.centreAdverse[p]));
     assert.ok(Math.min(...Object.keys(STATS.pourtourAdverse[p]).map(Number)) === 3);
   }
-  // mesuré (PM.graphe.flancs) : le pourtour est plus court que le centre dans 99,1 % des mesures, 1,8 pas de moins en moyenne
+  // mesuré (PM.graphe.flancs) : le pourtour est plus court que le centre dans 98,0 % des mesures, 1,8 pas de moins en moyenne
   const f = STATS.flancs.N;
   assert.ok(f.plusCourt / f.n > 0.95, 'part ' + f.plusCourt / f.n);
   const finis = f.diff.filter(Number.isFinite);
   assert.ok(moy(finis) < -1.5 && moy(finis) > -2.4, 'différence moyenne ' + moy(finis));
 });
 
-test('équilibre : aucune tuile du catalogue ne fait basculer l\'équilibre à elle seule (S moyen avec / sans, écart < 0,45)', () => {
-  // mesuré sur 1000 plateaux : plus grand écart de S moyen avec / sans un modèle : 0,27 (B3, bord en Y : 2,14 contre 1,87)
+test('équilibre : aucune tuile du catalogue ne fait basculer l\'équilibre à elle seule (S moyen avec / sans, écart < 0,55)', () => {
+  // mesuré sur 1000 plateaux : plus grand écart de S moyen avec / sans un modèle : 0,34 (B3, bord en Y : 2,28 contre 1,94)
   for (const m of CAT.modeles) {
     const avec = STATS.plateaux.filter((p) => p.modeles.has(m.id)), sans = STATS.plateaux.filter((p) => !p.modeles.has(m.id));
     if (!sans.length || !avec.length) continue;
     const d = Math.abs(moy(avec.map((p) => p.sommeS / p.n)) - moy(sans.map((p) => p.sommeS / p.n)));
-    assert.ok(d < 0.45, `${m.id} : écart de S moyen ${d.toFixed(2)}`);   // marge : 300 plateaux seulement
+    assert.ok(d < 0.55, `${m.id} : écart de S moyen ${d.toFixed(2)}`);   // marge : 300 plateaux seulement
   }
 });
 
@@ -592,7 +624,7 @@ test('équilibre : aucune tuile du catalogue ne fait basculer l\'équilibre à e
 /* Document                                                                */
 /* ====================================================================== */
 
-test('nouveauDocument : document vide (version 2, grille 4×4) avec une copie modifiable des 14 modèles', () => {
+test('nouveauDocument : document vide (version 2, grille 4×4) avec une copie modifiable des 13 modèles', () => {
   const doc = CAT.nouveauDocument();
   const vide = M.nouveauDocument();
   assert.strictEqual(doc.version, 2);
@@ -604,7 +636,7 @@ test('nouveauDocument : document vide (version 2, grille 4×4) avec une copie mo
   doc.modeles[0].cases[0].x = 1;
   doc.modeles.pop();
   assert.strictEqual(CAT.modeles[0].cases[0].x, 60);
-  assert.strictEqual(CAT.modeles.length, 14);
+  assert.strictEqual(CAT.modeles.length, 13);
   assert.notStrictEqual(CAT.nouveauDocument().modeles, CAT.nouveauDocument().modeles);
 });
 

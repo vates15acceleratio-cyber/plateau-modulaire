@@ -61,7 +61,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
         return { doc: neuf, message: 'La sauvegarde automatique précédente est illisible : elle a été mise de côté (« ' + S.CLE_AUTOSAVE + '-illisible ») et un plateau neuf est ouvert.', niveau: 'alerte' };
       }
     }
-    return { doc: neuf, message: 'Glissez une tuile de la bibliothèque vers une case du plateau.', niveau: 'info' };
+    return { doc: neuf, message: 'Cliquez une tuile de la bibliothèque puis une case du plateau, ou glissez-la.', niveau: 'info' };
   }
 
   /**

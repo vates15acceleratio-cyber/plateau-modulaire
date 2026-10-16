@@ -32,7 +32,7 @@ button:focus-visible { outline: 2px solid var(--pm-accent); outline-offset: 1px;
 .pm-pastille.pm-neutre { background: #eef0ec; color: var(--pm-discret); }
 .pm-pastille.pm-erreur { background: #fdecea; color: var(--pm-erreur); }
 
-.pm-principal { display: grid; grid-template-columns: 220px 1fr; min-height: 0; }
+.pm-principal { display: grid; grid-template-columns: 360px 1fr; min-height: 0; }
 .pm-colonne-gauche { border-right: 1px solid var(--pm-bord); background: var(--pm-panneau); overflow: auto; min-height: 0; }
 .pm-ecran { display: grid; grid-template-columns: 1fr 260px; min-height: 0; }
 .pm-ecran[hidden] { display: none; }
@@ -62,6 +62,11 @@ button:focus-visible { outline: 2px solid var(--pm-accent); outline-offset: 1px;
 .pm-dialogue-entete { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--pm-bord); }
 .pm-dialogue-entete h2 { font-size: 16px; margin: 0; }
 .pm-dialogue-contenu { padding: 16px; overflow: auto; max-height: calc(90vh - 60px); }
+
+/* Écran moyen : bibliothèque un peu moins large pour laisser la place au plateau et au panneau de droite. */
+@media (max-width: 1200px) {
+  .pm-principal { grid-template-columns: 290px 1fr; }
+}
 
 /* Écran étroit : colonnes empilées, plateau sur toute la largeur, cibles tactiles de 44 px (recette B1). */
 @media (max-width: 900px) {

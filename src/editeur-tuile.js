@@ -620,7 +620,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     M.GABARITS.forEach(function (r) { var o = el('option', '', LIBELLES_GABARITS[r]); o.value = r; selGabarit.appendChild(o); });
     barre.appendChild(champ('Gabarit', selGabarit));
     var inExemplaires = el('input', 'pm-editeur-saisie pm-editeur-saisie-court'); inExemplaires.type = 'number'; inExemplaires.min = '0'; inExemplaires.step = '1';
-    barre.appendChild(champ('Exemplaires', inExemplaires));
+    inExemplaires.title = 'Nombre d’exemplaires à imprimer (jeu complet) et poids dans le plateau aléatoire ; il ne limite pas les poses.';
+    barre.appendChild(champ('Exemplaires à imprimer', inExemplaires));
     corps.appendChild(barre);
 
     var avertissement = el('div', 'pm-editeur-avertissement');

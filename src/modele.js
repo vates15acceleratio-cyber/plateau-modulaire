@@ -7,8 +7,9 @@
  *  - grille toujours pleine, format du document dans `doc.grille` ('4x4' | '5x5', absent = '4x4') ;
  *  - un modèle déclare un gabarit (centrale | bord | coin), jamais bloquant ;
  *  - seules les règles physiques bloquent un modèle ; R1 à R4 et les règles de place sont des alertes ;
- *  - pose libre : une tuile va sur n'importe quelle cellule libre, dans n'importe quelle rotation
- *    (rotation suggérée pour un bord ou un coin sur le pourtour) ;
+ *  - pose : chaque modèle se pose autant de fois qu'on veut (les exemplaires ne servent qu'à l'impression et au
+ *    générateur), mais le rôle est respecté (coin dans un coin, bord sur le pourtour, centrale au centre) ;
+ *    rotation libre, rotation suggérée pour un bord ou un coin sur le pourtour ;
  *  - jetons : villes seulement ('capture') ; une jonction sans ville est une case chemin (voir graphe.js).
  *
  * Un modèle ne stocke PAS de masque : les masques `raccords` (12 bits) et
@@ -417,6 +418,17 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
       if (sortie[r] || (groupe.length === 1 && !relie[groupe[0]])) return; // case isolée : erreur dédiée
       e.push(alerte('reseau_sans_sortie', 'Les cases ' + groupe.join(', ') + ' n\'ont ni raccord ni port : elles ne mènent nulle part.', { type: 'case', id: groupe[0], ids: groupe }));
     });
+    // Poche : case en impasse (un seul chemin, vers une autre case) qui ne porte ni raccord ni port et n'est pas
+    // la case d'apparition. Un réseau entier sans sortie est déjà signalé ci-dessus, on ne le répète pas.
+    var degre = dict(), typeDe = dict();
+    tab(m.cases).forEach(function (c) { if (estObjet(c) && estId(c.id)) typeDe[c.id] = c.type; });
+    pourChaqueExtremite(m, function (x, t) { if (t === 'case') degre[x['case']] = (degre[x['case']] || 0) + 1; });
+    var avecSortie = dict();
+    sortiesDesCases(m).forEach(function (s) { avecSortie[s.caseId] = true; });
+    ids.forEach(function (id) {
+      if (degre[id] !== 1 || avecSortie[id] || typeDe[id] === 'apparition' || !sortie[racine(id)]) return;
+      e.push(alerte('poche', 'La case ' + id + ' est une poche : un seul chemin y mène et elle n\'a ni raccord ni port, c\'est une impasse qui ne mène nulle part.', refCase(id)));
+    });
     return e;
   });
 
@@ -534,7 +546,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
 
   /**
    * Gabarit attendu à la position d'une cellule : 'coin' (2 côtés extérieurs), 'bord' (1), 'centrale' (0),
-   * null hors grille. Simple repère : la pose reste libre (alerte si le gabarit de la tuile diffère).
+   * null hors grille. Sert au contrôle du rôle à la pose (peutPoserTuile).
    */
   function gabaritCellule(col, lig, format) {
     var F = resoudreFormat(format);
@@ -608,11 +620,6 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   function nbPosees(doc, modeleId) {
     return doc.plateau.tuiles.filter(function (t) { return t && t.modeleId === modeleId; }).length;
   }
-  function exemplairesRestants(doc, modeleId) {
-    var m = modeleParId(doc, modeleId);
-    if (!m) return 0;
-    return m.exemplaires - nbPosees(doc, modeleId);
-  }
 
   /** Le modèle porte-t-il au moins une case d'apparition ? */
   function aUneApparition(m) { return tab(m && m.cases).some(function (c) { return estObjet(c) && c.type === 'apparition'; }); }
@@ -625,10 +632,19 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return { raccords: G.tournerRaccords(mm.raccords, tuile.rot), portsCoin: G.tournerPorts(mm.portsCoin, tuile.rot) };
   }
 
+  /** Phrase de refus quand le rôle (gabarit) du modèle ne correspond pas à la cellule. */
+  var PHRASE_ROLE = {
+    coin: 'Cette tuile est un coin : elle se pose dans un coin du plateau.',
+    bord: 'Cette tuile est un bord : elle se pose sur le pourtour du plateau, hors des coins.',
+    centrale: 'Cette tuile est une centrale : elle se pose au centre du plateau.'
+  };
+
   /**
-   * Teste la pose d'une tuile (pose libre). Renvoie { ok, raison, rot } ; rot = rotation suggérée
-   * (rotationDeduite) ou 0. Refus seulement : modèle introuvable, hors grille, cellule occupée,
-   * modèle incomplet (erreur bloquante), exemplaires épuisés.
+   * Teste la pose d'une tuile. Renvoie { ok, raison, rot } ; rot = rotation suggérée
+   * (rotationDeduite) ou 0. Les poses sont illimitées (les exemplaires ne servent qu'à l'impression et au générateur).
+   * Refus : modèle introuvable, hors grille, cellule occupée, modèle incomplet (erreur bloquante), rôle
+   * qui ne correspond pas à la cellule (coin dans un coin, bord sur le pourtour hors coins, centrale au centre).
+   * Un modèle sans gabarit connu n'a pas de rôle : il va partout.
    */
   function peutPoserTuile(doc, modeleId, col, lig) {
     var F = formatDuDocument(doc);
@@ -638,7 +654,8 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     if (!dansGrille(col, lig, F)) return non('Cette cellule est hors de la grille.');
     if (tuileEn(doc, col, lig)) return non('Cette cellule est déjà occupée.');
     if (!validerModele(modele, F).complet) return non('Ce modèle est incomplet : corrigez ses erreurs dans l\'éditeur.');
-    if (exemplairesRestants(doc, modeleId) <= 0) return non('Il ne reste plus d\'exemplaire de cette tuile.');
+    var role = gabaritConnu(modele.gabarit);
+    if (role && role !== gabaritCellule(col, lig, F)) return non(PHRASE_ROLE[role]);
     var rot = rotationDeduite(col, lig, modele.gabarit, F);
     return { ok: true, raison: '', rot: rot === null ? 0 : rot };
   }
@@ -916,13 +933,6 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
       erreurs = erreurs.concat(verifierTuilePosee(doc, t));
       alertes = alertes.concat(alertesTuilePosee(doc, t));
     });
-    tab(doc.modeles).forEach(function (m) {
-      if (!m) return;
-      var n = nbPosees(doc, m.id);
-      if (n > m.exemplaires) {
-        erreurs.push(err('exemplaires_depasses', 'Le modèle « ' + (m.nom || m.id) + ' » est posé ' + n + ' fois pour ' + m.exemplaires + ' exemplaire(s).', refModele(m)));
-      }
-    });
     jetonsInvalides(doc).forEach(function (j) {
       erreurs.push(err('jeton_invalide', j.raison, { type: 'jeton', i: j.i, j: j.j }));
     });
@@ -970,12 +980,10 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return nouveau;
   }
 
-  /** Change le nombre d'exemplaires (pure). Lève une Error si n n'est pas un entier ≥ nombre de tuiles posées. */
+  /** Change le nombre d'exemplaires à imprimer (pure). Lève une Error si n n'est pas un entier ≥ 0 (il ne limite pas la pose). */
   function changerExemplaires(doc, id, n) {
     if (!modeleParId(doc, id)) throw new Error('Modèle de tuile introuvable.');
     if (!estEntier(n) || n < 0) throw new Error('Le nombre d\'exemplaires doit être un entier positif ou nul.');
-    var posees = nbPosees(doc, id);
-    if (n < posees) throw new Error('Il y a déjà ' + posees + ' tuile(s) posée(s) de ce modèle : retirez-en d\'abord.');
     var nouveau = clone(doc);
     modeleParId(nouveau, id).exemplaires = n;
     return nouveau;
@@ -1006,7 +1014,6 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     clonerDocument: clonerDocument,
     modeleParId: modeleParId,
     tuileEn: tuileEn,
-    exemplairesRestants: exemplairesRestants,
     masquesTuilePosee: masquesTuilePosee,
     peutPoserTuile: peutPoserTuile,
     poserTuile: poserTuile,

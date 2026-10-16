@@ -6,12 +6,13 @@
  *
  * Règles appliquées (règles v2, docs/18 à docs/20 ; vérifié sur le catalogue v2, docs/21) :
  *  - grille pleine du format du document (4×4 ou 5×5) ;
- *  - tuiles tirées dans la bibliothèque du document (modèles complets, selon leurs exemplaires), selon le
- *    gabarit attendu à chaque position ; rotation suggérée des bords et coins, rotation aléatoire des centrales ;
+ *  - tuiles tirées dans la bibliothèque du document (modèles complets), selon le gabarit attendu à chaque
+ *    position ; un modèle peut servir plusieurs fois (poses illimitées) mais le tirage favorise la variété :
+ *    poids du modèle = son nombre d'exemplaires (0 = jamais tiré), divisé par (1 + 0,5 × usages) à chaque réutilisation
+ *    sur le plateau en cours ; rotation suggérée des bords et coins, rotation aléatoire des centrales ;
  *  - 7 villes sur les jonctions intérieures, les autres jonctions sont des cases chemin (jonctions-cases) : en 4×4,
  *    par défaut les 2 jonctions-cases sont dans la rangée centrale (aucun « 5 contre 2 », docs/22), avec l'option
  *    « jonctions variées » elles sont libres sauf deux dans une même rangée extérieure ; 5×5 : villes tirées librement ;
- *  - stock plafonné à PM.modele.PLAFOND_TUILES tuiles (somme des exemplaires des modèles complets) ;
  *  - villes non traversables (règle du jeu) ;
  *  - élimination : validerPlateau avec erreur, graphe non connexe, camp sans case d'apparition, deux villes
  *    à moins de 3 cases (jamais produit, docs/18), ville inaccessible, plateau très déséquilibré (« 5 contre 2 »,
@@ -38,7 +39,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   var FACTEUR_ESSAIS = 5;         // essais maximaux = candidats × 5
   var TOLERANCE_DEFAUT = 1;       // bons candidats : S ≤ Smin + tolérance (1 : garde de l'aléa)
   var RACCORDS_TOLERES = 2;       // raccords morts tolérés sans pénalité
-  var LIBELLES_GABARIT = { centrale: 'centrale(s)', bord: 'bord(s)', coin: 'coin(s)' };
+  var LIBELLES_GABARIT = { centrale: 'centrale', bord: 'bord', coin: 'coin' };
 
   /* ------------------------------------------------------------------ */
   /* Hasard reproductible                                                */
@@ -177,15 +178,24 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   /* Bibliothèque et tirage des tuiles                                   */
   /* ------------------------------------------------------------------ */
 
-  /** Stock par gabarit (ids répétés selon les exemplaires), modèles complets seulement, ordre du document. */
-  function stockParGabarit(doc, F) {
-    var stock = { centrale: [], bord: [], coin: [] };
+  /** Force de la pénalité de répétition (voir facteurRepetition). */
+  var PENALITE_REPETITION = 0.5;
+
+  /** Pénalité de répétition : le poids d'un modèle déjà posé u fois sur le plateau en cours est divisé par (1 + 0,5·u). */
+  function facteurRepetition(usages) { return 1 / (1 + PENALITE_REPETITION * usages); }
+
+  /**
+   * Modèles tirables par gabarit : [{id, poids}], modèles complets seulement, ordre du document.
+   * Le poids est le nombre d'exemplaires du modèle (un modèle à 0 exemplaire n'est jamais tiré).
+   */
+  function modelesParGabarit(doc, F) {
+    var res = { centrale: [], bord: [], coin: [] };
     (Array.isArray(doc.modeles) ? doc.modeles : []).forEach(function (m) {
-      if (!m || !Object.prototype.hasOwnProperty.call(stock, m.gabarit) || !M.validerModele(m, F).complet) return;
+      if (!m || !Object.prototype.hasOwnProperty.call(res, m.gabarit) || !M.validerModele(m, F).complet) return;
       var n = M.exemplairesValides(m);
-      for (var k = 0; k < n; k++) stock[m.gabarit].push(m.id);
+      if (n > 0) res[m.gabarit].push({ id: m.id, poids: n });
     });
-    return stock;
+    return res;
   }
 
   /** Cellules de la grille avec leur gabarit attendu : [{col, lig, gabarit}]. */
@@ -197,13 +207,25 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     return res;
   }
 
-  /** Tuiles d'un candidat : [{modeleId, col, lig, rot}] (tirage sans remise par gabarit). */
-  function tirerTuiles(stock, cellules, F, rng) {
-    var paquets = {};
-    Object.keys(stock).forEach(function (r) { paquets[r] = melanger(stock[r], rng); });
+  /** Un modèle tiré parmi `modeles` selon poids × facteurRepetition(usages du modèle). */
+  function tirerModele(modeles, usages, rng) {
+    var poids = modeles.map(function (m) { return m.poids * facteurRepetition(usages[m.id] || 0); });
+    var total = poids.reduce(function (a, b) { return a + b; }, 0), x = rng() * total;
+    for (var k = 0; k < modeles.length; k++) {
+      x -= poids[k];
+      if (x < 0) return modeles[k].id;
+    }
+    return modeles[modeles.length - 1].id; // arrondi flottant : dernier modèle
+  }
+
+  /** Tuiles d'un candidat : [{modeleId, col, lig, rot}] (tirage avec remise, cellule par cellule, variété favorisée). */
+  function tirerTuiles(modeles, cellules, F, rng) {
+    var usages = {};
     return cellules.map(function (c) {
+      var id = tirerModele(modeles[c.gabarit], usages, rng);
+      usages[id] = (usages[id] || 0) + 1;
       var rot = M.rotationDeduite(c.col, c.lig, c.gabarit, F);
-      return { modeleId: paquets[c.gabarit].pop(), col: c.col, lig: c.lig, rot: rot === null ? entier(rng, 4) : rot };
+      return { modeleId: id, col: c.col, lig: c.lig, rot: rot === null ? entier(rng, 4) : rot };
     });
   }
 
@@ -253,21 +275,16 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     var F;
     try { F = M.formatDuDocument(doc); } catch (e) { return echec(e.message); }
 
-    // Stock plafonné (somme des exemplaires des modèles complets), puis bibliothèque suffisante ?
-    var stock = stockParGabarit(doc, F), cellules = cellulesDuFormat(F), besoins = { centrale: 0, bord: 0, coin: 0 }, manques = [];
+    // Bibliothèque suffisante ? Il faut au moins un modèle complet (à 1 exemplaire ou plus) pour chaque gabarit utilisé.
+    var modelesDispo = modelesParGabarit(doc, F), cellules = cellulesDuFormat(F), besoins = { centrale: 0, bord: 0, coin: 0 }, manques = [];
     cellules.forEach(function (c) { besoins[c.gabarit]++; });
-    var total = M.GABARITS.reduce(function (s, r) { return s + stock[r].length; }, 0);
-    if (total > M.PLAFOND_TUILES) {
-      return echec('La bibliothèque compte ' + total + ' tuiles (modèles complets, selon leurs exemplaires) : le générateur en accepte ' +
-        M.PLAFOND_TUILES + ' au plus. Réduisez le nombre d\'exemplaires.');
-    }
     M.GABARITS.forEach(function (r) {
-      if (stock[r].length < besoins[r]) {
-        manques.push((besoins[r] - stock[r].length) + ' ' + LIBELLES_GABARIT[r] + ' (' + stock[r].length + ' disponible(s), ' + besoins[r] + ' nécessaire(s))');
+      if (besoins[r] > 0 && !modelesDispo[r].length) {
+        manques.push('aucun modèle de ' + LIBELLES_GABARIT[r] + ' (il en faut pour ' + besoins[r] + ' cellule(s) ; seuls les modèles complets à 1 exemplaire au moins sont tirés)');
       }
     });
     if (manques.length) {
-      return echec('Bibliothèque insuffisante (modèles complets seulement) : il manque ' + manques.join(', ') + '.');
+      return echec('Bibliothèque insuffisante : ' + manques.join(', ') + '.');
     }
 
     // Candidats
@@ -276,7 +293,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     var bons = [], essais = 0;
     while (bons.length < nbCandidats && essais < essaisMax) {
       essais++;
-      var tuiles = tirerTuiles(stock, cellules, F, rng), jetons = tirerVilles(jonctions, rng, paires);
+      var tuiles = tirerTuiles(modelesDispo, cellules, F, rng), jetons = tirerVilles(jonctions, rng, paires);
       var cand = { version: doc.version, grille: F.id, modeles: modeles, plateau: { tuiles: tuiles, jetons: jetons } };
       if (M.validerPlateau(cand).erreurs.length) { rejets.plateau_invalide++; continue; }
       var ev = evaluer(cand);
@@ -374,7 +391,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
 
     var F = M.formatDuDocument(etat.doc());
     racine.appendChild(el(d, 'p', 'pm-generateur-explication',
-      'Tire un plateau ' + F.GRILLE.colonnes + '×' + F.GRILLE.lignes + ' complet dans la bibliothèque : 7 villes à 3 cases d\'écart au moins, ' +
+      'Tire un plateau ' + F.GRILLE.colonnes + '×' + F.GRILLE.lignes + ' complet dans la bibliothèque (un modèle peut servir plusieurs fois, la variété est favorisée ; les exemplaires pèsent dans le tirage) : 7 villes à 3 cases d\'écart au moins, ' +
       'les autres jonctions restent des cases chemin' + (pairesJonctionsCases(F, false) ? ' (les deux jonctions-cases sont placées dans la rangée centrale, sauf option « jonctions variées »)' : ' (tirées librement, classées par équilibre)') + ' ; ' +
       'plateau équilibré tiré au hasard parmi les meilleurs candidats. ' +
       'La même graine redonne le même plateau.'));
@@ -501,6 +518,11 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     generer: generer,
     critere: critere,
     pairesJonctionsCases: pairesJonctionsCases,
+    tirerTuiles: tirerTuiles,
+    modelesParGabarit: modelesParGabarit,
+    cellulesDuFormat: cellulesDuFormat,
+    facteurRepetition: facteurRepetition,
+    PENALITE_REPETITION: PENALITE_REPETITION,
     hacher: hacher,
     mulberry32: mulberry32,
     nouvelleGraine: nouvelleGraine,

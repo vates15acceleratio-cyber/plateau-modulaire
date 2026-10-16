@@ -94,7 +94,8 @@ test('robustesse : ids inconnus et coordonnées hors plateau avec un document va
     appels.push(['cibleSurbrillance port', () => A.cibleSurbrillance({ type: 'port', col: 1, lig: 1, coin: a }, d)]);
     appels.push(['messageJeton', () => A.messageJeton(d, a, b)]);
     appels.push(['vignettes', () => B.vignettesBibliotheque(d, a)]);
-    appels.push(['libelleRestants', () => B.libelleRestants(a)]);
+    appels.push(['refusArmement', () => B.refusArmement(d, a)]);
+    appels.push(['retirerParClicDroit', () => A.retirerParClicDroit(d, a, b)]);
     appels.push(['aimanter', () => E.aimanter(a, b, a)]);
     appels.push(['cibleEn', () => E.cibleEn(d.modeles[0], a, b)]);
     appels.push(['nbUtilisations', () => E.nbUtilisations(a, b)]);
@@ -182,20 +183,24 @@ test('effets d\'une action : villes retirées expliquées, annulation mentionné
   assert.deepEqual(A.effetsDeAction(d, copie(d)), { jetonsRetires: [] });
 });
 
-test('déplacement de tuile : rotation conservée, pose libre, refus seulement si occupé', () => {
+test('déplacement de tuile : rotation conservée, vers une cellule libre du même rôle, refus si occupée ou si le rôle ne convient pas', () => {
   const d = plateauComplet(false);
   const t = M.tuileEn(d, 1, 0);
-  const sans = M.retirerTuile(d, 2, 2);
-  const apres = A.deplacerTuile(sans, { col: 1, lig: 0 }, { col: 2, lig: 2 });
-  assert.equal(M.tuileEn(apres, 2, 2).modeleId, t.modeleId);
-  assert.equal(M.tuileEn(apres, 2, 2).rot, t.rot);
-  assert.ok(C.calculer(apres).alertes.some((a) => a.code === 'gabarit_place'));
+  const sans = M.retirerTuile(d, 2, 0);
+  const apres = A.deplacerTuile(sans, { col: 1, lig: 0 }, { col: 2, lig: 0 });
+  assert.equal(M.tuileEn(apres, 2, 0).modeleId, t.modeleId);
+  assert.equal(M.tuileEn(apres, 2, 0).rot, t.rot);
+  assert.ok(!C.calculer(apres).alertes.some((a) => a.code === 'gabarit_place'));
+  // un bord ne va pas au centre : refus expliqué, document inchangé
+  const centre = A.testerDeplacement(M.retirerTuile(sans, 2, 2), { col: 1, lig: 0 }, { col: 2, lig: 2 });
+  assert.equal(centre.ok, false);
+  assert.match(centre.raison, /Cette tuile est un bord/);
   assert.equal(A.testerDeplacement(d, { col: 1, lig: 1 }, { col: 0, lig: 0 }).ok, false);
   assert.equal(A.testerDeplacement(d, { col: 1, lig: 1 }, { col: 1, lig: 1 }).identique, true);
   assert.deepEqual(A.cellulesCompatiblesDeplacement(d, { col: 3, lig: 3 }).map((c) => c.col + ',' + c.lig), ['3,3']);
 });
 
-test('bibliothèque : groupes par gabarit, filtre, posable / incomplet / épuisé, gabarit inconnu', () => {
+test('bibliothèque : groupes par gabarit, filtre, posable / incomplet, gabarit inconnu, plus de compteur de stock', () => {
   let d = docVide();
   const incomplet = E.modeleDeDepart('coin', d.modeles.map((m) => m.id));
   d = M.ajouterModele(d, incomplet);
@@ -206,20 +211,27 @@ test('bibliothèque : groupes par gabarit, filtre, posable / incomplet / épuis�
   assert.equal(v.complet, false); assert.equal(v.posable, false);
   assert.deepEqual(B.vignettesBibliotheque(d, 'bord').map((x) => x.gabarit), ['bord']);
   assert.deepEqual(B.vignettesBibliotheque(d, 'zzz'), []);
-  const p = A.poserTuileTournee(A.poserTuileTournee(d, 'K1', 0, 0, 0), 'K1', 3, 0, 1);
-  const k1 = B.vignettesBibliotheque(p, 'coin')[0].modeles.find((m) => m.id === 'K1');
-  assert.equal(k1.restants, 0); // K1 existe en 2 exemplaires
-  assert.equal(k1.posable, false);
-  assert.equal(k1.alertes, 0, 'K1 (catalogue v2) : aucune alerte');
+  // poses illimitées : K4 n'a qu'un exemplaire, il se pose dans les 4 coins et reste posable
+  let p = d;
+  for (const [c, l, r] of [[0, 0, 0], [3, 0, 1], [3, 3, 2], [0, 3, 3]]) p = A.poserTuileTournee(p, 'K4', c, l, r);
+  const k4 = B.vignettesBibliotheque(p, 'coin')[0].modeles.find((m) => m.id === 'K4');
+  assert.equal(k4.exemplaires, 1);
+  assert.equal(k4.posees, 4);
+  assert.equal(k4.posable, true);
+  assert.equal('restants' in k4, false);
+  assert.equal(k4.alertes, 0, 'K4 (catalogue v2) : aucune alerte');
+  assert.equal(B.refusArmement(p, 'K4'), '');
+  assert.match(B.refusArmement(p, incomplet.id), /incomplet/);
+  assert.match(B.refusArmement(p, 'nope'), /introuvable/);
 });
 
-test('pose : refus en une phrase (incomplet, hors grille, introuvable, occupée, épuisée), sinon libre', () => {
+test('pose : refus en une phrase (incomplet, hors grille, introuvable, occupée, rôle), jamais pour des exemplaires épuisés', () => {
   let d = docVide();
   const inc = E.modeleDeDepart('coin', []);
   d = M.ajouterModele(d, inc);
   const cas = [
     [M.peutPoserTuile(d, inc.id, 0, 0), /incomplet/],
-    [M.peutPoserTuile(d, 'K1', 4, 0), /hors/],
+    [M.peutPoserTuile(d, 'K2', 4, 0), /hors/],
     [M.peutPoserTuile(d, 'nope', 0, 0), /introuvable/]
   ];
   for (const [r, re] of cas) {
@@ -227,18 +239,23 @@ test('pose : refus en une phrase (incomplet, hors grille, introuvable, occupée,
     assert.match(r.raison, re);
     assert.ok(!/[.!?]\s+\S/.test(r.raison), 'une seule phrase : ' + r.raison);
   }
-  // pose libre : un coin au centre, une centrale dans un coin
-  assert.equal(M.peutPoserTuile(d, 'K1', 1, 1).ok, true);
-  assert.equal(M.peutPoserTuile(d, 'C1', 0, 0).ok, true);
-  d = A.poserTuileTournee(d, 'K1', 0, 0, 0);
+  // rôle respecté : un coin ne va pas au centre, une centrale ne va pas dans un coin (refus d'une phrase)
+  const coinCentre = M.peutPoserTuile(d, 'K2', 1, 1), centraleCoin = M.peutPoserTuile(d, 'C1', 0, 0);
+  assert.equal(coinCentre.ok, false); assert.equal(centraleCoin.ok, false);
+  assert.equal(coinCentre.raison, 'Cette tuile est un coin : elle se pose dans un coin du plateau.');
+  assert.equal(centraleCoin.raison, 'Cette tuile est une centrale : elle se pose au centre du plateau.');
+  assert.equal(M.peutPoserTuile(d, 'B1', 0, 0).raison, 'Cette tuile est un bord : elle se pose sur le pourtour du plateau, hors des coins.');
+  assert.equal(M.peutPoserTuile(d, 'K2', 0, 0).ok, true);
+  assert.equal(M.peutPoserTuile(d, 'C1', 1, 1).ok, true);
+  d = A.poserTuileTournee(d, 'K4', 0, 0, 0);
   assert.match(M.peutPoserTuile(d, 'K2', 0, 0).raison, /occupée/);
-  d = A.poserTuileTournee(d, 'K1', 3, 0, 1); // 2e et dernier exemplaire de K1
-  assert.match(M.peutPoserTuile(d, 'K1', 3, 3).raison, /exemplaire/);
+  d = A.poserTuileTournee(d, 'K4', 3, 0, 1); // K4 n'a qu'un exemplaire : 2e pose acceptée (poses illimitées)
+  assert.equal(M.peutPoserTuile(d, 'K4', 3, 3).ok, true);
   const avant = copie(d);
-  assert.throws(() => A.poserTuileTournee(d, 'K1', 3, 3, 0), Error);
+  assert.throws(() => A.poserTuileTournee(d, 'K4', 1, 1, 0), Error);
   assert.deepEqual(d, avant, 'document inchangé après refus');
-  assert.equal(A.poserTuileTournee(docVide(), 'K1', 0, 0, 3).plateau.tuiles[0].rot, 3, 'rotation choisie respectée');
-  assert.equal(A.poserTuileTournee(docVide(), 'K1', 3, 3, null).plateau.tuiles[0].rot, 2, 'rotation suggérée du coin SE');
+  assert.equal(A.poserTuileTournee(docVide(), 'K2', 0, 0, 3).plateau.tuiles[0].rot, 3, 'rotation choisie respectée');
+  assert.equal(A.poserTuileTournee(docVide(), 'K2', 3, 3, null).plateau.tuiles[0].rot, 2, 'rotation suggérée du coin SE');
   assert.equal(A.poserTuileTournee(docVide(), 'C1', 1, 1, 5).plateau.tuiles[0].rot, 1, 'quarts de tour modulo 4');
   assert.equal(A.poserTuileTournee(docVide(), 'C1', 1, 1, -1).plateau.tuiles[0].rot, 3);
 });
@@ -275,10 +292,10 @@ test('éditeur : aimantation sur la grille de 1 cm, marges de coupe et zones de 
 });
 
 test('éditeur : ajouterChemin et supprimer (refus en phrase, modèle source intact) ; extérieurs permis', () => {
-  const k1 = copie(docVide().modeles.find((m) => m.id === 'K1'));
+  const k1 = copie(docVide().modeles.find((m) => m.id === 'K2'));
   const avant = copie(k1);
   assert.throws(() => E.ajouterChemin(k1, { 'case': 'c1' }, { 'case': 'c1' }), /lui-même/);
-  assert.throws(() => E.ajouterChemin(k1, { 'case': 'a' }, { 'case': 'c1' }), /déjà reliés/);
+  assert.throws(() => E.ajouterChemin(k1, { 'case': 'a' }, { 'case': 'r' }), /déjà reliés/);
   assert.throws(() => E.ajouterChemin(k1, { 'case': 'zz' }, { coin: 2 }), /n'existe pas/);
   assert.throws(() => E.ajouterChemin(k1, { coin: 2 }, { raccord: { cote: 1, pos: 1 } }), /case/);
   assert.throws(() => E.supprimer(k1, { type: 'case', id: 'zz' }), /introuvable/);
@@ -292,22 +309,22 @@ test('éditeur : ajouterChemin et supprimer (refus en phrase, modèle source int
 });
 
 test('éditeur : modification d\'un modèle posé répercutée ; changement de gabarit permis même posé', () => {
-  const d = A.poserTuileTournee(docVide(), 'K1', 0, 0, 0);
-  const casse = copie(M.modeleParId(d, 'K1'));
+  const d = A.poserTuileTournee(docVide(), 'K2', 0, 0, 0);
+  const casse = copie(M.modeleParId(d, 'K2'));
   casse.cases[0].diametre = 50;
-  const d2 = M.remplacerModele(d, 'K1', casse);
+  const d2 = M.remplacerModele(d, 'K2', casse);
   assert.equal(d2.plateau.tuiles.length, 1);
   assert.ok(C.calculer(d2).erreurs.some((e) => e.code === 'modele_incomplet'));
-  assert.equal(E.nbUtilisations(d2, 'K1'), 1);
-  const d3 = M.remplacerModele(d, 'K1', E.changerGabarit(M.modeleParId(d, 'K1'), 'bord'));
-  assert.equal(M.modeleParId(d3, 'K1').gabarit, 'bord');
+  assert.equal(E.nbUtilisations(d2, 'K2'), 1);
+  const d3 = M.remplacerModele(d, 'K2', E.changerGabarit(M.modeleParId(d, 'K2'), 'bord'));
+  assert.equal(M.modeleParId(d3, 'K2').gabarit, 'bord');
   assert.ok(C.calculer(d3).alertes.some((a) => a.code === 'gabarit_place'));
 });
 
 test('éditeur : dupliquer donne un id neuf, 1 exemplaire, nom « (copie) »', () => {
-  const k = docVide().modeles.find((m) => m.id === 'K1');
+  const k = docVide().modeles.find((m) => m.id === 'K2');
   const c = E.dupliquer(k, docVide().modeles.map((m) => m.id));
-  assert.notEqual(c.id, 'K1');
+  assert.notEqual(c.id, 'K2');
   assert.equal(c.exemplaires, 1);
   assert.match(c.nom, /\(copie\)$/);
   assert.deepEqual(c.chemins, k.chemins);
@@ -351,17 +368,17 @@ test('sauvegarde automatique : stockage simulé, contenu corrompu, stockage abse
 test('état partagé : refus sans changement, historique de 100 niveaux, rétablir vidé par une nouvelle action', () => {
   const etat = PM.etat.creer(docVide());
   const avant = JSON.stringify(etat.doc());
-  const r = etat.appliquer((d) => M.poserTuile(d, 'K1', 9, 9), 'x');
+  const r = etat.appliquer((d) => M.poserTuile(d, 'K2', 9, 9), 'x');
   assert.equal(r.ok, false);
   assert.equal(JSON.stringify(etat.doc()), avant);
   assert.equal(etat.ui().message.niveau, 'erreur');
   assert.equal(etat.appliquer(() => { throw 'chaîne'; }).ok, false);
   assert.equal(etat.peutAnnuler(), false);
-  for (let n = 0; n < 105; n++) etat.appliquer((d) => M.changerExemplaires(d, 'K1', n % 2 ? 2 : 3), 'e' + n);
+  for (let n = 0; n < 105; n++) etat.appliquer((d) => M.changerExemplaires(d, 'K2', n % 2 ? 2 : 3), 'e' + n);
   let k = 0; while (etat.annuler()) k++;
   assert.equal(k, 100);
   assert.equal(etat.retablir(), true);
-  etat.appliquer((d) => M.changerExemplaires(d, 'K1', 5), 'nouveau');
+  etat.appliquer((d) => M.changerExemplaires(d, 'K2', 5), 'nouveau');
   assert.equal(etat.peutRetablir(), false);
   const avantOuverture = JSON.stringify(etat.doc());
   etat.remplacer(docVide());

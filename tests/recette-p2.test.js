@@ -149,7 +149,7 @@ function hostiliserCases(m) {
 function docModifie() {
   const doc = docCatalogue();
   doc.modeles.find((m) => m.id === 'C1').exemplaires = 3;
-  doc.modeles.find((m) => m.id === 'K1').exemplaires = 0;
+  doc.modeles.find((m) => m.id === 'K2').exemplaires = 2;
   doc.modeles.find((m) => m.id === 'B1').exemplaires = 3;
   const inc = doc.modeles.find((m) => m.id === 'C3');
   inc.cases = []; // incomplet (brouillon)
@@ -189,7 +189,7 @@ test('export : catalogue en A3 = 4 planches (6, 6, 6, 4) de 297 x 420 ; en A4 = 
   assert.ok(a3.every((p) => p.largeur === 297 && p.hauteur === 420));
   assert.strictEqual(a4.length, 11);
   assert.ok(a4.every((p) => p.tuiles.length === 2 && p.largeur === 210 && p.hauteur === 297));
-  // 22 tuiles du catalogue : 15 modèles (B1 en 5 exemplaires, K1 à K3 en 2)
+  // 22 tuiles du catalogue : 13 modèles (B1 en 6 exemplaires, K2 en 4, K4 en 1, C4 en 2)
   const total = (ps) => ps.reduce((s, p) => s + p.tuiles.length, 0);
   assert.strictEqual(total(a3), 22);
   assert.strictEqual(total(a4), 22);
@@ -269,16 +269,16 @@ test('export : bibliothèque modifiée, exemplaires pris en compte, modèle inco
   assert.ok(!liste.tuiles.some((t) => t.modeleId === 'C3'));
   const nb = (id) => liste.tuiles.filter((t) => t.modeleId === id).length;
   assert.strictEqual(nb('C1'), 3);
-  assert.strictEqual(nb('K1'), 0);
+  assert.strictEqual(nb('K2'), 2);
   assert.strictEqual(nb('B1'), 3);
-  assert.strictEqual(liste.tuiles.length, 22 - 1 /* C3 */ + 2 /* C1 */ - 2 /* K1 */ - 3 /* B1 : 6 -> 3 */);
+  assert.strictEqual(liste.tuiles.length, 22 - 1 /* C3 */ + 2 /* C1 */ - 2 /* K2 : 4 -> 2 */ - 3 /* B1 : 6 -> 3 */);
   const a3 = E.calepiner(doc, { format: 'A3' });
   assert.deepStrictEqual(a3.map((p) => p.tuiles.length), [6, 6, 6]);
   // suffixe -n seulement pour les modèles à plusieurs exemplaires
   const etiq = a3.flatMap((p) => p.tuiles.map((t) => t.etiquette));
   assert.ok(etiq.includes('C1-1') && etiq.includes('C1-3') && etiq.includes('B1-3'));
   assert.ok(etiq.includes('C2') && !etiq.includes('C2-1'));
-  assert.ok(!etiq.some((e) => e.startsWith('K1')));
+  assert.ok(etiq.includes('K2-2') && !etiq.includes('K2-3') && etiq.includes('K4') && !etiq.includes('K4-1'));
   // signalé par preparerSorties (c'est ce que la boîte affiche)
   const sortie = E.preparerSorties(doc, { format: 'A3' });
   assert.deepStrictEqual(sortie.exclus.map((x) => x.id), ['C3']);
@@ -474,7 +474,7 @@ test('export : PDF A4 du catalogue (11 pages 210 x 297) et PDF de la bibliothèq
   assert.strictEqual(rm.n, 3);
   const texte = rm.textes.join('\n').split('\n');
   assert.ok(texte.includes('C1-3') && texte.includes('B1-2'));
-  assert.ok(!texte.includes('C3') && !texte.some((t) => t.startsWith('K1')));
+  assert.ok(!texte.includes('C3') && texte.includes('K2-2') && !texte.some((t) => t.startsWith('K2-3')));
 });
 
 test('export : PDF des jetons (A4) et de l\'aperçu (A3) : tailles, texte, repères', { skip: SANS_PYMUPDF }, () => {
@@ -843,8 +843,8 @@ test('générateur : bibliothèque insuffisante, raison claire et document incha
   cas.push(['bords incomplets', bordsCasses, /bord/]);
   const sansCentrale = libGenerateur(); sansCentrale.modeles = sansCentrale.modeles.filter((m) => m.gabarit !== 'centrale');
   cas.push(['sans centrale', sansCentrale, /centrale/]);
-  const trois = libGenerateur(); trois.modeles.forEach((m) => { if (m.gabarit === 'centrale') m.exemplaires = 1; });
-  cas.push(['2 centrales seulement', trois, /centrale/]);
+  const zero = libGenerateur(); zero.modeles.forEach((m) => { if (m.gabarit === 'centrale') m.exemplaires = 0; });
+  cas.push(['centrales à 0 exemplaire', zero, /centrale/]);
   for (const [nom, doc, motif] of cas) {
     const avant = JSON.stringify(doc);
     const r = GEN.generer(doc, { graine: 'x', candidats: 20 });

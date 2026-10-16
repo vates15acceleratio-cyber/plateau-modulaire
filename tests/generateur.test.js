@@ -130,20 +130,20 @@ test('pureté : l\'entrée n\'est pas modifiée, les modèles et autres champs s
   assert.notStrictEqual(r.doc.modeles, doc.modeles);
 });
 
-test('bibliothèque insuffisante : ok false avec le gabarit manquant ; modèle incomplet non compté', () => {
+test('bibliothèque insuffisante : ok false avec le gabarit sans modèle (complet, à 1 exemplaire au moins)', () => {
   const doc = docExemples();
-  doc.modeles.find((m) => m.gabarit === 'coin').exemplaires = 2;
+  doc.modeles.find((m) => m.gabarit === 'coin').exemplaires = 0;   // jamais tiré : plus aucun coin utilisable
   const r = GEN.generer(doc, { graine: 1 });
   assert.strictEqual(r.ok, false);
   assert.match(r.raison, /Bibliothèque insuffisante/);
-  assert.match(r.raison, /2 coin\(s\) \(2 disponible\(s\), 4 nécessaire\(s\)\)/);
+  assert.match(r.raison, /aucun modèle de coin \(il en faut pour 4 cellule\(s\)/);
   const d2 = docExemples();
   d2.modeles.filter((m) => m.gabarit === 'centrale').forEach((m) => { m.cases[0].diametre = 60; });
   assert.match(GEN.generer(d2, { graine: 1 }).raison, /centrale/);
   assert.match(GEN.generer(M.nouveauDocument(), { graine: 1 }).raison, /coin/);
   // grille 5×5 avec les tuiles du 4×4 : aucune n'est posable (autre grille), il manque tout
   const d5 = Object.assign(M.nouveauDocument('5x5'), { modeles: docExemples().modeles });
-  assert.match(GEN.generer(d5, { graine: 1 }).raison, /9 centrale\(s\) \(0 disponible\(s\), 9 nécessaire\(s\)\)/);
+  assert.match(GEN.generer(d5, { graine: 1 }).raison, /aucun modèle de centrale \(il en faut pour 9 cellule\(s\)/);
 });
 
 test('aucun candidat acceptable : ok false, nombre d\'essais borné et causes données', () => {
@@ -211,16 +211,96 @@ test('critere : adaptateur des champs de PM.graphe.equilibre (pas de second calc
   assert.strictEqual(inacc.villeInaccessible, true);
 });
 
-test('plafond : plus de 200 tuiles au total dans la bibliothèque, refus clair', () => {
+test('exemplaires : simples poids du tirage, aucun plafond ni minimum (un seul exemplaire suffit pour tout un plateau)', () => {
   const d = docExemples();
-  d.modeles[0].exemplaires = 200;
-  const r = GEN.generer(d, { graine: 'p' });
-  assert.strictEqual(r.ok, false);
-  assert.match(r.raison, /214 tuiles/);
-  assert.match(r.raison, /200 au plus/);
-  const d2 = docExemples();
-  d2.modeles[0].exemplaires = 186; // exactement 200
-  assert.ok(GEN.generer(d2, { graine: 'p', candidats: 10 }).ok);
+  d.modeles.forEach((m) => { m.exemplaires = m.id === 'ex-centrale' ? 999 : 1; });
+  const r = GEN.generer(d, { graine: 'p', candidats: 10 });
+  assert.ok(r.ok, r.raison);
+  assert.strictEqual(r.doc.plateau.tuiles.length, 16);
+  // un seul coin possible (ex-coin à 1 exemplaire) : il est posé dans les 4 coins du plateau
+  const coins = r.doc.plateau.tuiles.filter((t) => M.gabaritCellule(t.col, t.lig, '4x4') === 'coin');
+  assert.deepStrictEqual(coins.map((t) => t.modeleId), ['ex-coin', 'ex-coin', 'ex-coin', 'ex-coin']);
+  assert.deepStrictEqual(M.validerPlateau(r.doc).erreurs, []);
+});
+
+test('un modèle à 0 exemplaire n\u2019est jamais tiré', () => {
+  const d = docExemples();
+  d.modeles.find((m) => m.id === 'ex-centrale-b').exemplaires = 0;
+  for (let k = 0; k < 4; k++) {
+    const r = GEN.generer(d, { graine: 'zero' + k, candidats: 10 });
+    assert.ok(r.ok, r.raison);
+    assert.ok(r.doc.plateau.tuiles.every((t) => t.modeleId !== 'ex-centrale-b'));
+  }
+});
+
+test('rôles respectés par le tirage : coin dans un coin, bord sur le pourtour, centrale au centre (4×4 et 5×5), toutes les poses valides', () => {
+  for (const grille of ['4x4', '5x5']) {
+    const r = GEN.generer(docExemples(grille), { graine: 'roles', candidats: 20 });
+    assert.ok(r.ok, r.raison);
+    const gab = { 'ex-coin': 'coin', 'ex-bord': 'bord', 'ex-centrale': 'centrale', 'ex-centrale-b': 'centrale' };
+    for (const t of r.doc.plateau.tuiles) assert.strictEqual(gab[t.modeleId], M.gabaritCellule(t.col, t.lig, grille), `${t.modeleId} en (${t.col},${t.lig})`);
+  }
+});
+
+/* ---------- réutilisation d'un modèle et variété ---------- */
+
+/** Bibliothèque 4×4 avec 5 bords de poids égal (le tirage des 8 bords doit les répartir). */
+function docCinqBords() {
+  const d = A.documentExemples();
+  const bord = d.modeles.find((m) => m.gabarit === 'bord');
+  bord.exemplaires = 1;
+  for (let k = 2; k <= 5; k++) d.modeles.push(Object.assign(JSON.parse(JSON.stringify(bord)), { id: 'ex-bord-' + k, nom: 'Bord ' + k }));
+  return d;
+}
+function rng(graine) { return GEN.mulberry32(GEN.hacher(graine)); }
+const distincts = (tuiles, gabarit) => new Set(tuiles.filter((t) => M.gabaritCellule(t.col, t.lig, '4x4') === gabarit).map((t) => t.modeleId)).size;
+
+test('tirage : un modèle peut servir plusieurs fois et la même graine redonne les mêmes tuiles', () => {
+  const d = A.documentExemples(), F = M.formatDuDocument(d);
+  const modeles = GEN.modelesParGabarit(d, F), cellules = GEN.cellulesDuFormat(F);
+  const a = GEN.tirerTuiles(modeles, cellules, F, rng('rep')), b = GEN.tirerTuiles(modeles, cellules, F, rng('rep'));
+  assert.deepStrictEqual(a, b);
+  assert.strictEqual(a.length, 16);
+  assert.strictEqual(a.filter((t) => t.modeleId === 'ex-bord').length, 8);   // un seul modèle de bord : réutilisé 8 fois
+  assert.notDeepStrictEqual(a, GEN.tirerTuiles(modeles, cellules, F, rng('autre')));
+});
+
+test('tirage : la pénalité de répétition favorise la variété (plus de bords distincts qu\u2019un tirage sans pénalité de mêmes poids)', () => {
+  const d = docCinqBords(), F = M.formatDuDocument(d);
+  const modeles = GEN.modelesParGabarit(d, F), cellules = GEN.cellulesDuFormat(F);
+  assert.strictEqual(modeles.bord.length, 5);
+  assert.ok(GEN.facteurRepetition(0) === 1 && GEN.facteurRepetition(1) < 1 && GEN.facteurRepetition(2) < GEN.facteurRepetition(1));
+  const N = 400, avec = [], sans = [], r1 = rng('variete'), r2 = rng('variete-sans');
+  for (let k = 0; k < N; k++) {
+    avec.push(distincts(GEN.tirerTuiles(modeles, cellules, F, r1), 'bord'));
+    // même tirage, poids égaux, sans aucune pénalité (référence)
+    const cartes = cellules.filter((c) => c.gabarit === 'bord').map(() => modeles.bord[Math.floor(r2() * 5)].id);
+    sans.push(new Set(cartes).size);
+  }
+  const moy = (t) => t.reduce((a, b) => a + b, 0) / t.length;
+  // mesuré sur 4000 tirages : 4,52 modèles distincts sur 5 avec pénalité contre 4,17 sans (8 tirages parmi 5)
+  assert.ok(moy(avec) > moy(sans) + 0.2, `avec pénalité ${moy(avec).toFixed(2)}, sans ${moy(sans).toFixed(2)}`);
+  assert.ok(moy(avec) > 4.3, 'avec pénalité : ' + moy(avec));
+  // et plus de plateaux à 4 bords distincts ou plus
+  const part4 = (t) => t.filter((n) => n >= 4).length / t.length;
+  assert.ok(part4(avec) > part4(sans) + 0.05, `part à 4 bords distincts au moins : ${part4(avec)} contre ${part4(sans)}`);
+});
+
+test('tirage : les poids (exemplaires) comptent encore : un modèle à 6 exemplaires sort plus souvent que ses voisins à 1', () => {
+  const d = docCinqBords(), F = M.formatDuDocument(d);
+  d.modeles.find((m) => m.id === 'ex-bord').exemplaires = 6;
+  const modeles = GEN.modelesParGabarit(d, F), cellules = GEN.cellulesDuFormat(F), r = rng('poids');
+  let lourd = 0, autres = 0;
+  for (let k = 0; k < 300; k++) {
+    for (const t of GEN.tirerTuiles(modeles, cellules, F, r)) if (M.gabaritCellule(t.col, t.lig, '4x4') === 'bord') { if (t.modeleId === 'ex-bord') lourd++; else autres++; }
+  }
+  assert.ok(lourd / 300 > 2 * (autres / 300 / 4), `modèle lourd ${lourd / 300} par plateau, un autre ${(autres / 300 / 4).toFixed(2)}`);
+});
+
+test('plateau généré avec répétition : un seul modèle par gabarit donne un plateau valide (même modèle sur tout le pourtour)', () => {
+  const r = GEN.generer(A.documentExemples(), { graine: 'meme', candidats: 5, essaisMax: 400 });
+  // les exemples de test ne respectent pas tous le critère d'équilibre : on vérifie seulement que la pose répétée ne produit aucune erreur
+  assert.deepStrictEqual(r.ok ? M.validerPlateau(r.doc).erreurs : [], []);
 });
 
 test('entrées invalides : document absent, grille inconnue', () => {

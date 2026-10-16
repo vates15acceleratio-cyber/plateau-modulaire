@@ -70,17 +70,19 @@ test('jonctionSous : rayon de 15 mm autour des 9 jonctions intérieures', functi
   assert.equal(n, 9);
 });
 
-test('cellulesCompatibles : pose libre (toute cellule libre), occupation, stock, modèle incomplet', function () {
+test('cellulesCompatibles : rôle respecté (coin, bord, centrale), occupation, poses illimitées, modèle incomplet', function () {
   var d = docExemples();
-  assert.equal(A.cellulesCompatibles(d, 'ex-coin').length, 16);
-  assert.equal(A.cellulesCompatibles(d, 'ex-centrale').length, 16);
+  assert.equal(A.cellulesCompatibles(d, 'ex-coin').length, 4);
+  assert.equal(A.cellulesCompatibles(d, 'ex-bord').length, 8);
+  assert.equal(A.cellulesCompatibles(d, 'ex-centrale').length, 4);
   d = M.poserTuile(d, 'ex-coin', 0, 0);
-  assert.equal(A.cellulesCompatibles(d, 'ex-coin').length, 15);
+  assert.equal(A.cellulesCompatibles(d, 'ex-coin').length, 3);
   var r = A.cellulesCompatibles(d, 'ex-coin').filter(function (c) { return c.col === 3 && c.lig === 3; })[0];
   assert.equal(r.rot, 2); // rotation suggérée du coin SE
-  assert.equal(A.cellulesCompatibles(d, 'ex-coin').filter(function (c) { return c.col === 1 && c.lig === 1; })[0].rot, 0);
-  d = M.changerExemplaires(d, 'ex-coin', 1);
-  assert.equal(A.cellulesCompatibles(d, 'ex-coin').length, 0);
+  assert.equal(A.cellulesCompatibles(d, 'ex-coin').filter(function (c) { return c.col === 1 && c.lig === 1; }).length, 0);
+  // poses illimitées : même avec 1 exemplaire (ou 0) toutes les cellules libres du rôle restent compatibles
+  d = M.changerExemplaires(d, 'ex-coin', 0);
+  assert.equal(A.cellulesCompatibles(d, 'ex-coin').length, 3);
   var inc = docExemples();
   inc.modeles[0].cases[0].diametre = 60;
   assert.equal(A.cellulesCompatibles(inc, inc.modeles[0].id).length, 0);
@@ -92,29 +94,51 @@ test('poserTuileTournee : rotation choisie pour toute tuile, rotation suggérée
   assert.equal(M.tuileEn(A.poserTuileTournee(d, 'ex-bord', 3, 1, 2), 3, 1).rot, 2); // choix de l'utilisateur
   assert.equal(M.tuileEn(A.poserTuileTournee(d, 'ex-bord', 3, 1, null), 3, 1).rot, 1); // suggestion : bord est
   assert.equal(M.tuileEn(A.poserTuileTournee(d, 'ex-bord', 3, 1), 3, 1).rot, 1);
-  assert.equal(M.tuileEn(A.poserTuileTournee(d, 'ex-bord', 1, 1, -1), 1, 1).rot, 3);
+  assert.equal(M.tuileEn(A.poserTuileTournee(d, 'ex-bord', 1, 0, -1), 1, 0).rot, 3);
   assert.throws(function () { A.poserTuileTournee(d, 'ex-bord', 4, 1, 0); }, /hors de la grille/);
+  assert.throws(function () { A.poserTuileTournee(d, 'ex-bord', 1, 1, 0); }, /Cette tuile est un bord/);
   assert.equal(d.plateau.tuiles.length, 0); // pureté
 });
 
-test('deplacerTuile : retrait + pose, rotation conservée, vers n\'importe quelle cellule libre', function () {
+test('deplacerTuile : retrait + pose, rotation conservée, vers une autre cellule du même rôle', function () {
   var d = docExemples();
   d = M.poserTuile(d, 'ex-bord', 1, 0);
   d = M.tournerTuile(d, 1, 0, 1);
-  var n = A.deplacerTuile(d, { col: 1, lig: 0 }, { col: 2, lig: 2 });
+  var n = A.deplacerTuile(d, { col: 1, lig: 0 }, { col: 3, lig: 2 });
   assert.equal(M.tuileEn(n, 1, 0), null);
-  assert.equal(M.tuileEn(n, 2, 2).rot, 1);
+  assert.equal(M.tuileEn(n, 3, 2).rot, 1);
   assert.equal(M.tuileEn(d, 1, 0).rot, 1); // pureté
-  var plein = M.changerExemplaires(d, 'ex-bord', 1);
-  assert.equal(A.testerDeplacement(plein, { col: 1, lig: 0 }, { col: 0, lig: 0 }).ok, true);
-  assert.equal(A.cellulesCompatiblesDeplacement(plein, { col: 1, lig: 0 }).length, 16);
-  d = M.poserTuile(d, 'ex-coin', 0, 0);
-  var t = A.testerDeplacement(d, { col: 1, lig: 0 }, { col: 0, lig: 0 });
+  assert.equal(A.testerDeplacement(d, { col: 1, lig: 0 }, { col: 0, lig: 0 }).ok, false); // un bord ne va pas dans un coin
+  assert.match(A.testerDeplacement(d, { col: 1, lig: 0 }, { col: 2, lig: 2 }).raison, /Cette tuile est un bord/);
+  assert.equal(A.cellulesCompatiblesDeplacement(d, { col: 1, lig: 0 }).length, 8); // les 8 cellules de bord, la sienne comprise
+  d = M.poserTuile(d, 'ex-bord', 2, 0);
+  var t = A.testerDeplacement(d, { col: 1, lig: 0 }, { col: 2, lig: 0 });
   assert.equal(t.ok, false);
   assert.match(t.raison, /occupée/);
-  assert.throws(function () { A.deplacerTuile(d, { col: 1, lig: 0 }, { col: 0, lig: 0 }); });
+  assert.throws(function () { A.deplacerTuile(d, { col: 1, lig: 0 }, { col: 2, lig: 0 }); });
   assert.equal(A.testerDeplacement(d, { col: 1, lig: 0 }, { col: 1, lig: 0 }).identique, true);
   assert.equal(A.testerDeplacement(d, { col: 2, lig: 2 }, { col: 1, lig: 1 }).ok, false);
+});
+
+test('retirerParClicDroit : retire la tuile (pure), annonce les villes retirées, rien sur une cellule vide', function () {
+  var d = remplir(docExemples());
+  d = M.cyclerJeton(M.cyclerJeton(d, 2, 1), 2, 2);
+  var avant = JSON.stringify(d);
+  var r = A.retirerParClicDroit(d, 1, 0);
+  assert.equal(r.ok, true);
+  assert.equal(M.tuileEn(r.doc, 1, 0), null);
+  assert.equal(r.doc.plateau.tuiles.length, 15);
+  assert.equal(r.tuile.col, 1);
+  assert.equal(JSON.stringify(d), avant); // pureté
+  assert.equal(r.niveau, 'alerte');
+  assert.equal(r.phrase, 'Tuile « ex-bord » retirée de (1,0). 1 ville retirée : la jonction (2,1) n\'a plus 4 tuiles. Ctrl+Z pour annuler.');
+  var s = A.retirerParClicDroit(d, 0, 0);
+  assert.equal(s.niveau, 'info');
+  assert.equal(s.phrase, 'Tuile « ex-coin » retirée de (0,0).');
+  var vide = A.retirerParClicDroit(r.doc, 1, 0);
+  assert.equal(vide.ok, false);
+  assert.equal(vide.doc, r.doc);
+  assert.equal(A.retirerParClicDroit(d, 9, 9).ok, false);
 });
 
 test('effetsDeAction : villes retirées par un retrait, avec la raison', function () {
@@ -215,16 +239,17 @@ test('svgPlateau : 16 cellules, 9 jonctions, camps vert et rouge, villes, classe
   assert.match(s5, />Bord, neutre</);
 });
 
-test('bibliothèque : groupes par gabarit, filtre, stock, état incomplet, alertes', function () {
+test('bibliothèque : groupes par gabarit, filtre, poses illimitées (pas de compteur), état incomplet, alertes', function () {
   var d = docExemples();
   var g = B.vignettesBibliotheque(d, 'tous');
   assert.deepEqual(g.map(function (x) { return x.gabarit; }), ['centrale', 'bord', 'coin']);
   assert.deepEqual(g.map(function (x) { return x.titre; }), ['Centrales', 'Bords', 'Coins']);
   assert.equal(B.vignettesBibliotheque(d, 'coin').length, 1);
-  assert.equal(B.vignettesBibliotheque(d, 'coin')[0].modeles[0].restants, 4);
-  d = M.poserTuile(d, 'ex-coin', 0, 0);
+  assert.equal(B.vignettesBibliotheque(d, 'coin')[0].modeles[0].exemplaires, 4);
+  assert.equal('restants' in B.vignettesBibliotheque(d, 'coin')[0].modeles[0], false);
+  for (var n = 0; n < 4; n++) d = M.poserTuile(d, 'ex-coin', [0, 3, 3, 0][n], [0, 0, 3, 3][n]); // les 4 exemplaires posés
   var v = B.vignettesBibliotheque(d, 'coin')[0].modeles[0];
-  assert.deepEqual([v.restants, v.posees, v.posable, v.alertes], [3, 1, true, 0]);
+  assert.deepEqual([v.posees, v.posable, v.alertes], [4, true, 0]); // toujours posable (poses illimitées)
   d.modeles[0].cases[0].diametre = 60;
   var vc = B.vignettesBibliotheque(d, 'centrale')[0].modeles[0];
   assert.equal(vc.complet, false);
@@ -232,8 +257,8 @@ test('bibliothèque : groupes par gabarit, filtre, stock, état incomplet, alert
   d.modeles[1].cases[2].type = 'deplacement'; // bord sans case d'apparition : alerte, toujours posable
   var vb = B.vignettesBibliotheque(d, 'bord')[0].modeles[0];
   assert.deepEqual([vb.complet, vb.alertes], [true, 1]);
-  assert.equal(B.libelleRestants(0), '×0 restant');
-  assert.equal(B.libelleRestants(3), '×3 restants');
+  assert.equal(B.libelleRestants, undefined);
+  assert.equal(M.exemplairesRestants, undefined);
   d.modeles.push({ id: 'bizarre', gabarit: 'autre-chose', exemplaires: 1, cases: [], chemins: [] });
   var gs = B.vignettesBibliotheque(d, 'tous');
   assert.equal(gs[gs.length - 1].titre, 'Autres');

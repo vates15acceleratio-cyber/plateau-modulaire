@@ -62,7 +62,7 @@ for (const grille of ['4x4', '5x5']) {
     assert.equal(M.campCellule(grille, 0, n), null);
   });
 
-  test(grille + ' : pose libre, chaque modèle accepté sur chaque cellule libre ; rotation suggérée = côté extérieur dehors', () => {
+  test(grille + ' : rôle respecté à la pose (coin, bord, centrale), cellules libres du bon rôle seulement ; rotation suggérée = côté extérieur dehors', () => {
     const doc = M.nouveauDocument(grille);
     doc.modeles = M.copieExemples(grille);
     const n = G.format(grille).GRILLE.colonnes;
@@ -70,8 +70,11 @@ for (const grille of ['4x4', '5x5']) {
       for (let lig = 0; lig < n; lig++) {
         for (let col = 0; col < n; col++) {
           const t = M.peutPoserTuile(doc, ID[g], col, lig);
-          assert.equal(t.ok, true, g + ' ' + col + ',' + lig);
-          if (g !== 'centrale' && oracleGabarit(col, lig, n) === g) {
+          assert.equal(t.ok, oracleGabarit(col, lig, n) === g, g + ' ' + col + ',' + lig);
+          if (!t.ok) {
+            assert.match(t.raison, /^Cette tuile est (un coin|un bord|une centrale) : elle se pose /);
+            assert.equal(t.rot, 0);
+          } else if (g !== 'centrale') {
             // les côtés extérieurs canoniques, tournés de rot, tombent sur les côtés au bord de la grille
             const ext = G.GABARITS[g].cotesExterieurs.map((c) => (c + t.rot) % 4);
             const dehors = [0, 1, 2, 3].filter((c) => { const d = G.coteVoisin(c); const vc = col + d.dc, vl = lig + d.dl; return vc < 0 || vl < 0 || vc >= n || vl >= n; });
@@ -103,7 +106,7 @@ function docRiche() {
 }
 const OPERATIONS = {
   poserTuile: (d) => M.poserTuile(d, ID.coin, 0, 0),
-  'poserTuile (rotation choisie)': (d) => M.poserTuile(d, ID.centrale, 0, 0, 3),
+  'poserTuile (rotation choisie)': (d) => M.poserTuile(d, ID.coin, 0, 0, 3),
   retirerTuile: (d) => M.retirerTuile(d, 1, 1),
   'retirerTuile (cellule vide)': (d) => M.retirerTuile(d, 9, 9),
   tournerTuile: (d) => M.tournerTuile(d, 1, 1, 1),
@@ -310,13 +313,17 @@ test('document rechargé depuis JSON : mêmes résultats pour toutes les opérat
   assert.deepEqual(M.tournerTuile(relu, 1, 1), M.tournerTuile(doc, 1, 1));
   assert.deepEqual(M.tuileEnPlateau(relu, relu.plateau.tuiles[5]), M.tuileEnPlateau(doc, doc.plateau.tuiles[5]));
 });
-test('stock : poses successives jusqu\'à épuisement, refus en une phrase, retrait qui libère', () => {
+test('poses illimitées : aucun refus pour exemplaires épuisés, refus de rôle en une phrase, retrait sans effet sur la pose', () => {
   let doc = M.nouveauDocument();
   doc.modeles = M.copieExemples();
   doc = M.changerExemplaires(doc, ID.coin, 2);
-  doc = M.poserTuile(M.poserTuile(doc, ID.coin, 0, 0), ID.coin, 1, 1);
-  assert.equal(M.exemplairesRestants(doc, ID.coin), 0);
-  assert.equal(M.peutPoserTuile(doc, ID.coin, 3, 3).raison, 'Il ne reste plus d\'exemplaire de cette tuile.');
-  doc = M.retirerTuile(doc, 1, 1);
+  doc = M.poserTuile(M.poserTuile(doc, ID.coin, 0, 0), ID.coin, 3, 0);
+  assert.equal(M.exemplairesRestants, undefined);
+  assert.equal(M.peutPoserTuile(doc, ID.coin, 3, 3).ok, true);        // 3e coin posé avec 2 exemplaires
+  doc = M.poserTuile(M.poserTuile(doc, ID.coin, 3, 3), ID.coin, 0, 3); // 4 coins posés avec 2 exemplaires
+  assert.equal(doc.plateau.tuiles.length, 4);
+  assert.deepEqual(M.validerPlateau(doc).erreurs, []);
+  assert.equal(M.peutPoserTuile(doc, ID.coin, 1, 1).raison, 'Cette tuile est un coin : elle se pose dans un coin du plateau.');
+  doc = M.retirerTuile(doc, 3, 3);
   assert.equal(M.peutPoserTuile(doc, ID.coin, 3, 3).ok, true);
 });

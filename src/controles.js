@@ -30,7 +30,6 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /** Libellés des groupes d'erreurs et d'alertes (un code sans libellé affiche le premier message). */
   var LIBELLES = {
     desequilibre: 'Plateau très déséquilibré',
-    exemplaires_depasses: 'Exemplaires dépassés',
     raccord_mort: 'Raccords morts',
     port_pourtour: 'Ports vers le bord du plateau',
     jonction_ports: 'Jonctions mal reliées',
@@ -62,7 +61,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   /**
    * Convertit la référence `ref` d'une erreur de PM.modele en objet de surbrillance.
-   * `modele` (exemplaires dépassés, pas de type de surbrillance) : on vise la première tuile posée de ce modèle.
+   * `modele` (pas de type de surbrillance) : on vise la première tuile posée de ce modèle.
    */
   function cibleDepuisRef(ref, doc) {
     if (!ref) return null;

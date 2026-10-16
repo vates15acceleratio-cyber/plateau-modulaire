@@ -22,6 +22,7 @@ require('../src/geometrie.js');
 require('../src/modele.js');
 require('../src/catalogue.js');
 require('../src/graphe.js');
+require('../src/generateur.js');
 const PM = globalThis.PM;
 const M = PM.modele;
 const GR = PM.graphe;
@@ -40,31 +41,16 @@ function mulberry32(graine) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-function melanger(t, rng) {
-  t = t.slice();
-  for (let i = t.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [t[i], t[j]] = [t[j], t[i]]; }
-  return t;
-}
 /**
- * Plateau 4×4 complet : modèles tirés sans remise selon les exemplaires et le gabarit de chaque cellule,
- * rotation suggérée (bords et coins tournés vers l'extérieur), rotation aléatoire des centrales.
+ * Plateau 4×4 complet : tirage du générateur (PM.generateur.tirerTuiles) : modèles tirés avec remise, poids = exemplaires,
+ * pénalité de répétition qui favorise la variété ; rotation suggérée (bords et coins tournés vers l'extérieur),
+ * rotation aléatoire des centrales. Les 7 villes ne sont pas posées ici (voir PAIRES).
  */
 function tirerPlateau(rng) {
-  let doc = CAT.nouveauDocument();
+  const doc = CAT.nouveauDocument();
   const F = M.formatDuDocument(doc);
-  const stock = {};
-  for (const m of doc.modeles) {
-    stock[m.gabarit] = stock[m.gabarit] || [];
-    for (let k = 0; k < m.exemplaires; k++) stock[m.gabarit].push(m.id);
-  }
-  for (const r of Object.keys(stock)) stock[r] = melanger(stock[r], rng);
-  for (let lig = 0; lig < F.GRILLE.lignes; lig++) {
-    for (let col = 0; col < F.GRILLE.colonnes; col++) {
-      const gabarit = M.gabaritCellule(col, lig, F);
-      doc = M.poserTuile(doc, stock[gabarit].pop(), col, lig);
-      if (gabarit === 'centrale') { const r = Math.floor(rng() * 4); if (r) doc = M.tournerTuile(doc, col, lig, r); }
-    }
-  }
+  const GEN = PM.generateur;
+  doc.plateau.tuiles = GEN.tirerTuiles(GEN.modelesParGabarit(doc, F), GEN.cellulesDuFormat(F), F, rng);
   return doc;
 }
 function tirerPlateaux(nb, graine) {
@@ -308,7 +294,7 @@ function rediger(stats, meta) {
   out(`Généré par \`outils/mesures-equilibre.js\`${meta.graine !== undefined ? ` (graine ${meta.graine})` : ''} : ${NB} plateau(x) 4×4 tiré(s) du catalogue réel \`PM.catalogue.nouveauDocument()\`` +
     (stats.fixe ? ', placement des villes tel que fourni.' : `, ${stats.nbPaires} combinaisons de 2 jonctions-cases par plateau (7 villes sur les 7 autres jonctions), soit ${NB * stats.nbPaires} configurations.`));
   out();
-  out('Plateaux tirés comme dans `tests/catalogue.test.js` : modèles tirés sans remise selon les exemplaires de chaque gabarit, bords et coins tournés vers l\'extérieur, centrales en rotation aléatoire. ' +
+  out('Plateaux tirés comme dans `tests/catalogue.test.js` : tirage du générateur (`PM.generateur.tirerTuiles`) : modèles tirés avec remise, poids = exemplaires, pénalité de répétition (poids divisé par (1 + 0,5 × usages)) qui favorise la variété, bords et coins tournés vers l\'extérieur, centrales en rotation aléatoire. ' +
     'Villes non traversables (règle du jeu). D(k) : distance du rang k de villes, depuis la case d\'apparition la plus proche de chaque joueur. ' +
     'S = somme des |D1(k) − D2(k)| sur les rangs 1 à 7 ; « écart max » = plus grand |D1(k) − D2(k)| sur les rangs 1 à 7 ; « 5 contre 2 » = un joueur strictement plus proche de 5 villes ou plus.');
   out();

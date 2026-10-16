@@ -1,8 +1,10 @@
 /*
  * bibliotheque.js : colonne gauche, bibliothèque des modèles de tuile (commune aux deux onglets).
- * Vignettes SVG, filtre par gabarit (centrale, bord, coin), exemplaires restants, +/− sur le nombre d'exemplaires,
- * badge « incomplet » ; un modèle dessiné pour l'autre grille est grisé, badgé et non posable. Clic = ouvrir dans l'éditeur ; glisser = poser sur le plateau
- * (le glissement est confié à PM.assemblage.demarrerGlissement) ; bouton « Poser » = pose en deux clics.
+ * Vignettes SVG sur plusieurs colonnes, filtre par gabarit (centrale, bord, coin), badge « incomplet » ;
+ * un modèle dessiné pour l'autre grille est grisé, badgé et non posable. Les poses sont illimitées : aucun compteur.
+ * Clic sur une vignette = armer la pose (puis clic sur une cellule du plateau, Échap annule) ; double-clic (ou touche E
+ * sur la vignette qui a le focus) = ouvrir dans l'éditeur ; glisser = poser sur le plateau
+ * (le glissement est confié à PM.assemblage.demarrerGlissement).
  * Les fonctions de calcul (vignettesBibliotheque, ...) n'accèdent pas au DOM : testables sous Node.
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
@@ -42,7 +44,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   /**
    * Données d'affichage de la bibliothèque (pure) : groupes par gabarit, filtrés.
    * filtre : 'tous' | un gabarit. Renvoie [{gabarit, titre, modeles: [{id, nom, gabarit, exemplaires,
-   * posees, restants, complet, posable, alertes}]}] (groupes vides omis). Les gabarits inconnus vont dans « Autres ».
+   * posees, complet, posable, alertes}]}] (groupes vides omis). Les gabarits inconnus vont dans « Autres ».
    */
   function vignettesBibliotheque(doc, filtre) {
     var M = PM.modele, groupes = {}, ordre = GABARITS.concat(['autre']);
@@ -55,10 +57,9 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       if (!m || typeof m !== 'object') return;
       var gabarit = GABARITS.indexOf(m.gabarit) >= 0 ? m.gabarit : 'autre';
       var v = M.validerModele(m, F);
-      var restants = M.exemplairesRestants(doc, m.id);
       groupes[gabarit].push({
         id: m.id, nom: m.nom || '', gabarit: gabarit, exemplaires: m.exemplaires, posees: nbPosees(doc, m.id),
-        restants: restants, complet: v.complet, posable: v.complet && restants > 0, alertes: v.alertes.length,
+        complet: v.complet, posable: v.complet, alertes: v.alertes.length,
         autreGrille: phraseAutreGrille(m, doc) !== ''
       });
     });
@@ -69,9 +70,19 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     });
   }
 
-  /** Libellé du stock (pure) : « ×2 restants », « ×1 restant », « ×0 restant ». */
-  function libelleRestants(n) {
-    return '×' + n + ' restant' + (Math.abs(n) > 1 ? 's' : '');
+  /**
+   * Peut-on armer la pose de ce modèle ? (pure) Renvoie '' si oui, sinon la phrase de refus (modèle d'une autre grille,
+   * modèle incomplet, modèle introuvable).
+   */
+  function refusArmement(doc, id) {
+    var m = PM.modele.modeleParId(doc, id);
+    if (!m) return 'Modèle de tuile introuvable.';
+    var autre = phraseAutreGrille(m, doc);
+    if (autre) return autre;
+    if (!PM.modele.validerModele(m, PM.modele.formatDuDocument(doc)).complet) {
+      return 'Ce modèle est incomplet : complétez-le dans l’éditeur avant de le poser.';
+    }
+    return '';
   }
 
   /* ------------------------------------------------------------------ */
@@ -90,7 +101,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
             GABARITS.map(function (r) { return '<option value="' + r + '">' + TITRES_GABARIT[r] + '</option>'; }).join('') +
           '</select>' +
         '</label>' +
-        '<p class="pm-biblio-aide">Clic : ouvrir dans l\'éditeur. Glisser ou « Poser » : placer sur le plateau.</p>' +
+        '<p class="pm-biblio-aide">Clic : choisir la tuile, puis cliquer une cellule du plateau (Échap annule). Glisser : poser directement. Double-clic (ou touche E) : ouvrir dans l\'éditeur. Les poses sont illimitées.</p>' +
       '</div>' +
       '<div class="pm-biblio-liste" data-role="liste"></div>';
     var liste = conteneur.querySelector('[data-role="liste"]');
@@ -108,13 +119,15 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       var classes = ['pm-biblio-vignette'];
       if (!v.complet) classes.push('pm-biblio-incomplet');
       if (v.autreGrille) classes.push('pm-biblio-autre-grille');
-      if (v.restants <= 0) classes.push('pm-biblio-epuise');
       if (ui.modeleSelectionne === v.id) classes.push('pm-biblio-selection');
       if (ui.aPoser === v.id) classes.push('pm-biblio-arme');
       var id = echapper(v.id);
+      var titre = v.autreGrille ? phraseAutreGrille(m, etat.doc())
+        : v.complet ? 'Clic : choisir pour poser (puis cliquer une cellule). Double-clic : ouvrir dans l\'éditeur. Glisser : poser sur le plateau.'
+        : 'Modèle incomplet (non posable). Double-clic : ouvrir dans l\'éditeur pour le corriger.';
       return '<li class="' + classes.join(' ') + '" data-vignette="' + id + '">' +
-        '<button type="button" class="pm-biblio-ouvrir" data-action="ouvrir" data-id="' + id + '"' +
-          ' title="' + (v.autreGrille ? echapper(phraseAutreGrille(m, etat.doc())) : v.complet ? 'Ouvrir dans l\'éditeur ; glisser pour poser sur le plateau' : 'Modèle incomplet : ouvrir dans l\'éditeur (non posable)') + '"' +
+        '<button type="button" class="pm-biblio-ouvrir" data-action="armer" data-id="' + id + '"' +
+          ' title="' + echapper(titre) + '" aria-pressed="' + (ui.aPoser === v.id) + '"' +
           (ui.modeleSelectionne === v.id ? ' aria-current="true"' : '') + '>' +
           '<span class="pm-biblio-image' + (v.complet ? ' pm-biblio-glissable' : '') + '" data-glisser="' + id + '">' + svg + '</span>' +
           '<span class="pm-biblio-texte">' +
@@ -124,17 +137,6 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
             (v.complet && v.alertes ? '<span class="pm-biblio-badge" title="Alertes de l’éditeur (par exemple règles R1 à R4)">' + v.alertes + ' alerte' + (v.alertes > 1 ? 's' : '') + '</span>' : '') +
           '</span>' +
         '</button>' +
-        '<div class="pm-biblio-stock">' +
-          '<button type="button" class="pm-biblio-moins" data-action="moins" data-id="' + id + '"' +
-            (v.exemplaires <= 0 ? ' disabled' : '') + ' aria-label="Un exemplaire de moins (' + id + ')">−</button>' +
-          '<span class="pm-biblio-restants" title="' + v.exemplaires + ' exemplaire(s), ' + v.posees + ' posé(s)">' +
-            libelleRestants(v.restants) + '</span>' +
-          '<button type="button" class="pm-biblio-plus" data-action="plus" data-id="' + id + '"' +
-            ' aria-label="Un exemplaire de plus (' + id + ')">+</button>' +
-          '<button type="button" class="pm-biblio-poser" data-action="poser" data-id="' + id + '"' +
-            (v.posable ? '' : ' disabled') + ' aria-pressed="' + (ui.aPoser === v.id) + '"' +
-            ' title="Poser en deux clics : choisir ce modèle puis cliquer une cellule du plateau">Poser</button>' +
-        '</div>' +
       '</li>';
     }
 
@@ -164,14 +166,8 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       var zone = ev.target.closest('[data-glisser]');
       if (!zone) return;
       var id = zone.getAttribute('data-glisser');
-      var m = PM.modele.modeleParId(etat.doc(), id);
-      if (!m) return;
-      var autre = phraseAutreGrille(m, etat.doc());
-      if (autre) { etat.signaler(autre, 'erreur'); return; } // modèle d'une autre grille : non glissable
-      if (!PM.modele.validerModele(m, PM.modele.formatDuDocument(etat.doc())).complet) { // incomplet : non glissable, et on dit pourquoi (recette B2)
-        etat.signaler('Ce modèle est incomplet : complétez-le dans l’éditeur avant de le poser.', 'erreur');
-        return;
-      }
+      var refus = refusArmement(etat.doc(), id); // autre grille ou incomplet : non glissable, et on dit pourquoi (recette B2)
+      if (refus) { etat.signaler(refus, 'erreur'); return; }
       appui = { id: id, x: ev.clientX, y: ev.clientY, pointerId: ev.pointerId };
     });
     document.addEventListener('pointermove', function (ev) {
@@ -190,27 +186,39 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     document.addEventListener('pointercancel', function () { appui = null; });
 
     liste.addEventListener('click', function (ev) {
-      var b = ev.target.closest('[data-action]');
+      var b = ev.target.closest('[data-action="armer"]');
       if (!b || b.disabled) return;
       // clic souris émis juste après le lâcher d'un glissement : ignoré (le clavier, detail = 0, ne l'est jamais)
-      if (ev.detail > 0 && Date.now() - finGlissement < 400 && b.getAttribute('data-action') === 'ouvrir') return;
-      var id = b.getAttribute('data-id'), action = b.getAttribute('data-action');
-      var M = PM.modele;
-      if (action === 'ouvrir') {
-        etat.majUi({ modeleSelectionne: id, onglet: 'tuiles', aPoser: null });
-      } else if (action === 'plus' || action === 'moins') {
-        var m = M.modeleParId(etat.doc(), id);
-        if (!m) return;
-        var n = m.exemplaires + (action === 'plus' ? 1 : -1);
-        var r = etat.appliquer(function (d) { return M.changerExemplaires(d, id, n); },
-          'exemplaires de ' + id);
-        if (r.ok) etat.signaler('« ' + id + ' » : ' + n + ' exemplaire' + (n > 1 ? 's' : '') + '.', 'info');
-      } else if (action === 'poser') {
-        var arme = etat.ui().aPoser === id ? null : id;
-        etat.majUi({ aPoser: arme, onglet: 'plateau' });
-        if (arme) etat.signaler('Cliquez une cellule libre du plateau pour poser « ' + id + ' » (Échap pour annuler).', 'info');
-      }
+      if (ev.detail > 0 && Date.now() - finGlissement < 400) return;
+      // deuxième clic d'un double-clic : ignoré, le double-clic ouvre l'éditeur
+      if (ev.detail > 1) return;
+      var id = b.getAttribute('data-id');
+      if (etat.ui().aPoser === id) { etat.majUi({ aPoser: null }); return; } // second clic sur la tuile armée : annule
+      var refus = refusArmement(etat.doc(), id);
+      if (refus) { etat.signaler(refus, 'erreur'); return; }
+      etat.majUi({ aPoser: id, onglet: 'plateau' });
+      etat.signaler('Cliquez une cellule éclairée du plateau pour poser « ' + id + ' » (Échap pour annuler).', 'info');
     });
+
+    // Double-clic : ouvrir dans l'éditeur (tout modèle, même incomplet ou d'une autre grille : c'est le moyen de le corriger)
+    liste.addEventListener('dblclick', function (ev) {
+      var b = ev.target.closest('[data-action="armer"]');
+      if (!b) return;
+      ouvrirDansEditeur(b.getAttribute('data-id'));
+    });
+
+    // Clavier : Entrée / Espace arment la pose (clic), E ouvre l'éditeur
+    liste.addEventListener('keydown', function (ev) {
+      if (ev.ctrlKey || ev.metaKey || ev.altKey || (ev.key !== 'e' && ev.key !== 'E')) return;
+      var b = ev.target.closest('[data-action="armer"]');
+      if (!b) return;
+      ev.preventDefault();
+      ouvrirDansEditeur(b.getAttribute('data-id'));
+    });
+
+    function ouvrirDansEditeur(id) {
+      etat.majUi({ modeleSelectionne: id, onglet: 'tuiles', aPoser: null });
+    }
 
     etat.abonner(dessiner);
     dessiner();
@@ -218,7 +226,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
 
   PM.bibliotheque = {
     vignettesBibliotheque: vignettesBibliotheque,
-    libelleRestants: libelleRestants,
+    refusArmement: refusArmement,
     phraseAutreGrille: phraseAutreGrille,
     SEUIL_GLISSEMENT: SEUIL_GLISSEMENT,
     monter: monter

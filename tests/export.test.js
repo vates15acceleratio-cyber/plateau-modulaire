@@ -90,7 +90,7 @@ test('tri par identifiant, tuiles posées en tête, option « seulement les pos�
   assert.deepEqual(sansPose, ids.flatMap(id => [id, id]));
   // pose d'un exemplaire du dernier id : il passe en tête
   const dernier = doc.modeles.find(m => m.id === ids[ids.length - 1]);
-  const pose = M.poserTuile(doc, dernier.id, 1, 1);
+  const pose = M.poserTuile(doc, dernier.id, 0, 0); // ex-coin : le coin va dans un coin
   const liste = E.listeTuiles(pose, {}).tuiles;
   assert.equal(liste[0].modeleId, dernier.id);
   assert.equal(liste[0].posee, true);
@@ -99,6 +99,55 @@ test('tri par identifiant, tuiles posées en tête, option « seulement les pos�
   const seules = E.listeTuiles(pose, { portee: 'posees' }).tuiles;
   assert.equal(seules.length, 1);
   assert.equal(seules[0].modeleId, dernier.id);
+});
+
+test('jeu complet : nombre d’exemplaires par modèle choisi dans la fenêtre (options.exemplaires), valeurs invalides ignorées', () => {
+  const doc = docAvec([2, 2, 2]);
+  const [bord, centrale, coin] = ['ex-bord', 'ex-centrale', 'ex-coin'];
+  const nb = (liste, id) => liste.tuiles.filter(t => t.modeleId === id).length;
+  const base = E.listeTuiles(doc, { portee: 'stock' });
+  assert.deepEqual([nb(base, bord), nb(base, centrale), nb(base, coin)], [2, 2, 2], 'sans choix : champ exemplaires du modèle');
+  const choisi = E.listeTuiles(doc, { portee: 'stock', exemplaires: { [bord]: 5, [centrale]: 0 } });
+  assert.deepEqual([nb(choisi, bord), nb(choisi, centrale), nb(choisi, coin)], [5, 0, 2]);
+  // valeurs invalides (négatif, décimal, texte, trop grand) : retour au champ du modèle
+  for (const mauvais of [-1, 1.5, '3', NaN, 1000, null, undefined]) {
+    assert.equal(nb(E.listeTuiles(doc, { portee: 'stock', exemplaires: { [bord]: mauvais } }), bord), 2, String(mauvais));
+  }
+  assert.equal(E.exemplairesImprimes({ id: 'x', exemplaires: 7 }, { exemplaires: { x: 3 } }), 3);
+  assert.equal(E.exemplairesImprimes({ id: 'x', exemplaires: 7 }, {}), 7);
+  assert.equal(E.exemplairesImprimes({ id: 'x', exemplaires: 7 }, { exemplaires: { x: 999 } }), 999);
+  assert.equal(E.MAX_EXEMPLAIRES, 999);
+  // le document n'est pas modifié
+  assert.equal(doc.modeles.find(m => m.id === bord).exemplaires, 2);
+  // les étiquettes portent un numéro dès qu'il y a plusieurs tuiles du modèle sur les planches
+  const etiq = E.calepiner(doc, { format: 'A3', portee: 'stock', exemplaires: { [bord]: 3, [centrale]: 1 } }).flatMap(p => p.tuiles.map(t => t.etiquette));
+  assert.ok(etiq.includes('ex-bord-3') && etiq.includes('ex-centrale') && !etiq.includes('ex-centrale-1') && etiq.includes('ex-coin-2'));
+  // preparerSorties transmet le choix
+  const sortie = E.preparerSorties(doc, { format: 'A3', portee: 'stock', exemplaires: { [bord]: 9 } });
+  assert.equal(sortie.nbTuiles, 9 + 2 + 2);
+});
+
+test('plafond du jeu complet : calculé sur les exemplaires choisis, pas sur ceux du document', () => {
+  const doc = docAvec([1, 1, 1]);
+  assert.throws(() => E.listeTuiles(doc, { portee: 'stock', exemplaires: { 'ex-bord': 199, 'ex-coin': 1 } }), /201 tuiles .*200 au plus/);
+  assert.equal(E.listeTuiles(doc, { portee: 'stock', exemplaires: { 'ex-bord': 198, 'ex-coin': 1 } }).tuiles.length, 200);
+  assert.throws(() => E.preparerSorties(doc, { portee: 'stock', exemplaires: { 'ex-bord': 300 } }), /200 au plus/);
+  // un jeu du document à 500 tuiles est ramené sous le plafond par le choix de la fenêtre
+  const gros = docAvec([300, 1, 1]);
+  assert.throws(() => E.listeTuiles(gros, { portee: 'stock' }), /200 au plus/);
+  assert.equal(E.listeTuiles(gros, { portee: 'stock', exemplaires: { 'ex-centrale': 2 } }).tuiles.length, 4);
+  // la portée « posées » n'est pas concernée par le plafond ni par les exemplaires choisis
+  assert.equal(E.listeTuiles(gros, { portee: 'posees', exemplaires: { 'ex-centrale': 150 } }).tuiles.length, 0);
+});
+
+test('tuiles posées : un modèle posé plusieurs fois est imprimé autant de fois, avec numéro d’exemplaire', () => {
+  let doc = docAvec([1, 1, 1]);   // 1 exemplaire par modèle, mais poses illimitées
+  for (const [c, l] of [[1, 0], [2, 0], [3, 1]]) doc = M.poserTuile(doc, 'ex-bord', c, l);
+  const liste = E.listeTuiles(doc, { portee: 'posees' });
+  assert.deepEqual(liste.tuiles.map(t => t.modeleId + '#' + t.exemplaire), ['ex-bord#1', 'ex-bord#2', 'ex-bord#3']);
+  assert.ok(liste.tuiles.every(t => t.posee));
+  const etiq = E.calepiner(doc, { format: 'A3', portee: 'posees' })[0].tuiles.map(t => t.etiquette);
+  assert.deepEqual(etiq, ['ex-bord-1', 'ex-bord-2', 'ex-bord-3']);
 });
 
 test('modèles incomplets exclus et signalés', () => {
