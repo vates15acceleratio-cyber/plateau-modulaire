@@ -1,7 +1,15 @@
 /*
- * modele.js : modèles de tuile, chemins, forme et plateau, validation.
+ * modele.js : modèles de tuile, chemins et plateau, validation (règles de la version 2).
  * Aucun accès au DOM. Toutes les fonctions de modification du document sont
  * pures : elles renvoient un nouveau document sans altérer l'entrée.
+ *
+ * Règles v2 (docs/18-decisions-v2.md, docs/20-avis-geometrie-v2.md D1 à D3 et arbitrages) :
+ *  - grille toujours pleine, format du document dans `doc.grille` ('4x4' | '5x5', absent = '4x4') ;
+ *  - un modèle déclare un gabarit (centrale | bord | coin), jamais bloquant ;
+ *  - seules les règles physiques bloquent un modèle ; R1 à R4 et les règles de place sont des alertes ;
+ *  - pose libre : une tuile va sur n'importe quelle cellule libre, dans n'importe quelle rotation
+ *    (rotation suggérée pour un bord ou un coin sur le pourtour) ;
+ *  - jetons : villes seulement ('capture') ; une jonction sans ville est une case chemin (voir graphe.js).
  *
  * Un modèle ne stocke PAS de masque : les masques `raccords` (12 bits) et
  * `portsCoin` (4 bits) sont calculés à partir des chemins (masquesDuModele).
@@ -16,21 +24,11 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   var G = PM.geometrie;
   var EPS = 1e-9;
 
-  var ROLES = ['centrale', 'coin', 'bord', 'apparition'];
-  var LIBELLE_ROLE = {
-    centrale: 'une centrale', coin: 'un coin', bord: 'un bord', apparition: 'une apparition'
-  };
+  var GABARITS = Object.keys(G.GABARITS);         // ['centrale', 'bord', 'coin']
+  var LIBELLE_GABARIT = { centrale: 'une centrale', bord: 'un bord', coin: 'un coin' };
   var TYPES_CASE = ['deplacement', 'apparition'];
-  var TYPES_JETON = ['capture', 'carrefour'];
-
-  /** Nombre de cases exigé par rôle. */
-  var NB_CASES_PAR_ROLE = { centrale: 4, coin: 3, bord: 3, apparition: 3 };
-  /** Côtés extérieurs (orientation canonique). */
-  var COTES_EXTERIEURS = { centrale: [], coin: [0, 3], bord: [0], apparition: [0] };
-  /** Masque des ports de coin obligatoires (coins intérieurs, orientation canonique). */
-  var PORTS_OBLIGATOIRES = { centrale: 0xF, coin: 0x4, bord: 0xC, apparition: 0xC };
-  /** Nombre minimal de côtés à raccord non vide. */
-  var MIN_COTES_RACCORD = { centrale: 3, coin: 2, bord: 2, apparition: 2 };
+  var TYPES_JETON = ['capture'];
+  var VERSION_DOCUMENT = 2;
 
   /* ------------------------------------------------------------------ */
   /* Outils                                                              */
@@ -45,8 +43,8 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   function estId(x) { return typeof x === 'string' && x.length > 0; }
   /** Dictionnaire sans prototype (les ids « constructor », « __proto__ »... restent des clés ordinaires). */
   function dict() { return Object.create(null); }
-  /** Lit une table indexée par rôle, seulement si le rôle est connu (sinon undefined). */
-  function tableRole(table, role) { return ROLES.indexOf(role) >= 0 ? table[role] : undefined; }
+  /** Gabarit connu, ou null (une valeur héritée d'Object.prototype n'est pas un gabarit). */
+  function gabaritConnu(g) { return GABARITS.indexOf(g) >= 0 ? g : null; }
 
   /**
    * Format de grille (objet de PM.geometrie.format) à partir d'un objet format, d'un identifiant
@@ -56,8 +54,8 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     if (f && typeof f === 'object') return f;
     return G.format(f === undefined || f === null ? G.FORMAT_DEFAUT : f);
   }
-  /** Format du document : champ `format`, absent = '4x4'. Lève une Error si le format est inconnu. */
-  function formatDuDocument(doc) { return G.format((doc && doc.format) || G.FORMAT_DEFAUT); }
+  /** Format du document : champ `grille`, absent = '4x4'. Lève une Error si le format est inconnu. */
+  function formatDuDocument(doc) { return G.format((doc && doc.grille) || G.FORMAT_DEFAUT); }
 
   function nomCote(c) { return ['nord', 'est', 'sud', 'ouest'][c]; }
   function nomCoin(k) { return ['NO', 'NE', 'SE', 'SO'][k]; }
@@ -104,6 +102,18 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     });
   }
 
+  /** Chemins bien formés reliant une case à un coin ou à un raccord : [{caseId, autre, type, chemin}]. */
+  function sortiesDesCases(modele) {
+    var res = [];
+    tab(modele && modele.chemins).forEach(function (ch) {
+      if (!estObjet(ch) || !extremiteValide(ch.a) || !extremiteValide(ch.b)) return;
+      var ta = typeExtremite(ch.a), tb = typeExtremite(ch.b);
+      if (ta === 'case' && tb !== 'case') res.push({ caseId: ch.a['case'], autre: ch.b, type: tb, chemin: ch });
+      else if (tb === 'case' && ta !== 'case') res.push({ caseId: ch.b['case'], autre: ch.a, type: ta, chemin: ch });
+    });
+    return res;
+  }
+
   /** Masques calculés à partir des chemins : { raccords (12 bits), portsCoin (4 bits) }. */
   function masquesDuModele(modele) {
     var raccords = 0, portsCoin = 0;
@@ -114,10 +124,36 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return { raccords: raccords, portsCoin: portsCoin };
   }
 
-  function nbCotesNonVides(m) {
-    var n = 0;
-    for (var c = 0; c < 4; c++) if (G.triplet(m, c) !== 0) n++;
-    return n;
+  /* ------------------------------------------------------------------ */
+  /* Géométrie plane (règles physiques des tracés)                       */
+  /* ------------------------------------------------------------------ */
+
+  function distancePointSegment(p, a, b) {
+    var dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+    var t = l2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2));
+    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+  }
+
+  /**
+   * Point commun de deux segments [a, b] et [c, d] (contact compris), ou null.
+   * Segments colinéaires qui se recouvrent : milieu de la partie commune.
+   */
+  function intersectionSegments(a, b, c, d) {
+    var r = { x: b.x - a.x, y: b.y - a.y }, s = { x: d.x - c.x, y: d.y - c.y };
+    var den = r.x * s.y - r.y * s.x, qp = { x: c.x - a.x, y: c.y - a.y };
+    if (Math.abs(den) < EPS) {
+      if (Math.abs(qp.x * r.y - qp.y * r.x) > EPS) return null; // parallèles distincts
+      var l2 = r.x * r.x + r.y * r.y;
+      if (l2 < EPS) return null;
+      var t0 = (qp.x * r.x + qp.y * r.y) / l2, t1 = t0 + (s.x * r.x + s.y * r.y) / l2;
+      var lo = Math.max(0, Math.min(t0, t1)), hi = Math.min(1, Math.max(t0, t1));
+      if (lo > hi + EPS) return null;
+      var tm = (lo + hi) / 2;
+      return { x: a.x + tm * r.x, y: a.y + tm * r.y };
+    }
+    var t = (qp.x * s.y - qp.y * s.x) / den, u = (qp.x * r.y - qp.y * r.x) / den;
+    if (t < -EPS || t > 1 + EPS || u < -EPS || u > 1 + EPS) return null;
+    return { x: a.x + t * r.x, y: a.y + t * r.y };
   }
 
   /* ------------------------------------------------------------------ */
@@ -125,30 +161,40 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   /* ------------------------------------------------------------------ */
 
   /**
-   * Erreur de validation : { code, message, ref }.
+   * Entrée de validation : { code, message, ref }.
    * ref = { type: 'modele'|'case'|'chemin'|'coin'|'raccord', id, ... } désigne l'élément fautif
-   * (pour le halo de l'interface). Le chevauchement ajoute ids: [a, b].
+   * (pour le halo de l'interface). Le chevauchement et les réseaux ajoutent ids: [...].
+   * Une règle marque une alerte par `alerte: true` (retiré du résultat de validerModele).
    */
   function err(code, message, ref) { return { code: code, message: message, ref: ref }; }
+  function alerte(code, message, ref) { return { code: code, message: message, ref: ref, alerte: true }; }
   function refModele(m) { return { type: 'modele', id: m && m.id }; }
   function refCase(id) { return { type: 'case', id: id }; }
   function refChemin(ch) { return { type: 'chemin', id: ch && ch.id }; }
   function refCoin(k) { return { type: 'coin', id: k }; }
   function refRaccord(r, ch) { return { type: 'raccord', id: r.cote + ':' + r.pos, cote: r.cote, pos: r.pos, chemin: ch && ch.id }; }
 
+  /** Phrase commune aux alertes R1 à R4 (arbitrage de l'orchestrateur, docs/20). */
+  var RISQUE_ECART = 'cette tuile peut rapprocher deux villes à moins de 3 cases';
+
   /**
    * Règles de validation. Chaque règle reçoit le modèle et le format de grille, et renvoie un tableau
-   * d'erreurs. Pour ajouter une règle (ex. chevauchement chemin / case),
+   * d'entrées (erreurs bloquantes, ou alertes marquées `alerte: true`). Pour ajouter une règle,
    * pousser une fonction dans PM.modele.regles.
    */
   var regles = [];
 
-  // Identité, rôle, exemplaires, ids uniques et bien formés
-  regles.push(function (m) {
+  // Identité, gabarit, grille, exemplaires, ids uniques et bien formés
+  regles.push(function (m, F) {
     var e = [];
     if (!estId(m.id)) e.push(err('id_modele', 'Le modèle doit avoir un identifiant (texte non vide).', refModele(m)));
     if (m.nom !== undefined && typeof m.nom !== 'string') e.push(err('nom_invalide', 'Le nom du modèle doit être un texte.', refModele(m)));
-    if (ROLES.indexOf(m.role) < 0) e.push(err('role_inconnu', 'Le rôle de la tuile est inconnu.', refModele(m)));
+    if (!gabaritConnu(m.gabarit)) {
+      e.push(alerte('gabarit_inconnu', 'Gabarit non déclaré (centrale, bord ou coin) : pas de rotation suggérée ni de quart de case de jonction imprimé.', refModele(m)));
+    }
+    if (m.grille !== undefined && m.grille !== F.id) {
+      e.push(err('grille_modele', 'Cette tuile est dessinée pour la grille ' + String(m.grille) + ' : elle ne va pas sur une grille ' + F.id + '.', refModele(m)));
+    }
     if (!estEntier(m.exemplaires) || m.exemplaires < 0) {
       e.push(err('exemplaires_invalides', 'Le nombre d\'exemplaires doit être un entier positif ou nul.', refModele(m)));
     }
@@ -171,24 +217,19 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return e;
   });
 
-  // Nombre et type des cases
+  // Type des cases ; cases d'apparition (alertes)
   regles.push(function (m) {
-    var e = [], cases = tab(m.cases), attendu = tableRole(NB_CASES_PAR_ROLE, m.role);
-    if (attendu === undefined) return e;
-    if (cases.length !== attendu) {
-      e.push(err('nombre_cases', 'Une tuile « ' + m.role + ' » a ' + attendu + ' cases (il y en a ' + cases.length + ').', refModele(m)));
-    }
-    var nbAppar = 0;
-    cases.forEach(function (c) {
+    var e = [], nbAppar = 0;
+    tab(m.cases).forEach(function (c) {
       if (!estObjet(c)) return; // signalé par la règle de géométrie
       if (TYPES_CASE.indexOf(c.type) < 0) e.push(err('type_case', 'Type de case inconnu.', refCase(c.id)));
       else if (c.type === 'apparition') nbAppar++;
     });
-    var voulu = m.role === 'apparition' ? 1 : 0;
-    if (nbAppar !== voulu) {
-      e.push(err('cases_apparition', voulu
-        ? 'Une tuile d\'apparition a exactement 1 case d\'apparition.'
-        : 'Seule une tuile d\'apparition peut avoir une case d\'apparition.', refModele(m)));
+    if (nbAppar > 1) {
+      e.push(alerte('plusieurs_apparitions', 'Cette tuile a ' + nbAppar + ' cases d\'apparition : une seule est prévue par tuile.', refModele(m)));
+    }
+    if (nbAppar === 0 && (m.gabarit === 'bord' || m.gabarit === 'coin')) {
+      e.push(alerte('sans_apparition', 'Une tuile de ' + (m.gabarit === 'bord' ? 'bord' : 'coin') + ' porte une case d\'apparition : il n\'y en a pas.', refModele(m)));
     }
     return e;
   });
@@ -230,9 +271,9 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return e;
   });
 
-  // Chemins : extrémités, références, boucles, doublons, raccords utilisés une fois
+  // Chemins : extrémités, références, boucles, doublons, raccords et coins utilisés une fois
   regles.push(function (m) {
-    var e = [], ids = dict(), vus = dict(), raccordsUtilises = dict();
+    var e = [], ids = dict(), vus = dict(), raccordsUtilises = dict(), parCoin = dict();
     tab(m.cases).forEach(function (c) { if (estObjet(c) && estId(c.id)) ids[c.id] = true; });
     tab(m.chemins).forEach(function (ch) {
       if (!estObjet(ch) || !extremiteValide(ch.a) || !extremiteValide(ch.b)) {
@@ -254,92 +295,153 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
         e.push(err('chemin_sans_case', 'Un chemin doit avoir au moins une extrémité sur une case.', refChemin(ch)));
       }
       [ch.a, ch.b].forEach(function (x) {
-        if (typeExtremite(x) !== 'raccord') return;
-        var k = cleExtremite(x);
-        if (raccordsUtilises[k]) e.push(err('raccord_double', 'Un raccord est utilisé par deux chemins.', refRaccord(x.raccord, ch)));
-        raccordsUtilises[k] = true;
+        var t = typeExtremite(x);
+        if (t === 'raccord') {
+          var k = cleExtremite(x);
+          if (raccordsUtilises[k]) e.push(err('raccord_double', 'Un raccord est utilisé par deux chemins.', refRaccord(x.raccord, ch)));
+          raccordsUtilises[k] = true;
+        } else if (t === 'coin') {
+          parCoin[x.coin] = (parCoin[x.coin] || 0) + 1;
+        }
       });
-    });
-    return e;
-  });
-
-  // Ports de coin : exactement les coins intérieurs ; un seul chemin par coin ; une case porte au plus un port
-  regles.push(function (m) {
-    var e = [], attendu = tableRole(PORTS_OBLIGATOIRES, m.role);
-    if (attendu === undefined) return e;
-    var present = masquesDuModele(m).portsCoin;
-    for (var k = 0; k < 4; k++) {
-      var a = (attendu >> k) & 1, p = (present >> k) & 1;
-      if (a && !p) e.push(err('port_manquant', 'Il manque le port du coin ' + nomCoin(k) + '.', refCoin(k)));
-      if (p && !a) e.push(err('port_interdit', 'Port sur un coin extérieur (' + nomCoin(k) + ').', refCoin(k)));
-    }
-    var parCoin = dict(), parCase = dict();
-    tab(m.chemins).forEach(function (ch) {
-      if (!estObjet(ch) || !extremiteValide(ch.a) || !extremiteValide(ch.b)) return;
-      var ta = typeExtremite(ch.a), tb = typeExtremite(ch.b);
-      if (ta === 'coin') parCoin[ch.a.coin] = (parCoin[ch.a.coin] || 0) + 1;
-      if (tb === 'coin') parCoin[ch.b.coin] = (parCoin[ch.b.coin] || 0) + 1;
-      if (ta === 'case' && tb === 'coin') parCase[ch.a['case']] = (parCase[ch.a['case']] || 0) + 1;
-      if (tb === 'case' && ta === 'coin') parCase[ch.b['case']] = (parCase[ch.b['case']] || 0) + 1;
     });
     Object.keys(parCoin).forEach(function (k) {
       if (parCoin[k] > 1) e.push(err('coin_double', 'Un coin ne peut recevoir qu\'un seul chemin (coin ' + nomCoin(+k) + ').', refCoin(+k)));
     });
-    Object.keys(parCase).forEach(function (id) {
-      if (parCase[id] > 1) e.push(err('ports_case', 'Une case porte au plus un port de coin.', refCase(id)));
+    return e;
+  });
+
+  // Tracés (docs/20 D2) : chemin contre une case, chemins croisés, chemin dans une zone de coin, case isolée
+  regles.push(function (m, F) {
+    var e = [], demiLargeur = F.LARGEUR_CHEMIN / 2;
+    var cases = tab(m.cases).filter(function (c) { return estObjet(c) && estId(c.id) && estNombre(c.x) && estNombre(c.y) && estNombre(c.diametre); });
+    var traces = G.tracesModele(m, F);
+    // Un segment passe à moins de r + L/2 d'une case qu'il ne relie pas
+    traces.forEach(function (t) {
+      cases.forEach(function (c) {
+        if (t.cases.indexOf(c) >= 0) return;
+        for (var s = 0; s + 1 < t.pts.length; s++) {
+          if (distancePointSegment(c, t.pts[s], t.pts[s + 1]) < c.diametre / 2 + demiLargeur - EPS) {
+            e.push(err('chemin_case', 'Ce chemin passe sur la case ' + c.id + ' qu\'il ne relie pas.', { type: 'chemin', id: t.id, ids: [c.id] }));
+            return;
+          }
+        }
+      });
+    });
+    // Deux chemins se croisent ou se touchent ailleurs que dans une case qu'ils partagent
+    for (var a = 0; a < traces.length; a++) {
+      for (var b = a + 1; b < traces.length; b++) {
+        var ta = traces[a], tb = traces[b], communes = ta.cases.filter(function (c) { return tb.cases.indexOf(c) >= 0; });
+        var croise = false;
+        for (var i = 0; i + 1 < ta.pts.length && !croise; i++) {
+          for (var j = 0; j + 1 < tb.pts.length && !croise; j++) {
+            var p = intersectionSegments(ta.pts[i], ta.pts[i + 1], tb.pts[j], tb.pts[j + 1]);
+            if (p && !communes.some(function (c) { return Math.hypot(p.x - c.x, p.y - c.y) <= c.diametre / 2 + EPS; })) croise = true;
+          }
+        }
+        if (croise) e.push(err('chemins_croises', 'Deux chemins se croisent.', { type: 'chemin', id: ta.id, ids: [ta.id, tb.id] }));
+      }
+    }
+    // Le trait d'un chemin entre dans une zone de coin (R + L/2), hors amorce du port de ce coin
+    traces.forEach(function (t) {
+      for (var k = 0; k < 4; k++) {
+        var K = F.pointCoin(k);
+        for (var s = 0; s + 1 < t.pts.length; s++) {
+          if (t.type === 'port' && t.coin === k && s === 0) continue;
+          if (distancePointSegment(K, t.pts[s], t.pts[s + 1]) < F.RAYON_ZONE_COIN + demiLargeur - EPS) {
+            e.push(err('amorce_zone', 'Ce chemin entre dans la zone du coin ' + nomCoin(k) + ' (réservée au jeton et à la case de jonction).', refChemin(t)));
+            return;
+          }
+        }
+      }
+    });
+    // Case reliée à rien
+    var touchees = dict();
+    pourChaqueExtremite(m, function (x, t) { if (t === 'case') touchees[x['case']] = true; });
+    cases.forEach(function (c) {
+      if (!touchees[c.id]) e.push(err('case_isolee', 'La case ' + c.id + ' n\'est reliée à rien : ajoutez-lui un chemin.', refCase(c.id)));
     });
     return e;
   });
 
-  // Raccords : pas sur un côté extérieur ; assez de côtés non vides
+  // Ports et raccords : alertes R1 à R4 (docs/19) et extrémités sur un bord extérieur du gabarit
   regles.push(function (m) {
-    var e = [], ext = tableRole(COTES_EXTERIEURS, m.role);
-    if (ext === undefined) return e;
-    pourChaqueExtremite(m, function (x, t, ch) {
-      if (t === 'raccord' && ext.indexOf(x.raccord.cote) >= 0) {
-        e.push(err('raccord_exterieur', 'Raccord sur un côté extérieur (' + nomCote(x.raccord.cote) + ').', refRaccord(x.raccord, ch)));
+    var e = [], sorties = sortiesDesCases(m), gabarit = gabaritConnu(m.gabarit);
+    var portsParCase = dict(), raccordsParCase = dict(), typeCase = dict();
+    tab(m.cases).forEach(function (c) { if (estObjet(c) && estId(c.id)) typeCase[c.id] = c.type; });
+    sorties.forEach(function (s) {
+      var table = s.type === 'coin' ? portsParCase : raccordsParCase;
+      table[s.caseId] = (table[s.caseId] || 0) + 1;
+    });
+    function porteuse(id) { return !!portsParCase[id]; }
+    Object.keys(portsParCase).forEach(function (id) {
+      if (portsParCase[id] > 1) e.push(alerte('ports_case', 'La case ' + id + ' porte plusieurs ports de coin : ' + RISQUE_ECART + '.', refCase(id)));
+      if (raccordsParCase[id]) e.push(alerte('raccord_porteuse', 'La case ' + id + ' porte un port et un raccord : ' + RISQUE_ECART + '.', refCase(id)));
+      if (typeCase[id] === 'apparition') e.push(alerte('port_apparition', 'La case d\'apparition ' + id + ' porte un port de coin : ' + RISQUE_ECART + '.', refCase(id)));
+    });
+    tab(m.chemins).forEach(function (ch) {
+      if (!estObjet(ch) || typeExtremite(ch.a) !== 'case' || typeExtremite(ch.b) !== 'case') return;
+      if (porteuse(ch.a['case']) && porteuse(ch.b['case']) && ch.a['case'] !== ch.b['case']) {
+        e.push(alerte('porteuses_reliees', 'Deux cases porteuses de port sont reliées directement : ' + RISQUE_ECART + '.', refChemin(ch)));
       }
     });
-    var n = nbCotesNonVides(masquesDuModele(m).raccords), mini = tableRole(MIN_COTES_RACCORD, m.role);
-    if (n < mini) {
-      e.push(err('cotes_raccord', 'Il faut des raccords sur au moins ' + mini + ' côtés (il y en a ' + n + ').', refModele(m)));
+    if (gabarit) {
+      var g = G.GABARITS[gabarit];
+      sorties.forEach(function (s) {
+        if (s.type === 'raccord' && g.cotesExterieurs.indexOf(s.autre.raccord.cote) >= 0) {
+          e.push(alerte('raccord_exterieur', 'Raccord sur le côté ' + nomCote(s.autre.raccord.cote) + ', extérieur pour ' + LIBELLE_GABARIT[gabarit] + ' : il sera face au vide.', refRaccord(s.autre.raccord, s.chemin)));
+        } else if (s.type === 'coin' && g.coinsInterieurs.indexOf(s.autre.coin) < 0) {
+          e.push(alerte('port_exterieur', 'Port sur le coin ' + nomCoin(s.autre.coin) + ', extérieur pour ' + LIBELLE_GABARIT[gabarit] + ' : il n\'aboutira à aucune jonction.', refCoin(s.autre.coin)));
+        }
+      });
     }
     return e;
   });
 
-  // Graphe interne connexe (arêtes = chemins case-case)
+  // Réseau sans sortie : groupe de cases reliées entre elles sans aucun raccord ni port
   regles.push(function (m) {
-    var e = [], cases = [], parent = dict();
-    tab(m.cases).forEach(function (c) { if (estObjet(c) && estId(c.id)) { cases.push(c); parent[c.id] = c.id; } });
-    if (cases.length === 0) return e;
+    var e = [], parent = dict(), ids = [];
+    tab(m.cases).forEach(function (c) { if (estObjet(c) && estId(c.id) && parent[c.id] === undefined) { parent[c.id] = c.id; ids.push(c.id); } });
     function racine(x) { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }
     tab(m.chemins).forEach(function (ch) {
       if (!estObjet(ch) || typeExtremite(ch.a) !== 'case' || typeExtremite(ch.b) !== 'case') return;
       if (parent[ch.a['case']] === undefined || parent[ch.b['case']] === undefined) return;
       parent[racine(ch.a['case'])] = racine(ch.b['case']);
     });
-    var r0 = racine(cases[0].id);
-    cases.forEach(function (c) {
-      if (racine(c.id) !== r0) e.push(err('non_connexe', 'Cette case n\'est reliée aux autres par aucun chemin.', refCase(c.id)));
+    var sortie = dict(), membres = dict(), relie = dict();
+    sortiesDesCases(m).forEach(function (s) { if (parent[s.caseId] !== undefined) sortie[racine(s.caseId)] = true; });
+    pourChaqueExtremite(m, function (x, t) { if (t === 'case') relie[x['case']] = true; });
+    ids.forEach(function (id) { var r = racine(id); (membres[r] = membres[r] || []).push(id); });
+    Object.keys(membres).forEach(function (r) {
+      var groupe = membres[r];
+      if (sortie[r] || (groupe.length === 1 && !relie[groupe[0]])) return; // case isolée : erreur dédiée
+      e.push(alerte('reseau_sans_sortie', 'Les cases ' + groupe.join(', ') + ' n\'ont ni raccord ni port : elles ne mènent nulle part.', { type: 'case', id: groupe[0], ids: groupe }));
     });
     return e;
   });
 
   /**
    * Valide un modèle de tuile (orientation canonique) pour le format `format` (objet ou identifiant,
-   * 4×4 par défaut). Ne lève jamais d'exception sur le modèle. Renvoie { complet, erreurs: [{code, message, ref}] }.
+   * 4×4 par défaut). Ne lève jamais d'exception sur le modèle.
+   * Renvoie { complet, erreurs, alertes } (entrées {code, message, ref}) ; complet = aucune erreur bloquante.
    */
   function validerModele(modele, format) {
-    var erreurs = [], F = resoudreFormat(format);
+    var erreurs = [], alertes = [], F = resoudreFormat(format);
     if (!estObjet(modele)) {
-      return { complet: false, erreurs: [err('modele_absent', 'Modèle absent.', { type: 'modele', id: undefined })] };
+      return { complet: false, erreurs: [err('modele_absent', 'Modèle absent.', { type: 'modele', id: undefined })], alertes: [] };
     }
     regles.forEach(function (r) {
-      try { erreurs = erreurs.concat(r(modele, F)); } catch (ex) {
-        erreurs.push(err('regle_en_erreur', 'Le modèle n\'a pas pu être vérifié (données inattendues).', refModele(modele)));
+      var entrees;
+      try { entrees = r(modele, F); } catch (ex) {
+        entrees = [err('regle_en_erreur', 'Le modèle n\'a pas pu être vérifié (données inattendues).', refModele(modele))];
       }
+      tab(entrees).forEach(function (x) {
+        if (!x) return;
+        if (x.alerte) alertes.push(err(x.code, x.message, x.ref));
+        else erreurs.push(x);
+      });
     });
-    return { complet: erreurs.length === 0, erreurs: erreurs };
+    return { complet: erreurs.length === 0, erreurs: erreurs, alertes: alertes };
   }
 
   /** Premier identifiant libre parmi les cases et chemins du modèle : prefixe + 1, 2, 3... */
@@ -354,82 +456,46 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return prefixe + k;
   }
 
-
   /* ------------------------------------------------------------------ */
   /* Modèles d'exemple (orientation canonique, mm)                       */
+  /* Conformes aux règles v2 sans alerte (R1 à R4 respectées, raccourci   */
+  /* de coin de docs/20 D5) ; de quoi remplir une grille pleine.          */
   /* ------------------------------------------------------------------ */
 
-  function construireExemples() {
+  /** Exemples d'un format : cotes de docs/20 (D4, vérifications de l'étoile, du bord et du coin). */
+  function construireExemples(grille) {
+    var F = resoudreFormat(grille), C = F.COTE, cinq = F.id === '5x5';
+    var D = 24;                         // Ø des cases (≤ Ø max des deux formats)
+    function kase(id, x, y, type) { return { id: id, x: x, y: y, diametre: D, type: type || 'deplacement' }; }
+    function lien(id, a, b) { return { id: id, a: { 'case': a }, b: { 'case': b } }; }
+    function port(id, c, coin) { return { id: id, a: { 'case': c }, b: { coin: coin } }; }
+    function raccord(id, c, cote, pos) { return { id: id, a: { 'case': c }, b: { raccord: { cote: cote, pos: pos } } }; }
+    var p = cinq ? 28 : 32;            // distance des cases porteuses de l'étoile à leur coin, sur chaque axe
+    var bord = cinq ? { x: 25, y: 72, ay: 34 } : { x: 32, y: 88, ay: 40 };
+    var coin = cinq ? { a: 36, c: 70 } : { a: 44, c: 88 };
+    var n = F.GRILLE.colonnes, l = F.GRILLE.lignes;
     return [
-      { // 4 cases aux quatre quarts, un port de coin par case
-        id: 'ex-centrale', nom: 'Centrale en Z', role: 'centrale', exemplaires: 4,
-        cases: [
-          { id: 'c1', x: 36, y: 36, diametre: 24, type: 'deplacement' },
-          { id: 'c2', x: 84, y: 36, diametre: 24, type: 'deplacement' },
-          { id: 'c3', x: 84, y: 84, diametre: 24, type: 'deplacement' },
-          { id: 'c4', x: 36, y: 84, diametre: 24, type: 'deplacement' }
-        ],
+      { // étoile à 5 cases : relais au centre, 4 porteuses, raccords au milieu des côtés depuis le centre
+        id: 'ex-centrale', nom: 'Étoile', gabarit: 'centrale', grille: F.id, exemplaires: (n - 2) * (l - 2),
+        cases: [kase('c0', C / 2, C / 2), kase('c1', p, p), kase('c2', C - p, p), kase('c3', C - p, C - p), kase('c4', p, C - p)],
         chemins: [
-          { id: 'h1', a: { 'case': 'c1' }, b: { 'case': 'c2' } },
-          { id: 'h2', a: { 'case': 'c2' }, b: { 'case': 'c3' } },
-          { id: 'h3', a: { 'case': 'c3' }, b: { 'case': 'c4' } },
-          { id: 'p1', a: { 'case': 'c1' }, b: { coin: 0 } },
-          { id: 'p2', a: { 'case': 'c2' }, b: { coin: 1 } },
-          { id: 'p3', a: { 'case': 'c3' }, b: { coin: 2 } },
-          { id: 'p4', a: { 'case': 'c4' }, b: { coin: 3 } },
-          { id: 'r1', a: { 'case': 'c1' }, b: { raccord: { cote: 0, pos: 0 } } },
-          { id: 'r2', a: { 'case': 'c2' }, b: { raccord: { cote: 1, pos: 1 } } },
-          { id: 'r3', a: { 'case': 'c3' }, b: { raccord: { cote: 2, pos: 1 } } },
-          { id: 'r4', a: { 'case': 'c4' }, b: { raccord: { cote: 3, pos: 1 } } }
+          lien('h1', 'c0', 'c1'), lien('h2', 'c0', 'c2'), lien('h3', 'c0', 'c3'), lien('h4', 'c0', 'c4'),
+          port('p1', 'c1', 0), port('p2', 'c2', 1), port('p3', 'c3', 2), port('p4', 'c4', 3),
+          raccord('r1', 'c0', 0, 1), raccord('r2', 'c0', 1, 1), raccord('r3', 'c0', 2, 1), raccord('r4', 'c0', 3, 1)
         ]
       },
-      { // côtés extérieurs N et O ; port au coin SE
-        id: 'ex-coin', nom: 'Coin simple', role: 'coin', exemplaires: 4,
-        cases: [
-          { id: 'c1', x: 85, y: 85, diametre: 24, type: 'deplacement' },
-          { id: 'c2', x: 85, y: 40, diametre: 24, type: 'deplacement' },
-          { id: 'c3', x: 40, y: 85, diametre: 24, type: 'deplacement' }
-        ],
+      { // côté extérieur au N ; apparition relais entre les deux porteuses ; raccourcis E p0 et O p2
+        id: 'ex-bord', nom: 'Bord en V', gabarit: 'bord', grille: F.id, exemplaires: 2 * (n - 2) + 2 * (l - 2),
+        cases: [kase('c1', C - bord.x, bord.y), kase('c2', bord.x, bord.y), kase('c3', C / 2, bord.ay, 'apparition')],
         chemins: [
-          { id: 'h1', a: { 'case': 'c1' }, b: { 'case': 'c2' } },
-          { id: 'h2', a: { 'case': 'c1' }, b: { 'case': 'c3' } },
-          { id: 'p1', a: { 'case': 'c1' }, b: { coin: 2 } },
-          { id: 'r1', a: { 'case': 'c2' }, b: { raccord: { cote: 1, pos: 1 } } },
-          { id: 'r2', a: { 'case': 'c3' }, b: { raccord: { cote: 2, pos: 1 } } }
+          lien('h1', 'c3', 'c1'), lien('h2', 'c3', 'c2'), port('p1', 'c1', 2), port('p2', 'c2', 3),
+          raccord('r1', 'c3', 1, 0), raccord('r2', 'c3', 3, 2), raccord('r3', 'c3', 2, 1)
         ]
       },
-      { // côté extérieur au N ; ports aux coins SE et SO
-        id: 'ex-bord', nom: 'Bord en V', role: 'bord', exemplaires: 4,
-        cases: [
-          { id: 'c1', x: 90, y: 90, diametre: 24, type: 'deplacement' },
-          { id: 'c2', x: 30, y: 90, diametre: 24, type: 'deplacement' },
-          { id: 'c3', x: 60, y: 40, diametre: 24, type: 'deplacement' }
-        ],
-        chemins: [
-          { id: 'h1', a: { 'case': 'c1' }, b: { 'case': 'c3' } },
-          { id: 'h2', a: { 'case': 'c2' }, b: { 'case': 'c3' } },
-          { id: 'p1', a: { 'case': 'c1' }, b: { coin: 2 } },
-          { id: 'p2', a: { 'case': 'c2' }, b: { coin: 3 } },
-          { id: 'r1', a: { 'case': 'c1' }, b: { raccord: { cote: 1, pos: 1 } } },
-          { id: 'r2', a: { 'case': 'c2' }, b: { raccord: { cote: 3, pos: 1 } } },
-          { id: 'r3', a: { 'case': 'c3' }, b: { raccord: { cote: 2, pos: 1 } } }
-        ]
-      },
-      { // comme le bord, avec la case d'apparition au centre haut
-        id: 'ex-apparition', nom: 'Apparition', role: 'apparition', exemplaires: 4,
-        cases: [
-          { id: 'c1', x: 90, y: 90, diametre: 24, type: 'deplacement' },
-          { id: 'c2', x: 30, y: 90, diametre: 24, type: 'deplacement' },
-          { id: 'c3', x: 60, y: 40, diametre: 24, type: 'apparition' }
-        ],
-        chemins: [
-          { id: 'h1', a: { 'case': 'c1' }, b: { 'case': 'c3' } },
-          { id: 'h2', a: { 'case': 'c2' }, b: { 'case': 'c3' } },
-          { id: 'p1', a: { 'case': 'c1' }, b: { coin: 2 } },
-          { id: 'p2', a: { 'case': 'c2' }, b: { coin: 3 } },
-          { id: 'r1', a: { 'case': 'c1' }, b: { raccord: { cote: 1, pos: 1 } } },
-          { id: 'r2', a: { 'case': 'c2' }, b: { raccord: { cote: 3, pos: 1 } } }
-        ]
+      { // côtés extérieurs N et O ; apparition sur la diagonale, porteuse au coin SE ; raccourci E p0 et S p2
+        id: 'ex-coin', nom: 'Coin raccourci', gabarit: 'coin', grille: F.id, exemplaires: 4,
+        cases: [kase('c1', coin.c, coin.c), kase('c2', coin.a, coin.a, 'apparition')],
+        chemins: [lien('h1', 'c2', 'c1'), port('p1', 'c1', 2), raccord('r1', 'c2', 1, 0), raccord('r2', 'c2', 2, 2)]
       }
     ];
   }
@@ -444,7 +510,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   }
 
   /* ------------------------------------------------------------------ */
-  /* Forme du plateau, rôles et rotations                                */
+  /* Cellules, gabarits de position, camps et rotations                  */
   /* Convention : une cellule est (col, lig) ; une jonction est (i, j)   */
   /* avec i = colonne et j = ligne des coins de cellules (1..3 en 4×4). */
   /* Le dernier paramètre `format` (objet ou identifiant) est facultatif */
@@ -455,127 +521,41 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     var NC = F.GRILLE.colonnes, NL = F.GRILLE.lignes;
     return estEntier(col) && estEntier(lig) && col >= 0 && col < NC && lig >= 0 && lig < NL;
   }
-  function estCoinGrille(col, lig, F) {
-    var NC = F.GRILLE.colonnes, NL = F.GRILLE.lignes;
-    return (col === 0 || col === NC - 1) && (lig === 0 || lig === NL - 1);
-  }
-  function estRetiree(col, lig, forme) {
-    return tab(forme && forme.retires).some(function (r) { return !!r && r.col === col && r.lig === lig; });
-  }
-  /** Cellule d'apparition : colonnes intérieures de la rangée nord (J1) ou sud (J2). */
-  function estApparition(col, lig, F) {
-    var NC = F.GRILLE.colonnes, NL = F.GRILLE.lignes;
-    return (lig === 0 || lig === NL - 1) && col >= 1 && col <= NC - 2;
-  }
 
-  /**
-   * Valide la forme : vide, 1 ou 2 coins retirés, ou 1 coin et le bord est / ouest
-   * voisin dans la même colonne. Ne lève jamais d'exception.
-   * Renvoie { valide, erreurs: [{code, message}] }.
-   */
-  function validerForme(forme, format) {
-    var erreurs = [], F = resoudreFormat(format), NC = F.GRILLE.colonnes, NL = F.GRILLE.lignes;
-    function ajouter(code, message) { erreurs.push({ code: code, message: message }); }
-    if (forme !== null && forme !== undefined &&
-        (!estObjet(forme) || (forme.retires !== undefined && !Array.isArray(forme.retires)))) {
-      ajouter('forme_invalide', 'La forme du plateau est mal formée.');
-      return { valide: false, erreurs: erreurs };
-    }
-    var retires = tab(forme && forme.retires);
-    var i, j;
-    for (i = 0; i < retires.length; i++) {
-      if (!estObjet(retires[i]) || !estNombre(retires[i].col) || !estNombre(retires[i].lig)) {
-        ajouter('retrait_invalide', 'Une cellule retirée est mal décrite.');
-      } else if (!dansGrille(retires[i].col, retires[i].lig, F)) {
-        ajouter('hors_grille', 'Une cellule retirée est hors de la grille.');
-      }
-    }
-    if (erreurs.length) return { valide: false, erreurs: erreurs };
-    for (i = 0; i < retires.length; i++) {
-      for (j = i + 1; j < retires.length; j++) {
-        if (retires[i].col === retires[j].col && retires[i].lig === retires[j].lig) ajouter('doublon', 'Une cellule est retirée deux fois.');
-      }
-    }
-    if (erreurs.length) return { valide: false, erreurs: erreurs };
-    if (retires.length > 2) {
-      ajouter('trop_de_retraits', 'On retire au plus 2 cellules.');
-      return { valide: false, erreurs: erreurs };
-    }
-    retires.forEach(function (r) {
-      if (estCoinGrille(r.col, r.lig, F)) return;
-      if (estApparition(r.col, r.lig, F)) {
-        ajouter('apparition_retiree', 'Une cellule d\'apparition ne peut pas être retirée.');
-      } else if (r.col >= 1 && r.col <= NC - 2) {
-        ajouter('cellule_interieure', 'Une cellule centrale ne peut pas être retirée.');
-      } else {
-        // bord est / ouest : seul le bord voisin d'un coin retiré est admis
-        var ligCoin = r.lig <= 1 ? 0 : NL - 1;
-        if (!estRetiree(r.col, ligCoin, forme)) {
-          ajouter('bord_seul', 'Un bord ne peut être retiré qu\'avec le coin voisin.');
-        }
-      }
-    });
-    if (!erreurs.length) {
-      cellulesActives(forme, F).forEach(function (c) {
-        if (roleCellule(c.col, c.lig, forme, F) === null) {
-          ajouter('role_impossible', 'La cellule (' + c.col + ', ' + c.lig + ') n\'a pas de rôle possible.');
-        }
-      });
-    }
-    return { valide: erreurs.length === 0, erreurs: erreurs };
-  }
-
-  /** Cellules présentes dans la forme, ordre lignes puis colonnes. */
-  function cellulesActives(forme, format) {
-    var res = [], F = resoudreFormat(format), NC = F.GRILLE.colonnes, NL = F.GRILLE.lignes;
-    for (var lig = 0; lig < NL; lig++) {
-      for (var col = 0; col < NC; col++) {
-        if (!estRetiree(col, lig, forme)) res.push({ col: col, lig: lig });
-      }
-    }
-    return res;
-  }
-
-  /** Côtés d'une cellule dont le voisin est hors grille ou retiré. */
-  function cotesExposes(col, lig, forme, F) {
+  /** Côtés d'une cellule de la grille qui donnent sur l'extérieur du plateau (ordre croissant). */
+  function cotesExterieursCellule(col, lig, F) {
     var res = [];
     for (var c = 0; c < 4; c++) {
-      var d = G.coteVoisin(c), vc = col + d.dc, vl = lig + d.dl;
-      if (!dansGrille(vc, vl, F) || estRetiree(vc, vl, forme)) res.push(c);
+      var d = G.coteVoisin(c);
+      if (!dansGrille(col + d.dc, lig + d.dl, F)) res.push(c);
     }
     return res;
   }
 
   /**
-   * Rôle attendu d'une cellule, ou null (hors grille, retirée, ou aucun modèle possible).
-   * Apparitions : fixes. Sinon selon les côtés exposés : 0 centrale, 1 bord, 2 adjacents coin.
+   * Gabarit attendu à la position d'une cellule : 'coin' (2 côtés extérieurs), 'bord' (1), 'centrale' (0),
+   * null hors grille. Simple repère : la pose reste libre (alerte si le gabarit de la tuile diffère).
    */
-  function roleCellule(col, lig, forme, format) {
+  function gabaritCellule(col, lig, format) {
     var F = resoudreFormat(format);
-    if (!dansGrille(col, lig, F) || estRetiree(col, lig, forme)) return null;
-    if (estApparition(col, lig, F)) return 'apparition';
-    var ex = cotesExposes(col, lig, forme, F);
-    if (ex.length === 0) return 'centrale';
-    if (ex.length === 1) return 'bord';
-    if (ex.length === 2 && (ex[1] - ex[0] === 1 || (ex[0] === 0 && ex[1] === 3))) return 'coin';
-    return null;
+    if (!dansGrille(col, lig, F)) return null;
+    return ['centrale', 'bord', 'coin'][cotesExterieursCellule(col, lig, F).length] || null;
   }
 
-  /** Joueur d'une cellule d'apparition (1 au nord, 2 au sud), null sinon. Le camp se déduit de la cellule. */
-  function joueurCellule(col, lig, format) {
-    if (!estApparition(col, lig, resoudreFormat(format))) return null;
-    return lig === 0 ? 1 : 2;
-  }
+  /** Camp d'une cellule : 'vert' | 'rouge' | null (rangée centrale d'une grille impaire, valeur invalide). */
+  function campCellule(format, col, lig) { return resoudreFormat(format).campCellule(col, lig); }
 
-  /** Rotation imposée (entier 0..3) d'une cellule coin / bord / apparition ; null pour une centrale ou une cellule sans rôle. */
-  function rotationDeduite(col, lig, forme, format) {
-    var F = resoudreFormat(format);
-    var role = roleCellule(col, lig, forme, F);
-    if (role === null || role === 'centrale') return null;
-    if (role === 'apparition') return joueurCellule(col, lig, F) === 1 ? 0 : 2;
-    var ex = cotesExposes(col, lig, forme, F);
-    if (role === 'bord') return ex[0];
-    // coin : côtés exposés {rot + 3, rot} (canonique N et O pour rot 0)
+  /**
+   * Rotation suggérée (entier 0..3) pour une tuile de ce gabarit posée en (col, lig) : un bord sur une
+   * cellule de bord tourne son côté extérieur vers le dehors, un coin sur une cellule de coin aussi.
+   * null sinon (centrale, gabarit inconnu, gabarit différent de la cellule) : la rotation reste libre.
+   */
+  function rotationDeduite(col, lig, gabarit, format) {
+    var F = resoudreFormat(format), place = gabaritCellule(col, lig, F);
+    if (!place || place === 'centrale' || gabarit !== place) return null;
+    var ex = cotesExterieursCellule(col, lig, F);
+    if (place === 'bord') return ex[0];
+    // coin : côtés extérieurs {rot + 3, rot} (canonique N et O pour rot 0)
     return (ex[0] === 0 && ex[1] === 3) ? 0 : ex[1];
   }
 
@@ -588,17 +568,6 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     { dc: -1, dl: -1, coin: 2 }, { dc: 0, dl: -1, coin: 3 },
     { dc: -1, dl: 0, coin: 1 }, { dc: 0, dl: 0, coin: 0 }
   ];
-
-  /**
-   * Camp d'une jonction (règle unique, docs/11-revue-interface.md I3) : 1 pour la rangée de jonctions nord
-   * (j = 1, camp J1), 2 pour la rangée sud (j = NL - 1, camp J2), null pour la rangée du milieu ou une valeur
-   * invalide. `i` n'intervient pas (les colonnes ouest / est ne sont pas des camps) ; jamais d'exception.
-   */
-  function campJonction(i, j, format) {
-    if (j === 1) return 1;
-    if (j === resoudreFormat(format).GRILLE.lignes - 1) return 2;
-    return null;
-  }
 
   /** Plafond du stock exporté ou tiré par le générateur : somme des exemplaires des modèles complets. */
   var PLAFOND_TUILES = 200;
@@ -614,32 +583,14 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return estEntier(i) && estEntier(j) && i >= 1 && i <= NC - 1 && j >= 1 && j <= NL - 1;
   }
 
-  /**
-   * Une jonction peut-elle un jour recevoir un jeton avec cette forme ? Il faut ses
-   * 4 cellules actives et au moins MIN_PORTS_JONCTION ports possibles (ports obligatoires
-   * des rôles déduits, après rotation).
-   */
-  function jonctionPossible(forme, i, j, format) {
-    var F = resoudreFormat(format);
-    if (!jonctionInterieure(i, j, F)) return false;
-    var ports = 0;
-    for (var n = 0; n < AUTOUR_JONCTION.length; n++) {
-      var a = AUTOUR_JONCTION[n], col = i + a.dc, lig = j + a.dl;
-      var role = roleCellule(col, lig, forme, F);
-      if (role === null) return false;
-      var rot = rotationDeduite(col, lig, forme, F);
-      var masque = G.tournerPorts(tableRole(PORTS_OBLIGATOIRES, role), rot === null ? 0 : rot);
-      if ((masque >> a.coin) & 1) ports++;
-    }
-    return ports >= F.MIN_PORTS_JONCTION;
-  }
-
   /* ------------------------------------------------------------------ */
   /* Document et plateau (fonctions pures)                               */
   /* ------------------------------------------------------------------ */
 
-  function nouveauDocument() {
-    return { version: 1, modeles: [], plateau: { forme: { retires: [] }, tuiles: [], jetons: [] } };
+  /** Document vide du format `grille` ('4x4' par défaut). */
+  function nouveauDocument(grille) {
+    var F = resoudreFormat(grille);
+    return { version: VERSION_DOCUMENT, grille: F.id, modeles: [], plateau: { tuiles: [], jetons: [] } };
   }
   /** Copie profonde (JSON). clonerDocument(undefined) renvoie undefined. */
   function clonerDocument(doc) { return doc === undefined ? undefined : clone(doc); }
@@ -663,6 +614,9 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return m.exemplaires - nbPosees(doc, modeleId);
   }
 
+  /** Le modèle porte-t-il au moins une case d'apparition ? */
+  function aUneApparition(m) { return tab(m && m.cases).some(function (c) { return estObjet(c) && c.type === 'apparition'; }); }
+
   /** Masques d'une tuile posée, après rotation : { raccords, portsCoin }. */
   function masquesTuilePosee(doc, tuile) {
     var m = modeleParId(doc, tuile.modeleId);
@@ -671,24 +625,21 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return { raccords: G.tournerRaccords(mm.raccords, tuile.rot), portsCoin: G.tournerPorts(mm.portsCoin, tuile.rot) };
   }
 
-  /** Teste la pose d'une tuile. Renvoie { ok, raison, rot }. Refuse tant que la forme est invalide. */
+  /**
+   * Teste la pose d'une tuile (pose libre). Renvoie { ok, raison, rot } ; rot = rotation suggérée
+   * (rotationDeduite) ou 0. Refus seulement : modèle introuvable, hors grille, cellule occupée,
+   * modèle incomplet (erreur bloquante), exemplaires épuisés.
+   */
   function peutPoserTuile(doc, modeleId, col, lig) {
-    var forme = doc.plateau.forme, F = formatDuDocument(doc);
+    var F = formatDuDocument(doc);
     function non(raison) { return { ok: false, raison: raison, rot: 0 }; }
     var modele = modeleParId(doc, modeleId);
     if (!modele) return non('Modèle de tuile introuvable.');
-    if (!validerForme(forme, F).valide) return non('La forme du plateau est invalide.');
     if (!dansGrille(col, lig, F)) return non('Cette cellule est hors de la grille.');
-    if (estRetiree(col, lig, forme)) return non('Cette cellule est retirée du plateau.');
     if (tuileEn(doc, col, lig)) return non('Cette cellule est déjà occupée.');
-    var attendu = roleCellule(col, lig, forme, F);
-    if (attendu === null) return non('Aucune tuile ne convient à cette cellule.');
-    if (modele.role !== attendu) {
-      return non('Cette tuile est ' + LIBELLE_ROLE[modele.role] + ', la cellule attend ' + LIBELLE_ROLE[attendu] + '.');
-    }
-    if (!validerModele(modele, F).complet) return non('Ce modèle est incomplet.');
+    if (!validerModele(modele, F).complet) return non('Ce modèle est incomplet : corrigez ses erreurs dans l\'éditeur.');
     if (exemplairesRestants(doc, modeleId) <= 0) return non('Il ne reste plus d\'exemplaire de cette tuile.');
-    var rot = rotationDeduite(col, lig, forme, F);
+    var rot = rotationDeduite(col, lig, modele.gabarit, F);
     return { ok: true, raison: '', rot: rot === null ? 0 : rot };
   }
 
@@ -709,12 +660,17 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return doc;
   }
 
-  /** Pose une tuile (pure). Lève une Error avec la raison si la pose est refusée. */
-  function poserTuile(doc, modeleId, col, lig) {
+  /**
+   * Pose une tuile (pure), dans la rotation `rot` (entier, facultatif : rotation suggérée par défaut).
+   * Lève une Error avec la raison si la pose est refusée.
+   */
+  function poserTuile(doc, modeleId, col, lig, rot) {
     var test = peutPoserTuile(doc, modeleId, col, lig);
     if (!test.ok) throw new Error(test.raison);
+    if (rot !== undefined && rot !== null && !estEntier(rot)) throw new Error('La rotation doit être un nombre entier de quarts de tour.');
     var nouveau = clone(doc);
-    nouveau.plateau.tuiles.push({ modeleId: modeleId, col: col, lig: lig, rot: test.rot });
+    var r = rot === undefined || rot === null ? test.rot : ((rot % 4) + 4) % 4;
+    nouveau.plateau.tuiles.push({ modeleId: modeleId, col: col, lig: lig, rot: r });
     return nouveau;
   }
 
@@ -726,20 +682,18 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   }
 
   /**
-   * Tourne une tuile centrale de `quarts` quarts de tour horaires (pure), entier (1 par défaut).
-   * Lève une Error si `quarts` n'est pas un entier, ou si la tuile est absente ou non centrale.
+   * Tourne une tuile posée de `quarts` quarts de tour horaires (pure), entier (1 par défaut).
+   * Toutes les tuiles tournent (rotation libre). Lève une Error si `quarts` n'est pas un entier
+   * ou si la cellule est vide.
    */
   function tournerTuile(doc, col, lig, quarts) {
     if (quarts === undefined) quarts = 1;
     if (!estEntier(quarts)) throw new Error('Le nombre de quarts de tour doit être un entier.');
-    var t = tuileEn(doc, col, lig);
-    if (!t) throw new Error('Aucune tuile dans cette cellule.');
-    var m = modeleParId(doc, t.modeleId);
-    if (!m || m.role !== 'centrale') throw new Error('Seules les tuiles centrales peuvent tourner.');
+    if (!tuileEn(doc, col, lig)) throw new Error('Aucune tuile dans cette cellule.');
     var nouveau = clone(doc);
     var nt = tuileEn(nouveau, col, lig);
     nt.rot = (((nt.rot + quarts) % 4) + 4) % 4;
-    return nettoyerJetons(nouveau);
+    return nouveau;
   }
 
   /** Ports qui aboutissent à la jonction (i, j) (colonne, ligne) et nombre de tuiles autour : { ports, tuiles }. */
@@ -760,27 +714,28 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return null;
   }
 
-  /** Raison pour laquelle la jonction ne peut pas accueillir de jeton (hors occupation), ou null. */
+  /**
+   * Raison pour laquelle la jonction ne peut pas porter de ville (hors occupation), ou null :
+   * jonction intérieure et 4 tuiles posées autour (le jeton repose sur les 4 tuiles).
+   * Moins de 2 ports n'empêche rien : c'est une alerte de validerPlateau.
+   */
   function raisonJonction(doc, i, j) {
     var F = formatDuDocument(doc);
     if (!jonctionInterieure(i, j, F)) return 'Ce n\'est pas une jonction intérieure.';
     var p = portsJonction(doc, i, j);
     if (p.tuiles < 4) return 'Il faut 4 tuiles autour de la jonction (' + p.tuiles + ' posées).';
-    if (p.ports < F.MIN_PORTS_JONCTION) {
-      return 'Il faut au moins ' + F.MIN_PORTS_JONCTION + ' ports à la jonction (' + p.ports + ').';
-    }
     return null;
   }
 
-  /** Teste la pose d'un jeton sur la jonction (i, j) = (colonne, ligne). Renvoie { ok, raison }. */
+  /** Teste la pose d'une ville sur la jonction (i, j) = (colonne, ligne). Renvoie { ok, raison }. */
   function peutPoserJeton(doc, i, j) {
     if (!jonctionInterieure(i, j, formatDuDocument(doc))) return { ok: false, raison: 'Ce n\'est pas une jonction intérieure.' };
-    if (jetonEn(doc, i, j)) return { ok: false, raison: 'Cette jonction a déjà un jeton.' };
+    if (jetonEn(doc, i, j)) return { ok: false, raison: 'Cette jonction a déjà une ville.' };
     var raison = raisonJonction(doc, i, j);
     return raison ? { ok: false, raison: raison } : { ok: true, raison: '' };
   }
 
-  /** Pose un jeton (pure), type 'capture' par défaut. Lève une Error si refusé. */
+  /** Pose une ville (pure) ; seul le type 'capture' existe (par défaut). Lève une Error si refusé. */
   function poserJeton(doc, i, j, type) {
     type = type || 'capture';
     if (TYPES_JETON.indexOf(type) < 0) throw new Error('Type de jeton inconnu.');
@@ -797,21 +752,14 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return nouveau;
   }
 
-  /** Vide -> capture -> carrefour -> vide (pure). Lève une Error si la pose initiale est refusée. */
+  /** Case chemin -> ville -> case chemin (pure). Lève une Error si la pose de la ville est refusée. */
   function cyclerJeton(doc, i, j) {
-    var jeton = jetonEn(doc, i, j);
-    if (!jeton) return poserJeton(doc, i, j, 'capture');
-    if (jeton.type === 'capture') {
-      var nouveau = clone(doc);
-      jetonEn(nouveau, i, j).type = 'carrefour';
-      return nouveau;
-    }
-    return retirerJeton(doc, i, j);
+    return jetonEn(doc, i, j) ? retirerJeton(doc, i, j) : poserJeton(doc, i, j, 'capture');
   }
 
   /**
    * Jetons qui ne respectent plus les conditions de pose : [{ i, j, type, raison }].
-   * (retirerTuile, tournerTuile et changerForme les retirent automatiquement.)
+   * (retirerTuile les retire automatiquement.)
    */
   function jetonsInvalides(doc) {
     var res = [], vus = dict();
@@ -819,7 +767,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
       if (!estObjet(j)) { res.push({ i: undefined, j: undefined, type: undefined, raison: 'Jeton mal formé.' }); return; }
       var raison = null, cle = j.i + ',' + j.j;
       if (TYPES_JETON.indexOf(j.type) < 0) raison = 'Type de jeton inconnu.';
-      else if (vus[cle]) raison = 'Deux jetons sur la même jonction.';
+      else if (vus[cle]) raison = 'Deux villes sur la même jonction.';
       else raison = raisonJonction(doc, j.i, j.j);
       vus[cle] = true;
       if (raison) res.push({ i: j.i, j: j.j, type: j.type, raison: raison });
@@ -829,11 +777,11 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
 
   /**
    * Raccords sans vis-à-vis : [{ col, lig, cote, pos, raison }] (côté dans le repère du plateau).
-   * raison : 'absent' = cellule active pas encore posée ; 'vide' = cellule retirée ou hors grille ;
+   * raison : 'absent' = cellule voisine pas encore posée ; 'vide' = bord du plateau ;
    * 'mort' = voisin posé sans raccord en face.
    */
   function raccordsMorts(doc) {
-    var res = [], forme = doc.plateau.forme, F = formatDuDocument(doc);
+    var res = [], F = formatDuDocument(doc);
     doc.plateau.tuiles.forEach(function (t) {
       var mA = masquesTuilePosee(doc, t).raccords;
       for (var cote = 0; cote < 4; cote++) {
@@ -845,7 +793,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
           raison = 'mort';
         } else {
           morts = G.triplet(mA, cote);
-          raison = (!dansGrille(vc, vl, F) || estRetiree(vc, vl, forme)) ? 'vide' : 'absent';
+          raison = dansGrille(vc, vl, F) ? 'absent' : 'vide';
         }
         for (var pos = 0; pos < 3; pos++) {
           if ((morts >> pos) & 1) res.push({ col: t.col, lig: t.lig, cote: cote, pos: pos, raison: raison });
@@ -856,26 +804,39 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   }
 
   /**
-   * Ports de coin qui ne mèneront jamais à un jeton (jonction hors plateau ou impossible avec la forme) :
+   * Ports de coin qui aboutissent au pourtour du plateau (aucune jonction intérieure, donc aucune case) :
    * [{ col, lig, coin, i, j }] (coin dans le repère du plateau, après rotation).
    */
-  function portsCoinMorts(doc) {
-    var res = [], forme = doc.plateau.forme, F = formatDuDocument(doc);
+  function portsVersPourtour(doc) {
+    var res = [], F = formatDuDocument(doc);
     doc.plateau.tuiles.forEach(function (t) {
       var ports = masquesTuilePosee(doc, t).portsCoin;
       for (var k = 0; k < 4; k++) {
         if (!((ports >> k) & 1)) continue;
         var jn = jonctionDuCoin(t.col, t.lig, k);
-        if (!jonctionPossible(forme, jn.i, jn.j, F)) res.push({ col: t.col, lig: t.lig, coin: k, i: jn.i, j: jn.j });
+        if (!jonctionInterieure(jn.i, jn.j, F)) res.push({ col: t.col, lig: t.lig, coin: k, i: jn.i, j: jn.j });
       }
     });
     return res;
   }
 
+  /** Jonctions intérieures entourées de 4 tuiles et reliées par moins de MIN_PORTS_JONCTION ports : [{i, j, ports}]. */
+  function jonctionsMalReliees(doc) {
+    var res = [], F = formatDuDocument(doc);
+    for (var j = 1; j < F.GRILLE.lignes; j++) {
+      for (var i = 1; i < F.GRILLE.colonnes; i++) {
+        var p = portsJonction(doc, i, j);
+        if (p.tuiles === 4 && p.ports < F.MIN_PORTS_JONCTION) res.push({ i: i, j: j, ports: p.ports });
+      }
+    }
+    return res;
+  }
+
   /**
    * Éléments d'une tuile posée en repère plateau (mm), pour le graphe global :
-   * { cases: [{ id, x, y, diametre, type, joueur }], aretes: [[idA, idB]],
+   * { cases: [{ id, x, y, diametre, type, camp }], aretes: [[idA, idB]],
    *   raccords: [{ cote, pos, caseId }], ports: [{ coin, caseId, i, j }] }.
+   * camp ('vert' | 'rouge' | null) : camp de la cellule pour une case d'apparition, null sinon.
    * Les ids de case sont globaux (« col,lig:idLocal »). Renvoie null si le modèle est absent.
    * Le raccord (cote, pos) d'une tuile fait face au raccord PM.geometrie.raccordEnFace(cote, pos) du voisin.
    */
@@ -890,7 +851,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
       var p = F.tournerPoint({ x: c.x, y: c.y }, rot);
       res.cases.push({
         id: gid(c.id), x: p.x + tuile.col * F.COTE, y: p.y + tuile.lig * F.COTE, diametre: c.diametre, type: c.type,
-        joueur: c.type === 'apparition' ? joueurCellule(tuile.col, tuile.lig, F) : null
+        camp: c.type === 'apparition' ? F.campCellule(tuile.col, tuile.lig) : null
       });
     });
     tab(m.chemins).forEach(function (ch) {
@@ -911,45 +872,50 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
 
   /** Erreurs d'une tuile posée : [{ code, message, ref: {type:'tuile', col, lig} }] ([] si elle est correcte). */
   function verifierTuilePosee(doc, tuile) {
-    var e = [], ref = { type: 'tuile', col: tuile.col, lig: tuile.lig }, forme = doc.plateau.forme, F = formatDuDocument(doc);
+    var e = [], ref = { type: 'tuile', col: tuile.col, lig: tuile.lig }, F = formatDuDocument(doc);
     var m = modeleParId(doc, tuile.modeleId);
     if (!m) e.push(err('modele_absent', 'Le modèle de cette tuile n\'existe plus.', ref));
     else if (!validerModele(m, F).complet) e.push(err('modele_incomplet', 'Le modèle de cette tuile est incomplet.', ref));
     if (!dansGrille(tuile.col, tuile.lig, F)) {
       e.push(err('hors_grille', 'Cette tuile est hors de la grille.', ref));
-    } else if (estRetiree(tuile.col, tuile.lig, forme)) {
-      e.push(err('cellule_retiree', 'Cette tuile est sur une cellule retirée.', ref));
-    } else {
-      var attendu = roleCellule(tuile.col, tuile.lig, forme, F);
-      if (attendu === null) e.push(err('role_impossible', 'Aucune tuile ne convient à cette cellule.', ref));
-      else if (m && m.role !== attendu) {
-        e.push(err('role_incorrect', 'Cette tuile est ' + LIBELLE_ROLE[m.role] + ', la cellule attend ' + LIBELLE_ROLE[attendu] + '.', ref));
-      }
-      if (!estEntier(tuile.rot) || tuile.rot < 0 || tuile.rot > 3) {
-        e.push(err('rot_invalide', 'La rotation doit être un entier de 0 à 3.', ref));
-      } else {
-        var rotAttendue = rotationDeduite(tuile.col, tuile.lig, forme, F);
-        if (rotAttendue !== null && tuile.rot !== rotAttendue) {
-          e.push(err('rot_incorrecte', 'La rotation de cette tuile ne correspond pas à sa cellule.', ref));
-        }
-      }
+    } else if (!estEntier(tuile.rot) || tuile.rot < 0 || tuile.rot > 3) {
+      e.push(err('rot_invalide', 'La rotation doit être un entier de 0 à 3.', ref));
     }
     var memeCellule = doc.plateau.tuiles.filter(function (t) { return t && t.col === tuile.col && t.lig === tuile.lig; });
     if (memeCellule.length > 1) e.push(err('doublon', 'Plusieurs tuiles occupent cette cellule.', ref));
     return e;
   }
 
+  /** Alertes de place d'une tuile posée (gabarit, apparition) : [{ code, message, ref }]. */
+  function alertesTuilePosee(doc, tuile) {
+    var e = [], ref = { type: 'tuile', col: tuile.col, lig: tuile.lig }, F = formatDuDocument(doc);
+    var m = modeleParId(doc, tuile.modeleId), place = gabaritCellule(tuile.col, tuile.lig, F);
+    if (!m || !place) return e;
+    var g = gabaritConnu(m.gabarit);
+    if (g && g !== place) {
+      e.push(err('gabarit_place', 'La tuile « ' + (m.nom || m.id) + ' » est ' + LIBELLE_GABARIT[g] + ', posée à la place d\'' + LIBELLE_GABARIT[place] + '.', ref));
+    }
+    if (place !== 'centrale' && !aUneApparition(m)) {
+      e.push(err('pourtour_sans_apparition', 'Tuile du pourtour sans case d\'apparition : aucun groupe ne peut y apparaître.', ref));
+    }
+    if (place === 'centrale' && aUneApparition(m)) {
+      e.push(err('apparition_centre', 'Case d\'apparition sur une tuile du centre : elle ne sert à aucun joueur.', ref));
+    }
+    return e;
+  }
+
   /**
    * Revalide tout le plateau : { erreurs, alertes }, éléments { code, message, ref }.
-   * erreurs : forme, tuiles (verifierTuilePosee), exemplaires dépassés, jetons invalides.
-   * alertes : raccords morts ou face au vide, ports de coin morts (n'empêchent rien).
+   * erreurs : tuiles (verifierTuilePosee), exemplaires dépassés, jetons invalides.
+   * alertes : place des tuiles, raccords morts ou face au vide, ports vers le pourtour, jonctions mal reliées
+   * (n'empêchent rien).
    */
   function validerPlateau(doc) {
     var erreurs = [], alertes = [];
-    validerForme(doc.plateau.forme, formatDuDocument(doc)).erreurs.forEach(function (x) {
-      erreurs.push(err(x.code, x.message, { type: 'forme' }));
+    doc.plateau.tuiles.forEach(function (t) {
+      erreurs = erreurs.concat(verifierTuilePosee(doc, t));
+      alertes = alertes.concat(alertesTuilePosee(doc, t));
     });
-    doc.plateau.tuiles.forEach(function (t) { erreurs = erreurs.concat(verifierTuilePosee(doc, t)); });
     tab(doc.modeles).forEach(function (m) {
       if (!m) return;
       var n = nbPosees(doc, m.id);
@@ -965,31 +931,15 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
       alertes.push(err('raccord_mort', r.raison === 'vide' ? 'Raccord face au vide.' : 'Raccord sans vis-à-vis.',
         { type: 'raccord', col: r.col, lig: r.lig, cote: r.cote, pos: r.pos }));
     });
-    portsCoinMorts(doc).forEach(function (p) {
-      alertes.push(err('port_mort', 'Port de coin vers une jonction qui ne peut pas recevoir de jeton.',
+    portsVersPourtour(doc).forEach(function (p) {
+      alertes.push(err('port_pourtour', 'Port de coin vers le bord du plateau : il n\'aboutit à aucune case de jonction.',
         { type: 'coin', col: p.col, lig: p.lig, coin: p.coin, i: p.i, j: p.j }));
     });
+    jonctionsMalReliees(doc).forEach(function (x) {
+      alertes.push(err('jonction_ports', 'La jonction (' + x.i + ', ' + x.j + ') n\'est reliée que par ' + x.ports + ' port(s) : sa case est mal reliée au reste du plateau.',
+        { type: 'jeton', i: x.i, j: x.j }));
+    });
     return { erreurs: erreurs, alertes: alertes };
-  }
-
-  /**
-   * Change la forme (pure). Retire les tuiles des cellules retirées, recalcule la rotation
-   * des tuiles non centrales et retire les jetons invalides. Lève une Error si la forme est invalide.
-   * Les tuiles dont le rôle ne correspond plus restent en place : validerPlateau les signale.
-   */
-  function changerForme(doc, forme) {
-    var F = formatDuDocument(doc), v = validerForme(forme, F);
-    if (!v.valide) throw new Error(v.erreurs[0].message);
-    var nouveau = clone(doc);
-    nouveau.plateau.forme = { retires: clone(tab(forme && forme.retires)) };
-    nouveau.plateau.tuiles = nouveau.plateau.tuiles.filter(function (t) {
-      return !estRetiree(t.col, t.lig, nouveau.plateau.forme);
-    });
-    nouveau.plateau.tuiles.forEach(function (t) {
-      var rot = rotationDeduite(t.col, t.lig, nouveau.plateau.forme, F);
-      if (rot !== null) t.rot = rot;
-    });
-    return nettoyerJetons(nouveau);
   }
 
   /** Ajoute un modèle (pure, copie). Lève une Error si l'id est invalide ou déjà pris. */
@@ -1001,20 +951,13 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return nouveau;
   }
 
-  /**
-   * Remplace le modèle `id` (pure). Même id obligatoire. Refus si le modèle est posé et que son rôle change.
-   * Les jetons devenus invalides sont retirés.
-   */
+  /** Remplace le modèle `id` (pure). Même id obligatoire ; le gabarit peut changer (il n'est jamais bloquant). */
   function remplacerModele(doc, id, modele) {
-    var ancien = modeleParId(doc, id);
-    if (!ancien) throw new Error('Modèle de tuile introuvable.');
+    if (!modeleParId(doc, id)) throw new Error('Modèle de tuile introuvable.');
     if (!estObjet(modele) || modele.id !== id) throw new Error('Le modèle de remplacement doit garder le même identifiant.');
-    if (nbPosees(doc, id) > 0 && modele.role !== ancien.role) {
-      throw new Error('Ce modèle est posé sur le plateau : son rôle ne peut pas changer.');
-    }
     var nouveau = clone(doc);
     nouveau.modeles = nouveau.modeles.map(function (m) { return m && m.id === id ? clone(modele) : m; });
-    return nettoyerJetons(nouveau);
+    return nouveau;
   }
 
   /** Supprime un modèle (pure). Lève une Error s'il est posé sur le plateau. */
@@ -1038,30 +981,27 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return nouveau;
   }
 
-  var EXEMPLES = geler(construireExemples());
+  var EXEMPLES = geler(construireExemples('4x4'));
 
   PM.modele = {
-    ROLES: ROLES,
-    NB_CASES_PAR_ROLE: NB_CASES_PAR_ROLE,
-    COTES_EXTERIEURS: COTES_EXTERIEURS,
-    PORTS_OBLIGATOIRES: PORTS_OBLIGATOIRES,
+    GABARITS: GABARITS,
+    TYPES_JETON: TYPES_JETON,
+    VERSION_DOCUMENT: VERSION_DOCUMENT,
     regles: regles,
     masquesDuModele: masquesDuModele,
     validerModele: validerModele,
     formatDuDocument: formatDuDocument,
     nouvelId: nouvelId,
-    exemples: EXEMPLES,                                      // tableau gelé (lecture seule)
-    copieExemples: function () { return clone(EXEMPLES); },  // copie modifiable
-    validerForme: validerForme,
-    cellulesActives: cellulesActives,
-    roleCellule: roleCellule,
-    joueurCellule: joueurCellule,
+    exemples: EXEMPLES,                                      // tableau gelé du format 4×4 (lecture seule)
+    /** Copie modifiable des exemples du format `grille` ('4x4' par défaut, ou '5x5'). */
+    copieExemples: function (grille) { return grille && resoudreFormat(grille).id !== '4x4' ? construireExemples(grille) : clone(EXEMPLES); },
+    gabaritCellule: gabaritCellule,
+    campCellule: campCellule,
     rotationDeduite: rotationDeduite,
     jonctionDuCoin: jonctionDuCoin,
-    jonctionPossible: jonctionPossible,
-    campJonction: campJonction,
     PLAFOND_TUILES: PLAFOND_TUILES,
     exemplairesValides: exemplairesValides,
+    aUneApparition: aUneApparition,
     nouveauDocument: nouveauDocument,
     clonerDocument: clonerDocument,
     modeleParId: modeleParId,
@@ -1074,7 +1014,6 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     tournerTuile: tournerTuile,
     verifierTuilePosee: verifierTuilePosee,
     validerPlateau: validerPlateau,
-    changerForme: changerForme,
     ajouterModele: ajouterModele,
     remplacerModele: remplacerModele,
     supprimerModele: supprimerModele,
@@ -1086,7 +1025,8 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     cyclerJeton: cyclerJeton,
     jetonsInvalides: jetonsInvalides,
     raccordsMorts: raccordsMorts,
-    portsCoinMorts: portsCoinMorts,
+    portsVersPourtour: portsVersPourtour,
+    jonctionsMalReliees: jonctionsMalReliees,
     tuileEnPlateau: tuileEnPlateau
   };
 

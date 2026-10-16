@@ -7,6 +7,9 @@
  * jonction (i, j) = (colonne, ligne) des coins de cellules, intérieure si 1 ≤ i ≤ colonnes - 1 et
  * 1 ≤ j ≤ lignes - 1 (1..3 en 4×4), en (i·COTE, j·COTE) mm.
  * Les fonctions sans document prennent un dernier paramètre `format` facultatif (4×4 par défaut).
+ *
+ * Règles v2 : grille pleine, pose libre (toute tuile sur toute cellule libre), rotation libre de toutes les
+ * tuiles (R), rotation suggérée pour un bord ou un coin posé sur le pourtour ; jonction = case chemin ou ville.
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
 
@@ -16,6 +19,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   'use strict';
 
   var RAYON_JONCTION = 15;        // aimantation d'un jeton (D10)
+  var NB_VILLES = 7;              // villes de la composition (docs/18)
 
   function M() { return PM.modele; }
   function G() { return PM.geometrie; }
@@ -24,7 +28,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     if (f && typeof f === 'object') return f;
     return G().format(f === undefined || f === null ? G().FORMAT_DEFAUT : f);
   }
-  /** Format du document (champ `format`, absent = 4×4). */
+  /** Format du document (champ `grille`, absent = 4×4). */
   function formatDoc(doc) { return M().formatDuDocument(doc); }
 
   /** Zone visible du SVG (mm) : plateau de 0 à colonnes × COTE, marges pour les camps et les dimensions. */
@@ -41,7 +45,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var NORMALE = [{ x: 0, y: 1 }, { x: -1, y: 0 }, { x: 0, y: -1 }, { x: 1, y: 0 }]; // vers l'intérieur, par côté
   var BISSECTRICE = [{ x: 1, y: 1 }, { x: -1, y: 1 }, { x: -1, y: -1 }, { x: 1, y: -1 }]
     .map(function (v) { return { x: v.x / Math.SQRT2, y: v.y / Math.SQRT2 }; }); // vers l'intérieur, par coin
-  var LIBELLE_ROLE = { centrale: 'une centrale', coin: 'un coin', bord: 'un bord', apparition: 'une apparition' };
+  var NOMS_GABARIT = { centrale: 'Centrale', bord: 'Bord', coin: 'Coin' };
 
   function cle(a, b) { return a + ',' + b; }
   function arrondi(n) { return Math.round(n * 1000) / 1000; }
@@ -50,7 +54,6 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
-  function pluriel(n, mot, mots) { return n + ' ' + (n > 1 ? (mots || mot + 's') : mot); }
 
   /* ------------------------------------------------------------------ */
   /* Conversions écran ↔ mm et cibles                                    */
@@ -126,20 +129,13 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return res;
   }
 
-  function estCentrale(doc, modeleId) {
-    var m = M().modeleParId(doc, modeleId);
-    return !!m && m.role === 'centrale';
-  }
-
   /**
-   * Pose un modèle puis, pour une centrale, la tourne de `quarts` quarts de tour (pure, une seule étape
-   * d'historique). La rotation est ignorée pour les autres rôles (rotation déduite). Lève une Error si refus.
+   * Pose un modèle dans la rotation `quarts` (entier) ; `quarts` null ou absent = rotation suggérée
+   * (bord ou coin sur le pourtour, 0 sinon). Pure, une seule étape d'historique. Lève une Error si refus.
    */
   function poserTuileTournee(doc, modeleId, col, lig, quarts) {
-    var n = M().poserTuile(doc, modeleId, col, lig);
-    var q = ((quarts || 0) % 4 + 4) % 4;
-    if (q && estCentrale(doc, modeleId)) n = M().tournerTuile(n, col, lig, q);
-    return n;
+    var q = quarts === null || quarts === undefined ? undefined : ((quarts % 4) + 4) % 4;
+    return M().poserTuile(doc, modeleId, col, lig, q);
   }
 
   /** Teste le déplacement d'une tuile posée : {ok, raison, identique}. */
@@ -153,7 +149,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   }
 
   /**
-   * Déplace une tuile (pure) : retrait puis pose, la rotation d'une centrale est conservée.
+   * Déplace une tuile (pure) : retrait puis pose, la rotation de la tuile est conservée.
    * Les jetons devenus invalides sont retirés (par retirerTuile). Lève une Error si la pose est refusée.
    */
   /** Objet cellule {col, lig} (les valeurs elles-mêmes sont jugées par PM.modele). */
@@ -162,7 +158,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /** Lève une Error explicite (et non un TypeError natif) si le document n'a pas la forme attendue. */
   function verifierDocument(doc) {
     var p = doc && doc.plateau;
-    if (!p || typeof p !== 'object' || !Array.isArray(p.tuiles) || !Array.isArray(p.jetons) || !p.forme || typeof p.forme !== 'object') {
+    if (!p || typeof p !== 'object' || !Array.isArray(p.tuiles) || !Array.isArray(p.jetons)) {
       throw new Error('Document invalide : plateau absent ou mal formé.');
     }
     if (!Array.isArray(doc.modeles)) throw new Error('Document invalide : bibliothèque de modèles absente.');
@@ -177,74 +173,35 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return poserTuileTournee(sans, t.modeleId, vers.col, vers.lig, t.rot);
   }
 
-  function libelleJeton(type) { return type === 'carrefour' ? 'carrefour' : 'ville'; }
-
-  /** Raison courte pour laquelle la jonction (i, j) ne porte plus de jeton dans `doc`. */
+  /** Raison courte pour laquelle la jonction (i, j) ne porte plus de ville dans `doc`. */
   function raisonCourteJonction(doc, i, j) {
     var p = M().portsJonction(doc, i, j);
     if (p.tuiles < 4) return 'la jonction (' + i + ',' + j + ') n\'a plus 4 tuiles';
-    if (p.ports < formatDoc(doc).MIN_PORTS_JONCTION) return 'la jonction (' + i + ',' + j + ') n\'a plus que ' + pluriel(p.ports, 'port');
     var r = M().peutPoserJeton(doc, i, j).raison;
     return 'la jonction (' + i + ',' + j + ') : ' + (r || 'jeton invalide').replace(/\.$/, '').toLowerCase();
   }
 
   /**
    * Effets de bord d'une action (pure) : compare le document avant et après.
-   * Renvoie { jetonsRetires: [{i, j, type, raison}], tuilesRetirees: [{col, lig, modeleId}],
-   *           tuilesARevoir: [{col, lig, modeleId, attendu}] } (tuiles restées en place dont le rôle ne
-   * correspond plus à la cellule, par exemple après un changement de forme).
+   * Renvoie { jetonsRetires: [{i, j, type, raison}] } (villes retirées faute de tuiles autour).
    */
   function effetsDeAction(avant, apres) {
-    var res = { jetonsRetires: [], tuilesRetirees: [], tuilesARevoir: [] };
+    var res = { jetonsRetires: [] };
     avant.plateau.jetons.forEach(function (jt) {
       if (!jt) return;
       var reste = apres.plateau.jetons.some(function (x) { return x && x.i === jt.i && x.j === jt.j && x.type === jt.type; });
       if (!reste) res.jetonsRetires.push({ i: jt.i, j: jt.j, type: jt.type, raison: raisonCourteJonction(apres, jt.i, jt.j) });
-    });
-    avant.plateau.tuiles.forEach(function (t) {
-      if (!t) return;
-      // effet de bord seulement : tuile disparue parce que sa cellule est retirée par la nouvelle forme
-      var reste = apres.plateau.tuiles.some(function (x) { return x && x.col === t.col && x.lig === t.lig && x.modeleId === t.modeleId; });
-      var celluleRetiree = (apres.plateau.forme && Array.isArray(apres.plateau.forme.retires) ? apres.plateau.forme.retires : [])
-        .some(function (r) { return r && r.col === t.col && r.lig === t.lig; });
-      if (!reste && celluleRetiree) res.tuilesRetirees.push({ col: t.col, lig: t.lig, modeleId: t.modeleId });
-    });
-    function maloriente(doc, t) {
-      return M().verifierTuilePosee(doc, t).some(function (e) { return e.code === 'role_incorrect' || e.code === 'role_impossible'; });
-    }
-    apres.plateau.tuiles.forEach(function (t) {
-      if (!t || !maloriente(apres, t)) return;
-      var tAvant = M().tuileEn(avant, t.col, t.lig);
-      if (tAvant && tAvant.modeleId === t.modeleId && maloriente(avant, tAvant)) return; // déjà signalée avant
-      res.tuilesARevoir.push({ col: t.col, lig: t.lig, modeleId: t.modeleId, attendu: M().roleCellule(t.col, t.lig, apres.plateau.forme, formatDoc(apres)) });
     });
     return res;
   }
 
   /** Phrase pour la barre d'état décrivant les effets (null s'il n'y en a pas). Se termine par « Ctrl+Z pour annuler. ». */
   function messageEffets(effets) {
-    var phrases = [];
-    var tr = effets.tuilesRetirees || [], jr = effets.jetonsRetires || [], ar = effets.tuilesARevoir || [];
-    if (tr.length) {
-      phrases.push((tr.length > 1 ? tr.length + ' tuiles retirées : ' : '1 tuile retirée : ') +
-        tr.map(function (t) { return '(' + t.col + ',' + t.lig + ')'; }).join(', ') + '.');
-    }
-    if (jr.length === 1) {
-      var j = jr[0];
-      phrases.push('1 ' + libelleJeton(j.type) + ' retiré' + (j.type === 'carrefour' ? '' : 'e') + ' : ' + j.raison + '.');
-    } else if (jr.length > 1) {
-      var nv = jr.filter(function (x) { return x.type !== 'carrefour'; }).length, nc = jr.length - nv;
-      var detail = [nv ? pluriel(nv, 'ville') : '', nc ? pluriel(nc, 'carrefour') : ''].filter(Boolean).join(', ');
-      phrases.push(jr.length + ' jetons retirés (' + detail + ') : ' + jr.map(function (x) { return x.raison; }).join(' ; ') + '.');
-    }
-    if (ar.length) {
-      phrases.push(ar.map(function (t) {
-        return 'La tuile (' + t.col + ',' + t.lig + ') ne convient plus à sa cellule' +
-          (t.attendu ? ' (' + LIBELLE_ROLE[t.attendu] + ' attendu' + (t.attendu === 'centrale' || t.attendu === 'apparition' ? 'e' : '') + ')' : '') + '.';
-      }).join(' '));
-    }
-    if (!phrases.length) return null;
-    return phrases.join(' ') + ' Ctrl+Z pour annuler.';
+    var jr = effets.jetonsRetires || [];
+    if (!jr.length) return null;
+    var phrase = jr.length === 1 ? '1 ville retirée : ' + jr[0].raison + '.'
+      : jr.length + ' villes retirées : ' + jr.map(function (x) { return x.raison; }).join(' ; ') + '.';
+    return phrase + ' Ctrl+Z pour annuler.';
   }
 
   /* ------------------------------------------------------------------ */
@@ -254,88 +211,26 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /** Nombre de jetons posés. */
   function compterJetons(doc) { return doc.plateau.jetons.filter(Boolean).length; }
 
-  /**
-   * Côté d'une jonction : 'nord' (camp J1), 'sud' (camp J2) ou null (rangée du milieu, neutre),
-   * selon la règle unique PM.modele.campJonction. Interprétation de la règle « jamais les 2 carrefours du même côté ».
-   */
-  function coteJonction(j, format) {
-    var camp = M().campJonction(null, j, format);
-    return camp === 1 ? 'nord' : camp === 2 ? 'sud' : null;
-  }
-
-  /** Côté où se trouvent au moins 2 carrefours ('nord' | 'sud'), ou null (règle manuelle, sans blocage). */
-  function carrefoursMemeCote(doc) {
-    var n = { nord: 0, sud: 0 }, F = formatDoc(doc);
-    doc.plateau.jetons.forEach(function (jt) {
-      if (jt && jt.type === 'carrefour') { var c = coteJonction(jt.j, F); if (c) n[c]++; }
-    });
-    return n.nord >= 2 ? 'nord' : n.sud >= 2 ? 'sud' : null;
-  }
-
-  /** Phrase d'alerte si les carrefours sont du même côté, sinon null. */
-  function alerteCarrefours(doc) {
-    var c = carrefoursMemeCote(doc);
-    if (!c) return null;
-    return 'Les 2 carrefours sont du même côté (' + (c === 'nord' ? 'camp J1, nord' : 'camp J2, sud') +
-      ') : la règle demande de ne pas les regrouper.';
-  }
-
-  /** Phrase après un cycle de jeton sur (i, j) (pure). */
+  /** Phrase après un clic sur la jonction (i, j) (pure) : ville posée ou retirée. */
   function messageJeton(apres, i, j) {
     var jt = apres.plateau.jetons.filter(function (x) { return x && x.i === i && x.j === j; })[0];
-    var base = jt ? (jt.type === 'carrefour' ? 'Carrefour' : 'Ville') + ' sur la jonction (' + i + ',' + j + ').'
-      : 'Jeton retiré de la jonction (' + i + ',' + j + ').';
-    var a = alerteCarrefours(apres);
-    return { texte: a ? base + ' ' + a : base, niveau: a ? 'alerte' : 'info' };
+    return { texte: jt ? 'Ville sur la jonction (' + i + ',' + j + ').' : 'Ville retirée : la jonction (' + i + ',' + j + ') redevient une case chemin.', niveau: 'info' };
   }
 
   /* ------------------------------------------------------------------ */
-  /* Formes du plateau                                                   */
+  /* Cellules                                                            */
   /* ------------------------------------------------------------------ */
 
-  /** Les 15 formes proposées : [{cle, groupe, libelle, forme: {retires}}]. */
-  function formesProposees(format) {
-    var F = leFormat(format), dc = F.GRILLE.colonnes - 1, dl = F.GRILLE.lignes - 1;
-    var COINS = [{ col: 0, lig: 0 }, { col: dc, lig: 0 }, { col: dc, lig: dl }, { col: 0, lig: dl }];
-    var NOMS_COIN = {};
-    ['NO', 'NE', 'SE', 'SO'].forEach(function (nom, k) { NOMS_COIN[cle(COINS[k].col, COINS[k].lig)] = nom; });
-    var complet = F.GRILLE.colonnes + '×' + F.GRILLE.lignes + ' complet';
-    var res = [{ cle: 'complet', groupe: complet, libelle: complet, forme: { retires: [] } }];
-    COINS.forEach(function (c) {
-      res.push({ cle: 'c' + c.col + c.lig, groupe: '1 coin retiré', libelle: 'Sans le coin ' + NOMS_COIN[cle(c.col, c.lig)],
-        forme: { retires: [{ col: c.col, lig: c.lig }] } });
-    });
-    for (var a = 0; a < 4; a++) {
-      for (var b = a + 1; b < 4; b++) {
-        var ca = COINS[a], cb = COINS[b];
-        res.push({ cle: 'c' + ca.col + ca.lig + 'c' + cb.col + cb.lig, groupe: '2 coins retirés',
-          libelle: 'Sans les coins ' + NOMS_COIN[cle(ca.col, ca.lig)] + ' et ' + NOMS_COIN[cle(cb.col, cb.lig)],
-          forme: { retires: [{ col: ca.col, lig: ca.lig }, { col: cb.col, lig: cb.lig }] } });
-      }
-    }
-    COINS.forEach(function (c) {
-      var bord = { col: c.col, lig: c.lig === 0 ? 1 : dl - 1 };
-      res.push({ cle: 'c' + c.col + c.lig + 'b' + bord.col + bord.lig, groupe: 'Coin et bord voisin',
-        libelle: 'Sans le coin ' + NOMS_COIN[cle(c.col, c.lig)] + ' et le bord (' + bord.col + ',' + bord.lig + ')',
-        forme: { retires: [{ col: c.col, lig: c.lig }, bord] } });
-    });
-    return res;
-  }
-
-  /** Clé de la forme proposée identique à `forme` (ordre des cellules indifférent), ou null. */
-  function cleForme(forme, format) {
-    var r = (forme && Array.isArray(forme.retires) ? forme.retires : []).map(function (x) { return x && cle(x.col, x.lig); }).sort().join('|');
-    var f = formesProposees(format).filter(function (p) {
-      return p.forme.retires.map(function (x) { return cle(x.col, x.lig); }).sort().join('|') === r;
-    })[0];
-    return f ? f.cle : null;
-  }
-
-  /** Étiquette d'une cellule libre : 'Coin', 'Bord', 'Apparition J1', 'Apparition J2', 'Centrale', ou null. */
-  function etiquetteCellule(col, lig, forme, format) {
-    var r = M().roleCellule(col, lig, forme, format);
-    if (r === 'apparition') return 'Apparition J' + M().joueurCellule(col, lig, format);
-    return r ? r.charAt(0).toUpperCase() + r.slice(1) : null;
+  /**
+   * Étiquette d'une cellule libre : gabarit attendu et camp, par exemple « Bord, camp vert », « Centrale »,
+   * « Bord, neutre » (rangée centrale du 5×5) ; null hors grille.
+   */
+  function etiquetteCellule(col, lig, format) {
+    var F = leFormat(format), g = M().gabaritCellule(col, lig, F);
+    if (!g) return null;
+    if (g === 'centrale') return NOMS_GABARIT[g];
+    var camp = F.campCellule(col, lig);
+    return NOMS_GABARIT[g] + ', ' + (camp ? 'camp ' + camp : 'neutre');
   }
 
   /* ------------------------------------------------------------------ */
@@ -345,7 +240,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /**
    * Alertes à dessiner (pure), en mm dans le repère du plateau :
    *  - raccords morts de raison 'vide' ou 'mort' (pas 'absent') : {type:'raccord', col, lig, cote, pos, raison, x, y, nx, ny} ;
-   *  - ports de coin morts : {type:'port', col, lig, coin, i, j, x, y, nx, ny}.
+   *  - ports de coin vers le bord du plateau : {type:'port', col, lig, coin, i, j, x, y, nx, ny}.
    * (x, y) = point sur la frontière ou au coin ; (nx, ny) = direction vers l'intérieur de la tuile.
    */
   function alertesPlateau(doc) {
@@ -356,7 +251,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       res.push({ type: 'raccord', col: r.col, lig: r.lig, cote: r.cote, pos: r.pos, raison: r.raison,
         x: r.col * C + p.x, y: r.lig * C + p.y, nx: n.x, ny: n.y });
     });
-    M().portsCoinMorts(doc).forEach(function (p) {
+    M().portsVersPourtour(doc).forEach(function (p) {
       var k = F.pointCoin(p.coin), b = BISSECTRICE[p.coin];
       res.push({ type: 'port', col: p.col, lig: p.lig, coin: p.coin, i: p.i, j: p.j,
         x: p.col * C + k.x, y: p.lig * C + k.y, nx: b.x, ny: b.y });
@@ -367,7 +262,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /**
    * Formes à faire clignoter pour `surbrillance` (etat.ui().surbrillance), en mm :
    * [{forme:'rect', x, y, w, h} | {forme:'cercle', x, y, r}]. Accepte aussi les références brutes de
-   * validerPlateau ('coin' pour un port, 'jeton' pour une jonction, 'modele', 'forme').
+   * validerPlateau ('coin' pour un port, 'jeton' pour une jonction, 'modele').
    */
   function cibleSurbrillance(s, doc) {
     if (!s || typeof s !== 'object') return [];
@@ -393,7 +288,6 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         return typeof s.i === 'number' ? [{ forme: 'cercle', x: s.i * COTE, y: s.j * COTE, r: 22 }] : [];
       case 'case': case 'chemin': return tuilesDuModele(s.modeleId);
       case 'modele': return tuilesDuModele(s.id);
-      case 'forme': return [{ forme: 'rect', x: 0, y: 0, w: F.GRILLE.colonnes * COTE, h: F.GRILLE.lignes * COTE }];
       default: return [];
     }
   }
@@ -417,15 +311,15 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function svgPlateau(doc, vue) {
     verifierDocument(doc);
     vue = vue || {};
-    var forme = doc.plateau.forme, s = [];
+    var s = [];
     var F = formatDoc(doc), COTE = F.COTE, NC = F.GRILLE.colonnes, NL = F.GRILLE.lignes, V = vuePour(F);
     var larg = NC * COTE, haut = NL * COTE, milieu = larg / 2, demi = COTE / 2;
     var dimensions = (larg / 10) + ' × ' + (haut / 10) + ' cm';
     s.push('<svg class="pm-assemblage-svg" xmlns="http://www.w3.org/2000/svg" viewBox="' + V.x + ' ' + V.y + ' ' + V.w + ' ' + V.h +
       '" role="group" aria-label="Plateau ' + NC + ' × ' + NL + ', ' + dimensions + '">');
     // Camps et dimensions
-    s.push('<text class="pm-assemblage-camp pm-assemblage-camp-j1" x="' + milieu + '" y="-26" text-anchor="middle">Camp J1 (nord)</text>');
-    s.push('<text class="pm-assemblage-camp pm-assemblage-camp-j2" x="' + milieu + '" y="' + (haut + 32) + '" text-anchor="middle">Camp J2 (sud)</text>');
+    s.push('<text class="pm-assemblage-camp pm-assemblage-camp-j1" x="' + milieu + '" y="-26" text-anchor="middle">Camp vert (nord)</text>');
+    s.push('<text class="pm-assemblage-camp pm-assemblage-camp-j2" x="' + milieu + '" y="' + (haut + 32) + '" text-anchor="middle">Camp rouge (sud)</text>');
     s.push('<text class="pm-assemblage-dimensions" x="' + milieu + '" y="' + (haut + 56) + '" text-anchor="middle">' + dimensions + '</text>');
     s.push('<rect class="pm-assemblage-cadre" x="0" y="0" width="' + larg + '" height="' + haut + '"/>');
 
@@ -433,34 +327,28 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     for (var lig = 0; lig < NL; lig++) {
       for (var col = 0; col < NC; col++) {
         var k = cle(col, lig), x = col * COTE, y = lig * COTE;
-        var t = M().tuileEn(doc, col, lig), role = M().roleCellule(col, lig, forme, F);
+        var t = M().tuileEn(doc, col, lig);
         var classes = ['pm-assemblage-cellule'];
-        var etiquette = etiquetteCellule(col, lig, forme, F);
+        var etiquette = etiquetteCellule(col, lig, F), camp = F.campCellule(col, lig) || 'neutre';
         var nom;
-        if (t) classes.push('pm-assemblage-occupee');
-        else if (role === null) classes.push('pm-assemblage-retiree');
-        else classes.push('pm-assemblage-libre');
+        classes.push(t ? 'pm-assemblage-occupee' : 'pm-assemblage-libre');
         if (vue.compatibles) classes.push(vue.compatibles[k] ? 'pm-assemblage-compatible' : 'pm-assemblage-estompee');
         if (vue.cible && vue.cible.col === col && vue.cible.lig === lig) classes.push('pm-assemblage-cible');
         if (vue.clignote && vue.clignote.cellule === k) classes.push('pm-assemblage-clignote');
         if (vue.selection && vue.selection.col === col && vue.selection.lig === lig) classes.push('pm-assemblage-selection');
         var m = t ? M().modeleParId(doc, t.modeleId) : null;
-        if (t) nom = 'Tuile ' + t.modeleId + ' en (' + col + ',' + lig + ')' + (m && m.role === 'centrale' ? ', centrale (R pour pivoter)' : '');
-        else if (role === null) nom = 'Cellule (' + col + ',' + lig + ') retirée du plateau';
+        if (t) nom = 'Tuile ' + t.modeleId + ' en (' + col + ',' + lig + '), R pour pivoter';
         else nom = 'Cellule libre (' + col + ',' + lig + ') : ' + etiquette;
         s.push('<g class="' + classes.join(' ') + '" data-cellule="' + k + '" data-cle="c:' + k + '" transform="translate(' + x + ' ' + y + ')"' +
           ' tabindex="0" role="button" aria-label="' + echapper(nom) + '">');
         if (t) {
           if (m) {
-            s.push(PM.rendu.contenuTuile(m, { rot: t.rot, joueur: M().joueurCellule(col, lig, F), format: F }));
+            s.push(PM.rendu.contenuTuile(m, { rot: t.rot, camp: camp, format: F }));
             s.push(repereNord(t.rot, F));
           } else {
             s.push('<rect class="pm-assemblage-absent" x="0" y="0" width="' + COTE + '" height="' + COTE + '"/>' +
               '<text class="pm-assemblage-etiquette" x="' + demi + '" y="' + (demi + 4) + '" text-anchor="middle">Modèle absent</text>');
           }
-        } else if (role === null) {
-          s.push('<rect class="pm-assemblage-fond-retire" x="4" y="4" width="' + (COTE - 8) + '" height="' + (COTE - 8) + '"/>' +
-            '<text class="pm-assemblage-etiquette" x="' + demi + '" y="' + (demi + 4) + '" text-anchor="middle">Retirée</text>');
         } else {
           s.push('<rect class="pm-assemblage-silhouette" x="5" y="5" width="' + (COTE - 10) + '" height="' + (COTE - 10) + '" rx="4"/>' +
             '<text class="pm-assemblage-etiquette" x="' + demi + '" y="' + (demi + 4) + '" text-anchor="middle">' + echapper(etiquette) + '</text>');
@@ -473,7 +361,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     // Alertes (raccords et ports morts)
     alertesPlateau(doc).forEach(function (a) {
       var lg = a.type === 'raccord' ? F.LARGEUR_CHEMIN + 2 : 24;
-      var titre = a.type === 'port' ? 'Port de coin vers une jonction qui ne peut pas recevoir de jeton'
+      var titre = a.type === 'port' ? 'Port de coin vers le bord du plateau (aucune case de jonction)'
         : a.raison === 'vide' ? 'Raccord face au vide' : 'Raccord sans vis-à-vis';
       var ax = a.x + a.nx * 5, ay = a.y + a.ny * 5; // triangle légèrement à l'intérieur
       s.push('<g class="pm-assemblage-alerte" data-alerte="' + a.type + '">' +
@@ -489,27 +377,22 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       for (var i = 1; i < NC; i++) {
         var kj = cle(i, j), cx = i * COTE, cy = j * COTE;
         var jeton = doc.plateau.jetons.filter(function (x) { return x && x.i === i && x.j === j; })[0];
-        var possible = M().jonctionPossible(forme, i, j, F);
         var test = jeton ? { ok: true } : M().peutPoserJeton(doc, i, j);
         var cl = ['pm-assemblage-jonction'], info;
         if (jeton) {
           cl.push('pm-assemblage-jeton');
-          info = (jeton.type === 'carrefour' ? 'Carrefour' : 'Ville') + ' en (' + i + ',' + j + ') : clic pour ' +
-            (jeton.type === 'carrefour' ? 'retirer le jeton' : 'passer en carrefour');
-        } else if (!possible) {
-          cl.push('pm-assemblage-impossible');
-          info = 'Jonction (' + i + ',' + j + ') impossible avec cette forme : il lui manque une tuile voisine ou des ports.';
+          info = 'Ville en (' + i + ',' + j + ') : clic pour la retirer (la jonction redevient une case chemin)';
         } else if (!test.ok) {
           cl.push('pm-assemblage-refusee');
-          info = 'Jonction (' + i + ',' + j + ') : ' + test.raison;
+          info = 'Case de jonction (' + i + ',' + j + ') : ' + test.raison;
         } else {
           cl.push('pm-assemblage-disponible');
-          info = 'Jonction (' + i + ',' + j + ') libre : clic pour poser une ville';
+          info = 'Case de jonction (' + i + ',' + j + ') : clic pour y poser une ville';
         }
         if (vue.clignote && vue.clignote.jonction === kj) cl.push('pm-assemblage-clignote');
         s.push('<g class="' + cl.join(' ') + '" data-jonction="' + kj + '" data-cle="j:' + kj + '" tabindex="0" role="button" aria-label="' + echapper(info) + '">');
         if (jeton) s.push(PM.rendu.contenuJeton(jeton.type, cx, cy, F));
-        else s.push('<circle class="pm-assemblage-point" cx="' + cx + '" cy="' + cy + '" r="' + (possible ? 9 : 6) + '"/>');
+        else s.push('<circle class="pm-assemblage-point" cx="' + cx + '" cy="' + cy + '" r="' + (test.ok ? 9 : 6) + '"/>');
         s.push('<circle class="pm-assemblage-zone-jonction" cx="' + cx + '" cy="' + cy + '" r="' + RAYON_JONCTION + '"><title>' + echapper(info) + '</title></circle>');
         s.push('</g>');
       }
@@ -537,27 +420,15 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   }
 
   function monter(conteneur, etat) {
-    var formes = formesProposees();
-    var groupes = [];
-    formes.forEach(function (f) { if (groupes.indexOf(f.groupe) < 0) groupes.push(f.groupe); });
-
     conteneur.classList.add('pm-assemblage');
     conteneur.innerHTML =
       '<div class="pm-assemblage-outils">' +
-        '<label class="pm-assemblage-forme">Forme ' +
-          '<select data-role="forme">' + groupes.map(function (g) {
-            return '<optgroup label="' + echapper(g) + '">' + formes.filter(function (f) { return f.groupe === g; }).map(function (f) {
-              return '<option value="' + f.cle + '">' + echapper(f.libelle) + '</option>';
-            }).join('') + '</optgroup>';
-          }).join('') + '</select>' +
-        '</label>' +
         '<span class="pm-assemblage-compteur" data-role="jetons" aria-live="polite"></span>' +
         '<span class="pm-assemblage-consigne" data-role="consigne"></span>' +
       '</div>' +
       '<div class="pm-assemblage-scene" data-role="scene"></div>' +
       '<div class="pm-assemblage-fantome" data-role="fantome" hidden></div>';
     var scene = conteneur.querySelector('[data-role="scene"]');
-    var selForme = conteneur.querySelector('[data-role="forme"]');
     var compteur = conteneur.querySelector('[data-role="jetons"]');
     var consigne = conteneur.querySelector('[data-role="consigne"]');
     var fantome = conteneur.querySelector('[data-role="fantome"]');
@@ -595,14 +466,12 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         clignote: clignote, surbrillance: ui.surbrillance
       });
       if (cleFocus) { var el = scene.querySelector('[data-cle="' + cleFocus + '"]'); if (el) el.focus(); }
-      var F = formatDoc(doc), k = cleForme(doc.plateau.forme, F);
-      selForme.value = k || '';
-      compteur.textContent = 'Jetons posés ' + compterJetons(doc) + '/' + ((F.GRILLE.colonnes - 1) * (F.GRILLE.lignes - 1));
+      compteur.textContent = 'Villes posées ' + compterJetons(doc) + '/' + NB_VILLES;
       var t = selection && M().tuileEn(doc, selection.col, selection.lig);
       if (ui.aPoser) consigne.textContent = 'Pose de « ' + ui.aPoser + ' » : cliquez une cellule éclairée (Échap pour annuler).';
       else if (t) consigne.textContent = 'Tuile (' + t.col + ',' + t.lig + ') sélectionnée : ' +
-        (estCentrale(doc, t.modeleId) ? 'R ou clic pour pivoter, ' : 'sens posé automatiquement, ') + 'Suppr pour retirer, glisser pour déplacer.';
-      else consigne.textContent = 'Clic sur une jonction : ville, carrefour, vide.';
+        'R ou clic pour pivoter, Suppr pour retirer, glisser pour déplacer.';
+      else consigne.textContent = 'Clic sur une jonction : case chemin ou ville.';
     }
 
     function faireClignoter(c) {
@@ -631,7 +500,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       if (r.ok) {
         selection = { col: col, lig: lig };
         etat.signaler('Tuile « ' + modeleId + ' » posée en (' + col + ',' + lig + ')' +
-          (estCentrale(etat.doc(), modeleId) ? ' : R pour la pivoter.' : ', dans le bon sens automatiquement.'), 'info');
+          ' : R pour la pivoter.', 'info');
       }
       return r.ok;
     }
@@ -650,12 +519,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     function pivoterSelection() {
       var doc = etat.doc(), t = selection && M().tuileEn(doc, selection.col, selection.lig);
       if (!t) return;
-      if (!estCentrale(doc, t.modeleId)) {
-        etat.signaler('Les coins, bords et apparitions sont tournés automatiquement selon leur cellule.', 'info');
-        return;
-      }
       appliquerAvecEffets(function (d) { return M().tournerTuile(d, t.col, t.lig, 1); }, 'rotation',
-        'Centrale (' + t.col + ',' + t.lig + ') pivotée d\'un quart de tour.');
+        'Tuile (' + t.col + ',' + t.lig + ') pivotée d\'un quart de tour.');
     }
 
     function retirerSelection() {
@@ -673,10 +538,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       if (!aJeton) {
         var test = M().peutPoserJeton(doc, i, j);
         if (!test.ok) {
-          var raison = M().jonctionPossible(doc.plateau.forme, i, j, formatDoc(doc)) ? test.raison
-            : 'Cette jonction ne peut pas recevoir de jeton avec cette forme de plateau.';
           faireClignoter({ jonction: cle(i, j) });
-          etat.signaler(raison, 'erreur');
+          etat.signaler(test.raison, 'erreur');
           return;
         }
       }
@@ -694,7 +557,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       var p = ce.getAttribute('data-cellule').split(',').map(Number), col = p[0], lig = p[1];
       var t = M().tuileEn(doc, col, lig);
       if (ui.aPoser && !t) {
-        if (poserIci(ui.aPoser, col, lig, 0)) etat.majUi({ aPoser: null });
+        if (poserIci(ui.aPoser, col, lig, null)) etat.majUi({ aPoser: null });
         return;
       }
       if (t) {
@@ -705,10 +568,9 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       }
       selection = null;
       dessiner();
-      var et = etiquetteCellule(col, lig, doc.plateau.forme, formatDoc(doc));
-      etat.signaler(et ? 'Cellule (' + col + ',' + lig + ') : ' + et.toLowerCase() + ' attendu' +
-        (/^(Centrale|Apparition)/.test(et) ? 'e' : '') + '. Glissez une tuile de ce rôle depuis la bibliothèque.'
-        : 'Cette cellule est retirée du plateau.', 'info');
+      var et = etiquetteCellule(col, lig, formatDoc(doc));
+      etat.signaler('Cellule (' + col + ',' + lig + ') : ' + (et || '').toLowerCase() +
+        '. Glissez-y n\'importe quelle tuile depuis la bibliothèque (pose libre).', 'info');
     }
 
     /* --- Glissement ------------------------------------------------- */
@@ -720,7 +582,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       fantome.style.width = taille + 'px';
       fantome.style.height = taille + 'px';
       fantome.innerHTML = '<svg viewBox="0 0 ' + F.COTE + ' ' + F.COTE + '" width="100%" height="100%" aria-hidden="true">' +
-        PM.rendu.contenuTuile(m, { rot: glissement.rot, joueur: null, format: F }) + '</svg>';
+        PM.rendu.contenuTuile(m, { rot: glissement.rot || 0, format: F }) + '</svg>';
       fantome.hidden = false;
     }
 
@@ -734,7 +596,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       var doc = etat.doc(), m = M().modeleParId(doc, g.modeleId);
       if (!m) return false;
       var t = g.de ? M().tuileEn(doc, g.de.col, g.de.lig) : null;
-      glissement = { modeleId: g.modeleId, de: g.de, rot: t ? t.rot : 0, pointerId: ev.pointerId, cible: null };
+      // rot null : rotation suggérée à la pose (tuile neuve) ; R pendant le glissement fixe la rotation
+      glissement = { modeleId: g.modeleId, de: g.de, rot: t ? t.rot : null, pointerId: ev.pointerId, cible: null };
       if (etat.ui().aPoser) etat.majUi({ aPoser: null });
       conteneur.classList.add('pm-assemblage-glisse');
       dessiner();
@@ -828,8 +691,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       var k = ev.key;
       if (k === 'r' || k === 'R') {
         if (glissement) {
-          if (estCentrale(etat.doc(), glissement.modeleId)) { glissement.rot = (glissement.rot + 1) % 4; dessinerFantome(); }
-          else etat.signaler('Seules les centrales pivotent : les autres tuiles sont tournées automatiquement.', 'info');
+          glissement.rot = ((glissement.rot || 0) + 1) % 4;
+          dessinerFantome();
           ev.preventDefault();
         } else if (selection) { pivoterSelection(); ev.preventDefault(); }
       } else if (k === 'Delete') {
@@ -845,13 +708,6 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     document.addEventListener('pointerdown', function () {
       if (etat.ui().surbrillance && etat.ui().onglet === 'plateau') etat.majUi({ surbrillance: null });
     }, true);
-
-    selForme.addEventListener('change', function () {
-      var f = formes.filter(function (x) { return x.cle === selForme.value; })[0];
-      if (!f) return;
-      appliquerAvecEffets(function (d) { return M().changerForme(d, f.forme); }, 'forme du plateau', 'Forme : ' + f.libelle.charAt(0).toLowerCase() + f.libelle.slice(1) + '.');
-      dessiner();
-    });
 
     // Le fantôme suit la taille du plateau si la fenêtre change pendant un glissement.
     window.addEventListener('resize', function () { if (glissement) dessinerFantome(); });
@@ -881,12 +737,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     effetsDeAction: effetsDeAction,
     messageEffets: messageEffets,
     compterJetons: compterJetons,
-    coteJonction: coteJonction,
-    carrefoursMemeCote: carrefoursMemeCote,
-    alerteCarrefours: alerteCarrefours,
     messageJeton: messageJeton,
-    formesProposees: formesProposees,
-    cleForme: cleForme,
     etiquetteCellule: etiquetteCellule,
     alertesPlateau: alertesPlateau,
     cibleSurbrillance: cibleSurbrillance,

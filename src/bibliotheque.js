@@ -1,6 +1,6 @@
 /*
  * bibliotheque.js : colonne gauche, bibliothèque des modèles de tuile (commune aux deux onglets).
- * Vignettes SVG, filtre par rôle, exemplaires restants, +/− sur le nombre d'exemplaires,
+ * Vignettes SVG, filtre par gabarit (centrale, bord, coin), exemplaires restants, +/− sur le nombre d'exemplaires,
  * badge « incomplet ». Clic = ouvrir dans l'éditeur ; glisser = poser sur le plateau
  * (le glissement est confié à PM.assemblage.demarrerGlissement) ; bouton « Poser » = pose en deux clics.
  * Les fonctions de calcul (vignettesBibliotheque, ...) n'accèdent pas au DOM : testables sous Node.
@@ -10,8 +10,8 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
 (function () {
   'use strict';
 
-  var ROLES = ['centrale', 'coin', 'bord', 'apparition'];
-  var TITRES_ROLE = { centrale: 'Centrales', coin: 'Coins', bord: 'Bords', apparition: 'Apparitions' };
+  var GABARITS = ['centrale', 'bord', 'coin'];
+  var TITRES_GABARIT = { centrale: 'Centrales', bord: 'Bords', coin: 'Coins' };
   /** Distance (px) au-delà de laquelle un appui devient un glissement. */
   var SEUIL_GLISSEMENT = 5;
 
@@ -26,12 +26,12 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   }
 
   /**
-   * Données d'affichage de la bibliothèque (pure) : groupes par rôle, filtrés.
-   * filtre : 'tous' | un rôle. Renvoie [{role, titre, modeles: [{id, nom, role, exemplaires,
-   * posees, restants, complet, posable}]}] (groupes vides omis). Les rôles inconnus vont dans « Autres ».
+   * Données d'affichage de la bibliothèque (pure) : groupes par gabarit, filtrés.
+   * filtre : 'tous' | un gabarit. Renvoie [{gabarit, titre, modeles: [{id, nom, gabarit, exemplaires,
+   * posees, restants, complet, posable, alertes}]}] (groupes vides omis). Les gabarits inconnus vont dans « Autres ».
    */
   function vignettesBibliotheque(doc, filtre) {
-    var M = PM.modele, groupes = {}, ordre = ROLES.concat(['autre']);
+    var M = PM.modele, groupes = {}, ordre = GABARITS.concat(['autre']);
     var p = doc && doc.plateau;
     // document mal formé : refus explicite (Error lisible), jamais un TypeError natif
     if (!p || typeof p !== 'object' || !Array.isArray(p.tuiles)) throw new Error('Document invalide : plateau absent ou mal formé.');
@@ -39,18 +39,18 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     var F = M.formatDuDocument(doc);
     (Array.isArray(doc.modeles) ? doc.modeles : []).forEach(function (m) {
       if (!m || typeof m !== 'object') return;
-      var role = ROLES.indexOf(m.role) >= 0 ? m.role : 'autre';
-      var complet = M.validerModele(m, F).complet;
+      var gabarit = GABARITS.indexOf(m.gabarit) >= 0 ? m.gabarit : 'autre';
+      var v = M.validerModele(m, F);
       var restants = M.exemplairesRestants(doc, m.id);
-      groupes[role].push({
-        id: m.id, nom: m.nom || '', role: role, exemplaires: m.exemplaires, posees: nbPosees(doc, m.id),
-        restants: restants, complet: complet, posable: complet && restants > 0
+      groupes[gabarit].push({
+        id: m.id, nom: m.nom || '', gabarit: gabarit, exemplaires: m.exemplaires, posees: nbPosees(doc, m.id),
+        restants: restants, complet: v.complet, posable: v.complet && restants > 0, alertes: v.alertes.length
       });
     });
     return ordre.filter(function (r) {
       return groupes[r].length && (!filtre || filtre === 'tous' || filtre === r);
     }).map(function (r) {
-      return { role: r, titre: TITRES_ROLE[r] || 'Autres', modeles: groupes[r] };
+      return { gabarit: r, titre: TITRES_GABARIT[r] || 'Autres', modeles: groupes[r] };
     });
   }
 
@@ -72,7 +72,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
         '<label class="pm-biblio-filtre">Filtre ' +
           '<select data-role="filtre">' +
             '<option value="tous">Tous</option>' +
-            ROLES.map(function (r) { return '<option value="' + r + '">' + TITRES_ROLE[r] + '</option>'; }).join('') +
+            GABARITS.map(function (r) { return '<option value="' + r + '">' + TITRES_GABARIT[r] + '</option>'; }).join('') +
           '</select>' +
         '</label>' +
         '<p class="pm-biblio-aide">Clic : ouvrir dans l\'éditeur. Glisser ou « Poser » : placer sur le plateau.</p>' +
@@ -86,7 +86,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     function vignetteHtml(v, ui) {
       var m = PM.modele.modeleParId(etat.doc(), v.id), F = PM.modele.formatDuDocument(etat.doc()), t = F.COTE + 6;
       var svg = '<svg class="pm-biblio-svg" viewBox="-3 -3 ' + t + ' ' + t + '" aria-hidden="true">' +
-        PM.rendu.contenuTuile(m, { rot: 0, joueur: v.role === 'apparition' ? 1 : null, format: F }) + '</svg>';
+        PM.rendu.contenuTuile(m, { rot: 0, format: F }) + '</svg>';
       var classes = ['pm-biblio-vignette'];
       if (!v.complet) classes.push('pm-biblio-incomplet');
       if (v.restants <= 0) classes.push('pm-biblio-epuise');
@@ -102,6 +102,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
             '<span class="pm-biblio-id">' + id + '</span>' +
             '<span class="pm-biblio-nom">' + echapper(v.nom) + '</span>' +
             (v.complet ? '' : '<span class="pm-biblio-badge">incomplet</span>') +
+            (v.complet && v.alertes ? '<span class="pm-biblio-badge" title="Alertes de l’éditeur (par exemple règles R1 à R4)">' + v.alertes + ' alerte' + (v.alertes > 1 ? 's' : '') + '</span>' : '') +
           '</span>' +
         '</button>' +
         '<div class="pm-biblio-stock">' +

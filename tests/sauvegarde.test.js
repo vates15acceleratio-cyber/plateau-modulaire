@@ -49,21 +49,24 @@ test('versJSON puis depuisJSON redonne le même document', () => {
   assert.deepStrictEqual(r.erreurs, []);
 });
 
-test('versJSON écrit un en-tête format, version et date ISO en tête', () => {
+test('versJSON écrit un en-tête format, version, grille et date ISO en tête', () => {
   const texte = S.versJSON(documentTest());
   const objet = JSON.parse(texte);
-  assert.deepStrictEqual(Object.keys(objet).slice(0, 4), ['format', 'version', 'date', 'modeles']);
+  assert.deepStrictEqual(Object.keys(objet).slice(0, 5), ['format', 'version', 'grille', 'date', 'modeles']);
   assert.strictEqual(objet.format, 'plateau-modulaire');
-  assert.strictEqual(objet.version, 1);
+  assert.strictEqual(objet.version, 2);
+  assert.strictEqual(objet.grille, '4x4');
   assert.match(objet.date, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   assert.ok(texte.includes('\n  "modeles"'), 'JSON indenté');
 });
 
-test('un document nu {version, modeles, plateau} est accepté', () => {
+test('un document nu {version, grille, modeles, plateau} est accepté', () => {
   const doc = documentTest();
-  const r = S.depuisJSON(JSON.stringify({ version: 1, modeles: doc.modeles, plateau: doc.plateau }));
+  const r = S.depuisJSON(JSON.stringify({ version: 2, grille: '4x4', modeles: doc.modeles, plateau: doc.plateau }));
   assert.strictEqual(r.ok, true);
   assert.deepStrictEqual(r.doc, doc);
+  // grille absente = 4×4
+  assert.strictEqual(S.depuisJSON(JSON.stringify({ version: 2, modeles: [], plateau: { tuiles: [] } })).doc.grille, '4x4');
 });
 
 test('les champs inconnus sont ignorés, les ids conservés', () => {
@@ -125,7 +128,7 @@ test('mutations de structure : aucune exception, résultat exploitable', () => {
   const base = JSON.parse(S.versJSON(documentTest()));
   const chemins = [
     ['format'], ['version'], ['modeles'], ['modeles', 0], ['modeles', 0, 'cases'],
-    ['modeles', 0, 'chemins'], ['plateau'], ['plateau', 'forme'], ['plateau', 'forme', 'retires'],
+    ['modeles', 0, 'chemins'], ['plateau'], ['grille'], ['modeles', 0, 'gabarit'], ['modeles', 0, 'grille'],
     ['plateau', 'tuiles', 0], ['plateau', 'jetons', 0], ['plateau', 'tuiles'], ['plateau', 'jetons']
   ];
   const valeurs = [null, 'x', 5, [], {}];
@@ -157,10 +160,10 @@ test('contenus internes mal formés : le document reste utilisable par le rendu 
     (d) => { d.modeles[0].cases = [{ id: 'c1', x: 'a' }]; },
     (d) => { d.modeles[0].chemins = [{ id: 'h', a: { case: 'inexistant' }, b: { case: 'c1' } }]; },
     (d) => { d.modeles[0].chemins = [{ a: null, b: 5 }]; },
-    (d) => { d.plateau.forme.retires = [null, 'x', {}]; },
+    (d) => { d.modeles[0].grille = '9x9'; },
     (d) => { d.modeles[0].cases = [{ id: 5, x: 1, y: 1, diametre: 'a', type: 3 }]; },
     (d) => { d.plateau.tuiles = [{ modeleId: 'ex-centrale', col: 1, lig: 1, rot: 9 }]; },
-    (d) => { d.modeles[0].role = 'truc'; }
+    (d) => { d.modeles[0].gabarit = 'truc'; }
   ];
   for (const mutation of cas) {
     const d = M.nouveauDocument();
@@ -173,7 +176,6 @@ test('contenus internes mal formés : le document reste utilisable par le rendu 
       PM.rendu.contenuTuile(m, { rot: 0 });
       PM.rendu.tracesModele(m);
       M.masquesDuModele(m);
-      M.cellulesActives(r.doc.plateau.forme);
       M.validerPlateau(r.doc);
       M.validerModele(m);
     }, `après mutation ${mutation.toString()}`);
@@ -195,7 +197,7 @@ test('un plateau imparfait s\'ouvre avec des alertes', () => {
 
 test('un modèle invalide est conservé comme brouillon avec une alerte', () => {
   const doc = documentTest();
-  doc.modeles.push({ id: 'brouillon-1', nom: 'Brouillon', role: 'bord', exemplaires: 1, cases: [], chemins: [] });
+  doc.modeles.push({ id: 'brouillon-1', nom: 'Brouillon', gabarit: 'bord', exemplaires: 1, cases: [{ id: 'c1', x: 60, y: 60, diametre: 24, type: 'deplacement' }], chemins: [] });
   const r = S.depuisJSON(S.versJSON(doc));
   assert.strictEqual(r.ok, true);
   assert.ok(r.doc.modeles.some((m) => m.id === 'brouillon-1'));
@@ -352,11 +354,11 @@ test('ouvrirFichier sous Node résout null sans planter', async () => {
 test('sécurité (revue B1) : un fichier piégé ne fait passer aucun balisage dans les cases ni les chemins', () => {
   const S = globalThis.PM.sauvegarde;
   const piege = '0"/><foreignObject><img src=x onerror=alert(1)></foreignObject><circle cx="0';
-  const m = { id: 'P', nom: 'piège', role: 'centrale', exemplaires: 1,
+  const m = { id: 'P', nom: 'piège', gabarit: 'centrale', exemplaires: 1,
     cases: [{ id: 'c1', x: piege, y: 10, diametre: 24, type: 'deplacement' }, { id: 'c2', x: 60, y: 60, diametre: piege, type: 'deplacement' },
       { id: 'c3', x: 40, y: 40, type: 'deplacement', extra: piege }],
     chemins: [{ id: 'k1', a: { case: 'c3' }, b: { raccord: { cote: piege, pos: 1 } } }, { id: 'k2', a: { case: 'c3' }, b: { coin: 0, extra: piege } }] };
-  const r = S.depuisJSON(JSON.stringify({ format: 'plateau-modulaire', version: 1, modeles: [m], plateau: { forme: { retires: [] }, tuiles: [], jetons: [] } }));
+  const r = S.depuisJSON(JSON.stringify({ format: 'plateau-modulaire', version: 2, modeles: [m], plateau: { tuiles: [], jetons: [] } }));
   assert.equal(r.ok, true);
   const texte = JSON.stringify(r.doc.modeles);
   assert.ok(!texte.includes('onerror'), texte);
@@ -368,28 +370,108 @@ test('sécurité (revue B1) : un fichier piégé ne fait passer aucun balisage d
 
 test('audit de sécurité : plafonds à l’ouverture (taille, tableaux, valeurs)', () => {
   const S = globalThis.PM.sauvegarde, L = S.LIMITES;
-  const env = (modeles, plateau) => JSON.stringify({ format: 'plateau-modulaire', version: 1, modeles, plateau: plateau || { forme: { retires: [] }, tuiles: [], jetons: [] } });
+  const env = (modeles, plateau) => JSON.stringify({ format: 'plateau-modulaire', version: 2, modeles, plateau: plateau || { tuiles: [], jetons: [] } });
   // fichier trop volumineux : refusé avant JSON.parse
   const gros = S.depuisJSON(' '.repeat(L.octets + 1) + '{}');
   assert.equal(gros.ok, false);
   assert.equal(gros.erreurs[0].code, 'trop_gros');
-  // trop de cases : tronquées ; rôle non textuel → '' ; coordonnée extrême écartée ; exemplaires bornés
+  // trop de cases : tronquées ; gabarit non textuel → '' ; coordonnée extrême écartée ; exemplaires bornés
   const cases = Array.from({ length: L.cases + 50 }, (_, k) => ({ id: 'c' + k, x: 10, y: 10, diametre: 24, type: 'deplacement' }));
   cases.push({ id: 'z', x: 1e308, y: 10 });
-  const r = S.depuisJSON(env([{ id: 'M', nom: 'n', role: { pas: 'texte' }, exemplaires: 1e308, cases, chemins: [] }]));
+  const r = S.depuisJSON(env([{ id: 'M', nom: 'n', gabarit: { pas: 'texte' }, exemplaires: 1e308, cases, chemins: [] }]));
   assert.equal(r.ok, true);
   assert.equal(r.doc.modeles[0].cases.length, L.cases);
-  assert.equal(r.doc.modeles[0].role, '');
+  assert.equal(r.doc.modeles[0].gabarit, '');
   assert.equal(r.doc.modeles[0].exemplaires, 0);
-  // retraits de forme : seuls {col, lig} entiers, au plus L.retires
-  const retires = [{ col: 0, lig: 0, extra: { profond: true } }, { col: 'a', lig: 0 }, ...Array.from({ length: 40 }, () => ({ col: 3, lig: 3 }))];
-  const f = S.depuisJSON(env([], { forme: { retires }, tuiles: [], jetons: [] }));
-  assert.equal(f.ok, true);
-  assert.ok(f.doc.plateau.forme.retires.length <= L.retires);
-  assert.deepEqual(f.doc.plateau.forme.retires[0], { col: 0, lig: 0 });
   // trop de tuiles : seules les premières sont lues, avec une alerte
   const tuiles = Array.from({ length: L.tuiles + 10 }, () => ({ modeleId: 'M', col: 1, lig: 1, rot: 0 }));
-  const t = S.depuisJSON(env([], { forme: { retires: [] }, tuiles, jetons: [] }));
+  const t = S.depuisJSON(env([], { tuiles, jetons: [] }));
   assert.equal(t.doc.plateau.tuiles.length, L.tuiles);
   assert.ok(t.alertes.some((a) => a.code === 'tuiles_en_trop'));
+});
+
+/* ---------- version 2 : grille, migration d'un document de la version 1 ---------- */
+
+const fs = require('fs');
+const path = require('path');
+/** Document réel de la version 1.00.0 (catalogue v1, coin SO retiré, 2 carrefours), écrit par le versJSON du tag 1.00.0. */
+const TEXTE_V1 = fs.readFileSync(path.join(__dirname, 'donnees', 'document-v1.json'), 'utf8');
+
+test('migration v1 → v2 : document réel de la version 1.00.0 converti, une phrase dans les alertes', () => {
+  const brut = JSON.parse(TEXTE_V1);
+  assert.strictEqual(brut.version, 1);
+  const r = S.depuisJSON(TEXTE_V1);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.migre, true);
+  assert.strictEqual(r.alertes[0].code, 'migration_v1');
+  assert.match(r.alertes[0].message, /^Document de la version 1 converti/);
+  assert.match(r.alertes[0].message, /1 cellule\(s\) retirée\(s\) remise\(s\)/);
+  assert.match(r.alertes[0].message, /2 carrefour\(s\) supprimé\(s\)/);
+  assert.strictEqual(r.alertes.filter((a) => a.code === 'migration_v1').length, 1);
+  const d = r.doc;
+  assert.strictEqual(d.version, 2);
+  assert.strictEqual(d.grille, '4x4');
+  assert.ok(!('forme' in d.plateau), 'plus de forme : grille pleine');
+  // carrefours supprimés, villes conservées
+  assert.deepStrictEqual(d.plateau.jetons, brut.plateau.jetons.filter((j) => j.type === 'capture'));
+  assert.ok(d.plateau.jetons.every((j) => j.type === 'capture'));
+  // rôle → gabarit (apparition → bord), grille sur chaque modèle, plus de champ role
+  for (const m of d.modeles) {
+    const v1 = brut.modeles.find((x) => x.id === m.id);
+    assert.strictEqual(m.gabarit, v1.role === 'apparition' ? 'bord' : v1.role, m.id);
+    assert.strictEqual(m.grille, '4x4');
+    assert.ok(!('role' in m));
+    assert.strictEqual(M.validerModele(m, d.grille).complet, true, m.id);
+  }
+  // rotations stockées telles quelles, entiers 0..3
+  assert.deepStrictEqual(d.plateau.tuiles.map((t) => t.rot), brut.plateau.tuiles.map((t) => t.rot));
+  assert.strictEqual(M.validerPlateau(d).erreurs.length, 0);
+  // relu après écriture : version 2, plus de migration, document identique
+  const r2 = S.depuisJSON(S.versJSON(d));
+  assert.strictEqual(r2.migre, false);
+  assert.ok(!r2.alertes.some((a) => a.code === 'migration_v1'));
+  assert.deepStrictEqual(r2.doc, d);
+});
+
+test('migration : la sauvegarde automatique d\'un document v1 se rouvre convertie', () => {
+  const st = fauxStockage();
+  st.setItem(S.CLE_AUTOSAVE, TEXTE_V1);
+  const r = S.restaurerAutosave(st);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.doc.version, 2);
+  assert.strictEqual(r.alertes[0].code, 'migration_v1');
+});
+
+test('bibliothequeVersion1 : reconnue à ses modèles A1 et A2', () => {
+  const d = S.depuisJSON(TEXTE_V1).doc;
+  assert.strictEqual(S.bibliothequeVersion1(d), true);
+  assert.strictEqual(S.bibliothequeVersion1(documentTest()), false);
+  assert.strictEqual(S.bibliothequeVersion1(undefined), false);
+});
+
+test('version 2 : grille 5×5 conservée ; grille inconnue ou version inconnue refusées ; carrefour d\'un fichier v2 ignoré', () => {
+  const d = M.nouveauDocument('5x5');
+  d.modeles = M.copieExemples('5x5');
+  const r = S.depuisJSON(S.versJSON(d));
+  assert.strictEqual(r.doc.grille, '5x5');
+  assert.deepStrictEqual(r.doc, d);
+  assert.strictEqual(S.depuisJSON(JSON.stringify({ version: 2, grille: 'hexagone', modeles: [], plateau: { tuiles: [] } })).erreurs[0].code, 'grille');
+  assert.strictEqual(S.depuisJSON(JSON.stringify({ version: 3, modeles: [], plateau: { tuiles: [] } })).erreurs[0].code, 'version');
+  const v2 = S.depuisJSON(JSON.stringify({ version: 2, modeles: [], plateau: { tuiles: [], jetons: [{ i: 1, j: 1, type: 'carrefour' }] } }));
+  assert.deepStrictEqual(v2.doc.plateau.jetons, []);
+  assert.ok(v2.alertes.some((a) => a.code === 'jeton_ignore'));
+  // un modèle d'une autre grille est conservé, comme brouillon (non posable sur cette grille)
+  const autre = S.depuisJSON(JSON.stringify({ version: 2, grille: '4x4', modeles: M.copieExemples('5x5'), plateau: { tuiles: [] } }));
+  assert.ok(autre.doc.modeles.every((m) => m.grille === '5x5'));
+  assert.ok(autre.alertes.some((a) => a.code === 'modele_incomplet'));
+});
+
+test('fusionnerBibliotheque : une bibliothèque de la version 1 reçoit ses gabarits', () => {
+  const v1 = JSON.parse(TEXTE_V1);
+  const texte = JSON.stringify({ format: 'plateau-modulaire', version: 1, contenu: 'bibliotheque', modeles: v1.modeles });
+  const r = S.fusionnerBibliotheque(M.nouveauDocument(), texte);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.doc.modeles.find((m) => m.id === 'A1').gabarit, 'bord');
+  assert.strictEqual(r.doc.modeles.find((m) => m.id === 'K1').gabarit, 'coin');
+  assert.ok(r.doc.modeles.every((m) => !('role' in m)));
 });

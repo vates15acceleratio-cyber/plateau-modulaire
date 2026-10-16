@@ -28,7 +28,7 @@ test('appliquer, annuler, rétablir', () => {
 test('appliquer : une Error laisse le document intact et signale la raison', () => {
   const e = E.creer(docAvecExemples());
   const avant = e.doc();
-  const r = e.appliquer((d) => M.poserTuile(d, 'ex-coin', 1, 1));
+  const r = e.appliquer((d) => M.poserTuile(d, 'ex-coin', 9, 9));
   assert.equal(r.ok, false);
   assert.ok(r.raison.length > 0);
   assert.equal(e.doc(), avant);

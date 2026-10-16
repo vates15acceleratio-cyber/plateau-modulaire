@@ -1,0 +1,2218 @@
+{
+  "format": "plateau-modulaire",
+  "version": 1,
+  "date": "2026-10-15T12:00:00.000Z",
+  "modeles": [
+    {
+      "id": "C1",
+      "nom": "Anneau",
+      "role": "centrale",
+      "exemplaires": 1,
+      "cases": [
+        {
+          "id": "c1",
+          "x": 36,
+          "y": 36,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 84,
+          "y": 36,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c3",
+          "x": 84,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c4",
+          "x": 36,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "case": "c3"
+          }
+        },
+        {
+          "id": "h3",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "case": "c4"
+          }
+        },
+        {
+          "id": "h4",
+          "a": {
+            "case": "c4"
+          },
+          "b": {
+            "case": "c1"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 0
+          }
+        },
+        {
+          "id": "p2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "coin": 1
+          }
+        },
+        {
+          "id": "p3",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "p4",
+          "a": {
+            "case": "c4"
+          },
+          "b": {
+            "coin": 3
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "raccord": {
+              "cote": 0,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r3",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r4",
+          "a": {
+            "case": "c4"
+          },
+          "b": {
+            "raccord": {
+              "cote": 3,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "C2",
+      "nom": "Fer à cheval",
+      "role": "centrale",
+      "exemplaires": 1,
+      "cases": [
+        {
+          "id": "c1",
+          "x": 32,
+          "y": 32,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 80,
+          "y": 40,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c3",
+          "x": 80,
+          "y": 80,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c4",
+          "x": 32,
+          "y": 88,
+          "diametre": 24,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "case": "c3"
+          }
+        },
+        {
+          "id": "h3",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "case": "c4"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 0
+          }
+        },
+        {
+          "id": "p2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "coin": 1
+          }
+        },
+        {
+          "id": "p3",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "p4",
+          "a": {
+            "case": "c4"
+          },
+          "b": {
+            "coin": 3
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "raccord": {
+              "cote": 0,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r3",
+          "a": {
+            "case": "c4"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r4",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "raccord": {
+              "cote": 3,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "C3",
+      "nom": "Zigzag",
+      "role": "centrale",
+      "exemplaires": 1,
+      "cases": [
+        {
+          "id": "c1",
+          "x": 36,
+          "y": 36,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 76,
+          "y": 44,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c3",
+          "x": 84,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c4",
+          "x": 44,
+          "y": 76,
+          "diametre": 24,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "case": "c4"
+          }
+        },
+        {
+          "id": "h3",
+          "a": {
+            "case": "c4"
+          },
+          "b": {
+            "case": "c3"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 0
+          }
+        },
+        {
+          "id": "p2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "coin": 1
+          }
+        },
+        {
+          "id": "p3",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "p4",
+          "a": {
+            "case": "c4"
+          },
+          "b": {
+            "coin": 3
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "raccord": {
+              "cote": 0,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r3",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r4",
+          "a": {
+            "case": "c4"
+          },
+          "b": {
+            "raccord": {
+              "cote": 3,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "C4",
+      "nom": "Étoile",
+      "role": "centrale",
+      "exemplaires": 1,
+      "cases": [
+        {
+          "id": "c1",
+          "x": 44,
+          "y": 44,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 86,
+          "y": 34,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c3",
+          "x": 86,
+          "y": 86,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c4",
+          "x": 34,
+          "y": 86,
+          "diametre": 24,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "case": "c4"
+          }
+        },
+        {
+          "id": "h3",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "case": "c3"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 0
+          }
+        },
+        {
+          "id": "p2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "coin": 1
+          }
+        },
+        {
+          "id": "p3",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "p4",
+          "a": {
+            "case": "c4"
+          },
+          "b": {
+            "coin": 3
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "raccord": {
+              "cote": 0,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r3",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r4",
+          "a": {
+            "case": "c4"
+          },
+          "b": {
+            "raccord": {
+              "cote": 3,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "C5",
+      "nom": "Patte",
+      "role": "centrale",
+      "exemplaires": 1,
+      "cases": [
+        {
+          "id": "c1",
+          "x": 38,
+          "y": 38,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 82,
+          "y": 38,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c3",
+          "x": 76,
+          "y": 76,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c4",
+          "x": 32,
+          "y": 88,
+          "diametre": 24,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "case": "c3"
+          }
+        },
+        {
+          "id": "h3",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "case": "c3"
+          }
+        },
+        {
+          "id": "h4",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "case": "c4"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 0
+          }
+        },
+        {
+          "id": "p2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "coin": 1
+          }
+        },
+        {
+          "id": "p3",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "p4",
+          "a": {
+            "case": "c4"
+          },
+          "b": {
+            "coin": 3
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "raccord": {
+              "cote": 0,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r3",
+          "a": {
+            "case": "c4"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r4",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "raccord": {
+              "cote": 3,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "C6",
+      "nom": "Losange",
+      "role": "centrale",
+      "exemplaires": 1,
+      "cases": [
+        {
+          "id": "c1",
+          "x": 32,
+          "y": 32,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 76,
+          "y": 44,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c3",
+          "x": 88,
+          "y": 88,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c4",
+          "x": 44,
+          "y": 76,
+          "diametre": 24,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "case": "c3"
+          }
+        },
+        {
+          "id": "h3",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "case": "c4"
+          }
+        },
+        {
+          "id": "h4",
+          "a": {
+            "case": "c4"
+          },
+          "b": {
+            "case": "c1"
+          }
+        },
+        {
+          "id": "h5",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "case": "c4"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 0
+          }
+        },
+        {
+          "id": "p2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "coin": 1
+          }
+        },
+        {
+          "id": "p3",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "p4",
+          "a": {
+            "case": "c4"
+          },
+          "b": {
+            "coin": 3
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "raccord": {
+              "cote": 0,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r3",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "K1",
+      "nom": "Coude",
+      "role": "coin",
+      "exemplaires": 1,
+      "cases": [
+        {
+          "id": "c1",
+          "x": 84,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 88,
+          "y": 36,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c3",
+          "x": 36,
+          "y": 88,
+          "diametre": 24,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "case": "c3"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "K2",
+      "nom": "Raccourci",
+      "role": "coin",
+      "exemplaires": 1,
+      "cases": [
+        {
+          "id": "c1",
+          "x": 84,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 88,
+          "y": 36,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c3",
+          "x": 36,
+          "y": 88,
+          "diametre": 24,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "case": "c3"
+          }
+        },
+        {
+          "id": "h3",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "case": "c3"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "K3",
+      "nom": "Détour",
+      "role": "coin",
+      "exemplaires": 1,
+      "cases": [
+        {
+          "id": "c1",
+          "x": 84,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 88,
+          "y": 36,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c3",
+          "x": 40,
+          "y": 40,
+          "diametre": 24,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "case": "c3"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "case": "c1"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "K4",
+      "nom": "Diagonale",
+      "role": "coin",
+      "exemplaires": 1,
+      "cases": [
+        {
+          "id": "c1",
+          "x": 84,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 88,
+          "y": 36,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c3",
+          "x": 36,
+          "y": 88,
+          "diametre": 24,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "case": "c3"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "case": "c1"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "K5",
+      "nom": "Équerre",
+      "role": "coin",
+      "exemplaires": 1,
+      "cases": [
+        {
+          "id": "c1",
+          "x": 84,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 40,
+          "y": 40,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c3",
+          "x": 36,
+          "y": 88,
+          "diametre": 24,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "case": "c1"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "B1",
+      "nom": "Bord en V",
+      "role": "bord",
+      "exemplaires": 1,
+      "cases": [
+        {
+          "id": "c1",
+          "x": 84,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 36,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c3",
+          "x": 60,
+          "y": 58,
+          "diametre": 24,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "case": "c1"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "p2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "coin": 3
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "raccord": {
+              "cote": 3,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r3",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "B2",
+      "nom": "Barre",
+      "role": "bord",
+      "exemplaires": 1,
+      "cases": [
+        {
+          "id": "c1",
+          "x": 84,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 36,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c3",
+          "x": 88,
+          "y": 40,
+          "diametre": 24,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "p2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "coin": 3
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "raccord": {
+              "cote": 3,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r3",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "B3",
+      "nom": "Triangle",
+      "role": "bord",
+      "exemplaires": 1,
+      "cases": [
+        {
+          "id": "c1",
+          "x": 84,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 36,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c3",
+          "x": 60,
+          "y": 42,
+          "diametre": 24,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "case": "c1"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "h3",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "p2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "coin": 3
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "raccord": {
+              "cote": 3,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r3",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "B4",
+      "nom": "Crochet",
+      "role": "bord",
+      "exemplaires": 1,
+      "cases": [
+        {
+          "id": "c1",
+          "x": 84,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 36,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c3",
+          "x": 60,
+          "y": 42,
+          "diametre": 24,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "case": "c3"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "p2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "coin": 3
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "raccord": {
+              "cote": 3,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r3",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "B5",
+      "nom": "Pont",
+      "role": "bord",
+      "exemplaires": 1,
+      "cases": [
+        {
+          "id": "c1",
+          "x": 84,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 36,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c3",
+          "x": 32,
+          "y": 40,
+          "diametre": 24,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "case": "c3"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "p2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "coin": 3
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "raccord": {
+              "cote": 3,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r4",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "A1",
+      "nom": "Fourche",
+      "role": "apparition",
+      "exemplaires": 2,
+      "cases": [
+        {
+          "id": "c1",
+          "x": 84,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 36,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c3",
+          "x": 60,
+          "y": 58,
+          "diametre": 24,
+          "type": "apparition"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "case": "c1"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "p2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "coin": 3
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "raccord": {
+              "cote": 3,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r3",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "A2",
+      "nom": "Arc",
+      "role": "apparition",
+      "exemplaires": 2,
+      "cases": [
+        {
+          "id": "c1",
+          "x": 84,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 36,
+          "y": 84,
+          "diametre": 24,
+          "type": "deplacement"
+        },
+        {
+          "id": "c3",
+          "x": 60,
+          "y": 42,
+          "diametre": 24,
+          "type": "apparition"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "case": "c1"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "p2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "coin": 3
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "raccord": {
+              "cote": 3,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r3",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "plateau": {
+    "forme": {
+      "retires": [
+        {
+          "col": 0,
+          "lig": 3
+        }
+      ]
+    },
+    "tuiles": [
+      {
+        "modeleId": "K1",
+        "col": 0,
+        "lig": 0,
+        "rot": 0
+      },
+      {
+        "modeleId": "A1",
+        "col": 1,
+        "lig": 0,
+        "rot": 0
+      },
+      {
+        "modeleId": "A1",
+        "col": 2,
+        "lig": 0,
+        "rot": 0
+      },
+      {
+        "modeleId": "K2",
+        "col": 3,
+        "lig": 0,
+        "rot": 1
+      },
+      {
+        "modeleId": "B1",
+        "col": 0,
+        "lig": 1,
+        "rot": 3
+      },
+      {
+        "modeleId": "C1",
+        "col": 1,
+        "lig": 1,
+        "rot": 1
+      },
+      {
+        "modeleId": "C2",
+        "col": 2,
+        "lig": 1,
+        "rot": 0
+      },
+      {
+        "modeleId": "B2",
+        "col": 3,
+        "lig": 1,
+        "rot": 1
+      },
+      {
+        "modeleId": "K3",
+        "col": 0,
+        "lig": 2,
+        "rot": 3
+      },
+      {
+        "modeleId": "C3",
+        "col": 1,
+        "lig": 2,
+        "rot": 0
+      },
+      {
+        "modeleId": "C4",
+        "col": 2,
+        "lig": 2,
+        "rot": 0
+      },
+      {
+        "modeleId": "B3",
+        "col": 3,
+        "lig": 2,
+        "rot": 1
+      },
+      {
+        "modeleId": "A2",
+        "col": 1,
+        "lig": 3,
+        "rot": 2
+      },
+      {
+        "modeleId": "A2",
+        "col": 2,
+        "lig": 3,
+        "rot": 2
+      },
+      {
+        "modeleId": "K4",
+        "col": 3,
+        "lig": 3,
+        "rot": 2
+      }
+    ],
+    "jetons": [
+      {
+        "i": 1,
+        "j": 1,
+        "type": "capture"
+      },
+      {
+        "i": 2,
+        "j": 1,
+        "type": "capture"
+      },
+      {
+        "i": 3,
+        "j": 1,
+        "type": "capture"
+      },
+      {
+        "i": 1,
+        "j": 2,
+        "type": "carrefour"
+      },
+      {
+        "i": 3,
+        "j": 2,
+        "type": "carrefour"
+      },
+      {
+        "i": 2,
+        "j": 2,
+        "type": "capture"
+      },
+      {
+        "i": 2,
+        "j": 3,
+        "type": "capture"
+      },
+      {
+        "i": 3,
+        "j": 3,
+        "type": "capture"
+      }
+    ]
+  }
+}

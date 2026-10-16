@@ -1,17 +1,21 @@
 'use strict';
+/*
+ * Tests du catalogue (src/catalogue.js) : catalogue de la version 1, converti aux données de la version 2
+ * (gabarit, grille). Contenu, validité (aucune erreur bloquante ; alertes R1 à R4 attendues) et tracés.
+ * Les mesures sur 1000 plateaux tirés de ce catalogue (seuils de la version 1 : carrefours, rôle apparition,
+ * 3 pas entre jonctions) sont désactivées : à refaire avec le catalogue v2.
+ */
 const test = require('node:test');
 const assert = require('node:assert');
 require('../src/catalogue.js');
 require('../src/rendu.js');
-require('../src/graphe.js');
 const G = globalThis.PM.geometrie;
 const M = globalThis.PM.modele;
 const CAT = globalThis.PM.catalogue;
-const GR = globalThis.PM.graphe;
 const R = globalThis.PM.rendu;
 
 /* ====================================================================== */
-/* Outils de simulation                                                    */
+/* Tirage d'un plateau                                                     */
 /* ====================================================================== */
 
 /** Générateur pseudo-aléatoire reproductible (mulberry32), valeurs dans [0, 1). */
@@ -35,37 +39,28 @@ function melanger(t, rng) {
 }
 
 /**
- * Plateau 4x4 complet tiré au hasard dans le stock du catalogue : modèles tirés
- * sans remise selon les exemplaires de chaque rôle, rotation aléatoire des centrales.
- * Utilise poserTuile / tournerTuile (rotation déduite pour les autres rôles).
+ * Plateau 4x4 plein tiré au hasard dans le stock du catalogue : modèles tirés sans remise selon les
+ * exemplaires de chaque gabarit, à la place de leur gabarit, rotation suggérée sur le pourtour, aléatoire au centre.
  */
 function tirerPlateau(rng) {
   let doc = CAT.nouveauDocument();
-  const stock = {};
+  const stock = {}, F = M.formatDuDocument(doc);
   for (const m of doc.modeles) {
-    stock[m.role] = stock[m.role] || [];
-    for (let k = 0; k < m.exemplaires; k++) stock[m.role].push(m.id);
+    stock[m.gabarit] = stock[m.gabarit] || [];
+    for (let k = 0; k < m.exemplaires; k++) stock[m.gabarit].push(m.id);
   }
   for (const r of Object.keys(stock)) stock[r] = melanger(stock[r], rng);
-  for (const c of M.cellulesActives(doc.plateau.forme)) {
-    const role = M.roleCellule(c.col, c.lig, doc.plateau.forme);
-    doc = M.poserTuile(doc, stock[role].pop(), c.col, c.lig);
-    if (role === 'centrale') {
-      const r = Math.floor(rng() * 4);
-      if (r) doc = M.tournerTuile(doc, c.col, c.lig, r);
+  for (let lig = 0; lig < 4; lig++) {
+    for (let col = 0; col < 4; col++) {
+      const g = M.gabaritCellule(col, lig, F);
+      doc = M.poserTuile(doc, stock[g].pop(), col, lig);
+      if (g === 'centrale') {
+        const r = Math.floor(rng() * 4);
+        if (r) doc = M.tournerTuile(doc, col, lig, r);
+      }
     }
   }
   return doc;
-}
-
-/**
- * Graphe global : PM.graphe (src/graphe.js). Les jonctions reçoivent les 9 jetons d'une paire de carrefours.
- *  - structure (connexité, écart entre jonctions, sorties des apparitions) : villes traversables, comme le
- *    contrôle « villes trop proches » du générateur ;
- *  - équilibre : critère de docs/16 (villes non traversables, écart et S sur les rangs 1 à 7, « 5 contre 2 »).
- */
-function jetons9(carrefours) {
-  return JONCTIONS.map((jn) => ({ i: jn.i, j: jn.j, type: carrefours.some((c) => c.i === jn.i && c.j === jn.j) ? 'carrefour' : 'capture' }));
 }
 
 /* ====================================================================== */
@@ -150,31 +145,39 @@ function problemesTrace(m) {
 const IDS_ATTENDUS = {
   centrale: ['C1', 'C2', 'C3', 'C4', 'C5', 'C6'],
   coin: ['K1', 'K2', 'K3', 'K4', 'K5'],
-  bord: ['B1', 'B2', 'B3', 'B4', 'B5'],
-  apparition: ['A1', 'A2']
+  bord: ['B1', 'B2', 'B3', 'B4', 'B5', 'A1', 'A2']
 };
 
-test('catalogue : version 1, 18 modèles, ids attendus et uniques', () => {
+test('catalogue : version 1 convertie, 18 modèles, ids attendus et uniques, gabarit et grille 4×4', () => {
   assert.strictEqual(CAT.version, 1);
   assert.strictEqual(CAT.modeles.length, 18);
   const ids = CAT.modeles.map((m) => m.id);
   assert.strictEqual(new Set(ids).size, 18);
-  for (const role of Object.keys(IDS_ATTENDUS)) {
-    assert.deepStrictEqual(CAT.modeles.filter((m) => m.role === role).map((m) => m.id), IDS_ATTENDUS[role], role);
+  for (const g of Object.keys(IDS_ATTENDUS)) {
+    assert.deepStrictEqual(CAT.modeles.filter((m) => m.gabarit === g).map((m) => m.id), IDS_ATTENDUS[g], g);
   }
+  assert.ok(CAT.modeles.every((m) => m.grille === '4x4' && !('role' in m)));
 });
 
-test('catalogue : les 18 modèles passent validerModele sans erreur', () => {
+test('catalogue : les 18 modèles n\'ont aucune erreur bloquante (règles physiques v2)', () => {
   for (const m of CAT.modeles) assert.deepStrictEqual(M.validerModele(m).erreurs, [], m.id);
 });
 
-test('catalogue : rôles, exemplaires et 20 tuiles physiques', () => {
-  const parRole = {};
+test('catalogue v1 et règles v2 : alertes R2 / R3 attendues, case d\'apparition seulement sur A1 et A2', () => {
+  const alertes = (id) => M.validerModele(CAT.modeles.find((m) => m.id === id)).alertes.map((a) => a.code);
+  for (const id of IDS_ATTENDUS.centrale) assert.ok(alertes(id).includes('porteuses_reliees') && alertes(id).includes('raccord_porteuse'), id);
+  for (const id of IDS_ATTENDUS.coin.concat(['B1', 'B2', 'B3', 'B4', 'B5'])) assert.ok(alertes(id).includes('sans_apparition'), id);
+  assert.deepStrictEqual(alertes('A2'), []);
+  assert.ok(!alertes('A1').includes('sans_apparition'));
+});
+
+test('catalogue : gabarits, exemplaires et 20 tuiles physiques', () => {
+  const parGabarit = {};
   for (const m of CAT.modeles) {
-    parRole[m.role] = (parRole[m.role] || 0) + m.exemplaires;
-    assert.strictEqual(m.exemplaires, m.role === 'apparition' ? 2 : 1, m.id);
+    parGabarit[m.gabarit] = (parGabarit[m.gabarit] || 0) + m.exemplaires;
+    assert.strictEqual(m.exemplaires, m.id === 'A1' || m.id === 'A2' ? 2 : 1, m.id);
   }
-  assert.deepStrictEqual(parRole, { centrale: 6, coin: 5, bord: 5, apparition: 4 });
+  assert.deepStrictEqual(parGabarit, { centrale: 6, coin: 5, bord: 9 });
   assert.strictEqual(CAT.modeles.reduce((s, m) => s + m.exemplaires, 0), 20);
 });
 
@@ -193,7 +196,7 @@ test('catalogue : profils de raccords (pos 1 partout, variantes recensées)', ()
   for (const m of CAT.modeles) {
     const r = M.masquesDuModele(m).raccords;
     for (let cote = 0; cote < 4; cote++) {
-      const exterieur = M.COTES_EXTERIEURS[m.role].includes(cote);
+      const exterieur = G.GABARITS[m.gabarit].cotesExterieurs.includes(cote);
       const attendu = exterieur ? 0 : (variantes[m.id] && variantes[m.id][cote] !== undefined ? variantes[m.id][cote] : 0b010);
       assert.strictEqual(G.triplet(r, cote), attendu, `${m.id} côté ${cote}`);
     }
@@ -201,7 +204,7 @@ test('catalogue : profils de raccords (pos 1 partout, variantes recensées)', ()
 });
 
 test('catalogue : chaque case d\'apparition touche les deux cases à port', () => {
-  for (const m of CAT.modeles.filter((x) => x.role === 'apparition')) {
+  for (const m of CAT.modeles.filter((x) => M.aUneApparition(x))) {
     const sp = m.cases.find((c) => c.type === 'apparition').id;
     const voisins = m.chemins.filter((ch) => ch.a['case'] === sp || ch.b['case'] === sp)
       .map((ch) => (ch.a['case'] === sp ? ch.b['case'] : ch.a['case'])).filter(Boolean);
@@ -230,8 +233,8 @@ function signature(m, rot) {
   return m.cases.map((c) => lab(c.id)).sort().join(',') + '|' + aretes.join(',');
 }
 
-test('variété : aucune centrale n\'est la copie tournée d\'une autre, aucun doublon par rôle', () => {
-  const centrales = CAT.modeles.filter((m) => m.role === 'centrale');
+test('variété : aucune centrale n\'est la copie tournée d\'une autre, aucun doublon par gabarit', () => {
+  const centrales = CAT.modeles.filter((m) => m.gabarit === 'centrale');
   for (let i = 0; i < centrales.length; i++) {
     for (let j = i + 1; j < centrales.length; j++) {
       for (let rot = 0; rot < 4; rot++) {
@@ -250,9 +253,9 @@ test('variété : aucune centrale n\'est la copie tournée d\'une autre, aucun d
     return liens.length + ':' + [...deg.values()].sort().join('') + ':' + diagonales;
   });
   assert.strictEqual(new Set(formes).size, 6, formes.join(' '));
-  for (const role of ['coin', 'bord', 'apparition']) {
-    const sigs = CAT.modeles.filter((m) => m.role === role).map((m) => signature(m, 0));
-    assert.strictEqual(new Set(sigs).size, sigs.length, role);
+  for (const g of ['coin', 'bord']) {
+    const sigs = CAT.modeles.filter((m) => m.gabarit === g).map((m) => signature(m, 0));
+    assert.strictEqual(new Set(sigs).size, sigs.length, g);
   }
 });
 
@@ -268,15 +271,20 @@ test('tracés : le contrôle détecte un chemin qui traverse une case (témoin)'
   assert.ok(problemesTrace(m).some((t) => t.includes('x et y se touchent')));
   m.cases.push({ id: 'c5', x: 60, y: 60, diametre: 24, type: 'deplacement' });
   assert.ok(problemesTrace(m).some((t) => t.includes('de c5')));
+  // les mêmes défauts sont des erreurs bloquantes de validerModele (règles physiques v2)
+  const codes = M.validerModele(m).erreurs.map((e) => e.code);
+  assert.ok(codes.includes('chemins_croises') && codes.includes('chemin_case'), codes.join(' '));
 });
 
 /* ====================================================================== */
 /* Document                                                                */
 /* ====================================================================== */
 
-test('nouveauDocument : document vide avec une copie modifiable des 18 modèles', () => {
+test('nouveauDocument : document vide (version 2, grille 4×4) avec une copie modifiable des 18 modèles', () => {
   const doc = CAT.nouveauDocument();
   const vide = M.nouveauDocument();
+  assert.strictEqual(doc.version, 2);
+  assert.strictEqual(doc.grille, '4x4');
   assert.deepStrictEqual(doc.plateau, vide.plateau);
   assert.strictEqual(doc.version, vide.version);
   assert.deepStrictEqual(doc.modeles, JSON.parse(JSON.stringify(CAT.modeles)));
@@ -288,149 +296,28 @@ test('nouveauDocument : document vide avec une copie modifiable des 18 modèles'
   assert.notStrictEqual(CAT.nouveauDocument().modeles, CAT.nouveauDocument().modeles);
 });
 
-test('nouveauDocument : un plateau complet se pose et se valide sans erreur', () => {
+test('nouveauDocument : un plateau plein se pose et se valide sans erreur (alertes de pourtour sans apparition)', () => {
   const doc = tirerPlateau(mulberry32(1));
   assert.strictEqual(doc.plateau.tuiles.length, 16);
   const v = M.validerPlateau(doc);
   assert.deepStrictEqual(v.erreurs, []);
-  assert.ok(v.alertes.every((a) => a.code === 'raccord_mort'));
+  assert.ok(v.alertes.every((a) => ['raccord_mort', 'pourtour_sans_apparition'].includes(a.code)), v.alertes.map((a) => a.code).join(' '));
+  assert.ok(v.alertes.filter((a) => a.code === 'pourtour_sans_apparition').length >= 8);
 });
 
 /* ====================================================================== */
-/* Simulation de plateaux aléatoires                                       */
+/* Simulation de plateaux aléatoires : désactivée                          */
+/* Ces 8 mesures portaient sur le catalogue v1 et ses règles (2 carrefours,  */
+/* rôle apparition, 3 pas entre jonctions, 50 cases de déplacement) :       */
+/* à refaire avec le catalogue v2 (docs/19 : 1000 plateaux par format).     */
 /* ====================================================================== */
 
-const NB_PLATEAUX = 1000;
-const GRAINE = 20261015;
-const CARREFOURS = {
-  milieu: [{ i: 1, j: 2 }, { i: 3, j: 2 }],          // placement principal : ligne du milieu
-  unParCamp: [{ i: 2, j: 1 }, { i: 2, j: 3 }]       // variante : un carrefour près de chaque joueur
-};
-const JONCTIONS = [];
-for (let j = 1; j <= 3; j++) for (let i = 1; i <= 3; i++) JONCTIONS.push({ i, j });
-
-function moyenne(t) { return t.reduce((a, b) => a + b, 0) / t.length; }
-function histogramme(t) { return t.reduce((h, x) => { h[x] = (h[x] || 0) + 1; return h; }, {}); }
-
-/** Simulation unique, partagée par les tests ci-dessous. */
-const SIM = (function simuler() {
-  const rng = mulberry32(GRAINE);
-  const s = {
-    morts: [], nonConnexes: 0, nonConnexesSansPorts: 0, jonctionsSans4Ports: 0, distMinJonctions: Infinity, nbCases: new Set(),
-    sortiesMin: Infinity, autoroutes: 0, flancsInfinis: 0, flancMoins: [], ecarts: { milieu: [], unParCamp: [] },
-    scores: { milieu: [], unParCamp: [] }, cinqDeux: { milieu: 0, unParCamp: 0 }, premiereInegale: { milieu: 0, unParCamp: 0 },
-    distApparition: { A1: [], A2: [] }
-  };
-  for (let n = 0; n < NB_PLATEAUX; n++) {
-    const doc = tirerPlateau(rng);
-    s.morts.push(M.raccordsMorts(doc).length);
-    for (const jn of JONCTIONS) if (M.portsJonction(doc, jn.i, jn.j).ports !== 4) s.jonctionsSans4Ports++;
-
-    const g = GR.construire(doc, { jetons: jetons9(CARREFOURS.milieu), villesTraversables: true });
-    if (GR.distances(g, g.noeuds[0]).size !== g.noeuds.length) s.nonConnexes++;
-    // connexité par les seuls raccords et chemins internes (aucun jeton, donc aucune jonction) : juge les raccords latéraux
-    const sansJonctions = GR.construire(doc, { jetons: [], villesTraversables: true });
-    if (GR.distances(sansJonctions, sansJonctions.noeuds[0]).size !== sansJonctions.noeuds.length) s.nonConnexesSansPorts++;
-    if (g.jonctions.length !== 9) s.jonctionsSans4Ports++;
-    for (const j of g.jonctions) if (j.ports !== 4) s.jonctionsSans4Ports++;
-    for (const a of g.jonctions) {
-      const d = GR.distances(g, a.id);
-      for (const b of g.jonctions) if (b !== a) s.distMinJonctions = Math.min(s.distMinJonctions, d.has(b.id) ? d.get(b.id) : Infinity);
-    }
-    const deplacement = [...g.cases.values()].filter((c) => c.type === 'deplacement').length;
-    s.nbCases.add(deplacement + CARREFOURS.milieu.length);
-    for (const p of [1, 2]) for (const id of g.apparitions[p]) s.sortiesMin = Math.min(s.sortiesMin, g.voisins.get(id).size);
-
-    for (const cle of Object.keys(CARREFOURS)) {
-      const e = GR.equilibre(doc, { jetons: jetons9(CARREFOURS[cle]) }); // villes non traversables (défaut)
-      assert.strictEqual(e.villes.length, 7);
-      assert.strictEqual(e.complet, true);
-      s.ecarts[cle].push(e.ecartMax7 === null ? Infinity : e.ecartMax7);
-      s.scores[cle].push(e.S === null ? Infinity : e.S);
-      if (e.cinqContreDeux) s.cinqDeux[cle]++;
-      if (!e.premiereEgale) s.premiereInegale[cle]++;
-    }
-    for (const f of GR.flancs(doc, { villesTraversables: true })) {
-      if (!Number.isFinite(f.flanc) || !Number.isFinite(f.centre)) s.flancsInfinis++;
-      if (f.flanc < f.centre) s.autoroutes++;
-      s.flancMoins.push(f.flanc - f.centre);
-    }
-    // distances triées de chaque case d'apparition aux 9 jonctions, par modèle
-    for (const t of doc.plateau.tuiles) {
-      if (M.roleCellule(t.col, t.lig, doc.plateau.forme) !== 'apparition') continue;
-      const sp = g.apparitions[1].concat(g.apparitions[2]).find((id) => id.startsWith(`${t.col},${t.lig}:`));
-      const d = GR.distances(g, sp);
-      s.distApparition[t.modeleId].push(g.jonctions.map((j) => d.get(j.id)).sort((a, b) => a - b));
-    }
-  }
-  const profil = (k) => s.distApparition[k][0].map((_, r) => moyenne(s.distApparition[k].map((t) => t[r])));
-  s.profilA1 = profil('A1');
-  s.profilA2 = profil('A2');
-
-  const f2 = (x) => x.toFixed(2);
-  console.log(`\n[catalogue] simulation de ${NB_PLATEAUX} plateaux 4x4 (graine ${GRAINE})`);
-  console.log(`  raccords morts : moyenne ${f2(moyenne(s.morts))}, max ${Math.max(...s.morts)}, répartition ${JSON.stringify(histogramme(s.morts))}`);
-  console.log(`  non connexes : ${s.nonConnexes} ; jonctions sans 4 ports : ${s.jonctionsSans4Ports} ; écart min entre jonctions : ${s.distMinJonctions} pas ; cases de déplacement : ${[...s.nbCases]}`);
-  console.log(`  non connexes par les seuls raccords (jonctions retirées) : ${s.nonConnexesSansPorts}`);
-  console.log(`  sorties min d'une case d'apparition : ${s.sortiesMin}`);
-  for (const cle of Object.keys(CARREFOURS)) {
-    const e = s.ecarts[cle];
-    console.log(`  docs/16 (non traversables, rangs 1 à 7) carrefours ${JSON.stringify(CARREFOURS[cle])} : écart moyen ${f2(moyenne(e))}, pire ${Math.max(...e)}, ` +
-      `alertes (> 2) ${e.filter((x) => x > 2).length}, répartition ${JSON.stringify(histogramme(e))}, 5 contre 2 : ${s.cinqDeux[cle]}, ` +
-      `première ville inégale : ${s.premiereInegale[cle]}, S moyen ${f2(moyenne(s.scores[cle]))}, S >= 4 : ${s.scores[cle].filter((x) => x >= 4).length}`);
-  }
-  console.log(`  flancs plus courts que le centre : ${s.autoroutes} / ${2 * NB_PLATEAUX} ; flanc - centre moyen ${f2(moyenne(s.flancMoins))} pas ; mesures infinies : ${s.flancsInfinis}`);
-  console.log(`  distances triées moyennes apparition -> 9 jonctions : A1 ${s.profilA1.map(f2).join(' ')} | A2 ${s.profilA2.map(f2).join(' ')}`);
-  return s;
-})();
-
-test('simulation : graphe connexe, 9 jonctions à 4 ports, 50 cases de déplacement', () => {
-  assert.strictEqual(SIM.nonConnexes, 0);
-  assert.strictEqual(SIM.jonctionsSans4Ports, 0);
-  assert.deepStrictEqual([...SIM.nbCases], [50]);
-});
-
-test('simulation : les raccords latéraux relient à eux seuls toutes les cases (sans les jonctions)', () => {
-  assert.strictEqual(SIM.nonConnexesSansPorts, 0);
-});
-
-test('simulation : au moins 3 pas entre deux jonctions quelconques', () => {
-  assert.ok(SIM.distMinJonctions >= G.ECART_MIN_CAPTURES, String(SIM.distMinJonctions));
-});
-
-test('simulation : chaque case d\'apparition a au moins 2 sorties', () => {
-  assert.ok(SIM.sortiesMin >= 2, String(SIM.sortiesMin));
-});
-
-test('simulation : peu de raccords morts (moyenne <= 1,5, max <= 2)', () => {
-  assert.ok(moyenne(SIM.morts) <= 1.5, String(moyenne(SIM.morts)));
-  assert.ok(Math.max(...SIM.morts) <= 2, String(Math.max(...SIM.morts)));
-});
-
-/*
- * Critère de docs/16 (villes non traversables, rangs 1 à 7) sur des plateaux tirés sans filtre : quelques écarts
- * de 3 subsistent (mesuré : 0,9 % au milieu, 1,6 % un par camp ; le générateur les élimine). Seuils : jamais
- * plus de 3, au plus 2 % (milieu) et 3 % (un par camp) au-delà de 2 ; « 5 contre 2 » nul au milieu, ≤ 6 % un par
- * camp (mesuré 4,5 %, comme docs/12) ; première ville toujours à égalité (invariant d).
- */
-test('simulation : équilibre (docs/16), écarts rares et bornés, pas de « 5 contre 2 » au milieu, première ville égale', () => {
-  const plafond = { milieu: 0.02, unParCamp: 0.03 };
-  for (const cle of Object.keys(CARREFOURS)) {
-    assert.ok(Math.max(...SIM.ecarts[cle]) <= 3, cle);
-    assert.ok(SIM.ecarts[cle].filter((x) => x > 2).length <= plafond[cle] * NB_PLATEAUX, cle);
-    assert.strictEqual(SIM.premiereInegale[cle], 0, cle);
-  }
-  assert.strictEqual(SIM.cinqDeux.milieu, 0);
-  assert.ok(SIM.cinqDeux.unParCamp <= 0.06 * NB_PLATEAUX, String(SIM.cinqDeux.unParCamp));
-});
-
-test('simulation : pas d\'autoroute de flanc vers le camp adverse', () => {
-  assert.strictEqual(SIM.autoroutes, 0);
-  assert.strictEqual(SIM.flancsInfinis, 0); // mesure réelle (villes traversables), jamais Infinity < Infinity
-});
-
-test('simulation : les 2 modèles d\'apparition donnent des distances comparables (écart <= 0,5 par rang)', () => {
-  for (let r = 0; r < 9; r++) {
-    assert.ok(Math.abs(SIM.profilA1[r] - SIM.profilA2[r]) <= 0.5, `rang ${r + 1} : ${SIM.profilA1[r]} / ${SIM.profilA2[r]}`);
-  }
-});
+const A_REFAIRE = 'à refaire avec le catalogue v2';
+test.skip('simulation : graphe connexe, 9 jonctions à 4 ports, 50 cases de déplacement', A_REFAIRE);
+test.skip('simulation : les raccords latéraux relient à eux seuls toutes les cases (sans les jonctions)', A_REFAIRE);
+test.skip('simulation : au moins 3 pas entre deux jonctions quelconques', A_REFAIRE);
+test.skip('simulation : chaque case d\'apparition a au moins 2 sorties', A_REFAIRE);
+test.skip('simulation : peu de raccords morts (moyenne <= 1,5, max <= 2)', A_REFAIRE);
+test.skip('simulation : équilibre (docs/16), écarts rares et bornés, pas de « 5 contre 2 » au milieu, première ville égale', A_REFAIRE);
+test.skip('simulation : pas d\'autoroute de flanc vers le camp adverse', A_REFAIRE);
+test.skip('simulation : les 2 modèles d\'apparition donnent des distances comparables (écart <= 0,5 par rang)', A_REFAIRE);

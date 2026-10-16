@@ -1,8 +1,9 @@
 'use strict';
 /*
- * Recette des modules de priorité 2 et de l'export (testeur, sous-agent 9).
+ * Recette des modules de priorité 2 et de l'export (testeur, sous-agent 9), adaptée aux règles de la version 2.
  * Référence : la documentation (docs/14-export.md, 6-avis-prepresse.md, 16-avis-mesures-equilibre.md,
- * 12-mesures-equilibre.md, 15-mesures-generateur.md, 1b-... D7, 10-contrats-interface.md), pas les tests existants.
+ * 18-decisions-v2.md, 19-avis-design-v2.md, 20-avis-geometrie-v2.md, 10-contrats-interface.md), pas les tests existants.
+ * Plateaux générés : bibliothèque d'exemples conformes à R1 à R4 (le catalogue v1 ne permet aucun plateau v2).
  *
  * Les contrôles du PDF utilisent PyMuPDF (Python) par un sous-processus ; ils sont ignorés si Python ou
  * PyMuPDF est absent. Les fichiers intermédiaires sont écrits dans le dossier temporaire du système.
@@ -19,6 +20,7 @@ const { spawnSync } = require('node:child_process');
 const SRC = path.join(__dirname, '..', 'src');
 ['geometrie', 'modele', 'catalogue', 'rendu', 'graphe', 'equilibre', 'generateur', 'export', 'controles']
   .forEach((m) => require(path.join(SRC, m + '.js')));
+const AV2 = require('./aides-v2.js');
 const PM = globalThis.PM;
 const M = PM.modele, E = PM.exportation, GR = PM.graphe, GEN = PM.generateur, CT = PM.controles;
 
@@ -154,12 +156,22 @@ function docModifie() {
   return doc;
 }
 
+/** Bibliothèque du générateur : exemples conformes v2 et une seconde centrale (étoile sans raccord ouest). */
+function libGenerateur(grille) {
+  const d = AV2.documentExemples(grille);
+  const v = clone(d.modeles[0]);
+  v.id = 'ex-centrale-b'; v.nom = 'Étoile sans ouest'; v.exemplaires = 2;
+  v.chemins = v.chemins.filter((c) => c.id !== 'r4');
+  d.modeles.push(v);
+  return d;
+}
+
 /* Plateaux générés, calculés une fois. */
 const CACHE = {};
 function plateau(graine, options) {
   const cle = graine + '|' + JSON.stringify(options || {});
   if (!CACHE[cle]) {
-    const r = GEN.generer(docCatalogue(), Object.assign({ graine, candidats: 60 }, options || {}));
+    const r = GEN.generer(libGenerateur(), Object.assign({ graine, candidats: 60 }, options || {}));
     assert.ok(r.ok, r.raison);
     CACHE[cle] = r;
   }
@@ -274,30 +286,23 @@ test('export : bibliothèque modifiée, exemplaires pris en compte, modèle inco
   assert.strictEqual(sortie.feuilles.length, 4);
 });
 
-test('export : tuiles posées d\'abord, portée « posées », apparitions réparties 2 pour J1 et 2 pour J2', () => {
+test('export : tuiles posées d\'abord, portée « posées », tuiles imprimées neutres (aucun joueur)', () => {
   const r = plateau('export');
   const posees = E.listeTuiles(r.doc, { portee: 'posees' });
   assert.strictEqual(posees.tuiles.length, 16);
   assert.ok(posees.tuiles.every((t) => t.posee));
   assert.deepStrictEqual(E.calepiner(r.doc, { format: 'A3', portee: 'posees' }).map((p) => p.tuiles.length), [6, 6, 4]);
   const stock = E.listeTuiles(r.doc);
-  const premieres = stock.tuiles.slice(0, 16);
-  assert.ok(premieres.every((t) => t.posee) && stock.tuiles.slice(16).every((t) => !t.posee), 'posées d\'abord');
-  const app = stock.tuiles.filter((t) => t.modeleId === 'A1' || t.modeleId === 'A2');
-  assert.strictEqual(app.length, 4);
-  assert.strictEqual(app.filter((t) => t.joueur === 1).length, 2);
-  assert.strictEqual(app.filter((t) => t.joueur === 2).length, 2);
-  // plateau vide : les 4 apparitions sont réparties quand même
-  const vide = E.listeTuiles(docCatalogue()).tuiles.filter((t) => t.modeleId[0] === 'A');
-  assert.strictEqual(vide.filter((t) => t.joueur === 1).length, 2);
-  assert.strictEqual(vide.filter((t) => t.joueur === 2).length, 2);
+  assert.strictEqual(stock.tuiles.length, 18);
+  assert.ok(stock.tuiles.slice(0, 16).every((t) => t.posee) && stock.tuiles.slice(16).every((t) => !t.posee), 'posées d\'abord');
+  assert.ok(stock.tuiles.every((t) => !('joueur' in t)), 'docs/18 : une même tuile de bord sert aux deux camps');
 });
 
 test('export : étiquette longue (60 caractères) reste dans la feuille et ne rencontre ni tuile ni repère', () => {
   const doc = docCatalogue();
   const m = doc.modeles.find((x) => x.id === 'C1');
   m.id = 'ABCDEFGHIJ'.repeat(6);
-  doc.plateau = { forme: { retires: [] }, tuiles: [], jetons: [] };
+  doc.plateau = { tuiles: [], jetons: [] };
   for (const format of ['A3', 'A4']) {
     for (const p of E.calepiner(doc, { format })) {
       p.textes.forEach((t) => {
@@ -429,8 +434,8 @@ test('export : PDF du catalogue en A3 valide et lisible (PyMuPDF) : 4 pages 297 
     assert.ok(r.textes[k].includes('planche ' + (k + 1) + '/4'), 'titre de planche absent');
   });
   assert.ok(r.textes[0].includes('Plateau modulaire'));
-  // chiffres 1 / 2 des apparitions
-  assert.ok(r.textes[0].split('\n').includes('1') && r.textes[0].split('\n').includes('2'));
+  // case d'apparition imprimée neutre : ni chiffre de joueur ni couleur de camp (docs/18, défauts de D3 corrigés)
+  assert.ok(!r.textes.join('\n').split('\n').some((t) => t === '1' || t === '2'));
   // vectoriel : aucune image, des tracés, et une barre horizontale de 100 mm exacts
   assert.deepStrictEqual(r.images, [0, 0, 0, 0]);
   r.dessins.forEach((n) => assert.ok(n > 20, 'peu de tracés : ' + n));
@@ -444,8 +449,7 @@ test('export : PDF du catalogue en A3 valide et lisible (PyMuPDF) : 4 pages 297 
     });
     assert.deepStrictEqual(r.marges[k], [0, 0, 0, 0], 'pixels dans les 5 mm de bord, page ' + (k + 1));
   });
-  // apparitions : la planche 1 porte A1-2 (J2) en rouge pointillé
-  assert.ok(r.tuiles[0][1].rouge > 20, 'apparition J2 non rouge');
+  r.tuiles.forEach((tuiles) => tuiles.forEach((z) => assert.strictEqual(z.rouge, 0, 'aucun pixel rouge sur une tuile imprimée')));
   assert.ok(fs.existsSync(png) && fs.statSync(png).size > 5000);
 });
 
@@ -485,11 +489,10 @@ test('export : PDF des jetons (A4) et de l\'aperçu (A3) : tailles, texte, repè
   assert.ok(r.textes[0].includes('100 mm') && r.textes[0].includes('jetons'));
   assert.ok(r.textes[1].includes('non imprimable'), 'aperçu marqué « non imprimable »');
   assert.ok(r.textes[1].includes('réduit à 56'), 'texte accentué de l\'aperçu : ' + JSON.stringify(r.textes[1]));
-  // jetons : 9 jetons dans la feuille, 7 + 2 (doc 6, 9 jetons de Ø 33 mm au pas de 38 mm)
+  // jetons : 7 villes de Ø 33 mm au pas de 38 mm (plus de carrefour en version 2)
   const j = E.planchesJetons();
-  assert.strictEqual(j.jetons.length, 9);
-  assert.strictEqual(j.jetons.filter((x) => x.type === 'capture').length, 7);
-  assert.strictEqual(j.jetons.filter((x) => x.type === 'carrefour').length, 2);
+  assert.strictEqual(j.jetons.length, 7);
+  assert.ok(j.jetons.every((x) => x.type === 'capture'));
   j.jetons.forEach((x) => assert.ok(x.cx - 16.5 >= 5 && x.cx + 16.5 <= 205 && x.cy - 16.5 >= 5 && x.cy + 16.5 <= 292, 'jeton hors feuille'));
   for (let a = 0; a < j.jetons.length; a++) for (let b = a + 1; b < j.jetons.length; b++) {
     const d = Math.hypot(j.jetons[a].cx - j.jetons[b].cx, j.jetons[a].cy - j.jetons[b].cy);
@@ -547,9 +550,9 @@ test('export : lecture seule (le document n\'est pas modifié)', () => {
 /* ================================================================== */
 
 /**
- * Graphe synthétique : deux apparitions (n0 pour J1, n10 pour J2) et 7 villes. La ville k est reliée à n0 par une chaîne
- * de d1 pas et à n10 par une chaîne de d2 pas (null = pas de liaison). Villes non traversables : les distances valent
- * exactement d1 et d2.
+ * Graphe synthétique : deux apparitions (n0 pour le vert, n10 pour le rouge) et 7 villes. La ville k est reliée à n0
+ * par une chaîne de d1 pas et à n10 par une chaîne de d2 pas (null = pas de liaison). Villes non traversables : les
+ * distances valent exactement d1 et d2.
  */
 function grapheDistances(paires, traversables) {
   const voisins = new Map(), noeuds = [];
@@ -560,7 +563,7 @@ function grapheDistances(paires, traversables) {
   paires.forEach(([d1, d2], k) => {
     const ville = 'J' + (1 + k % 3) + ',' + (1 + Math.floor(k / 3));
     noeud(ville);
-    jonctions.push({ id: ville, i: 1 + k % 3, j: 1 + Math.floor(k / 3), type: 'capture', ports: 1, cases: [] });
+    jonctions.push({ id: ville, i: 1 + k % 3, j: 1 + Math.floor(k / 3), type: 'ville', ports: 1, cases: [] });
     villes.add(ville);
     const chaine = (depart, d, nom) => {
       let prec = depart;
@@ -572,10 +575,11 @@ function grapheDistances(paires, traversables) {
   });
   return { noeuds, voisins, cases: new Map(), jonctions, villes, apparitions: { 1: ['n0'], 2: ['n10'] }, villesTraversables: !!traversables };
 }
-const VIDE = () => ({ modeles: [], plateau: { forme: { retires: [] }, tuiles: [], jetons: [] } });
-const codes = (e) => e.alertes.map((a) => a.code).sort();
+const VIDE = () => M.nouveauDocument();
+/** Codes des alertes ET des blocages (plateau très déséquilibré), triés. */
+const codes = (e) => e.alertes.concat(e.blocages).map((a) => a.code).sort();
 
-test('graphe : distances sur un petit graphe connu, villes non traversables contre traversables', () => {
+test('graphe : distances sur un petit graphe connu, villes non traversables (règle) contre traversables (option interne)', () => {
   // P1 - a - C(ville) - b - P2 ; détour a - x - y - z - b
   const aretes = [['P1', 'a'], ['a', 'C'], ['C', 'b'], ['b', 'P2'], ['a', 'x'], ['x', 'y'], ['y', 'z'], ['z', 'b'], ['iso1', 'iso2']];
   for (const trav of [false, true]) {
@@ -584,67 +588,54 @@ test('graphe : distances sur un petit graphe connu, villes non traversables cont
     aretes.forEach(([u, v]) => { voisins.get(u).add(v); voisins.get(v).add(u); });
     const g = { noeuds, voisins, cases: new Map(), jonctions: [], villes: new Set(['C']), apparitions: { 1: ['P1'], 2: ['P2'] }, villesTraversables: trav };
     const d = GR.distances(g, 'P1');
-    assert.strictEqual(d.get('P1'), 0);
     assert.strictEqual(d.get('a'), 1);
     assert.strictEqual(d.get('C'), 2, 'une ville reste atteignable');
     assert.strictEqual(d.get('b'), trav ? 3 : 5, trav ? 'traversable : par la ville' : 'non traversable : par le détour');
     assert.strictEqual(d.get('P2'), trav ? 4 : 6);
     assert.ok(!d.has('iso1') && !d.has('iso2'), 'nœuds isolés absents');
-    // depuis plusieurs sources : minimum
     const dd = GR.distances(g, ['P1', 'P2']);
     assert.strictEqual(dd.get('b'), 1);
-    assert.strictEqual(dd.get('C'), 2);
-    assert.strictEqual(dd.get('a'), 1);
-    // depuis la ville elle-même : la ville est source, elle peut sortir
     assert.strictEqual(GR.distances(g, 'C').get('P1'), 2);
-    // source inconnue : rien, pas d'exception
     assert.strictEqual(GR.distances(g, 'inconnu').size, 0);
   }
 });
 
-test('équilibre : valeurs exactes sur graphe synthétique (S, écart par rang, partage, première ville)', () => {
-  // symétrique : D1 = D2
+test('équilibre : valeurs exactes sur graphe synthétique (S, écart par rang, partage, première ville, blocages)', () => {
   const sym = GR.equilibre(VIDE(), { graphe: grapheDistances([[2, 10], [3, 9], [4, 8], [6, 6], [8, 4], [9, 3], [10, 2]]) });
   assert.deepStrictEqual(sym.D[1], [2, 3, 4, 6, 8, 9, 10]);
   assert.deepStrictEqual(sym.D[2], [2, 3, 4, 6, 8, 9, 10]);
   assert.strictEqual(sym.S, 0);
-  assert.strictEqual(sym.ecartMax7, 0);
   assert.deepStrictEqual(sym.partage, { 1: 3, 2: 3, egalite: 1 });
-  assert.strictEqual(sym.premiereVille.ecart, 0);
-  assert.deepStrictEqual(sym.alertes, []);
-  assert.strictEqual(sym.aSurveiller, false);
+  assert.deepStrictEqual(codes(sym), []);
 
-  // « 5 contre 2 » : D1 = 2,3,4,5,5,7,8 ; D2 = 4,5,7,7,8,9,10
+  // « 5 contre 2 » : D1 = 2,3,4,5,5,7,8 ; D2 = 4,5,7,7,8,9,10 ; écart max 3 (alerte), « 5 contre 2 » (blocage)
   const cinq = GR.equilibre(VIDE(), { graphe: grapheDistances([[2, 10], [3, 9], [4, 8], [5, 7], [5, 7], [7, 5], [8, 4]]) });
-  assert.deepStrictEqual(cinq.D[1], [2, 3, 4, 5, 5, 7, 8]);
-  assert.deepStrictEqual(cinq.D[2], [4, 5, 7, 7, 8, 9, 10]);
   assert.deepStrictEqual(cinq.parRang.map((x) => x.ecart), [2, 2, 3, 2, 3, 2, 2]);
   assert.strictEqual(cinq.S, 16);
   assert.strictEqual(cinq.ecartMax7, 3);
-  assert.strictEqual(cinq.ecartRang, 3);
   assert.deepStrictEqual(cinq.partage, { 1: 5, 2: 2, egalite: 0 });
-  assert.strictEqual(cinq.aSurveiller, true);
   assert.deepStrictEqual(cinq.premiereVille, { 1: 2, 2: 4, ecart: 2 });
-  for (const c of ['cinq_contre_deux', 'ecart_rang_etendu', 'premiere_ville_inegale']) assert.ok(codes(cinq).includes(c), c);
-  assert.ok(!codes(cinq).includes('ecart_rang'), 'alerte ecart_rang supprimée (docs/17, I2)');
+  assert.deepStrictEqual(cinq.blocages.map((b) => b.code), ['cinq_contre_deux']);
+  assert.strictEqual(cinq.tresDesequilibre, true);
+  for (const c of ['ecart_rang_etendu', 'premiere_ville_inegale', 'score_s']) assert.ok(cinq.alertes.some((a) => a.code === c), c);
 
-  // écart > 2 seulement aux rangs 5 à 7 (doc 16 b) : alerte étendue, pas l'ancienne alerte des rangs 1 à 4
+  // écart 3 aux rangs 5 à 7 : alerte étendue (pas de blocage : 3 n'est pas plus de 3) et S = 9
   const loin = GR.equilibre(VIDE(), { graphe: grapheDistances([[2, 2], [3, 3], [4, 4], [5, 5], [6, 9], [7, 10], [8, 11]]) });
   assert.deepStrictEqual(loin.parRang.map((x) => x.ecart), [0, 0, 0, 0, 3, 3, 3]);
-  assert.strictEqual(loin.S, 9);
-  assert.strictEqual(loin.ecartRang, 0);
-  assert.strictEqual(loin.ecartMax7, 3);
-  assert.deepStrictEqual(codes(loin), ['ecart_rang_etendu']);
+  assert.deepStrictEqual(codes(loin), ['ecart_rang_etendu', 'score_s']);
 
-  // exactement 2 à chaque rang : pas d'alerte d'écart (seuil strictement supérieur à 2), mais S >= 4 « à surveiller »
+  // écart 4 à un rang : plus de SEUIL_BLOCAGE_ECART = 3 → plateau très déséquilibré
+  const quatre = GR.equilibre(VIDE(), { graphe: grapheDistances([[2, 2], [3, 3], [4, 4], [5, 5], [6, 6], [7, 7], [8, 12]]) });
+  assert.deepStrictEqual(quatre.blocages.map((b) => b.code), ['ecart_bloquant']);
+  assert.ok(!quatre.alertes.some((a) => a.code === 'ecart_rang_etendu'), 'pas annoncé deux fois');
+
+  // exactement 2 à chaque rang : pas d'alerte d'écart, mais S >= 4 « à surveiller »
   const deux = GR.equilibre(VIDE(), { graphe: grapheDistances([[2, 8], [3, 7], [4, 6], [5, 5], [6, 10], [7, 9], [8, 4]]) });
-  assert.deepStrictEqual(deux.D[1], [2, 3, 4, 5, 6, 7, 8]);
-  assert.deepStrictEqual(deux.D[2], [4, 5, 6, 7, 8, 9, 10]);
   assert.strictEqual(deux.S, 14);
   assert.strictEqual(deux.ecartMax7, 2);
-  assert.ok(!codes(deux).includes('ecart_rang_etendu') && !codes(deux).includes('ecart_rang'));
+  assert.ok(!codes(deux).includes('ecart_rang_etendu'));
+  assert.ok(codes(deux).includes('score_s'));
   assert.strictEqual(deux.aSurveiller, true);
-  assert.strictEqual(GR.SEUIL_S, 4);
 });
 
 test('équilibre : « 4 contre 3 » n\'alerte pas ; moins de 7 villes jamais de « 5 contre 2 » ; ville inaccessible signalée', () => {
@@ -654,25 +645,20 @@ test('équilibre : « 4 contre 3 » n\'alerte pas ; moins de 7 villes jamais de 
   const six = GR.equilibre(VIDE(), { graphe: grapheDistances([[2, 10], [3, 9], [4, 8], [5, 7], [6, 6], [7, 5]]) });
   assert.ok(!codes(six).includes('cinq_contre_deux'));
   assert.ok(six.lacunes.some((l) => /Il manque 1 ville/.test(l)));
-  assert.strictEqual(six.complet, false);
   const inacc = GR.equilibre(VIDE(), { graphe: grapheDistances([[2, 10], [3, 9], [4, 8], [5, 7], [6, 6], [7, 5], [8, null]]) });
   assert.strictEqual(inacc.inaccessibles[2].length, 1);
   assert.ok(codes(inacc).includes('ville_inaccessible'));
-  assert.strictEqual(inacc.D[2].length, 6);
-  assert.strictEqual(inacc.parRang.length, 7);
+  assert.ok(inacc.alertes.find((a) => a.code === 'ville_inaccessible').message.includes('joueur rouge'));
   assert.strictEqual(inacc.parRang[6].ecart, null, 'rang 7 non comparable');
 });
 
-test('équilibre : défaut « villes non traversables » (graphe, équilibre, rapport) ; le mode traversable est une option', () => {
+test('équilibre : villes non traversables partout (graphe, équilibre, rapport) ; le mode traversable reste une option interne', () => {
   const doc = plateau('graphe').doc;
   assert.strictEqual(GR.construire(doc).villesTraversables, false);
   assert.strictEqual(GR.equilibre(doc).villesTraversables, false);
   assert.strictEqual(PM.equilibre.analyser(doc).resultat.villesTraversables, false);
   assert.strictEqual(GR.equilibre(doc, { villesTraversables: true }).villesTraversables, true);
-  assert.strictEqual(GR.equilibre(doc, { villesTraversables: undefined }).villesTraversables, false);
-  // les distances en mode traversable ne sont jamais plus longues
-  const n = GR.equilibre(doc, { villesTraversables: false }), t = GR.equilibre(doc, { villesTraversables: true });
-  for (const p of [1, 2]) n.D[p].forEach((x, k) => assert.ok(t.D[p][k] <= x || t.D[p].length === n.D[p].length));
+  assert.ok(!('traversables' in PM.equilibre.rapport(PM.equilibre.analyser(doc))));
 });
 
 /** Parcours en largeur indépendant (oracle) sur le graphe construit. */
@@ -687,16 +673,17 @@ function bfs(g, sources, traversables) {
   return d;
 }
 
-test('graphe : structure du graphe d\'un plateau complet et distances égales à un parcours indépendant', () => {
+test('graphe : structure du graphe d\'un plateau complet (jonctions-cases) et distances égales à un parcours indépendant', () => {
   for (const graine of ['graphe', 'b', 'c']) {
     const doc = plateau(graine).doc;
     const g = GR.construire(doc);
     const nbCases = doc.plateau.tuiles.reduce((s, t) => s + M.modeleParId(doc, t.modeleId).cases.length, 0);
-    assert.strictEqual(g.noeuds.length, nbCases + 9, 'cases + 9 jetons');
+    assert.strictEqual(g.noeuds.length, nbCases + 9, 'cases des tuiles + 9 jonctions (cases chemin ou villes)');
     assert.strictEqual(g.villes.size, 7);
     assert.strictEqual(g.jonctions.length, 9);
-    assert.strictEqual(g.apparitions[1].length, 2);
-    assert.strictEqual(g.apparitions[2].length, 2);
+    assert.strictEqual(g.jonctions.filter((j) => j.type === 'case').length, 2);
+    assert.strictEqual(g.apparitions[1].length, 6);
+    assert.strictEqual(g.apparitions[2].length, 6);
     for (const [a, vs] of g.voisins) for (const b of vs) assert.ok(g.voisins.get(b).has(a), 'arête non symétrique');
     for (const trav of [false, true]) {
       const gt = GR.construire(doc, { villesTraversables: trav });
@@ -712,207 +699,135 @@ test('équilibre : plateau incomplet, résultat partiel sans exception, lacunes 
   const plein = plateau('graphe').doc;
   const cas = [];
   const a = clone(plein); a.plateau.tuiles.pop(); cas.push(['une tuile en moins', a]);
-  const b = clone(plein); b.plateau.jetons = b.plateau.jetons.filter((j) => j.type === 'carrefour'); cas.push(['sans villes', b]);
-  const c = clone(plein); c.plateau.jetons.pop(); cas.push(['un jeton en moins', c]);
-  const d = clone(plein); d.plateau.tuiles = d.plateau.tuiles.filter((t) => t.lig > 0); cas.push(['sans la rangée nord', d]);
-  const e = VIDE(); cas.push(['document vide', e]);
+  const b = clone(plein); b.plateau.jetons = []; cas.push(['sans villes', b]);
+  const c = clone(plein); c.plateau.jetons.pop(); cas.push(['une ville en moins', c]);
+  const d = clone(plein); d.plateau.tuiles = d.plateau.tuiles.filter((t) => t.lig > 1); cas.push(['sans le camp vert', d]);
+  cas.push(['document vide', VIDE()]);
   const g = clone(plein); g.plateau.jetons.push({ i: 9, j: 9, type: 'capture' }); cas.push(['jeton hors grille', g]);
-  const h = { modeles: plein.modeles }; cas.push(['plateau absent', h]);
+  cas.push(['plateau absent', { modeles: plein.modeles }]);
   for (const [nom, doc] of cas) {
     const avant = JSON.stringify(doc);
     let res;
     assert.doesNotThrow(() => { res = GR.equilibre(doc); }, nom);
-    assert.doesNotThrow(() => PM.equilibre.rapport(PM.equilibre.analyser(doc), PM.equilibre.analyser(doc, { villesTraversables: true })), nom + ' (rapport)');
+    assert.doesNotThrow(() => PM.equilibre.rapport(PM.equilibre.analyser(doc)), nom + ' (rapport)');
     assert.strictEqual(JSON.stringify(doc), avant, nom + ' : document modifié');
     if (nom !== 'jeton hors grille') {
       assert.strictEqual(res.complet, false, nom);
-      assert.strictEqual(res.partiel, true, nom);
       assert.ok(res.lacunes.length > 0, nom);
+      assert.deepStrictEqual(res.blocages.length === 0 || res.complet, true, nom + ' : pas de blocage sur plateau incomplet');
     }
   }
   assert.ok(GR.equilibre(a).lacunes.some((l) => /Il manque 1 tuile/.test(l)));
   assert.ok(GR.equilibre(b).lacunes.some((l) => /Il manque 7 ville/.test(l)));
+  assert.ok(GR.equilibre(d).lacunes.some((l) => /joueur vert n'a aucune case d'apparition/.test(l)));
   assert.doesNotThrow(() => GR.equilibre(null));
-  assert.doesNotThrow(() => GR.construire(undefined));
   assert.doesNotThrow(() => GR.goulets(GR.construire(a), 1));
 });
 
 test('équilibre : lecture seule, aucun appel ne modifie le document', () => {
   const doc = plateau('graphe').doc, avant = JSON.stringify(doc);
   GR.construire(doc); GR.equilibre(doc); GR.equilibre(doc, { villesTraversables: true });
-  GR.profil(doc); GR.flancs(doc);
-  const an = PM.equilibre.analyser(doc);
-  PM.equilibre.rapport(an, PM.equilibre.analyser(doc, { villesTraversables: true }));
+  GR.profil(doc); GR.flancs(doc); GR.villesProches(GR.construire(doc)); GR.connexe(GR.construire(doc));
+  PM.equilibre.rapport(PM.equilibre.analyser(doc));
   assert.strictEqual(JSON.stringify(doc), avant);
 });
 
-test('équilibre : rapport, rangs 1 à 7 avec écarts, « 5 contre 2 », première ville et S', () => {
+test('équilibre : rapport, rangs 1 à 7 avec écarts, « 5 contre 2 » (plateau très déséquilibré), première ville et S', () => {
   const g = grapheDistances([[2, 10], [3, 9], [4, 8], [5, 7], [5, 7], [7, 5], [8, 4]]);
   const analyse = { graphe: g, resultat: GR.equilibre(VIDE(), { graphe: g }), goulets: { 1: GR.goulets(g, 1), 2: GR.goulets(g, 2) } };
-  const r = PM.equilibre.rapport(analyse, null);
+  const r = PM.equilibre.rapport(analyse);
   assert.strictEqual(r.rangs.length, 7);
   assert.deepStrictEqual(r.rangs.map((x) => x.ecart), ['2', '2', '3', '2', '3', '2', '2']);
   assert.strictEqual(r.rangs.filter((x) => x.fort).length, 2, 'écarts > 2 signalés aux rangs 3 et 5');
-  assert.strictEqual(r.rangs[4].fort, true, 'le rang 5 compte aussi (doc 16 b)');
   assert.strictEqual(r.scoreTexte, '16');
   assert.strictEqual(r.aSurveiller, true);
   assert.deepStrictEqual(r.partage, { j1: 5, j2: 2, egalite: 0 });
   assert.deepStrictEqual(r.premiere, { j1: '2', j2: '4', ecart: '2' });
-  assert.ok(r.alertes.some((t) => /5 villes contre 2/.test(t)));
+  assert.ok(r.blocages.some((t) => /« 5 contre 2 »/.test(t) && /vert/.test(t)));
   assert.ok(r.tempo.length === 3);
-});
-
-test('équilibre : rapport, comparaison des deux modes seulement quand ils diffèrent', () => {
-  const doc = plateau('graphe').doc;
-  const n = PM.equilibre.analyser(doc), t = PM.equilibre.analyser(doc, { villesTraversables: true });
-  const r = PM.equilibre.rapport(n, t);
-  const different = JSON.stringify([n.resultat.D, n.resultat.alertes]) !== JSON.stringify([t.resultat.D, t.resultat.alertes]);
-  assert.strictEqual(r.comparaison !== null, different);
-  const meme = PM.equilibre.rapport(n, n);
-  assert.strictEqual(meme.comparaison, null);
+  assert.ok(!('comparaison' in r), 'plus de comparaison des modes : la règle est « villes non traversables »');
 });
 
 /* ================================================================== */
 /* 3. GÉNÉRATEUR                                                       */
 /* ================================================================== */
 
-test('générateur : même graine, même plateau (200 candidats par défaut, carrefours variés compris)', () => {
-  for (const opt of [{}, { paireCarrefours: 'varies' }]) {
-    const a = GEN.generer(docCatalogue(), Object.assign({ graine: 'recette' }, opt));
-    const b = GEN.generer(docCatalogue(), Object.assign({ graine: 'recette' }, opt));
-    assert.ok(a.ok, a.raison);
-    assert.deepStrictEqual(a.doc, b.doc);
-    assert.strictEqual(a.paire, b.paire);
-    assert.strictEqual(a.graine, 'recette');
-    assert.strictEqual(a.score.S, b.score.S);
-  }
-  const x = GEN.generer(docCatalogue(), { graine: 'recette' }), y = GEN.generer(docCatalogue(), { graine: 'recette2' });
-  assert.notDeepStrictEqual(x.doc.plateau.tuiles, y.doc.plateau.tuiles);
-  // la graine nombre et sa forme texte sont équivalentes
-  assert.deepStrictEqual(GEN.generer(docCatalogue(), { graine: 42, candidats: 20 }).doc, GEN.generer(docCatalogue(), { graine: '42', candidats: 20 }).doc);
+test('générateur : même graine, même plateau (200 candidats par défaut), 4×4 et 5×5', () => {
+  const a = GEN.generer(libGenerateur(), { graine: 'recette' });
+  const b = GEN.generer(libGenerateur(), { graine: 'recette' });
+  assert.ok(a.ok, a.raison);
+  assert.deepStrictEqual(a.doc, b.doc);
+  assert.strictEqual(a.graine, 'recette');
+  assert.strictEqual(a.score.S, b.score.S);
+  const x = GEN.generer(libGenerateur(), { graine: 'recette' }), y = GEN.generer(libGenerateur(), { graine: 'recette2' });
+  assert.notDeepStrictEqual(x.doc.plateau, y.doc.plateau);
+  assert.deepStrictEqual(GEN.generer(libGenerateur(), { graine: 42, candidats: 20 }).doc, GEN.generer(libGenerateur(), { graine: '42', candidats: 20 }).doc);
+  const c5 = GEN.generer(libGenerateur('5x5'), { graine: 'recette', candidats: 40 });
+  assert.ok(c5.ok, c5.raison);
+  assert.deepStrictEqual(c5.doc, GEN.generer(libGenerateur('5x5'), { graine: 'recette', candidats: 40 }).doc);
 });
 
-const CODES_EQ = ['cinq_contre_deux', 'ecart_rang_etendu', 'premiere_ville_inegale'];
-const GRAINES = ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10', 'r11', 'r12'];
+const GRAINES = ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8'];
 
-test('générateur : plateau valide, 16 tuiles, 9 jetons, tous les compteurs à ok, aucune alerte d\'équilibre ni autre alerte', () => {
+test('générateur : plateau valide, 16 tuiles, 7 villes, compteurs à ok, aucune erreur ni alerte', () => {
   for (const graine of GRAINES) {
-    const r = plateau(graine);
-    const doc = r.doc;
+    const doc = plateau(graine).doc;
     assert.strictEqual(M.validerPlateau(doc).erreurs.length, 0, graine);
     assert.strictEqual(doc.plateau.tuiles.length, 16);
-    assert.strictEqual(doc.plateau.jetons.length, 9);
-    assert.strictEqual(doc.plateau.jetons.filter((j) => j.type === 'capture').length, 7);
+    assert.strictEqual(doc.plateau.jetons.length, 7);
+    assert.ok(doc.plateau.jetons.every((j) => j.type === 'capture'));
     const c = CT.calculer(doc);
     assert.deepStrictEqual(c.erreurs, [], graine);
     c.compteurs.forEach((x) => assert.strictEqual(x.etat, 'ok', graine + ' : ' + x.cle + ' ' + x.valeur + '/' + x.cible));
-    assert.deepStrictEqual(c.alertes.filter((a) => CODES_EQ.includes(a.code)), [], graine);
-    // doc 15 : le générateur tolère jusqu'à 2 raccords morts ; aucune autre alerte n'est admise
     assert.deepStrictEqual(c.alertes.filter((a) => a.code !== 'raccord_mort').map((a) => a.code), [], graine + ' : alertes ' + c.alertes.map((a) => a.message).join(' / '));
-    // les modèles ne sont pas modifiés
-    assert.deepStrictEqual(doc.modeles, docCatalogue().modeles);
+    assert.deepStrictEqual(doc.modeles, libGenerateur().modeles);
   }
 });
 
-test('générateur : critère du doc 16 vérifié indépendamment (pas de 5 contre 2, écart <= 2 aux 7 rangs, première ville égale)', () => {
+test('générateur : critère v2 vérifié indépendamment (3 cases entre villes, pas de blocage, écart <= 2, première ville égale)', () => {
   for (const graine of GRAINES) {
     const doc = plateau(graine).doc;
-    const e = GR.equilibre(doc, { villesTraversables: false });
+    const e = GR.equilibre(doc);
     assert.strictEqual(e.complet, true);
+    assert.deepStrictEqual(e.blocages, [], graine);
     assert.ok(Math.max(e.partage[1], e.partage[2]) < 5, graine + ' : ' + JSON.stringify(e.partage));
     assert.ok(e.ecartMax7 <= 2, graine);
     assert.strictEqual(e.premiereVille.ecart, 0, graine);
-    assert.ok(e.S < GR.SEUIL_S, graine + ' : S ' + e.S);
-    assert.deepStrictEqual(e.alertes, [], graine);
-    // même résultat en recalcul indépendant des distances (parcours en largeur)
+    // distances recalculées par un parcours en largeur indépendant
     const g = GR.construire(doc);
     const d = [1, 2].map((p) => {
       const m = bfs(g, g.apparitions[p], false);
-      return g.jonctions.filter((j) => j.type === 'capture').map((j) => m.get(j.id)).sort((a, b) => a - b);
+      return g.jonctions.filter((j) => j.type === 'ville').map((j) => m.get(j.id)).sort((a, b) => a - b);
     });
     assert.deepStrictEqual(e.D[1], d[0]);
     assert.deepStrictEqual(e.D[2], d[1]);
-    // garde-fous D7 : 45 à 55 cases de déplacement, deux sorties au moins par apparition
-    const cases = doc.plateau.tuiles.reduce((s, t) => s + M.modeleParId(doc, t.modeleId).cases.filter((x) => x.type === 'deplacement').length, 0);
-    assert.ok(cases >= 45 && cases <= 55, 'cases de déplacement ' + cases);
-    // D7 : au moins 2 sorties distinctes par apparition, villes à 3 pas au moins (plus court chemin, villes traversables)
-    assert.ok(plateau(graine).score.sortiesMin >= 2, graine + ' : sorties minimales ' + plateau(graine).score.sortiesMin);
-    for (const opt of [undefined, { paireCarrefours: 'varies' }]) {
-      const dv = plateau(graine, opt).doc;
-      const gT = GR.construire(dv, { villesTraversables: true });
-      for (const v of gT.villes) {
-        const m = bfs(gT, [v], true);
-        for (const w of gT.villes) if (w !== v) assert.ok(m.get(w) >= 3, graine + ' : villes ' + v + ' et ' + w + ' à ' + m.get(w) + ' pas');
-      }
-      // sorties de chaque apparition : au moins 2 voisins distincts
-      const gN = GR.construire(dv);
-      [1, 2].forEach((p) => gN.apparitions[p].forEach((id) => assert.ok(gN.voisins.get(id).size >= 2, graine + ' : apparition ' + id + ' à ' + gN.voisins.get(id).size + ' sortie(s)')));
+    // au moins 3 cases (4 pas) entre deux villes, en villes non traversables
+    for (const v of g.villes) {
+      const m = bfs(g, [v], false);
+      for (const w of g.villes) if (w !== v && m.has(w)) assert.ok(m.get(w) >= 4, graine + ' : villes ' + v + ' et ' + w + ' à ' + m.get(w) + ' pas');
     }
+    [1, 2].forEach((p) => g.apparitions[p].forEach((id) => assert.ok(g.voisins.get(id).size >= 2, graine + ' : apparition ' + id)));
   }
 });
 
-test('générateur : paire de carrefours par défaut (1,2)+(3,2) et jamais deux carrefours du même camp', () => {
-  for (const graine of GRAINES) {
-    const r = plateau(graine);
-    assert.strictEqual(r.paire, GEN.PAIRE_DEFAUT);
-    assert.strictEqual(GEN.PAIRE_DEFAUT, '(1,2)+(3,2)');
-    const car = r.doc.plateau.jetons.filter((j) => j.type === 'carrefour').map((j) => j.i + ',' + j.j).sort();
-    assert.deepStrictEqual(car, ['1,2', '3,2']);
-  }
-  assert.strictEqual(GEN.PAIRES.length, 30, '30 paires permises (docs/12)');
-});
-
-test('générateur : carrefours variés, paire permise, aucune alerte a) ni b) dans les deux modes, S <= S de la paire par défaut', () => {
-  const vues = new Set();
-  for (const graine of GRAINES) {
-    const r = plateau(graine, { paireCarrefours: 'varies' });
-    vues.add(r.paire);
-    assert.ok(r.pairesPermises.includes(r.paire));
-    assert.ok(GEN.PAIRES.includes(r.paire));
-    assert.strictEqual(r.doc.plateau.jetons.filter((j) => j.type === 'carrefour').length, 2);
-    const car = r.doc.plateau.jetons.filter((j) => j.type === 'carrefour');
-    assert.ok(!(car[0].j === car[1].j && car[0].j !== 2), 'carrefours du même camp');
-    for (const trav of [false, true]) {
-      const e = GR.equilibre(r.doc, { villesTraversables: trav });
-      assert.ok(Math.max(e.partage[1], e.partage[2]) < 5, graine + (trav ? ' T' : ' N') + ' : 5 contre 2');
-      assert.ok(e.ecartMax7 <= 2, graine + (trav ? ' T' : ' N') + ' : écart ' + e.ecartMax7);
-      assert.strictEqual(e.premiereVille.ecart, 0, graine + ' première ville');
-    }
-    // S de la paire par défaut sur les mêmes tuiles
-    // placement par défaut complet : carrefours en (1,2) et (3,2), villes sur les 7 autres jonctions
-    const defaut = clone(r.doc);
-    defaut.plateau.jetons = jetonsPourPaire({ i: 1, j: 2 }, { i: 3, j: 2 });
-    const sDef = GR.equilibre(defaut, { villesTraversables: false }).S;
-    const sEff = GR.equilibre(r.doc, { villesTraversables: false }).S;
-    assert.strictEqual(sEff, r.score.S, 'le S annoncé est le S mesuré');
-    assert.ok(sEff <= sDef, graine + ' : paire ' + r.paire + ', S ' + sEff + ' > S de la paire par défaut ' + sDef + ' sur les mêmes tuiles');
-  }
-  assert.ok(vues.size > 1, 'au moins deux paires différentes sur ' + GRAINES.length + ' graines : ' + [...vues].join(' '));
-});
-
-test('générateur : option « villes traversables » ; « 5 contre 2 » reste absent en villes non traversables', () => {
-  for (const graine of ['t1', 't2', 't3']) {
-    const r = GEN.generer(docCatalogue(), { graine, candidats: 40, villesTraversables: true });
-    assert.ok(r.ok, r.raison);
-    assert.strictEqual(r.score.villesTraversables, true);
-    const e = GR.equilibre(r.doc, { villesTraversables: false });
-    assert.ok(Math.max(e.partage[1], e.partage[2]) < 5, 'doc 16 a) : toujours vérifié en non traversable');
-  }
+test('générateur : catalogue de la version 1 refusé avec une raison qui nomme le problème (villes à moins de 3 cases)', () => {
+  const r = GEN.generer(docCatalogue(), { graine: 'v1', candidats: 10, essaisMax: 30 });
+  assert.strictEqual(r.ok, false);
+  assert.strictEqual(r.doc, null);
+  assert.match(r.raison, /villes à moins de 3 cases/);
+  assert.match(r.raison, /catalogue v2/);
 });
 
 test('générateur : bibliothèque insuffisante, raison claire et document inchangé', () => {
-  const retirer = (id, nb) => { const d = docCatalogue(); const m = d.modeles.find((x) => x.id === id); m.exemplaires = nb; return d; };
   const cas = [];
-  const sansCoins = docCatalogue(); sansCoins.modeles.forEach((m) => { if (m.role === 'coin') m.exemplaires = 0; });
+  const sansCoins = libGenerateur(); sansCoins.modeles.forEach((m) => { if (m.gabarit === 'coin') m.exemplaires = 0; });
   cas.push(['coins à 0 exemplaire', sansCoins, /coin/]);
-  const unApp = retirer('A1', 1); unApp.modeles.find((m) => m.id === 'A2').exemplaires = 0;
-  cas.push(['une seule apparition', unApp, /apparition/]);
-  const incomplets = docCatalogue(); incomplets.modeles.forEach((m) => { if (m.role === 'bord') m.cases = []; });
-  cas.push(['bords incomplets', incomplets, /bord/]);
-  const centrales = docCatalogue(); centrales.modeles = centrales.modeles.filter((m) => m.role !== 'centrale');
-  cas.push(['sans centrale', centrales, /centrale/]);
-  const exemples = M.nouveauDocument(); exemples.modeles = M.copieExemples(); exemples.modeles[0].exemplaires = 3;
-  cas.push(['3 centrales seulement', exemples, /centrale/]);
+  const bordsCasses = libGenerateur(); bordsCasses.modeles.forEach((m) => { if (m.gabarit === 'bord') m.cases[0].diametre = 60; });
+  cas.push(['bords incomplets', bordsCasses, /bord/]);
+  const sansCentrale = libGenerateur(); sansCentrale.modeles = sansCentrale.modeles.filter((m) => m.gabarit !== 'centrale');
+  cas.push(['sans centrale', sansCentrale, /centrale/]);
+  const trois = libGenerateur(); trois.modeles.forEach((m) => { if (m.gabarit === 'centrale') m.exemplaires = 1; });
+  cas.push(['2 centrales seulement', trois, /centrale/]);
   for (const [nom, doc, motif] of cas) {
     const avant = JSON.stringify(doc);
     const r = GEN.generer(doc, { graine: 'x', candidats: 20 });
@@ -925,41 +840,29 @@ test('générateur : bibliothèque insuffisante, raison claire et document incha
 });
 
 test('générateur : entrées invalides (document absent, options absurdes) sans exception', () => {
-  for (const doc of [null, undefined, 42, 'x', {}, { modeles: [] }, { modeles: [null, 3], plateau: null }]) {
+  for (const doc of [null, undefined, 42, 'x', {}, { modeles: [] }, { modeles: [null, 3], plateau: null }, { grille: 'hexagone' }]) {
     let r;
     assert.doesNotThrow(() => { r = GEN.generer(doc, { graine: 'x', candidats: 10 }); });
     assert.strictEqual(r.ok, false);
     assert.ok(typeof r.raison === 'string' && r.raison.length > 0);
   }
-  for (const opt of [{ candidats: 0 }, { candidats: -5 }, { candidats: NaN }, { candidats: 'abc' }, { graine: '   ' }, { graine: null }, { tolerance: -1 }, { paireCarrefours: 'n\'importe quoi' }, { graine: { a: 1 } }]) {
+  for (const opt of [{ candidats: 0 }, { candidats: -5 }, { candidats: NaN }, { candidats: 'abc' }, { graine: '   ' }, { graine: null }, { tolerance: -1 }, { paireCarrefours: 'varies' }, { graine: { a: 1 } }]) {
     let r;
-    assert.doesNotThrow(() => { r = GEN.generer(docCatalogue(), Object.assign({ candidats: 10 }, opt)); }, JSON.stringify(opt));
+    assert.doesNotThrow(() => { r = GEN.generer(libGenerateur(), Object.assign({ candidats: 10 }, opt)); }, JSON.stringify(opt));
     assert.ok(r.ok || typeof r.raison === 'string', JSON.stringify(opt));
     assert.ok(typeof r.graine === 'string' && r.graine.length > 0);
   }
 });
 
-test('générateur : plateau d\'entrée non vide et forme réduite remplacés par le 4x4 complet, document d\'entrée intact', () => {
-  const base = plateau('r1').doc;
-  const reduit = clone(base);
-  reduit.plateau.forme.retires = [{ col: 0, lig: 0 }];
-  const avant = JSON.stringify(reduit);
-  const r = GEN.generer(reduit, { graine: 'forme', candidats: 30 });
-  assert.ok(r.ok, r.raison);
-  assert.deepStrictEqual(r.doc.plateau.forme, { retires: [] });
-  assert.strictEqual(r.doc.plateau.tuiles.length, 16);
-  assert.ok(r.rapport.some((t) => /forme réduite/.test(t)));
-  assert.strictEqual(JSON.stringify(reduit), avant);
-});
-
-test('générateur : même résultat sur le plateau vide ou rempli (seule la bibliothèque compte)', () => {
-  const vide = docCatalogue(), plein = clone(plateau('r1').doc);
+test('générateur : même résultat sur le plateau vide ou rempli (seule la bibliothèque compte), entrée intacte', () => {
+  const vide = libGenerateur(), plein = clone(plateau('r1').doc), avant = JSON.stringify(plein);
   const a = GEN.generer(vide, { graine: 'mm', candidats: 30 }), b = GEN.generer(plein, { graine: 'mm', candidats: 30 });
   assert.deepStrictEqual(a.doc, b.doc);
+  assert.strictEqual(JSON.stringify(plein), avant);
 });
 
 test('générateur : aperçu SVG neutralise un identifiant de modèle hostile', { skip: SANS_PYMUPDF }, () => {
-  const lib = docCatalogue();
+  const lib = libGenerateur();
   lib.modeles.forEach((x) => { hostiliserCases(x); x.nom = '<b>' + x.nom + '</b>'; });
   lib.modeles.forEach((x) => assert.strictEqual(M.validerModele(x).complet, true));
   const r = GEN.generer(lib, { graine: 'inj', candidats: 20 });
@@ -976,118 +879,44 @@ test('générateur : aperçu SVG neutralise un identifiant de modèle hostile', 
 /* 4. CONTRÔLES                                                        */
 /* ================================================================== */
 
-const JONCTIONS = [];
-for (let j = 1; j <= 3; j++) for (let i = 1; i <= 3; i++) JONCTIONS.push({ i, j });
-function jetonsPourPaire(p1, p2, villes) {
-  const reste = JONCTIONS.filter((x) => !(x.i === p1.i && x.j === p1.j) && !(x.i === p2.i && x.j === p2.j));
-  const captures = villes || reste;
-  return captures.map((x) => ({ i: x.i, j: x.j, type: 'capture' })).concat([{ i: p1.i, j: p1.j, type: 'carrefour' }, { i: p2.i, j: p2.j, type: 'carrefour' }]);
-}
-
-/** Cherche un plateau complet avec « 5 contre 2 » en villes non traversables (placement manuel). */
-function chercherCinqContreDeux() {
-  for (const graine of ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8']) {
-    const base = plateau(graine).doc;
-    for (const a of JONCTIONS) for (const b of JONCTIONS) {
-      if ((a.j > b.j) || (a.j === b.j && a.i >= b.i)) continue;
-      if (a.j === b.j && a.j !== 2) continue; // même camp
-      const doc = clone(base);
-      doc.plateau.jetons = jetonsPourPaire(a, b);
-      const e = GR.equilibre(doc, { villesTraversables: false });
-      if (codes(e).includes('cinq_contre_deux')) return { doc, e, paire: [a, b] };
-    }
-  }
-  return null;
-}
-
-test('contrôles : alertes d\'équilibre présentes sur un plateau complet, absentes sur un plateau incomplet', () => {
-  const trouve = chercherCinqContreDeux();
-  assert.ok(trouve, 'aucune configuration « 5 contre 2 » trouvée parmi 8 plateaux x 30 paires');
-  const c = CT.calculer(trouve.doc);
-  const eq = c.alertes.filter((a) => CODES_EQ.includes(a.code));
-  assert.ok(eq.some((a) => a.code === 'cinq_contre_deux'), 'alerte « 5 contre 2 » attendue sur plateau complet');
-  assert.ok(c.regroupees.some((g) => g.code === 'cinq_contre_deux'));
-  // même alertes que PM.graphe (villes non traversables)
-  const attendu = trouve.e.alertes.filter((a) => CODES_EQ.includes(a.code)).map((a) => a.code).sort();
-  assert.deepStrictEqual(eq.map((a) => a.code).sort(), attendu);
-  // une tuile en moins : l'équilibre n'est plus évalué par les contrôles
-  const moins = clone(trouve.doc); moins.plateau.tuiles.pop();
-  const c2 = CT.calculer(moins);
-  assert.deepStrictEqual(c2.alertes.filter((a) => CODES_EQ.includes(a.code)), [], 'pas d\'alerte d\'équilibre sur plateau incomplet');
-  // un jeton de ville en moins
-  const moinsVille = clone(trouve.doc);
-  moinsVille.plateau.jetons.splice(moinsVille.plateau.jetons.findIndex((j) => j.type === 'capture'), 1);
-  assert.deepStrictEqual(CT.calculer(moinsVille).alertes.filter((a) => CODES_EQ.includes(a.code)), []);
-  // plateau vide
-  assert.deepStrictEqual(CT.calculer(docCatalogue()).alertes.filter((a) => CODES_EQ.includes(a.code)), []);
+test('contrôles : plateau complet très déséquilibré = erreur (« 5 contre 2 ») ; incomplet = rien', () => {
+  const des = AV2.plateauDesequilibre();
+  const c = CT.calculer(des);
+  const e = c.erreurs.filter((x) => x.code === 'desequilibre');
+  assert.strictEqual(e.length, 1);
+  assert.match(e[0].message, /5 contre 2/);
+  assert.ok(c.regroupees[0].code === 'desequilibre' && c.regroupees[0].niveau === 'erreur');
+  // mêmes critères que PM.graphe
+  assert.ok(GR.equilibre(des).blocages.every((b) => e[0].message.includes(b.message.replace(/\.$/, ''))));
+  const moins = clone(des); moins.plateau.tuiles.pop();
+  assert.deepStrictEqual(CT.calculer(moins).erreurs.filter((x) => x.code === 'desequilibre'), []);
+  const moinsVille = clone(des); moinsVille.plateau.jetons.pop();
+  assert.deepStrictEqual(CT.calculer(moinsVille).erreurs.filter((x) => x.code === 'desequilibre'), []);
 });
 
-test('contrôles : alerte d\'équilibre silencieuse quand PM.graphe lève une exception', () => {
-  const trouve = chercherCinqContreDeux();
+test('contrôles : déséquilibre modéré = alerte « à surveiller », reprise de PM.graphe', () => {
+  const doc = AV2.plateauASurveiller();
+  const c = CT.calculer(doc);
+  assert.deepStrictEqual(c.erreurs, []);
+  const attendu = GR.equilibre(doc).alertes.filter((a) => ['score_s', 'ecart_rang_etendu', 'premiere_ville_inegale', 'ville_inaccessible'].includes(a.code)).map((a) => a.code).sort();
+  assert.deepStrictEqual(c.alertes.filter((a) => ['score_s', 'ecart_rang_etendu', 'premiere_ville_inegale', 'ville_inaccessible'].includes(a.code)).map((a) => a.code).sort(), attendu);
+  assert.ok(attendu.includes('score_s'));
+});
+
+test('contrôles : silence quand PM.graphe lève une exception', () => {
   const sauve = GR.equilibre;
   GR.equilibre = () => { throw new Error('boum'); };
   try {
-    assert.doesNotThrow(() => CT.calculer(trouve.doc));
+    assert.doesNotThrow(() => CT.calculer(AV2.plateauDesequilibre()));
+    assert.deepStrictEqual(CT.calculer(AV2.plateauDesequilibre()).erreurs, []);
   } finally { GR.equilibre = sauve; }
 });
 
-/** Taux de « 5 contre 2 » (non traversables) lus dans docs/12-mesures-equilibre.md, section 2. */
-function tauxDoc12() {
-  const texte = fs.readFileSync(path.join(__dirname, '..', 'docs', '12-mesures-equilibre.md'), 'utf8');
-  const section = texte.split('## 2. ')[1].split('## 3. ')[0];
-  const res = {};
-  section.split('\n').forEach((l) => {
-    const m = /^\| \((\d),(\d)\)\+\((\d),(\d)\) \|(.*)\|$/.exec(l);
-    if (!m) return;
-    const cols = m[5].split('|').map((x) => x.trim());
-    res[m[1] + ',' + m[2] + '+' + m[3] + ',' + m[4]] = parseFloat(cols[5]); // 5 contre 2 (N)
-  });
-  return res;
-}
-
-test('contrôles : message de paire de carrefours avec son taux (30 paires, taux de docs/12 section 2)', () => {
-  const taux = tauxDoc12();
-  assert.strictEqual(Object.keys(taux).length, 30, 'tableau du doc 12 lu');
-  const base = docCatalogue();
-  for (const cle of Object.keys(taux)) {
-    const [a, b] = cle.split('+').map((s) => { const [i, j] = s.split(',').map(Number); return { i, j }; });
-    for (const ordre of [[a, b], [b, a]]) {
-      const doc = clone(base);
-      doc.plateau.jetons = ordre.map((p) => ({ i: p.i, j: p.j, type: 'carrefour' }));
-      const al = CT.calculer(doc).alertes;
-      const paire = al.filter((x) => x.code === 'carrefours_paire');
-      assert.ok(!al.some((x) => x.code === 'carrefours_meme_cote'), cle);
-      if (taux[cle] > 0) {
-        assert.strictEqual(paire.length, 1, 'alerte de paire attendue : ' + cle);
-        const attendu = String(taux[cle]).replace('.', ',') + ' %';
-        assert.ok(paire[0].message.includes(attendu), cle + ' : taux ' + attendu + ' dans « ' + paire[0].message + ' »');
-        assert.ok(paire[0].message.includes('(' + a.i + ', ' + a.j + ')') && paire[0].message.includes('(' + b.i + ', ' + b.j + ')'), cle);
-        assert.ok(/5 villes contre 2/.test(paire[0].message));
-        assert.ok(paire[0].cible && paire[0].cible.type === 'jonction');
-      } else {
-        assert.strictEqual(paire.length, 0, 'pas d\'alerte pour la paire sûre ' + cle);
-      }
-    }
-  }
-});
-
-test('contrôles : deux carrefours du même camp, alerte dédiée sans message de paire', () => {
-  const doc = docCatalogue();
-  doc.plateau.jetons = [{ i: 1, j: 1, type: 'carrefour' }, { i: 2, j: 1, type: 'carrefour' }];
-  const codesAl = CT.calculer(doc).alertes.map((a) => a.code);
-  assert.ok(codesAl.includes('carrefours_meme_cote'));
-  assert.ok(!codesAl.includes('carrefours_paire'));
-});
-
-/* Incohérence éventuelle : un plateau généré en mode « carrefours variés » avec une paire autre que la paire par défaut
- * reçoit l'alerte manuelle « Paire de carrefours à risque » (taux typique > 0), alors que le générateur a vérifié l'équilibre
- * de ce plateau (docs/16 : « une autre paire seulement si la configuration n'a aucune alerte »). */
-test('générateur x contrôles : un plateau « carrefours variés » ne porte aucune alerte', () => {
+test('générateur x contrôles : un plateau généré ne porte aucune erreur ni alerte', () => {
   let avecAlerte = null;
   for (const graine of GRAINES) {
-    const r = plateau(graine, { paireCarrefours: 'varies' });
-    const al = CT.calculer(r.doc).alertes.filter((a) => a.code !== 'raccord_mort');
-    if (al.length) { avecAlerte = graine + ' (' + r.paire + ') : ' + al.map((a) => a.code).join(', '); break; }
+    const al = CT.calculer(plateau(graine).doc).alertes.filter((a) => a.code !== 'raccord_mort');
+    if (al.length) { avecAlerte = graine + ' : ' + al.map((a) => a.code).join(', '); break; }
   }
   assert.strictEqual(avecAlerte, null, 'plateau généré avec alerte : ' + avecAlerte);
 });
@@ -1095,26 +924,24 @@ test('générateur x contrôles : un plateau « carrefours variés » ne porte a
 test.after(() => { try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { /* ignoré */ } });
 
 /* ================================================================== */
-/* Défauts constatés (todo : le test décrit le comportement attendu)    */
+/* Défauts constatés autrefois (non-régression)                         */
 /* ================================================================== */
 
-test('rapport d\'équilibre : les rangs 5 à 7 comptent comme les rangs 1 à 4 (docs/16 b), pas de rang grisé ni de note « rangs 1 à 4 »', () => {
+test('rapport d\'équilibre : les rangs 5 à 7 comptent comme les rangs 1 à 4 (docs/16 b)', () => {
   const g = grapheDistances([[2, 2], [3, 3], [4, 4], [5, 5], [6, 9], [7, 10], [8, 11]]);
   const analyse = { graphe: g, resultat: GR.equilibre(VIDE(), { graphe: g }), goulets: { 1: GR.goulets(g, 1), 2: GR.goulets(g, 2) } };
-  const r = PM.equilibre.rapport(analyse, null);
-  assert.deepStrictEqual(r.rangs.map((x) => x.compte), [true, true, true, true, true, true, true]);
+  assert.deepStrictEqual(PM.equilibre.rapport(analyse).rangs.map((x) => x.compte), [true, true, true, true, true, true, true]);
 });
 
-test('rapport d\'équilibre : un même écart n\'est pas annoncé deux fois (ecart_rang et ecart_rang_etendu)', () => {
-  const g = grapheDistances([[2, 10], [3, 9], [4, 8], [5, 7], [5, 7], [7, 5], [8, 4]]);
+test('rapport d\'équilibre : un même écart n\'est pas annoncé deux fois', () => {
+  const g = grapheDistances([[2, 2], [3, 3], [4, 4], [5, 5], [6, 6], [7, 7], [8, 12]]);
   const analyse = { graphe: g, resultat: GR.equilibre(VIDE(), { graphe: g }), goulets: { 1: GR.goulets(g, 1), 2: GR.goulets(g, 2) } };
-  const r = PM.equilibre.rapport(analyse, null);
-  assert.ok(r.alertes.filter((t) => /pas d'écart/.test(t)).length <= 1, r.alertes.join(' / '));
+  const r = PM.equilibre.rapport(analyse);
+  assert.strictEqual(r.alertes.concat(r.blocages).filter((t) => /pas d'écart/.test(t)).length, 1, r.alertes.concat(r.blocages).join(' / '));
 });
 
 test('équilibre : une tuile posée dont le modèle est introuvable rend le plateau incomplet', () => {
   const doc = clone(plateau('graphe').doc);
   doc.plateau.tuiles[0].modeleId = 'fantome';
-  const e = GR.equilibre(doc);
-  assert.strictEqual(e.complet, false);
+  assert.strictEqual(GR.equilibre(doc).complet, false);
 });

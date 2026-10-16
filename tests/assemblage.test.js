@@ -11,20 +11,21 @@ require('../src/bibliotheque.js');
 require('../src/assemblage.js');
 var PM = globalThis.PM, M = PM.modele, A = PM.assemblage, B = PM.bibliotheque;
 
-/** Document avec les modèles d'exemple (4 exemplaires par rôle). */
+/** Document avec les modèles d'exemple (de quoi remplir la grille 4×4). */
 function docExemples() {
   var d = M.nouveauDocument();
   d.modeles = M.copieExemples();
   return d;
 }
-function idRole(doc, role) { return doc.modeles.filter(function (m) { return m.role === role; })[0].id; }
+var ID = { centrale: 'ex-centrale', bord: 'ex-bord', coin: 'ex-coin' };
 
-/** Remplit toutes les cellules actives avec le modèle d'exemple de leur rôle. */
+/** Remplit la grille avec le modèle d'exemple du gabarit de chaque cellule (rotation suggérée). */
 function remplir(doc) {
-  M.cellulesActives(doc.plateau.forme).forEach(function (c) {
-    var role = M.roleCellule(c.col, c.lig, doc.plateau.forme);
-    if (role && !M.tuileEn(doc, c.col, c.lig)) doc = M.poserTuile(doc, idRole(doc, role), c.col, c.lig);
-  });
+  for (var lig = 0; lig < 4; lig++) {
+    for (var col = 0; col < 4; col++) {
+      if (!M.tuileEn(doc, col, lig)) doc = M.poserTuile(doc, ID[M.gabaritCellule(col, lig)], col, lig);
+    }
+  }
   return doc;
 }
 
@@ -69,189 +70,99 @@ test('jonctionSous : rayon de 15 mm autour des 9 jonctions intérieures', functi
   assert.equal(n, 9);
 });
 
-test('cellulesCompatibles : selon le rôle, les cellules occupées et le stock', function () {
+test('cellulesCompatibles : pose libre (toute cellule libre), occupation, stock, modèle incomplet', function () {
   var d = docExemples();
-  var coins = A.cellulesCompatibles(d, idRole(d, 'coin')).map(function (c) { return c.col + ',' + c.lig; }).sort();
-  assert.deepEqual(coins, ['0,0', '0,3', '3,0', '3,3']);
-  assert.equal(A.cellulesCompatibles(d, idRole(d, 'centrale')).length, 4);
-  assert.equal(A.cellulesCompatibles(d, idRole(d, 'apparition')).length, 4);
-  d = M.poserTuile(d, idRole(d, 'coin'), 0, 0);
-  assert.equal(A.cellulesCompatibles(d, idRole(d, 'coin')).length, 3);
-  var r = A.cellulesCompatibles(d, idRole(d, 'coin')).filter(function (c) { return c.col === 3 && c.lig === 3; })[0];
-  assert.equal(r.rot, 2); // rotation déduite du coin SE
-  // Stock épuisé : plus aucune cellule
-  d = M.changerExemplaires(d, idRole(d, 'coin'), 1);
-  assert.equal(A.cellulesCompatibles(d, idRole(d, 'coin')).length, 0);
-  // Modèle incomplet : aucune cellule
+  assert.equal(A.cellulesCompatibles(d, 'ex-coin').length, 16);
+  assert.equal(A.cellulesCompatibles(d, 'ex-centrale').length, 16);
+  d = M.poserTuile(d, 'ex-coin', 0, 0);
+  assert.equal(A.cellulesCompatibles(d, 'ex-coin').length, 15);
+  var r = A.cellulesCompatibles(d, 'ex-coin').filter(function (c) { return c.col === 3 && c.lig === 3; })[0];
+  assert.equal(r.rot, 2); // rotation suggérée du coin SE
+  assert.equal(A.cellulesCompatibles(d, 'ex-coin').filter(function (c) { return c.col === 1 && c.lig === 1; })[0].rot, 0);
+  d = M.changerExemplaires(d, 'ex-coin', 1);
+  assert.equal(A.cellulesCompatibles(d, 'ex-coin').length, 0);
   var inc = docExemples();
-  inc.modeles[0].cases = [];
+  inc.modeles[0].cases[0].diametre = 60;
   assert.equal(A.cellulesCompatibles(inc, inc.modeles[0].id).length, 0);
 });
 
-test('poserTuileTournee : la rotation ne s\'applique qu\'aux centrales', function () {
+test('poserTuileTournee : rotation choisie pour toute tuile, rotation suggérée si absente', function () {
   var d = docExemples();
-  var c = A.poserTuileTournee(d, idRole(d, 'centrale'), 1, 1, 3);
-  assert.equal(M.tuileEn(c, 1, 1).rot, 3);
-  var b = A.poserTuileTournee(d, idRole(d, 'bord'), 3, 1, 1);
-  assert.equal(M.tuileEn(b, 3, 1).rot, 1); // bord est : rotation déduite 1, quarts ignorés
-  assert.throws(function () { A.poserTuileTournee(d, idRole(d, 'bord'), 1, 1, 0); }, /bord/);
+  assert.equal(M.tuileEn(A.poserTuileTournee(d, 'ex-centrale', 1, 1, 3), 1, 1).rot, 3);
+  assert.equal(M.tuileEn(A.poserTuileTournee(d, 'ex-bord', 3, 1, 2), 3, 1).rot, 2); // choix de l'utilisateur
+  assert.equal(M.tuileEn(A.poserTuileTournee(d, 'ex-bord', 3, 1, null), 3, 1).rot, 1); // suggestion : bord est
+  assert.equal(M.tuileEn(A.poserTuileTournee(d, 'ex-bord', 3, 1), 3, 1).rot, 1);
+  assert.equal(M.tuileEn(A.poserTuileTournee(d, 'ex-bord', 1, 1, -1), 1, 1).rot, 3);
+  assert.throws(function () { A.poserTuileTournee(d, 'ex-bord', 4, 1, 0); }, /hors de la grille/);
   assert.equal(d.plateau.tuiles.length, 0); // pureté
 });
 
-test('deplacerTuile : retrait + pose, rotation de centrale conservée, refus expliqué', function () {
+test('deplacerTuile : retrait + pose, rotation conservée, vers n\'importe quelle cellule libre', function () {
   var d = docExemples();
-  d = M.poserTuile(d, idRole(d, 'centrale'), 1, 1);
-  d = M.tournerTuile(d, 1, 1, 2);
-  var n = A.deplacerTuile(d, { col: 1, lig: 1 }, { col: 2, lig: 2 });
-  assert.equal(M.tuileEn(n, 1, 1), null);
-  assert.equal(M.tuileEn(n, 2, 2).rot, 2);
-  assert.equal(M.tuileEn(d, 1, 1).rot, 2); // pureté
-  // Stock à 0 : le déplacement reste possible (la tuile déplacée libère son exemplaire)
-  var plein = M.changerExemplaires(d, idRole(d, 'centrale'), 1);
-  assert.equal(A.testerDeplacement(plein, { col: 1, lig: 1 }, { col: 2, lig: 1 }).ok, true);
-  assert.equal(A.cellulesCompatiblesDeplacement(plein, { col: 1, lig: 1 }).length, 4);
-  // Mauvais rôle
-  var t = A.testerDeplacement(d, { col: 1, lig: 1 }, { col: 0, lig: 0 });
+  d = M.poserTuile(d, 'ex-bord', 1, 0);
+  d = M.tournerTuile(d, 1, 0, 1);
+  var n = A.deplacerTuile(d, { col: 1, lig: 0 }, { col: 2, lig: 2 });
+  assert.equal(M.tuileEn(n, 1, 0), null);
+  assert.equal(M.tuileEn(n, 2, 2).rot, 1);
+  assert.equal(M.tuileEn(d, 1, 0).rot, 1); // pureté
+  var plein = M.changerExemplaires(d, 'ex-bord', 1);
+  assert.equal(A.testerDeplacement(plein, { col: 1, lig: 0 }, { col: 0, lig: 0 }).ok, true);
+  assert.equal(A.cellulesCompatiblesDeplacement(plein, { col: 1, lig: 0 }).length, 16);
+  d = M.poserTuile(d, 'ex-coin', 0, 0);
+  var t = A.testerDeplacement(d, { col: 1, lig: 0 }, { col: 0, lig: 0 });
   assert.equal(t.ok, false);
-  assert.match(t.raison, /coin/);
-  assert.throws(function () { A.deplacerTuile(d, { col: 1, lig: 1 }, { col: 0, lig: 0 }); });
-  // Même cellule
-  assert.equal(A.testerDeplacement(d, { col: 1, lig: 1 }, { col: 1, lig: 1 }).identique, true);
+  assert.match(t.raison, /occupée/);
+  assert.throws(function () { A.deplacerTuile(d, { col: 1, lig: 0 }, { col: 0, lig: 0 }); });
+  assert.equal(A.testerDeplacement(d, { col: 1, lig: 0 }, { col: 1, lig: 0 }).identique, true);
   assert.equal(A.testerDeplacement(d, { col: 2, lig: 2 }, { col: 1, lig: 1 }).ok, false);
 });
 
-test('effetsDeAction : jetons retirés par un retrait, avec la raison', function () {
+test('effetsDeAction : villes retirées par un retrait, avec la raison', function () {
   var d = remplir(docExemples());
   assert.equal(d.plateau.tuiles.length, 16);
-  d = M.cyclerJeton(d, 2, 1); // ville
-  d = M.cyclerJeton(d, 2, 2);
-  d = M.cyclerJeton(d, 2, 2); // carrefour
-  var apres = M.retirerTuile(d, 1, 0);
-  var e = A.effetsDeAction(d, apres);
+  d = M.cyclerJeton(M.cyclerJeton(d, 2, 1), 2, 2);
+  var e = A.effetsDeAction(d, M.retirerTuile(d, 1, 0));
   assert.deepEqual(e.jetonsRetires.map(function (j) { return [j.i, j.j, j.type]; }), [[2, 1, 'capture']]);
-  assert.match(e.jetonsRetires[0].raison, /jonction \(2,1\) n'a plus 4 tuiles/);
-  assert.deepEqual(e.tuilesRetirees, []); // le retrait demandé n'est pas un effet de bord
   assert.equal(A.messageEffets(e), '1 ville retirée : la jonction (2,1) n\'a plus 4 tuiles. Ctrl+Z pour annuler.');
-  // Deux jetons
-  var apres2 = M.retirerTuile(d, 1, 1);
-  var m2 = A.messageEffets(A.effetsDeAction(d, apres2));
-  assert.match(m2, /^2 jetons retirés \(1 ville, 1 carrefour\) : /);
-  // Sans effet
+  assert.match(A.messageEffets(A.effetsDeAction(d, M.retirerTuile(d, 1, 1))), /^2 villes retirées : /);
   assert.equal(A.messageEffets(A.effetsDeAction(d, M.retirerTuile(d, 0, 0))), null);
+  // une rotation ne retire jamais de ville (moins de 2 ports = alerte seulement)
+  assert.deepEqual(A.effetsDeAction(d, M.tournerTuile(d, 1, 1, 1)).jetonsRetires, []);
 });
 
-test("effetsDeAction : rotation d'une centrale qui retire un jeton faute de ports", function () {
-  var d = remplir(docExemples());
-  // Centrale de test : ports de coin seulement en NO et NE (modèle incomplet, posé directement dans le document)
-  var c = JSON.parse(JSON.stringify(d.modeles.filter(function (m) { return m.role === 'centrale'; })[0]));
-  c.id = 'test-centrale';
-  c.chemins = c.chemins.filter(function (ch) {
-    var k = ch.a.coin !== undefined ? ch.a.coin : ch.b.coin;
-    return k === undefined || k === 0 || k === 1;
-  });
-  assert.equal(M.masquesDuModele(c).portsCoin, 3);
-  d.modeles.push(c);
-  d.plateau.tuiles.forEach(function (t) { if (t.col >= 1 && t.col <= 2 && t.lig >= 1 && t.lig <= 2) { t.modeleId = 'test-centrale'; t.rot = 0; } });
-  // Jonction (2,2) : coin NE de (1,2) et coin NO de (2,2) → 2 ports
-  assert.deepEqual(M.portsJonction(d, 2, 2), { ports: 2, tuiles: 4 });
-  d.plateau.jetons = [{ i: 2, j: 2, type: 'capture' }];
-  var apres = M.tournerTuile(d, 2, 2, 1);
-  var e = A.effetsDeAction(d, apres);
-  assert.deepEqual(e.jetonsRetires.map(function (j) { return [j.i, j.j]; }), [[2, 2]]);
-  assert.equal(A.messageEffets(e), "1 ville retirée : la jonction (2,2) n'a plus que 1 port. Ctrl+Z pour annuler.");
+test('etiquetteCellule : gabarit attendu et camp de la cellule', function () {
+  assert.equal(A.etiquetteCellule(0, 0), 'Coin, camp vert');
+  assert.equal(A.etiquetteCellule(0, 1), 'Bord, camp vert');
+  assert.equal(A.etiquetteCellule(2, 3), 'Bord, camp rouge');
+  assert.equal(A.etiquetteCellule(1, 1), 'Centrale');
+  assert.equal(A.etiquetteCellule(0, 2, '5x5'), 'Bord, neutre');
+  assert.equal(A.etiquetteCellule(4, 4), null);
 });
 
-test('effetsDeAction : changement de forme, tuiles retirées et tuiles à revoir', function () {
-  var d = remplir(docExemples());
-  d = M.cyclerJeton(d, 1, 1);
-  var f = A.formesProposees().filter(function (x) { return x.cle === 'c00'; })[0];
-  var apres = M.changerForme(d, f.forme);
-  var e = A.effetsDeAction(d, apres);
-  assert.deepEqual(e.tuilesRetirees.map(function (t) { return [t.col, t.lig]; }), [[0, 0]]);
-  assert.deepEqual(e.jetonsRetires.map(function (j) { return [j.i, j.j]; }), [[1, 1]]);
-  // Le bord (0,1) devient une cellule de coin : la tuile reste mais ne convient plus
-  assert.deepEqual(e.tuilesARevoir.map(function (t) { return [t.col, t.lig, t.attendu]; }), [[0, 1, 'coin']]);
-  var msg = A.messageEffets(e);
-  assert.match(msg, /^1 tuile retirée : \(0,0\)\. 1 ville retirée : la jonction \(1,1\) n'a plus 4 tuiles\. La tuile \(0,1\) ne convient plus à sa cellule \(un coin attendu\)\. Ctrl\+Z pour annuler\.$/);
-});
-
-test('formesProposees : 15 formes, toutes valides, clés retrouvées', function () {
-  var f = A.formesProposees();
-  assert.equal(f.length, 15);
-  var cles = {};
-  f.forEach(function (x) {
-    assert.equal(M.validerForme(x.forme).valide, true, x.libelle);
-    assert.equal(cles[x.cle], undefined);
-    cles[x.cle] = true;
-    var inverse = { retires: x.forme.retires.slice().reverse() };
-    assert.equal(A.cleForme(inverse), x.cle);
-  });
-  assert.equal(A.cleForme({ retires: [] }), 'complet');
-  assert.equal(A.cleForme(undefined), 'complet');
-  assert.equal(A.cleForme({ retires: [{ col: 1, lig: 1 }] }), null);
-});
-
-test('etiquetteCellule : rôles attendus des cellules libres', function () {
-  var forme = { retires: [] };
-  assert.equal(A.etiquetteCellule(0, 0, forme), 'Coin');
-  assert.equal(A.etiquetteCellule(0, 1, forme), 'Bord');
-  assert.equal(A.etiquetteCellule(1, 0, forme), 'Apparition J1');
-  assert.equal(A.etiquetteCellule(2, 3, forme), 'Apparition J2');
-  assert.equal(A.etiquetteCellule(1, 1, forme), 'Centrale');
-  assert.equal(A.etiquetteCellule(0, 0, { retires: [{ col: 0, lig: 0 }] }), null);
-  assert.equal(A.etiquetteCellule(0, 1, { retires: [{ col: 0, lig: 0 }] }), 'Coin');
-});
-
-test('carrefours : alerte seulement si les 2 sont du même côté (j = 1 ou j = 3)', function () {
-  function doc(jetons) { var d = M.nouveauDocument(); d.plateau.jetons = jetons; return d; }
-  assert.equal(A.carrefoursMemeCote(doc([{ i: 1, j: 2, type: 'carrefour' }, { i: 3, j: 2, type: 'carrefour' }])), null);
-  assert.equal(A.carrefoursMemeCote(doc([{ i: 1, j: 1, type: 'carrefour' }, { i: 3, j: 3, type: 'carrefour' }])), null);
-  assert.equal(A.carrefoursMemeCote(doc([{ i: 1, j: 1, type: 'carrefour' }, { i: 2, j: 2, type: 'carrefour' }])), null);
-  assert.equal(A.carrefoursMemeCote(doc([{ i: 1, j: 1, type: 'carrefour' }, { i: 3, j: 1, type: 'carrefour' }])), 'nord');
-  assert.equal(A.carrefoursMemeCote(doc([{ i: 1, j: 3, type: 'carrefour' }, { i: 2, j: 3, type: 'carrefour' }])), 'sud');
-  assert.equal(A.carrefoursMemeCote(doc([{ i: 1, j: 3, type: 'capture' }, { i: 2, j: 3, type: 'carrefour' }])), null);
-  assert.match(A.alerteCarrefours(doc([{ i: 1, j: 1, type: 'carrefour' }, { i: 3, j: 1, type: 'carrefour' }])), /même côté \(camp J1/);
-  assert.equal(A.coteJonction(2), null);
-});
-
-test('messageJeton et compterJetons : cycle vide → ville → carrefour → vide', function () {
+test('messageJeton et compterJetons : cycle case chemin → ville → case chemin', function () {
   var d = remplir(docExemples());
   d = M.cyclerJeton(d, 1, 1);
   assert.equal(A.compterJetons(d), 1);
   assert.deepEqual(A.messageJeton(d, 1, 1), { texte: 'Ville sur la jonction (1,1).', niveau: 'info' });
   d = M.cyclerJeton(d, 1, 1);
-  assert.equal(A.messageJeton(d, 1, 1).texte, 'Carrefour sur la jonction (1,1).');
-  d = M.cyclerJeton(M.cyclerJeton(d, 3, 1), 3, 1); // second carrefour au nord
-  var m = A.messageJeton(d, 3, 1);
-  assert.equal(m.niveau, 'alerte');
-  assert.match(m.texte, /même côté/);
-  d = M.cyclerJeton(d, 1, 1);
-  assert.equal(A.messageJeton(d, 1, 1).texte, 'Jeton retiré de la jonction (1,1).');
-  assert.equal(A.compterJetons(d), 1);
+  assert.equal(A.messageJeton(d, 1, 1).texte, 'Ville retirée : la jonction (1,1) redevient une case chemin.');
+  assert.equal(A.compterJetons(d), 0);
 });
 
-test('alertesPlateau : raccords « vide » et « mort » signalés, « absent » ignoré, ports morts', function () {
+test('alertesPlateau : raccords « vide » et « mort » signalés, « absent » ignoré, ports vers le bord', function () {
   var d = docExemples();
-  d = M.poserTuile(d, idRole(d, 'centrale'), 1, 1);
-  // Centrale seule : tous ses raccords font face à des cellules vides mais actives → aucune alerte
+  d = M.poserTuile(d, 'ex-centrale', 1, 1);
   assert.equal(A.alertesPlateau(d).length, 0);
   assert.ok(M.raccordsMorts(d).length > 0);
-  var plein = remplir(docExemples());
-  var attendus = M.raccordsMorts(plein).filter(function (r) { return r.raison !== 'absent'; }).length;
-  var al = A.alertesPlateau(plein).filter(function (a) { return a.type === 'raccord'; });
-  assert.equal(al.length, attendus);
-  al.forEach(function (a) {
-    // le point d'alerte est sur la frontière de la cellule
-    var surBord = Math.abs(a.x - a.col * 120) < 1e-9 || Math.abs(a.x - (a.col + 1) * 120) < 1e-9 ||
-      Math.abs(a.y - a.lig * 120) < 1e-9 || Math.abs(a.y - (a.lig + 1) * 120) < 1e-9;
-    assert.ok(surBord);
-  });
-  // Forme réduite : ports de coin morts
-  var reduit = remplir(M.changerForme(docExemples(), { retires: [{ col: 0, lig: 0 }] }));
-  var ports = A.alertesPlateau(reduit).filter(function (a) { return a.type === 'port'; });
-  assert.equal(ports.length, M.portsCoinMorts(reduit).length);
-  assert.ok(ports.length > 0);
-  ports.forEach(function (p) { assert.equal(p.x, p.col * 120 + PM.geometrie.pointCoin(p.coin).x); });
+  assert.deepEqual(A.alertesPlateau(remplir(docExemples())), []);
+  // bord retourné sur la rangée nord : raccord face au vide et deux ports vers le bord
+  var r = M.poserTuile(docExemples(), 'ex-bord', 1, 0, 2);
+  var al = A.alertesPlateau(r);
+  var rac = al.filter(function (a) { return a.type === 'raccord'; });
+  assert.ok(rac.some(function (a) { return a.raison === 'vide' && a.y === 0; }));
+  var ports = al.filter(function (a) { return a.type === 'port'; });
+  assert.equal(ports.length, 2);
+  ports.forEach(function (p) { assert.equal(p.y, 0); assert.equal(p.x, p.col * 120 + PM.geometrie.pointCoin(p.coin).x); });
 });
 
 test('cibleSurbrillance : références de l\'état et de validerPlateau', function () {
@@ -263,27 +174,27 @@ test('cibleSurbrillance : références de l\'état et de validerPlateau', functi
   assert.deepEqual([r.x, r.y], [240, 150]);
   var p = A.cibleSurbrillance({ type: 'port', col: 1, lig: 1, coin: 2 }, d)[0];
   assert.deepEqual([p.x, p.y], [240, 240]);
-  var p2 = A.cibleSurbrillance({ type: 'coin', col: 1, lig: 1, coin: 2 }, d)[0];
-  assert.deepEqual([p2.x, p2.y], [240, 240]);
-  assert.equal(A.cibleSurbrillance({ type: 'case', modeleId: idRole(d, 'coin'), id: 'c1' }, d).length, 4);
+  assert.equal(A.cibleSurbrillance({ type: 'case', modeleId: 'ex-coin', id: 'c1' }, d).length, 4);
   assert.deepEqual(A.cibleSurbrillance(null, d), []);
-  assert.deepEqual(A.cibleSurbrillance({ type: 'inconnu' }, d), []);
+  assert.deepEqual(A.cibleSurbrillance({ type: 'forme' }, d), []);
 });
 
-test('svgPlateau : 16 cellules, 9 jonctions, jetons, silhouettes et classes de glissement', function () {
+test('svgPlateau : 16 cellules, 9 jonctions, camps vert et rouge, villes, classes de glissement ; 5×5', function () {
   var d = docExemples();
   var s = A.svgPlateau(d, {});
   assert.equal((s.match(/data-cellule="/g) || []).length, 16);
   assert.equal((s.match(/data-jonction="/g) || []).length, 9);
-  assert.match(s, />Apparition J1</);
-  assert.match(s, />Apparition J2</);
-  assert.match(s, /Camp J1 \(nord\)/);
+  assert.match(s, />Bord, camp vert</);
+  assert.match(s, />Coin, camp rouge</);
+  assert.match(s, /Camp vert \(nord\)/);
+  assert.match(s, /Camp rouge \(sud\)/);
+  assert.doesNotMatch(s, /J1|J2|Retirée|[Cc]arrefour/);
   assert.match(s, /48 × 48 cm/);
   var compat = {};
-  A.cellulesCompatibles(d, idRole(d, 'coin')).forEach(function (c) { compat[c.col + ',' + c.lig] = true; });
+  [[0, 0], [1, 1]].forEach(function (c) { compat[c.join(',')] = true; });
   var s2 = A.svgPlateau(d, { compatibles: compat });
-  assert.equal((s2.match(/pm-assemblage-compatible/g) || []).length, 4);
-  assert.equal((s2.match(/pm-assemblage-estompee/g) || []).length, 12);
+  assert.equal((s2.match(/pm-assemblage-compatible/g) || []).length, 2);
+  assert.equal((s2.match(/pm-assemblage-estompee/g) || []).length, 14);
   var plein = remplir(docExemples());
   plein = M.cyclerJeton(plein, 2, 2);
   var s3 = A.svgPlateau(plein, { selection: { col: 1, lig: 1 }, surbrillance: { type: 'tuile', col: 0, lig: 0 } });
@@ -292,32 +203,38 @@ test('svgPlateau : 16 cellules, 9 jonctions, jetons, silhouettes et classes de g
   assert.match(s3, /pm-assemblage-jeton/);
   assert.match(s3, /pm-assemblage-selection/);
   assert.match(s3, /pm-assemblage-surbrillance/);
-  // Forme réduite : cellule retirée et jonction impossible
-  var r = M.changerForme(docExemples(), { retires: [{ col: 0, lig: 0 }] });
-  var s4 = A.svgPlateau(r, {});
-  assert.match(s4, /pm-assemblage-retiree/);
-  assert.match(s4, /pm-assemblage-impossible/);
+  // à l'écran : cases d'apparition aux couleurs (et formes) de leur camp
+  assert.equal((s3.match(/data-apparition="vert"/g) || []).length, 6);
+  assert.equal((s3.match(/data-apparition="rouge"/g) || []).length, 6);
+  assert.match(s3, /Case de jonction \(1,1\) : clic pour y poser une ville/);
+  var d5 = M.nouveauDocument('5x5');
+  d5.modeles = M.copieExemples('5x5');
+  var s5 = A.svgPlateau(d5, {});
+  assert.equal((s5.match(/data-cellule="/g) || []).length, 25);
+  assert.equal((s5.match(/data-jonction="/g) || []).length, 16);
+  assert.match(s5, />Bord, neutre</);
 });
 
-test('bibliothèque : groupes par rôle, filtre, stock et état incomplet', function () {
+test('bibliothèque : groupes par gabarit, filtre, stock, état incomplet, alertes', function () {
   var d = docExemples();
   var g = B.vignettesBibliotheque(d, 'tous');
-  assert.deepEqual(g.map(function (x) { return x.role; }), ['centrale', 'coin', 'bord', 'apparition']);
+  assert.deepEqual(g.map(function (x) { return x.gabarit; }), ['centrale', 'bord', 'coin']);
+  assert.deepEqual(g.map(function (x) { return x.titre; }), ['Centrales', 'Bords', 'Coins']);
   assert.equal(B.vignettesBibliotheque(d, 'coin').length, 1);
   assert.equal(B.vignettesBibliotheque(d, 'coin')[0].modeles[0].restants, 4);
-  d = M.poserTuile(d, idRole(d, 'coin'), 0, 0);
+  d = M.poserTuile(d, 'ex-coin', 0, 0);
   var v = B.vignettesBibliotheque(d, 'coin')[0].modeles[0];
-  assert.equal(v.restants, 3);
-  assert.equal(v.posees, 1);
-  assert.equal(v.posable, true);
-  d.modeles[0].cases = [];
+  assert.deepEqual([v.restants, v.posees, v.posable, v.alertes], [3, 1, true, 0]);
+  d.modeles[0].cases[0].diametre = 60;
   var vc = B.vignettesBibliotheque(d, 'centrale')[0].modeles[0];
   assert.equal(vc.complet, false);
   assert.equal(vc.posable, false);
+  d.modeles[1].cases[2].type = 'deplacement'; // bord sans case d'apparition : alerte, toujours posable
+  var vb = B.vignettesBibliotheque(d, 'bord')[0].modeles[0];
+  assert.deepEqual([vb.complet, vb.alertes], [true, 1]);
   assert.equal(B.libelleRestants(0), '×0 restant');
-  assert.equal(B.libelleRestants(1), '×1 restant');
   assert.equal(B.libelleRestants(3), '×3 restants');
-  d.modeles.push({ id: 'bizarre', role: 'autre-chose', exemplaires: 1, cases: [], chemins: [] });
+  d.modeles.push({ id: 'bizarre', gabarit: 'autre-chose', exemplaires: 1, cases: [], chemins: [] });
   var gs = B.vignettesBibliotheque(d, 'tous');
   assert.equal(gs[gs.length - 1].titre, 'Autres');
 });

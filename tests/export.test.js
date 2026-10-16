@@ -8,14 +8,14 @@ require('../src/export.js');
 const PM = globalThis.PM;
 const M = PM.modele, E = PM.exportation, R = PM.rendu;
 
-/** Document de test : les 4 modèles d'exemple, 5 exemplaires de chacun, puis un nombre d'exemplaires choisi. */
+/** Document de test : les 3 modèles d'exemple (centrale, bord, coin), avec le nombre d'exemplaires choisi. */
 function docAvec(exemplaires) {
   const doc = M.nouveauDocument();
   doc.modeles = M.copieExemples().map((m, i) => Object.assign(m, { exemplaires: exemplaires[i] }));
   return doc;
 }
-// 4 modèles x 5 = 20 tuiles
-const doc20 = () => docAvec([5, 5, 5, 5]);
+// 7 + 7 + 6 = 20 tuiles
+const doc20 = () => docAvec([7, 7, 6]);
 
 function texte(octets) { return Buffer.from(octets).toString('latin1'); }
 
@@ -84,18 +84,18 @@ test('coordonnées A3 : colonnes x = 19,5 et 151,5 ; rangées y = 15, 147, 279',
 });
 
 test('tri par identifiant, tuiles posées en tête, option « seulement les posées »', () => {
-  const doc = docAvec([2, 2, 2, 2]);
+  const doc = docAvec([2, 2, 2]);
   const ids = doc.modeles.map(m => m.id).sort();
   const sansPose = E.listeTuiles(doc, {}).tuiles.map(t => t.modeleId);
   assert.deepEqual(sansPose, ids.flatMap(id => [id, id]));
   // pose d'un exemplaire du dernier id : il passe en tête
   const dernier = doc.modeles.find(m => m.id === ids[ids.length - 1]);
-  const cellule = dernier.role === 'centrale' ? [1, 1] : dernier.role === 'coin' ? [0, 0] : dernier.role === 'bord' ? [0, 1] : [1, 0];
-  const pose = M.poserTuile(doc, dernier.id, cellule[0], cellule[1]);
+  const pose = M.poserTuile(doc, dernier.id, 1, 1);
   const liste = E.listeTuiles(pose, {}).tuiles;
   assert.equal(liste[0].modeleId, dernier.id);
   assert.equal(liste[0].posee, true);
-  assert.equal(liste.length, 8);
+  assert.equal(liste.length, 6);
+  assert.ok(liste.every((t) => !('joueur' in t)), 'tuiles imprimées neutres : pas de joueur');
   const seules = E.listeTuiles(pose, { portee: 'posees' }).tuiles;
   assert.equal(seules.length, 1);
   assert.equal(seules[0].modeleId, dernier.id);
@@ -103,39 +103,27 @@ test('tri par identifiant, tuiles posées en tête, option « seulement les pos�
 
 test('modèles incomplets exclus et signalés', () => {
   const doc = doc20();
-  doc.modeles[1].cases.pop(); // plus assez de cases : incomplet
+  doc.modeles[1].cases[0].diametre = 40; // case trop grande : incomplet
   const r = E.listeTuiles(doc, {});
   assert.equal(r.exclus.length, 1);
   assert.equal(r.exclus[0].id, doc.modeles[1].id);
-  assert.equal(r.tuiles.length, 15);
+  assert.equal(r.tuiles.length, 13);
+  // une alerte (R3) n'exclut pas un modèle
+  const d2 = doc20();
+  d2.modeles[0].chemins.push({ id: 'r9', a: { case: 'c1' }, b: { raccord: { cote: 0, pos: 0 } } });
+  assert.equal(E.listeTuiles(d2, {}).tuiles.length, 20);
 });
 
-test('joueurs des apparitions : 2 pour J1, 2 pour J2, alternés au sein de chaque modèle', () => {
-  const doc = docAvec([0, 0, 0, 4]);
-  const app = doc.modeles[3];
-  assert.equal(app.role, 'apparition');
-  const j = E.listeTuiles(doc, {}).tuiles.map(t => t.joueur);
-  assert.equal(j.filter(x => x === 1).length, 2);
-  assert.equal(j.filter(x => x === 2).length, 2);
-  // deux modèles d'apparition de 2 exemplaires : chaque joueur reçoit un exemplaire de chacun
-  const doc2 = docAvec([0, 0, 0, 2]);
-  const copie = JSON.parse(JSON.stringify(doc2.modeles[3]));
-  copie.id = 'ex-apparition-b';
-  doc2.modeles.push(copie);
-  const l = E.listeTuiles(doc2, {}).tuiles;
-  for (const id of [app.id, copie.id]) {
-    assert.deepEqual(l.filter(t => t.modeleId === id).map(t => t.joueur).sort(), [1, 2]);
+test('impression neutre (docs/18) : case d\'apparition en noir et blanc, sans couleur de camp, quarts de jonction imprimés', () => {
+  const doc = doc20();
+  for (const p of E.calepiner(doc, { format: 'A3' })) {
+    const svg = E.svgPlanche(doc, p);
+    assert.ok(!svg.includes(R.COULEURS.rouge), 'pas de rouge sur une planche de tuiles');
+    assert.ok(!/data-apparition="(vert|rouge|neutre)"/.test(svg));
   }
-  // les autres rôles n'ont pas de joueur
-  assert.ok(E.listeTuiles(doc20(), {}).tuiles.filter(t => t.modeleId !== app.id).every(t => t.joueur === null));
-});
-
-test('joueur d\'une apparition posée : celui de sa cellule', () => {
-  const doc = docAvec([0, 0, 0, 4]);
-  const app = doc.modeles[3];
-  const pose = M.poserTuile(M.poserTuile(doc, app.id, 1, 0), app.id, 1, 3);
-  const l = E.listeTuiles(pose, { portee: 'posees' }).tuiles;
-  assert.deepEqual(l.map(t => t.joueur).sort(), [1, 2]);
+  const svg = E.svgPlanche(doc, E.calepiner(doc, { format: 'A3' })[1]);
+  assert.ok(svg.includes('data-apparition="impression"'));
+  assert.ok(svg.includes('data-quart-jonction='));
 });
 
 /* ------------------------------------------------------------------ */
@@ -223,15 +211,15 @@ test('SVG de planche A3 : dimensions en mm, viewBox, balises équilibrées, une 
   assert.match(E.svgPlanche(doc, E.calepiner(doc, { format: 'A4' })[0]), /width="210mm" height="297mm" viewBox="0 0 210 297"/);
 });
 
-test('SVG de la planche des jetons : 9 jetons au pas de 38 mm, ville = disque noir de 33 mm', () => {
+test('SVG de la planche des jetons : 7 villes au pas de 38 mm, ville = disque noir de 33 mm', () => {
   const svg = E.svgJetons();
   assert.match(svg, /width="210mm" height="297mm" viewBox="0 0 210 297"/);
   equilibre(svg);
   const p = E.planchesJetons();
-  assert.equal(p.jetons.length, 9);
-  assert.equal(p.jetons.filter(j => j.type === 'capture').length, 7);
-  assert.equal(p.jetons.filter(j => j.type === 'carrefour').length, 2);
-  assert.equal((svg.match(/<circle [^>]*r="15" fill="none"/g) || []).length, 9, 'cercle de coupe par jeton');
+  assert.equal(p.jetons.length, 7);
+  assert.ok(p.jetons.every(j => j.type === 'capture'));
+  assert.match(p.titre, /7 villes\)$/);
+  assert.equal((svg.match(/<circle [^>]*r="15" fill="none"/g) || []).length, 7, 'cercle de coupe par jeton');
   assert.ok(Math.abs(p.jetons[1].cx - p.jetons[0].cx - 38) < 1e-9);
   assert.ok(Math.abs(p.jetons[5].cy - p.jetons[0].cy - 38) < 1e-9);
   assert.equal((svg.match(/r="16\.5"/g) || []).length, 7);
@@ -241,7 +229,7 @@ test('SVG de la planche des jetons : 9 jetons au pas de 38 mm, ville = disque no
 });
 
 test('SVG de l\'aperçu : A3, marqué non imprimable, sans repères de coupe', () => {
-  const doc = docAvec([5, 5, 5, 5]);
+  const doc = docAvec([5, 5, 5]);
   const svg = E.svgApercuPlateau(M.poserTuile(doc, doc.modeles[0].id, 1, 1));
   assert.match(svg, /width="297mm" height="420mm" viewBox="0 0 297 420"/);
   equilibre(svg);
@@ -343,14 +331,14 @@ test('PDF : opérateurs vectoriels, aucun nombre exponentiel, texte en WinAnsi',
   assert.ok(t.includes('Aper\\347u, non imprimable'), 'ç codé en octal WinAnsi');
 });
 
-test('PDF : la conversion couvre tout le SVG de rendu (exemples + tous les rôles + joueur 2)', () => {
+test('PDF : la conversion couvre tout le SVG de rendu (exemples des 3 gabarits, apparitions, quarts de jonction)', () => {
   const doc = doc20();
-  const p = E.calepiner(doc, { format: 'A3' }).find(x => x.tuiles.some(t => t.joueur === 2));
-  assert.ok(p, 'une planche contient une apparition de J2');
+  const p = E.calepiner(doc, { format: 'A3' })[1]; // centrales et bords
   const svg = E.svgPlanche(doc, p);
   const { flux } = E.svgVersFlux(svg);
-  // pointillé rouge du J2 : tracé en pointillé
-  assert.ok(/\[1\.5 1\.5\] 0 d/.test(flux));
+  // l'écran (camp rouge, en tirets ou triangle) passe aussi dans la conversion
+  assert.doesNotThrow(() => E.svgVersFlux('<svg xmlns="http://www.w3.org/2000/svg" width="120mm" height="120mm" viewBox="0 0 120 120">' +
+    R.contenuTuile(doc.modeles[1], { camp: 'neutre' }) + R.contenuTuile(doc.modeles[1], { camp: 'rouge' }) + '</svg>'));
   // autant de découpes que de tuiles
   assert.equal((flux.match(/ W n/g) || []).length, p.tuiles.length);
   // q / Q équilibrés
@@ -421,6 +409,7 @@ test('PNG : CRC32 identique à zlib, pHYs 11811 px/m inséré après IHDR (et re
 test('preparerSorties : planches, jetons, aperçu ; rien de coché = aucune feuille', () => {
   const doc = doc20();
   const s = E.preparerSorties(doc, { format: 'A3', jetons: true, apercu: true });
+  assert.ok(s.feuilles.find(f => f.type === 'apercu').svg.includes('Aperçu'));
   assert.deepEqual(s.feuilles.map(f => f.nom), ['plateau-tuiles-A3-1', 'plateau-tuiles-A3-2', 'plateau-tuiles-A3-3', 'plateau-tuiles-A3-4', 'plateau-jetons-A4', 'plateau-apercu-A3']);
   assert.equal(s.nbTuiles, 20);
   assert.equal(E.preparerSorties(doc, { tuiles: false }).feuilles.length, 0);
@@ -435,9 +424,6 @@ test('le catalogue réel (comptes globaux) : 20 tuiles, 4 planches A3, 10 planch
   assert.equal(E.calepiner(doc, { format: 'A4' }).length, 10);
   const pdf = E.pdfDepuisPlanches(E.calepiner(doc, { format: 'A3' }), doc);
   analyserPdf(pdf);
-  const j = E.listeTuiles(doc, {}).tuiles.filter(t => M.modeleParId(doc, t.modeleId).role === 'apparition');
-  assert.equal(j.filter(t => t.joueur === 1).length, 2);
-  assert.equal(j.filter(t => t.joueur === 2).length, 2);
 });
 
 test('découpe : un texte contenant %%CLIP:zz%% est imprimé tel quel (aucun remplacement dans les textes)', () => {
@@ -460,13 +446,13 @@ test('découpe : un texte contenant %%CLIP:zz%% est imprimé tel quel (aucun rem
 });
 
 test('plafond : plus de 200 tuiles au total dans le stock, export refusé avec un message clair ; « posées » non concerné', () => {
-  const trop = docAvec([50, 50, 50, 51]); // 201
+  const trop = docAvec([67, 67, 67]); // 201
   assert.throws(() => E.listeTuiles(trop, {}), /201 tuiles.*200 au plus/);
   assert.throws(() => E.preparerSorties(trop, {}), /200 au plus/);
-  assert.equal(E.listeTuiles(docAvec([50, 50, 50, 50]), {}).tuiles.length, 200);
+  assert.equal(E.listeTuiles(docAvec([67, 67, 66]), {}).tuiles.length, 200);
   assert.doesNotThrow(() => E.listeTuiles(trop, { portee: 'posees' }));
   // exemplaires invalides lus comme 0 (lecture commune PM.modele.exemplairesValides)
-  assert.equal(E.listeTuiles(docAvec([2.5, -1, '3', 2]), {}).tuiles.length, 2);
+  assert.equal(E.listeTuiles(docAvec([2.5, -1, 2]), {}).tuiles.length, 2);
 });
 
 test('export « posées » : une tuile au modèle introuvable est signalée dans exclus', () => {
@@ -478,4 +464,16 @@ test('export « posées » : une tuile au modèle introuvable est signalée dans
   assert.equal(r.tuiles.length, 1);
   assert.deepEqual(r.exclus, [{ id: 'fantome', nom: 'fantome', raison: 'introuvable' }]);
   assert.deepEqual(E.listeTuiles(doc, {}).exclus, []); // portée « stock » : rien à signaler
+});
+
+test('aperçu du plateau refusé si le plateau complet est très déséquilibré (le critère est nommé) ; accepté sinon', () => {
+  require('../src/graphe.js');
+  const A = require('./aides-v2.js');
+  const des = A.plateauDesequilibre();
+  assert.throws(() => E.preparerSorties(des, { tuiles: false, apercu: true }), /Aperçu du plateau refusé : plateau très déséquilibré \(.*5 contre 2/);
+  // les planches de tuiles restent exportables
+  assert.ok(E.preparerSorties(des, { apercu: false }).feuilles.length > 0);
+  assert.equal(E.preparerSorties(A.plateauComplet('4x4', true), { tuiles: false, apercu: true }).feuilles.length, 1);
+  // plateau incomplet : pas de mesure, aperçu accepté
+  assert.equal(E.preparerSorties(M.retirerTuile(des, 1, 1), { tuiles: false, apercu: true }).feuilles.length, 1);
 });

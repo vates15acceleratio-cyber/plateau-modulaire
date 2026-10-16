@@ -21,7 +21,7 @@ function geler(o) {
 }
 const gele = (o) => geler(JSON.parse(JSON.stringify(o)));
 const codes = (m) => M.validerModele(m).erreurs.map((e) => e.code);
-const exemple = (role) => M.copieExemples().find((m) => m.role === role);
+const exemple = (gabarit) => M.copieExemples().find((m) => m.gabarit === gabarit);
 
 test('module exposé et chargeable sous Node', () => {
   assert.equal(typeof E.monter, 'function');
@@ -74,26 +74,28 @@ test('aimanter : grille de 1 cm, marge de coupe et zones de coin respectées', (
 
 /* ---------- modèle de départ ---------- */
 
-test('modeleDeDepart : 4 rôles, bon nombre de cases, positions valides', () => {
-  M.ROLES.forEach((role) => {
-    const m = E.modeleDeDepart(role, []);
-    assert.equal(m.role, role);
-    assert.equal(m.exemplaires, 1);
-    assert.equal(m.cases.length, M.NB_CASES_PAR_ROLE[role]);
-    assert.deepEqual(m.chemins, []);
-    const c = codes(m);
-    ['hors_tuile', 'zone_coin', 'chevauchement', 'nombre_cases', 'cases_apparition', 'case_invalide', 'diametre', 'id_double', 'type_case'].forEach((x) => {
-      assert.ok(!c.includes(x), `${role} : ${x}`);
+test('modeleDeDepart : 3 gabarits, cases valides (une case d\'apparition sur le pourtour), aucun chemin, dans les deux formats', () => {
+  for (const grille of ['4x4', '5x5']) {
+    M.GABARITS.forEach((gabarit) => {
+      const m = E.modeleDeDepart(gabarit, [], grille);
+      assert.equal(m.gabarit, gabarit);
+      assert.equal(m.grille, grille);
+      assert.equal(m.exemplaires, 1);
+      assert.deepEqual(m.chemins, []);
+      assert.equal(m.cases.filter((c) => c.type === 'apparition').length, gabarit === 'centrale' ? 0 : 1);
+      const c = M.validerModele(m, grille).erreurs.map((e) => e.code);
+      ['hors_tuile', 'zone_coin', 'chevauchement', 'case_invalide', 'diametre', 'id_double', 'type_case', 'grille_modele'].forEach((x) => {
+        assert.ok(!c.includes(x), `${grille} ${gabarit} : ${x}`);
+      });
+      assert.ok(c.includes('case_isolee')); // pas encore de chemins
     });
-    assert.equal(M.validerModele(m).complet, false); // pas encore de chemins
-  });
-  assert.equal(E.modeleDeDepart('apparition', []).cases.filter((c) => c.type === 'apparition').length, 1);
+  }
 });
 
 test('modeleDeDepart : id de modèle unique par rapport aux ids existants', () => {
   assert.equal(E.modeleDeDepart('coin', []).id, 'modele-1');
   assert.equal(E.modeleDeDepart('coin', ['modele-1', 'modele-2']).id, 'modele-3');
-  assert.throws(() => E.modeleDeDepart('inconnu', []), /Rôle inconnu/);
+  assert.throws(() => E.modeleDeDepart('apparition', []), /Gabarit inconnu/);
 });
 
 test('dupliquer : nouvel id, 1 exemplaire, nom « (copie) », original intact', () => {
@@ -109,15 +111,15 @@ test('dupliquer : nouvel id, 1 exemplaire, nom « (copie) », original intact', 
 /* ---------- cases ---------- */
 
 test('ajouterCase / deplacerCase / basculerType : purs et aimantés', () => {
-  const m = gele(E.modeleDeDepart('coin', []));
+  const m = gele(E.modeleDeDepart('centrale', []));
   const m2 = E.ajouterCase(m, 62, 58);
-  assert.equal(m.cases.length, 3);
-  assert.equal(m2.cases.length, 4);
-  const n = m2.cases[3];
-  assert.equal(n.id, 'c4');
+  assert.equal(m.cases.length, 4);
+  assert.equal(m2.cases.length, 5);
+  const n = m2.cases[4];
+  assert.equal(n.id, 'c5');
   assert.deepEqual([n.x, n.y, n.diametre, n.type], [60, 60, 24, 'deplacement']);
-  const m3 = E.deplacerCase(gele(m2), 'c4', 83, 31);
-  assert.deepEqual([m3.cases[3].x, m3.cases[3].y], [80, 30]);
+  const m3 = E.deplacerCase(gele(m2), 'c5', 83, 31);
+  assert.deepEqual([m3.cases[4].x, m3.cases[4].y], [80, 30]);
   assert.throws(() => E.deplacerCase(m2, 'zzz', 0, 0), /introuvable/);
   const m4 = E.basculerType(gele(m3), 'c1');
   assert.equal(m4.cases[0].type, 'apparition');
@@ -135,40 +137,46 @@ test('ids de cases uniques même après suppression', () => {
 /* ---------- chemins ---------- */
 
 test('ajouterChemin : case-case, case-raccord, case-coin ; la case vient en premier', () => {
-  let m = gele(E.modeleDeDepart('coin', []));
+  let m = gele(E.modeleDeDepart('bord', []));
   m = gele(E.ajouterChemin(m, { 'case': 'c1' }, { 'case': 'c2' }));
   assert.equal(m.chemins[0].id, 'h1');
   m = gele(E.ajouterChemin(m, { raccord: { cote: 1, pos: 1 } }, { 'case': 'c2' }));
   assert.deepEqual(m.chemins[1].a, { 'case': 'c2' });
   assert.deepEqual(m.chemins[1].b, { raccord: { cote: 1, pos: 1 } });
-  m = gele(E.ajouterChemin(m, { 'case': 'c1' }, { coin: 2 }));
+  m = gele(E.ajouterChemin(m, { 'case': 'c3' }, { coin: 2 }));
   assert.equal(m.chemins.length, 3);
   assert.equal(new Set(m.chemins.map((c) => c.id)).size, 3);
 });
 
-test('ajouterChemin : refus expliqués', () => {
+test('ajouterChemin : refus expliqués ; côté ou coin extérieur accepté (alerte de validation)', () => {
   const m = gele(E.modeleDeDepart('coin', []));
   const refus = (a, b, re) => assert.throws(() => E.ajouterChemin(m, a, b), re);
   refus({ raccord: { cote: 0, pos: 0 } }, { coin: 2 }, /part toujours d'une case/);
   refus({ 'case': 'c1' }, { 'case': 'c1' }, /lui-même/);
   refus({ 'case': 'c1' }, { 'case': 'inexistante' }, /n'existe pas/);
-  refus({ 'case': 'c1' }, { raccord: { cote: 0, pos: 1 } }, /extérieur/); // côté nord extérieur pour un coin
-  refus({ 'case': 'c1' }, { raccord: { cote: 3, pos: 1 } }, /extérieur/);
-  refus({ 'case': 'c1' }, { coin: 0 }, /extérieur/);                       // seul le coin SE est un port du coin
   refus({ 'case': 'c1' }, null, /invalide/);
   const m2 = gele(E.ajouterChemin(m, { 'case': 'c1' }, { 'case': 'c2' }));
   assert.throws(() => E.ajouterChemin(m2, { 'case': 'c2' }, { 'case': 'c1' }), /déjà reliés/);
+  // côté nord extérieur pour un coin : plus de refus, une alerte
+  const m3 = E.ajouterChemin(m2, { 'case': 'c1' }, { raccord: { cote: 0, pos: 1 } });
+  assert.ok(M.validerModele(m3).alertes.some((a) => a.code === 'raccord_exterieur'));
+  const m4 = E.ajouterChemin(m2, { 'case': 'c2' }, { coin: 0 });
+  assert.ok(M.validerModele(m4).alertes.some((a) => a.code === 'port_exterieur'));
 });
 
-test('raccordActif / coinActif suivent le rôle', () => {
-  assert.equal(E.raccordActif('coin', 0), false);
-  assert.equal(E.raccordActif('coin', 1), true);
-  assert.equal(E.raccordActif('centrale', 0), true);
-  assert.equal(E.coinActif('coin', 2), true);
-  assert.equal(E.coinActif('coin', 0), false);
-  assert.equal(E.coinActif('centrale', 3), true);
-  assert.equal(E.coinActif('bord', 0), false);
-  assert.equal(E.coinActif('bord', 3), true);
+test('raccordExterieur / coinExterieur suivent le gabarit déclaré', () => {
+  assert.equal(E.raccordExterieur('coin', 0), true);
+  assert.equal(E.raccordExterieur('coin', 3), true);
+  assert.equal(E.raccordExterieur('coin', 1), false);
+  assert.equal(E.raccordExterieur('bord', 0), true);
+  assert.equal(E.raccordExterieur('centrale', 0), false);
+  assert.equal(E.raccordExterieur(undefined, 0), false);
+  assert.equal(E.coinExterieur('coin', 2), false);
+  assert.equal(E.coinExterieur('coin', 0), true);
+  assert.equal(E.coinExterieur('bord', 3), false);
+  assert.equal(E.coinExterieur('bord', 1), true);
+  assert.equal(E.coinExterieur('centrale', 3), false);
+  assert.equal(E.coinExterieur('constructor', 3), false);
 });
 
 /* ---------- suppression ---------- */
@@ -176,14 +184,12 @@ test('raccordActif / coinActif suivent le rôle', () => {
 test('supprimer : case (avec ses chemins), chemin, coin, raccord ; refus si absent', () => {
   const base = gele(exemple('coin'));
   const sansCase = E.supprimer(base, { type: 'case', id: 'c1' });
-  assert.equal(sansCase.cases.length, 2);
+  assert.equal(sansCase.cases.length, 1);
   assert.ok(sansCase.chemins.every((ch) => JSON.stringify(ch).indexOf('"c1"') < 0));
   assert.ok(!codes(sansCase).includes('case_inconnue'));
   assert.equal(E.supprimer(base, { type: 'chemin', id: 'h1' }).chemins.length, base.chemins.length - 1);
-  const sansPort = E.supprimer(base, { type: 'coin', id: 2 });
-  assert.ok(codes(sansPort).includes('port_manquant'));
-  const sansRaccord = E.supprimer(base, { type: 'raccord', cote: 1, pos: 1 });
-  assert.equal(sansRaccord.chemins.length, base.chemins.length - 1);
+  assert.equal(E.supprimer(base, { type: 'coin', id: 2 }).chemins.length, base.chemins.length - 1);
+  assert.equal(E.supprimer(base, { type: 'raccord', cote: 1, pos: 0 }).chemins.length, base.chemins.length - 1);
   assert.throws(() => E.supprimer(base, { type: 'case', id: 'zzz' }), /introuvable/);
   assert.throws(() => E.supprimer(base, { type: 'chemin', id: 'zzz' }), /introuvable/);
   assert.throws(() => E.supprimer(base, { type: 'coin', id: 0 }), /Aucun chemin/);
@@ -194,22 +200,19 @@ test('supprimer : case (avec ses chemins), chemin, coin, raccord ; refus si abse
 
 /* ---------- scénario complet ---------- */
 
-test('intégration : de modeleDeDepart(coin) à un modèle complet, uniquement avec les fonctions de l\'éditeur', () => {
-  let m = E.modeleDeDepart('coin', []);
-  // c1 (60,40), c2 (30,90), c3 (90,90)
-  m = E.deplacerCase(m, 'c1', 80, 40);     // la case du haut vers la droite
-  m = E.deplacerCase(m, 'c2', 40, 90);
-  m = E.deplacerCase(m, 'c3', 80, 90);
-  m = E.ajouterChemin(m, { 'case': 'c1' }, { 'case': 'c3' });
-  m = E.ajouterChemin(m, { 'case': 'c2' }, { 'case': 'c3' });
-  m = E.ajouterChemin(m, { 'case': 'c3' }, { coin: 2 });
-  m = E.ajouterChemin(m, { 'case': 'c1' }, { raccord: { cote: 1, pos: 1 } });
-  assert.ok(codes(m).includes('cotes_raccord'));
-  m = E.ajouterChemin(m, { 'case': 'c2' }, { raccord: { cote: 2, pos: 1 } });
+test('intégration : de modeleDeDepart(coin) au coin raccourci de docs/20 D5, uniquement avec les fonctions de l\'éditeur', () => {
+  let m = E.modeleDeDepart('coin', []); // c1 apparition, c2 déplacement
+  m = E.deplacerCase(m, 'c1', 44, 44);
+  m = E.deplacerCase(m, 'c2', 88, 88);
+  m = E.ajouterChemin(m, { 'case': 'c1' }, { 'case': 'c2' });
+  assert.ok(M.validerModele(m).alertes.some((a) => a.code === 'reseau_sans_sortie'));
+  m = E.ajouterChemin(m, { 'case': 'c2' }, { coin: 2 });
+  m = E.ajouterChemin(m, { 'case': 'c1' }, { raccord: { cote: 1, pos: 0 } });
+  m = E.ajouterChemin(m, { 'case': 'c1' }, { raccord: { cote: 2, pos: 2 } });
   const v = M.validerModele(m);
   assert.deepEqual(v.erreurs, []);
-  assert.equal(v.complet, true);
-  // le modèle complet s'ajoute à un document et se remplace sans erreur
+  assert.deepEqual(v.alertes, []);
+  assert.equal(M.masquesDuModele(m).raccords, 0x108);
   let doc = M.nouveauDocument();
   doc = M.ajouterModele(doc, m);
   doc = M.remplacerModele(doc, m.id, E.renommer(m, '  Mon coin '));
@@ -227,9 +230,9 @@ test('intégration via PM.etat : modifications = une étape d\'historique chacun
   assert.equal(etat.doc().modeles[0].cases.length, 3);
 });
 
-/* ---------- utilisation et rôle ---------- */
+/* ---------- utilisation et gabarit ---------- */
 
-test('nbUtilisations et refus de changement de rôle d\'un modèle posé', () => {
+test('nbUtilisations ; changement de gabarit d\'un modèle posé accepté (jamais bloquant)', () => {
   let doc = M.nouveauDocument();
   const m = exemple('centrale');
   doc = M.ajouterModele(doc, m);
@@ -238,47 +241,46 @@ test('nbUtilisations et refus de changement de rôle d\'un modèle posé', () =>
   assert.equal(E.nbUtilisations(doc, m.id), 2);
   assert.equal(E.nbUtilisations(doc, 'autre'), 0);
   assert.equal(E.nbUtilisations(M.nouveauDocument(), 'x'), 0);
-  const refuse = () => M.remplacerModele(doc, m.id, E.changerRole(m, 'bord'));
-  assert.throws(refuse, /posé sur le plateau/);
-  // même rôle : accepté
-  assert.doesNotThrow(() => M.remplacerModele(doc, m.id, E.renommer(m, 'Autre nom')));
-  assert.throws(() => E.changerRole(m, 'zzz'), /Rôle inconnu/);
+  const d2 = M.remplacerModele(doc, m.id, E.changerGabarit(m, 'bord'));
+  assert.equal(M.modeleParId(d2, m.id).gabarit, 'bord');
+  assert.throws(() => E.changerGabarit(m, 'apparition'), /Gabarit inconnu/);
 });
 
 /* ---------- cibles ---------- */
 
-test('cibleEn : priorité raccord > coin > case > chemin, inactifs signalés', () => {
+test('cibleEn : priorité raccord > coin > case > chemin, extérieurs signalés', () => {
   const m = exemple('coin'); // côtés extérieurs N et O, port SE
-  assert.deepEqual(E.cibleEn(m, 120, 60), { type: 'raccord', cote: 1, pos: 1, actif: true });
-  assert.deepEqual(E.cibleEn(m, 60, 1), { type: 'raccord', cote: 0, pos: 1, actif: false });
-  assert.deepEqual(E.cibleEn(m, 119, 119), { type: 'coin', coin: 2, actif: true });
-  assert.deepEqual(E.cibleEn(m, 1, 1), { type: 'coin', coin: 0, actif: false });
+  assert.deepEqual(E.cibleEn(m, 120, 30), { type: 'raccord', cote: 1, pos: 0, exterieur: false });
+  assert.deepEqual(E.cibleEn(m, 60, 1), { type: 'raccord', cote: 0, pos: 1, exterieur: true });
+  assert.deepEqual(E.cibleEn(m, 119, 119), { type: 'coin', coin: 2, exterieur: false });
+  assert.deepEqual(E.cibleEn(m, 1, 1), { type: 'coin', coin: 0, exterieur: true });
   assert.deepEqual(E.cibleEn(m, 85, 85), { type: 'case', id: 'c1' });
-  assert.deepEqual(E.cibleEn(m, 62, 86), { type: 'chemin', id: 'h2' }); // segment c1 - c3 (y = 85), hors des deux cases
-  assert.equal(E.cibleEn(m, 20, 20), null);
+  assert.deepEqual(E.cibleEn(m, 66, 66), { type: 'chemin', id: 'h1' });
+  assert.equal(E.cibleEn(m, 20, 100), null);
 });
 
-test('extremiteDeCible / refDeCible', () => {
+test('extremiteDeCible / refDeCible : raccords et coins toujours utilisables', () => {
   assert.deepEqual(E.extremiteDeCible({ type: 'case', id: 'c1' }), { 'case': 'c1' });
-  assert.deepEqual(E.extremiteDeCible({ type: 'raccord', cote: 1, pos: 2, actif: true }), { raccord: { cote: 1, pos: 2 } });
-  assert.equal(E.extremiteDeCible({ type: 'raccord', cote: 0, pos: 2, actif: false }), null);
-  assert.deepEqual(E.extremiteDeCible({ type: 'coin', coin: 2, actif: true }), { coin: 2 });
+  assert.deepEqual(E.extremiteDeCible({ type: 'raccord', cote: 1, pos: 2, exterieur: false }), { raccord: { cote: 1, pos: 2 } });
+  assert.deepEqual(E.extremiteDeCible({ type: 'raccord', cote: 0, pos: 2, exterieur: true }), { raccord: { cote: 0, pos: 2 } });
+  assert.deepEqual(E.extremiteDeCible({ type: 'coin', coin: 2 }), { coin: 2 });
   assert.equal(E.extremiteDeCible({ type: 'chemin', id: 'h1' }), null);
   assert.equal(E.extremiteDeCible(null), null);
-  assert.deepEqual(E.refDeCible({ type: 'coin', coin: 3, actif: true }), { type: 'coin', id: 3 });
-  assert.equal(E.refDeCible({ type: 'raccord', cote: 2, pos: 1, actif: true }).cote, 2);
+  assert.deepEqual(E.refDeCible({ type: 'coin', coin: 3 }), { type: 'coin', id: 3 });
+  assert.equal(E.refDeCible({ type: 'raccord', cote: 2, pos: 1 }).cote, 2);
 });
 
-test('libelleCible et coteCourte : cotes en cm', () => {
-  const m = exemple('centrale');
-  assert.match(E.libelleCible(m, { type: 'raccord', cote: 0, pos: 1, actif: true }), /nord.*6 cm/);
-  assert.match(E.libelleCible(m, { type: 'raccord', cote: 0, pos: 1, actif: false }), /inactif/);
-  assert.match(E.libelleCible(m, { type: 'coin', coin: 1, actif: true }), /obligatoire/);
-  assert.match(E.libelleCible(m, { type: 'coin', coin: 1, actif: false }), /extérieur/);
-  assert.match(E.libelleCible(m, { type: 'case', id: 'c1' }), /3,6 ; 3,6 cm/);
+test('libelleCible et coteCourte : cotes en cm, extérieur expliqué', () => {
+  const m = exemple('bord');
+  assert.match(E.libelleCible(m, { type: 'raccord', cote: 1, pos: 1, exterieur: false }), /est.*6 cm/);
+  assert.match(E.libelleCible(m, { type: 'raccord', cote: 0, pos: 1, exterieur: true }), /face au vide/);
+  assert.match(E.libelleCible(m, { type: 'coin', coin: 2, exterieur: false }), /case de jonction/);
+  assert.match(E.libelleCible(m, { type: 'coin', coin: 1, exterieur: true }), /extérieur/);
+  assert.match(E.libelleCible(m, { type: 'case', id: 'c3' }), /apparition.*6 ; 4 cm/);
   assert.equal(E.libelleCible(m, null), '');
-  assert.deepEqual(E.coteCourte(m, { type: 'raccord', cote: 0, pos: 0, actif: true }), { x: 30, y: 0, texte: '3 cm' });
-  assert.equal(E.coteCourte(m, { type: 'coin', coin: 0, actif: true }), null);
+  assert.deepEqual(E.coteCourte(m, { type: 'raccord', cote: 0, pos: 0 }), { x: 30, y: 0, texte: '3 cm' });
+  assert.match(E.libelleCible(m, { type: 'raccord', cote: 0, pos: 1 }, '5x5'), /5 cm/);
+  assert.equal(E.coteCourte(m, { type: 'coin', coin: 0 }), null);
 });
 
 /* ---------- validation : halo et marquages ---------- */
@@ -289,22 +291,23 @@ test('haloDe : une forme pour chaque type de ref de validerModele', () => {
   assert.equal(E.haloDe(m, { type: 'case', id: 'c1', ids: ['c1', 'c2'] }).cercles.length, 2);
   assert.equal(E.haloDe(m, { type: 'chemin', id: 'h1' }).lignes.length, 1);
   assert.deepEqual(E.haloDe(m, { type: 'coin', id: 2 }).cercles[0], { x: 120, y: 120, r: 12 });
-  assert.equal(E.haloDe(m, { type: 'raccord', id: '1:1', cote: 1, pos: 1 }).cercles.length, 1);
+  assert.equal(E.haloDe(m, { type: 'raccord', id: '1:0', cote: 1, pos: 0 }).cercles.length, 1);
   assert.equal(E.haloDe(m, { type: 'modele', id: 'x' }).tuile, true);
   assert.deepEqual(E.haloDe(m, null), { cercles: [], lignes: [], tuile: false });
   assert.equal(E.haloDe(m, { type: 'case', id: 'absente' }).cercles.length, 0);
 });
 
-test('chaque erreur de validation d\'un modèle abîmé produit un halo ou un marquage', () => {
+test('chaque erreur et chaque alerte d\'un modèle abîmé produit un halo ou un marquage', () => {
   const m = exemple('centrale');
-  m.cases[1].x = 40; // chevauche c1
-  m.chemins = m.chemins.filter((c) => c.id !== 'p3'); // port manquant au coin SE
+  m.cases[1].x = 50; m.cases[1].y = 50; // chevauche c0
+  m.chemins.push({ id: 'r9', a: { case: 'c2' }, b: { raccord: { cote: 0, pos: 2 } } }); // R3 (alerte)
+  m.chemins.push({ id: 'x9', a: { case: 'c0' }, b: { raccord: { cote: 0, pos: 0 } } }); // passe sur c1 : chemin_case
   const v = M.validerModele(m);
-  assert.ok(v.erreurs.length >= 2);
+  assert.ok(v.erreurs.length >= 2 && v.alertes.length >= 1);
   const mq = E.marquages(v.erreurs);
-  assert.ok(mq.cases.includes('c1') && mq.cases.includes('c2'), 'chevauchement : les deux cases');
-  assert.deepEqual(mq.coinsManquants, [2]);
-  v.erreurs.forEach((e) => {
+  assert.ok(mq.cases.includes('c0') && mq.cases.includes('c1'), 'chevauchement : les deux cases');
+  assert.ok(mq.chemins.includes('x9'));
+  v.erreurs.concat(v.alertes).forEach((e) => {
     const h = E.haloDe(m, e.ref);
     assert.ok(h.cercles.length + h.lignes.length > 0 || h.tuile, e.code);
   });
@@ -317,28 +320,27 @@ test('marquages : chemins, raccords, coins en erreur', () => {
     { code: 'coin_double', message: '', ref: { type: 'coin', id: 2 } },
     { code: 'x', message: '' }
   ]);
-  assert.deepEqual(mq, { cases: [], coinsManquants: [], coinsErreur: [2], raccords: ['1:1'], chemins: ['h9'] });
+  assert.deepEqual(mq, { cases: [], coinsErreur: [2], raccords: ['1:1'], chemins: ['h9'] });
 });
 
 test('extremitesUtilisees', () => {
-  assert.deepEqual(E.extremitesUtilisees(exemple('coin')), { raccords: ['1:1', '2:1'], coins: [2] });
+  assert.deepEqual(E.extremitesUtilisees(exemple('coin')), { raccords: ['1:0', '2:2'], coins: [2] });
 });
 
 /* ---------- fragments SVG ---------- */
 
-test('fragments SVG : 12 raccords, 4 coins, 4 zones, grille, vignettes', () => {
+test('fragments SVG : 12 raccords, 4 coins (extérieurs en tirets), 4 zones, grille, vignettes', () => {
   const m = exemple('coin');
   const mq = E.marquages(M.validerModele(m).erreurs);
   const r = E.svgRaccords(m, mq);
   assert.equal((r.match(/data-raccord=/g) || []).length, 12);
-  assert.equal((r.match(/pm-editeur-inactif/g) || []).length, 6); // côtés N et O
+  assert.equal((r.match(/pm-editeur-actif/g) || []).length, 12);
+  assert.equal((r.match(/pm-editeur-exterieur/g) || []).length, 6); // côtés N et O
   assert.equal((r.match(/pm-editeur-utilise/g) || []).length, 2);
   const c = E.svgCoins(m, mq);
   assert.equal((c.match(/data-coin=/g) || []).length, 4);
-  assert.equal((c.match(/pm-editeur-inactif/g) || []).length, 3);
-  const vide = Object.assign({}, m, { chemins: [] });
-  const c2 = E.svgCoins(vide, E.marquages(M.validerModele(vide).erreurs));
-  assert.equal((c2.match(/pm-editeur-pulse/g) || []).length, 1); // port SE manquant
+  assert.equal((c.match(/pm-editeur-exterieur/g) || []).length, 3);
+  assert.doesNotMatch(c, /pulse|inactif/);
   assert.equal((E.svgZonesCoin().match(/<path/g) || []).length, 4);
   assert.equal((E.svgGrille().match(/<line/g) || []).length, 22);
   for (let rot = 0; rot < 4; rot++) {
@@ -351,10 +353,10 @@ test('fragments SVG : 12 raccords, 4 coins, 4 zones, grille, vignettes', () => {
 });
 
 test('les fonctions pures ne modifient pas leurs entrées gelées', () => {
-  const m = gele(exemple('apparition'));
+  const m = gele(exemple('bord'));
   assert.doesNotThrow(() => {
     E.ajouterCase(m, 50, 50); E.deplacerCase(m, 'c1', 50, 50); E.basculerType(m, 'c1');
-    E.supprimer(m, { type: 'case', id: 'c1' }); E.renommer(m, 'x'); E.changerRole(m, 'bord');
+    E.supprimer(m, { type: 'case', id: 'c1' }); E.renommer(m, 'x'); E.changerGabarit(m, 'coin');
     E.dupliquer(m, []); E.haloDe(m, { type: 'case', id: 'c1' }); E.cibleEn(m, 50, 50);
     E.svgVignette(m, 1); E.extremitesUtilisees(m);
     try { E.ajouterChemin(m, { 'case': 'c1' }, { 'case': 'c1' }); } catch (e) { /* refus attendu */ }

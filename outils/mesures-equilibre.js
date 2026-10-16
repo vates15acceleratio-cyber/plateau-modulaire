@@ -1,4 +1,7 @@
 'use strict';
+// Adapté pour se charger sous les règles v2 (grille pleine, gabarits, villes seules) ; mesures, constats rédigés et seuils
+// à refaire avec le catalogue v2. Le « placement » mesuré est désormais le choix des 2 jonctions qui restent des cases chemin
+// (les 7 autres portent une ville) ; les commentaires et textes du rapport parlent encore de « carrefours » (vocabulaire v1).
 /*
  * mesures-equilibre.js : mesures d'équilibre sur des plateaux 4x4 (docs/9-validation-catalogue.md, mesures 1 à 7 et 9).
  *
@@ -9,7 +12,7 @@
  *   const { mesurer, rediger, tirerPlateaux } = require('./mesures-equilibre.js');
  *   const stats = mesurer(entrees, { paires: 'fixe' });   // entrees = [{ doc, jetons? }], jetons = placement du plateau
  *   const texte = rediger(stats, { titre: '...', graine: 1 });
- *  - paires: 'toutes' (défaut) essaie les 30 paires de carrefours permises sur chaque plateau ;
+ *  - paires: 'toutes' (défaut) essaie les 36 paires de jonctions-cases sur chaque plateau ;
  *    'fixe' ne mesure que le placement donné (entree.jetons, sinon doc.plateau.jetons).
  */
 const fs = require('fs');
@@ -41,19 +44,22 @@ function melanger(t, rng) {
   for (let i = t.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [t[i], t[j]] = [t[j], t[i]]; }
   return t;
 }
-/** Plateau 4x4 complet : modèles tirés sans remise selon exemplaires et rôles, rotation aléatoire des centrales. */
+/** Plateau complet (grille pleine du document) : modèles tirés sans remise selon exemplaires et gabarits, rotation aléatoire des centrales. */
 function tirerPlateau(rng) {
   let doc = CAT.nouveauDocument();
+  const F = M.formatDuDocument(doc);
   const stock = {};
   for (const m of doc.modeles) {
-    stock[m.role] = stock[m.role] || [];
-    for (let k = 0; k < m.exemplaires; k++) stock[m.role].push(m.id);
+    stock[m.gabarit] = stock[m.gabarit] || [];
+    for (let k = 0; k < m.exemplaires; k++) stock[m.gabarit].push(m.id);
   }
   for (const r of Object.keys(stock)) stock[r] = melanger(stock[r], rng);
-  for (const c of M.cellulesActives(doc.plateau.forme)) {
-    const role = M.roleCellule(c.col, c.lig, doc.plateau.forme);
-    doc = M.poserTuile(doc, stock[role].pop(), c.col, c.lig);
-    if (role === 'centrale') { const r = Math.floor(rng() * 4); if (r) doc = M.tournerTuile(doc, c.col, c.lig, r); }
+  for (let lig = 0; lig < F.GRILLE.lignes; lig++) {
+    for (let col = 0; col < F.GRILLE.colonnes; col++) {
+      const gabarit = M.gabaritCellule(col, lig, F);
+      doc = M.poserTuile(doc, stock[gabarit].pop(), col, lig); // rotation suggérée pour un bord ou un coin, 0 sinon
+      if (gabarit === 'centrale') { const r = Math.floor(rng() * 4); if (r) doc = M.tournerTuile(doc, col, lig, r); }
+    }
   }
   return doc;
 }
@@ -65,45 +71,25 @@ function tirerPlateaux(nb, graine) {
 }
 
 /* ---------------------------------------------------------------------- */
-/* Paires de carrefours permises                                           */
+/* Paires de jonctions restant des cases chemin (les 7 autres portent une ville) */
 /* ---------------------------------------------------------------------- */
 
 const JONCTIONS = [];
 for (let j = 1; j <= 3; j++) for (let i = 1; i <= 3; i++) JONCTIONS.push({ i, j });
-/** Règle unique PM.modele.campJonction : pas les deux sur la rangée nord (j = 1), ni les deux sur la rangée sud (j = 3). */
-const memeCamp = (a, b) => M.campJonction(a.i, a.j) !== null && M.campJonction(a.i, a.j) === M.campJonction(b.i, b.j);
 const cleJonction = (c) => `(${c.i},${c.j})`;
 
-function jetons9(carrefours) {
-  return JONCTIONS.map((jn) => ({ i: jn.i, j: jn.j, type: carrefours.some((c) => c.i === jn.i && c.j === jn.j) ? 'carrefour' : 'capture' }));
+/** 9 jonctions du 4×4 : 'capture' (ville) partout sauf sur les jonctions données, qui restent des cases chemin (pas de jeton). */
+function jetons9(casesChemin) {
+  return JONCTIONS.filter((jn) => !casesChemin.some((c) => c.i === jn.i && c.j === jn.j)).map((jn) => ({ i: jn.i, j: jn.j, type: 'capture' }));
 }
 const PAIRES = [];
 for (let a = 0; a < JONCTIONS.length; a++) {
   for (let b = a + 1; b < JONCTIONS.length; b++) {
-    if (memeCamp(JONCTIONS[a], JONCTIONS[b])) continue;
     PAIRES.push({ cle: cleJonction(JONCTIONS[a]) + '+' + cleJonction(JONCTIONS[b]), jetons: jetons9([JONCTIONS[a], JONCTIONS[b]]) });
   }
 }
-const CLE_DEFAUT = '(1,2)+(3,2)';     // placement par défaut du générateur (répartition 3 / 1 / 3)
-const CLE_PAR_CAMP = '(2,1)+(2,3)';   // un carrefour près de chaque joueur
-
-/** Contrôle croisé des paires avec PM.controles (alerte carrefours_meme_cote) ; null si le module n'est pas chargeable. */
-function verifierPairesAvecControles() {
-  try {
-    require('../src/controles.js');
-    let permises = 0;
-    for (let a = 0; a < 9; a++) {
-      for (let b = a + 1; b < 9; b++) {
-        const doc = CAT.nouveauDocument();
-        doc.plateau.jetons = [{ ...JONCTIONS[a], type: 'carrefour' }, { ...JONCTIONS[b], type: 'carrefour' }];
-        const r = PM.controles.calculer(doc);
-        const tout = [].concat(r.erreurs || [], r.alertes || []);
-        if (!tout.some((x) => x.code === 'carrefours_meme_cote')) permises++;
-      }
-    }
-    return permises;
-  } catch (e) { return null; }
-}
+const CLE_DEFAUT = '(1,2)+(3,2)';     // placement par défaut du générateur v1 (répartition 3 / 1 / 3), à reconfirmer avec le générateur v2
+const CLE_PAR_CAMP = '(2,1)+(2,3)';   // une case chemin près de chaque joueur
 
 /* ---------------------------------------------------------------------- */
 /* Outils de statistique                                                   */
@@ -328,8 +314,7 @@ function rediger(stats, meta) {
   if (!stats.fixe) {
     out('## 2. Toutes les paires de carrefours permises');
     out();
-    out(`${stats.nbPaires} paires (toutes sauf « même camp » : pas les deux sur j = 1, ni les deux sur j = 3).` +
-      (meta.pairesControles !== undefined && meta.pairesControles !== null ? ` Contrôle croisé avec \`PM.controles\` : ${meta.pairesControles} paires sans alerte « carrefours_meme_cote ».` : ''));
+    out(`${stats.nbPaires} paires (toutes les paires de jonctions, sans restriction de camp depuis la version 2).`);
     out();
     out('| Paire de carrefours | Écart D6 moyen (T) | Alerte D6 (T) | 5 contre 2 (T) | Écart D6 moyen (N) | Alerte D6 (N) | 5 contre 2 (N) | D6 étendu (T) | D6 étendu (N) | S ≥ 4 (N) |\n|---|---|---|---|---|---|---|---|---|---|');
     for (const p of PAIRES) {
@@ -502,7 +487,7 @@ function principal() {
   const stats = mesurer(entrees, { paires: 'toutes' });
   const autresGraines = [101, 202].map((g2) => ({ graine: g2, st: mesurer(tirerPlateaux(nb, g2), { paires: 'toutes' }) }));
   const texte = rediger(stats, {
-    titre: 'Mesures d\'équilibre du catalogue (sous-agent 7)', graine, autresGraines, pairesControles: verifierPairesAvecControles(),
+    titre: 'Mesures d\'équilibre du catalogue (sous-agent 7)', graine, autresGraines,
     notes: ['Plateaux tirés comme dans `tests/catalogue.test.js` (mêmes tirages pour la même graine), catalogue réel `PM.catalogue.nouveauDocument()`.']
   }) + '\n' + (constatsValables(nb, graine, stats) ? COMMENTAIRE + COMMENTAIRE_DOCS16
     : '## Constats\n\nConstats rédigés à la main pour 1000 plateaux et la graine 20261015 : à réécrire pour cette mesure.\n');
@@ -510,6 +495,6 @@ function principal() {
   console.log(`Rapport écrit : ${sortie} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 }
 
-module.exports = { mulberry32, tirerPlateau, tirerPlateaux, PAIRES, CLE_DEFAUT, jetons9, mesurer, rediger, verifierPairesAvecControles };
+module.exports = { mulberry32, tirerPlateau, tirerPlateaux, PAIRES, CLE_DEFAUT, jetons9, mesurer, rediger };
 
 if (require.main === module) principal();

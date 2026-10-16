@@ -62,8 +62,11 @@ test('PM.geometrie.* est un alias de format(\'4x4\')', () => {
 test('formatDuDocument : champ absent = 4×4', () => {
   assert.equal(M.formatDuDocument(M.nouveauDocument()), F4);
   assert.equal(M.formatDuDocument(undefined), F4);
-  assert.equal(M.formatDuDocument({ format: '5x5' }), F5);
-  assert.throws(() => M.formatDuDocument({ format: 'hexagone' }), /Format de grille inconnu/);
+  assert.equal(M.formatDuDocument({ grille: '5x5' }), F5);
+  assert.equal(M.formatDuDocument(M.nouveauDocument('5x5')), F5);
+  // la clé d'enveloppe « format » des fichiers n'est pas le format de grille
+  assert.equal(M.formatDuDocument({ format: 'plateau-modulaire' }), F4);
+  assert.throws(() => M.formatDuDocument({ grille: 'hexagone' }), /Format de grille inconnu/);
 });
 
 test('raccourci D5 : rotations des masques', () => {
@@ -111,13 +114,12 @@ test('tournerPoint 5×5 autour de (50, 50) : ×4 = identité, un quart envoie ch
   }
 });
 
-test('les fonctions paramétrées suivent le format passé (sans règle v2)', () => {
-  const forme = { retires: [] };
-  assert.equal(M.cellulesActives(forme).length, 16);
-  assert.equal(M.cellulesActives(forme, '5x5').length, 25);
-  assert.equal(M.campJonction(2, 3), 2);
-  assert.equal(M.campJonction(2, 3, F5), null);
-  assert.equal(M.campJonction(2, 4, F5), 2);
+test('les fonctions paramétrées suivent le format passé', () => {
+  assert.equal(M.gabaritCellule(3, 2), 'bord');
+  assert.equal(M.gabaritCellule(3, 2, F5), 'centrale');
+  assert.equal(F4.campCellule(1, 2), 'rouge');
+  assert.equal(F5.campCellule(1, 2), null);
+  assert.equal(F5.campCellule(1, 3), 'rouge');
   assert.equal(PM.assemblage.celluleSous(490, 490), null);
   assert.deepEqual(PM.assemblage.celluleSous(490, 490, F5), { col: 4, lig: 4 });
   assert.deepEqual(PM.assemblage.jonctionSous(400, 400, F5), { i: 4, j: 4 });
@@ -126,7 +128,7 @@ test('les fonctions paramétrées suivent le format passé (sans règle v2)', ()
   assert.deepEqual(PM.assemblage.vuePour(F5), { x: -40, y: -52, w: 580, h: 620 });
   assert.deepEqual(PM.editeurTuile.vuePour(F5), { x: -16, y: -16, l: 132, h: 132 });
   // case Ø 30 : admise en 4×4, trop grande en 5×5 (case max Ø 24)
-  const m = { id: 'm', role: 'centrale', exemplaires: 1, cases: [{ id: 'c1', x: 50, y: 50, diametre: 30, type: 'deplacement' }], chemins: [] };
+  const m = { id: 'm', gabarit: 'centrale', exemplaires: 1, cases: [{ id: 'c1', x: 50, y: 50, diametre: 30, type: 'deplacement' }], chemins: [] };
   const codes = (F) => M.validerModele(m, F).erreurs.map((e) => e.code);
   assert.ok(!codes().includes('diametre'));
   assert.ok(codes('5x5').includes('diametre'));
@@ -138,22 +140,10 @@ test('export : tuile avec fond perdu de 106 mm en 5×5, 126 mm en 4×4', () => {
   const E = PM.exportation;
   assert.equal(E.COTE_PLANCHE, 126);
   assert.equal(E.PAS, 132);
-  // centrale complète du format 5×5 (règles v1 : 4 cases, 4 ports, raccords sur 4 côtés)
-  const k = (id, x, y) => ({ id, x, y, diametre: 24, type: 'deplacement' });
-  const modele = {
-    id: 'c5', nom: 'Centrale 5×5', role: 'centrale', exemplaires: 1,
-    cases: [k('c1', 32, 32), k('c2', 68, 32), k('c3', 68, 68), k('c4', 32, 68)],
-    chemins: [
-      { id: 'h1', a: { case: 'c1' }, b: { case: 'c2' } }, { id: 'h2', a: { case: 'c2' }, b: { case: 'c3' } },
-      { id: 'h3', a: { case: 'c3' }, b: { case: 'c4' } },
-      { id: 'p1', a: { case: 'c1' }, b: { coin: 0 } }, { id: 'p2', a: { case: 'c2' }, b: { coin: 1 } },
-      { id: 'p3', a: { case: 'c3' }, b: { coin: 2 } }, { id: 'p4', a: { case: 'c4' }, b: { coin: 3 } },
-      { id: 'r1', a: { case: 'c1' }, b: { raccord: { cote: 0, pos: 0 } } }, { id: 'r2', a: { case: 'c2' }, b: { raccord: { cote: 1, pos: 1 } } },
-      { id: 'r3', a: { case: 'c3' }, b: { raccord: { cote: 2, pos: 1 } } }, { id: 'r4', a: { case: 'c4' }, b: { raccord: { cote: 3, pos: 1 } } }
-    ]
-  };
+  // étoile du format 5×5 (exemple conforme aux règles v2)
+  const modele = Object.assign(M.copieExemples('5x5')[0], { exemplaires: 1 });
   assert.deepEqual(M.validerModele(modele, F5).erreurs, []);
-  const doc5 = { format: '5x5', version: 1, modeles: [modele], plateau: { forme: { retires: [] }, tuiles: [], jetons: [] } };
+  const doc5 = Object.assign(M.nouveauDocument('5x5'), { modeles: [modele] });
   const [planche] = E.calepiner(doc5, { format: 'A3' });
   const marges5 = E.margesFormat('A3', '5x5');
   assert.equal(planche.pas, 112);

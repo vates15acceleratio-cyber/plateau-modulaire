@@ -11,6 +11,9 @@
  *  - le PNG est rastérisé dans un <canvas> (navigateur seulement), puis reçoit le chunk pHYs.
  * Les fonctions de calcul n'accèdent pas au DOM (testées sous Node) ; seules rasteriser(),
  * telecharger() et ouvrir() utilisent le navigateur.
+ * Règles v2 : les tuiles sont imprimées neutres (case d'apparition en noir et blanc, une même tuile sert aux
+ * deux camps) ; la planche de jetons porte 7 villes ; l'aperçu du plateau est refusé si le plateau complet est
+ * très déséquilibré (PM.graphe, docs/20).
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
 if (!PM.modele && typeof require === 'function') require('./modele.js'); // chargement sous Node
@@ -96,20 +99,14 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   /* Liste des tuiles à imprimer                                         */
   /* ------------------------------------------------------------------ */
 
-  function modeleAApparition(m) {
-    return tab(m && m.cases).some(function (c) { return c && c.type === 'apparition'; });
-  }
-
   /**
    * Tuiles à imprimer. options : { portee = 'stock' | 'posees' }.
-   * Renvoie { tuiles: [{ modeleId, exemplaire, joueur, posee }], exclus: [{ id, nom, raison }] }.
+   * Renvoie { tuiles: [{ modeleId, exemplaire, posee }], exclus: [{ id, nom, raison }] }.
    *  - 'stock' : chaque exemplaire de chaque modèle complet ; les tuiles posées d'abord ; lève une Error
    *    au-delà de PM.modele.PLAFOND_TUILES tuiles au total ;
    *  - 'posees' : seulement les tuiles posées sur le plateau ; une tuile au modèle introuvable est listée
    *    dans `exclus` (raison 'introuvable').
    * Les modèles incomplets sont exclus et listés dans `exclus` (raison 'incomplet'). Tri par identifiant (ordre naturel).
-   * Les tuiles d'apparition reçoivent leur joueur : celui de leur cellule si elles sont posées, puis
-   * 2 exemplaires par joueur ; à défaut, alternance (au sein de chaque modèle d'abord).
    */
   function listeTuiles(doc, options) {
     var portee = options && options.portee === 'posees' ? 'posees' : 'stock';
@@ -131,15 +128,9 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         exclus.push({ id: String(m.id), nom: String(m.nom || m.id), raison: 'incomplet' });
         return;
       }
-      var posees = tuilesPosees.filter(function (t) { return t && t.modeleId === m.id; })
-        .sort(function (a, b) { return (a.lig - b.lig) || (a.col - b.col); });
-      var total = portee === 'posees' ? posees.length : M.exemplairesValides(m);
-      for (var k = 0; k < total; k++) {
-        var posee = k < posees.length;
-        var joueur = null;
-        if (posee && modeleAApparition(m)) joueur = M.joueurCellule(posees[k].col, posees[k].lig, F);
-        entrees.push({ modeleId: m.id, exemplaire: k + 1, joueur: joueur, posee: posee, _app: modeleAApparition(m) });
-      }
+      var posees = tuilesPosees.filter(function (t) { return t && t.modeleId === m.id; }).length;
+      var total = portee === 'posees' ? posees : M.exemplairesValides(m);
+      for (var k = 0; k < total; k++) entrees.push({ modeleId: m.id, exemplaire: k + 1, posee: k < posees });
     });
     if (portee === 'posees') {
       // tuiles posées dont le modèle n'est plus dans la bibliothèque : non imprimables, signalées
@@ -150,28 +141,9 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         exclus.push({ id: String(t.modeleId), nom: String(t.modeleId), raison: 'introuvable' });
       });
     }
-    // Joueurs des apparitions non posées : 2 par joueur, alternance au sein de chaque modèle.
-    var compte = { 1: 0, 2: 0 }, parModele = {};
-    entrees.forEach(function (e) {
-      if (!e.joueur) return;
-      compte[e.joueur]++;
-      parModele[e.modeleId] = parModele[e.modeleId] || { 1: 0, 2: 0 };
-      parModele[e.modeleId][e.joueur]++;
-    });
-    entrees.forEach(function (e) {
-      if (!e._app || e.joueur) return;
-      var pm = parModele[e.modeleId] = parModele[e.modeleId] || { 1: 0, 2: 0 };
-      var candidats = [1, 2].filter(function (j) { return compte[j] < 2; });
-      if (!candidats.length) candidats = [1, 2];
-      candidats.sort(function (a, b) { return (pm[a] - pm[b]) || (compte[a] - compte[b]) || (a - b); });
-      e.joueur = candidats[0];
-      compte[e.joueur]++;
-      pm[e.joueur]++;
-    });
     var tri = function (a, b) { return compareId(a.modeleId, b.modeleId) || (a.exemplaire - b.exemplaire); };
     var tuiles = entrees.filter(function (e) { return e.posee; }).sort(tri)
-      .concat(entrees.filter(function (e) { return !e.posee; }).sort(tri))
-      .map(function (e) { return { modeleId: e.modeleId, exemplaire: e.exemplaire, joueur: e.joueur, posee: e.posee }; });
+      .concat(entrees.filter(function (e) { return !e.posee; }).sort(tri));
     return { tuiles: tuiles, exclus: exclus };
   }
 
@@ -269,7 +241,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
    * Répartit les tuiles en planches.
    * options : { format = 'A3' | 'A4', portee = 'stock' | 'posees' }.
    * Une planche : { format, nom, titre, numero, total, largeur, hauteur, colonnes, lignes, margeX, margeY, pas,
-   *   tuiles: [{ modeleId, exemplaire, joueur, posee, col, lig, rot, x, y, etiquette }], reperes, textes, barre }.
+   *   tuiles: [{ modeleId, exemplaire, posee, col, lig, rot, x, y, etiquette }], reperes, textes, barre }.
    * (x, y) = coin nord-ouest du carré de 126 mm en 4×4 (fond perdu compris), pas de la tuile coupée (qui est à +3 mm).
    * rot vaut 0 : la tuile physique est imprimée en orientation canonique, on la tourne à la pose.
    * Lève une Error si la grille ne tient pas sur la feuille.
@@ -293,7 +265,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         var col = k % f.colonnes, lig = Math.floor(k / f.colonnes);
         var etiquette = t.modeleId + (exemplairesDe[t.modeleId] > 1 ? '-' + t.exemplaire : '');
         planche.tuiles.push({
-          modeleId: t.modeleId, exemplaire: t.exemplaire, joueur: t.joueur, posee: t.posee, col: col, lig: lig, rot: 0,
+          modeleId: t.modeleId, exemplaire: t.exemplaire, posee: t.posee, col: col, lig: lig, rot: 0,
           x: marges.x + col * pas, y: marges.y + lig * pas, etiquette: etiquette
         });
       });
@@ -353,7 +325,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       var id = 'pm-clip-' + n;
       corps += '<g transform="translate(' + nb(t.x + FOND_PERDU) + ' ' + nb(t.y + FOND_PERDU) + ')" clip-path="url(#' + id + ')">' +
         '<clipPath id="' + id + '"><rect x="' + (-FOND_PERDU) + '" y="' + (-FOND_PERDU) + '" width="' + cp + '" height="' + cp + '"/></clipPath>' +
-        R.contenuTuile(modele, { rot: t.rot || 0, joueur: t.joueur, fondPerdu: FOND_PERDU, contour: false, format: F }) + '</g>';
+        R.contenuTuile(modele, { rot: t.rot || 0, fondPerdu: FOND_PERDU, contour: false, format: F }) + '</g>';
     });
     planche.reperes.forEach(function (r) { corps += svgLigne(r.x1, r.y1, r.x2, r.y2, EPAISSEUR_REPERE, NOIR_REPERAGE); });
     corps += svgBarre(planche.barre);
@@ -361,8 +333,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     return enveloppeSvg(planche.largeur, planche.hauteur, corps);
   }
 
-  /** Jetons de la planche : 7 villes ('capture') puis 2 carrefours. */
-  var JETONS = ['capture', 'capture', 'capture', 'capture', 'capture', 'capture', 'capture', 'carrefour', 'carrefour'];
+  /** Jetons de la planche : 7 villes ('capture', seul type de jeton). */
+  var JETONS = ['capture', 'capture', 'capture', 'capture', 'capture', 'capture', 'capture'];
   var PAS_JETON = 38, DIAMETRE_JETON_FP = 33, COLONNES_JETONS = 5;
 
   /** Géométrie de la planche de jetons (A4) : centres, rayon de coupe, textes. */
@@ -374,14 +346,14 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     });
     var margeX = (f.largeur - 150) / 2;
     return {
-      format: 'A4', nom: 'plateau-jetons-A4', titre: 'Plateau modulaire - jetons A4 (7 villes, 2 carrefours)', numero: 1, total: 1,
+      format: 'A4', nom: 'plateau-jetons-A4', titre: 'Plateau modulaire - jetons A4 (7 villes)', numero: 1, total: 1,
       largeur: f.largeur, hauteur: f.hauteur, rayonCoupe: rCoupe, rayonFondPerdu: rFp, jetons: jetons, margeX: margeX,
       barre: barreControle(f, margeX)
     };
   }
 
   /**
-   * SVG de la planche de jetons : 9 jetons de 33 mm (30 mm + 1,5 mm de fond perdu), pas de 38 mm.
+   * SVG de la planche de jetons : 7 villes de 33 mm (30 mm + 1,5 mm de fond perdu), pas de 38 mm.
    * Repères : quatre petits traits radiaux hors fond perdu, qui pointent vers le cercle de coupe (Ø 30 mm).
    */
   function svgJetons() {
@@ -422,10 +394,10 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       var id = 'pm-clip-' + n;
       corps += '<g transform="translate(' + tx + ' ' + ty + ')" clip-path="url(#' + id + ')">' +
         '<clipPath id="' + id + '"><rect x="0" y="0" width="' + C + '" height="' + C + '"/></clipPath>' +
-        R.contenuTuile(modele, { rot: t.rot || 0, joueur: M.joueurCellule(t.col, t.lig, F), fondPerdu: 0, contour: true, format: F }) + '</g>';
+        R.contenuTuile(modele, { rot: t.rot || 0, fondPerdu: 0, contour: true, format: F }) + '</g>';
     });
     tab(doc && doc.plateau && doc.plateau.jetons).forEach(function (j) {
-      if (j && (j.type === 'capture' || j.type === 'carrefour')) corps += R.contenuJeton(j.type, j.i * C, j.j * C, F);
+      if (j && j.type === 'capture') corps += R.contenuJeton(j.type, j.i * C, j.j * C, F);
     });
     corps += '<rect x="0" y="0" width="' + cote + '" height="' + cote + '" fill="none" stroke="' + R.COULEURS.noir + '" stroke-width="0.8"/></g>';
     corps += svgTexte({ texte: 'Aperçu, non imprimable', x: f.largeur / 2, y: 28, taille: 9, ancre: 'middle', gras: true });
@@ -760,12 +732,25 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   /* ------------------------------------------------------------------ */
 
   /**
+   * Refuse l'aperçu d'un plateau complet très déséquilibré (erreur des contrôles, docs/20) : lève une Error
+   * qui nomme le critère. Sans PM.graphe chargé, aucune vérification.
+   */
+  function verifierEquilibre(doc) {
+    if (!PM.graphe || typeof PM.graphe.equilibre !== 'function') return;
+    var e = PM.graphe.equilibre(doc);
+    if (e.complet && e.tresDesequilibre) {
+      throw new Error('Aperçu du plateau refusé : plateau très déséquilibré (' + e.blocages.map(function (b) { return b.message.replace(/\.$/, ''); }).join(' ; ') + ').');
+    }
+  }
+
+  /**
    * Construit les feuilles demandées.
    * choix : { tuiles = true, portee = 'stock'|'posees', format = 'A3'|'A4', jetons = false, apercu = false }.
    * Renvoie { feuilles: [{ nom, type, largeur, hauteur, svg }], exclus, nbTuiles }.
    */
   function preparerSorties(doc, choix) {
     var c = choix || {}, feuilles = [], exclus = [], nbTuiles = 0;
+    if (c.apercu) verifierEquilibre(doc);
     if (c.tuiles !== false) {
       var options = { format: c.format || 'A3', portee: c.portee || 'stock' };
       exclus = listeTuiles(doc, options).exclus;
@@ -898,7 +883,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     var iStock = ligne(gPortee, 'radio', 'portee', 'stock', 'Toutes les tuiles du stock (selon leurs exemplaires)', true);
     var iPosees = ligne(gPortee, 'radio', 'portee', 'posees', 'Seulement les tuiles posées sur le plateau', false);
     gContenu.appendChild(gPortee);
-    var iJetons = ligne(gContenu, 'checkbox', 'jetons', 'jetons', 'Planche des jetons (A4 : 7 villes, 2 carrefours)', false);
+    var iJetons = ligne(gContenu, 'checkbox', 'jetons', 'jetons', 'Planche des jetons (A4 : 7 villes)', false);
     var iApercu = ligne(gContenu, 'checkbox', 'apercu', 'apercu', 'Aperçu du plateau assemblé (A3, non imprimable)', false);
 
     var gFormat = groupe('Format de feuille pour les tuiles');

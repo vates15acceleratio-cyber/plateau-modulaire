@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Recette de l'interface (scénarios navigateur)</title>
+  <title>Recette de l'interface (scénarios navigateur, règles v2)</title>
   <link rel="stylesheet" href="../styles/base.css">
   <link rel="stylesheet" href="../styles/editeur-tuile.css">
   <link rel="stylesheet" href="../styles/assemblage.css">
@@ -75,11 +75,13 @@
   <script src="../src/rendu.js"></script>
   <script src="../src/etat.js"></script>
   <script src="../src/sauvegarde.js"></script>
+  <script src="../src/graphe.js"></script>
   <script src="../src/controles.js"></script>
   <script src="../src/bibliotheque.js"></script>
   <script src="../src/assemblage.js"></script>
   <script src="../src/editeur-tuile.js"></script>
   <script src="../src/app.js"></script>
+  <script src="../tests/aides-v2.js"></script>
   <script>
   window.addEventListener('load', function () {
     var M = PM.modele, G = PM.geometrie, A = PM.assemblage, E = PM.editeurTuile;
@@ -156,104 +158,91 @@
     function nbTuiles() { return etat.doc().plateau.tuiles.length; }
     function pastille() { return $('pastille-alertes').textContent; }
 
-    // Plateau complet « bien placé » (affectation trouvée par recherche : 0 alerte avec le catalogue réel)
-    var AFFECT = ['K5','A1','A2','K3','B1','C1','C5','B4','B3','C2','C4','B5','K1','A1','A2','K4'];
-    var ROTS = [0,0,0,0,0,1,3,0,0,0,1,0,0,0,0,0];
-
-    function assemblerComplet() {
-      var cells = M.cellulesActives(etat.doc().plateau.forme);
-      cells.forEach(function (c, k) { glisser(AFFECT[k], c.col, c.lig, ROTS[k]); });
-    }
-    var JETONS = [[1,1,1],[2,1,1],[3,1,1],[1,2,2],[2,2,1],[3,2,2],[1,3,1],[2,3,1],[3,3,1]];
+    var AV2 = PM.aidesV2;
+    /** Bibliothèque d'exemples conformes v2 (3 modèles : ex-centrale, ex-bord, ex-coin). */
+    function docExemples(grille) { return AV2.documentExemples(grille); }
+    // Rotations suggérées (oracle : docs/2-avis-geometrie.md, côté extérieur canonique au nord, coin N + O)
+    var ORA_ROT = { '0,0': 0, '3,0': 1, '3,3': 2, '0,3': 3, '0,1': 3, '0,2': 3, '3,1': 1, '3,2': 1, '1,0': 0, '2,0': 0, '1,3': 2, '2,3': 2 };
+    function idCellule(col, lig) { return { centrale: 'ex-centrale', bord: 'ex-bord', coin: 'ex-coin' }[M.gabaritCellule(col, lig)]; }
 
     var docComplet = null;
 
     /* ============================================================== */
     function s0_chargement() {
       titre('S0 chargement');
-      ['bibliotheque', 'assemblage', 'controles', 'editeurTuile', 'sauvegarde', 'app'].forEach(function (n) { ctrl('module PM.' + n + ' présent', !!PM[n]); });
+      ['bibliotheque', 'assemblage', 'controles', 'editeurTuile', 'sauvegarde', 'graphe', 'app'].forEach(function (n) { ctrl('module PM.' + n + ' présent', !!PM[n]); });
       ctrl('aucun module absent dans la coquille', !document.querySelector('.pm-module-absent'));
-      ctrl('bibliothèque : 18 vignettes', document.querySelectorAll('.pm-biblio-vignette').length === 18, document.querySelectorAll('.pm-biblio-vignette').length);
+      ctrl('bibliothèque : 18 vignettes (catalogue v1 converti)', document.querySelectorAll('.pm-biblio-vignette').length === 18, document.querySelectorAll('.pm-biblio-vignette').length);
+      ctrl('bibliothèque : 3 groupes (Centrales, Bords, Coins)', Array.prototype.map.call(document.querySelectorAll('.pm-biblio-groupe-titre'), function (h) { return h.textContent.split(' ')[0]; }).join(',') === 'Centrales,Bords,Coins');
       ctrl('plateau : 16 cellules et 9 jonctions', document.querySelectorAll('[data-cellule]').length === 16 && document.querySelectorAll('[data-jonction]').length === 9);
+      ctrl('plateau : camps vert (nord) et rouge (sud)', /Camp vert \(nord\)/.test(document.querySelector('#assemblage svg').textContent) && /Camp rouge \(sud\)/.test(document.querySelector('#assemblage svg').textContent));
+      ctrl('plus de sélecteur de forme', !document.querySelector('[data-role="forme"]'));
       ctrl('onglet Plateau sélectionné, écran Tuiles caché', document.querySelector('[data-onglet="plateau"]').getAttribute('aria-selected') === 'true' && $('ecran-tuiles').hidden);
       ctrl('Annuler / Rétablir désactivés au départ', $('btn-annuler').disabled && $('btn-retablir').disabled);
       ctrl('pastille « Plateau incomplet » au départ', pastille() === 'Plateau incomplet', pastille());
-      ctrl('document initial = catalogue (pas de reprise)', etat.doc().modeles.length === 18 && nbTuiles() === 0);
+      ctrl('document initial = catalogue (pas de reprise), version 2, grille 4×4', etat.doc().modeles.length === 18 && nbTuiles() === 0 && etat.doc().version === 2 && etat.doc().grille === '4x4');
+      ctrl('barre d\'état : bibliothèque de la version 1 signalée (catalogue v2 pas encore disponible)', /version 1/.test(msg()) && /catalogue de la version 2/.test(msg()) && niveau() === 'alerte', msg());
     }
 
     function s1_assemblage() {
-      titre('S1 assemblage complet par glisser-déposer');
-      reset();
-      var cells = M.cellulesActives(etat.doc().plateau.forme);
-      var tousOk = true, rotsOk = true, details = [];
-      cells.forEach(function (c, k) {
-        var avant = nbTuiles();
-        var g = glisser(AFFECT[k], c.col, c.lig, ROTS[k]);
-        if (!g.demarre || nbTuiles() !== avant + 1) { tousOk = false; details.push(AFFECT[k] + '@' + c.col + ',' + c.lig + ' : ' + msg()); }
-        var t = M.tuileEn(etat.doc(), c.col, c.lig);
-        var role = M.roleCellule(c.col, c.lig, etat.doc().plateau.forme);
-        if (t) {
-          if (role === 'centrale' && t.rot !== ROTS[k]) { rotsOk = false; details.push('rot centrale ' + t.rot + '/' + ROTS[k]); }
-        }
-      });
+      titre('S1 assemblage complet par glisser-déposer (bibliothèque d\'exemples v2)');
+      reset(docExemples());
+      ctrl('bibliothèque : 3 vignettes', document.querySelectorAll('.pm-biblio-vignette').length === 3);
+      var tousOk = true, details = [];
+      for (var lig = 0; lig < 4; lig++) for (var col = 0; col < 4; col++) {
+        var avant = nbTuiles(), quarts = col === 1 && lig === 1 ? 2 : 0;
+        var g = glisser(idCellule(col, lig), col, lig, quarts);
+        if (!g.demarre || nbTuiles() !== avant + 1) { tousOk = false; details.push(col + ',' + lig + ' : ' + msg()); }
+      }
       ctrl('16 poses réussies par glisser-déposer', tousOk && nbTuiles() === 16, details.join(' | '));
-      ctrl('rotation R pendant le glissement appliquée aux centrales', rotsOk, details.join(' | '));
-      // rotations déduites (oracle : docs/2-avis-geometrie.md, coin exposé N+O en rot 0, bord/apparition exposé N en rot 0)
-      var ora = { '0,0': 0, '3,0': 1, '3,3': 2, '0,3': 3, '0,1': 3, '0,2': 3, '3,1': 1, '3,2': 1, '1,0': 0, '2,0': 0, '1,3': 2, '2,3': 2 };
+      ctrl('R pendant le glissement : rotation choisie appliquée', M.tuileEn(etat.doc(), 1, 1).rot === 2, M.tuileEn(etat.doc(), 1, 1).rot);
       var mauvais = [];
-      etat.doc().plateau.tuiles.forEach(function (t) { var k = t.col + ',' + t.lig; if (k in ora && ora[k] !== t.rot) mauvais.push(k + ':' + t.rot + '/' + ora[k]); });
-      ctrl('rotations automatiques des coins, bords, apparitions', mauvais.length === 0, mauvais.join(' '));
+      etat.doc().plateau.tuiles.forEach(function (t) { var k = t.col + ',' + t.lig; if (k in ORA_ROT && ORA_ROT[k] !== t.rot) mauvais.push(k + ':' + t.rot + '/' + ORA_ROT[k]); });
+      ctrl('rotations suggérées des bords et coins (côté extérieur dehors)', mauvais.length === 0, mauvais.join(' '));
       var cp = compteurs();
       ctrl('compteur Tuiles posées 16 / 16', cp['Tuiles posées'] && cp['Tuiles posées'].v === '16 / 16', cp['Tuiles posées'] && cp['Tuiles posées'].v);
-      ctrl('pastille « Plateau incomplet » avant les jetons', pastille() === 'Plateau incomplet', pastille());
-      var msgs = [];
-      JETONS.forEach(function (j) {
-        for (var n = 0; n < j[2]; n++) cliquerJeton(j[0], j[1]);
-      });
-      function cliquerJeton(i, j) { cliquerJonction(i, j); }
-      ctrl('9 jetons posés (7 villes, 2 carrefours)', etat.doc().plateau.jetons.length === 9 &&
-        etat.doc().plateau.jetons.filter(function (x) { return x.type === 'capture'; }).length === 7 &&
-        etat.doc().plateau.jetons.filter(function (x) { return x.type === 'carrefour'; }).length === 2, J(etat.doc().plateau.jetons));
+      ctrl('compteurs apparitions vert 6 / 6 et rouge 6 / 6', cp['Apparitions vert'].v === '6 / 6' && cp['Apparitions rouge'].v === '6 / 6', J(cp));
+      ctrl('pastille « Plateau incomplet » avant les villes', pastille() === 'Plateau incomplet', pastille());
+      ctrl('cases d\'apparition aux couleurs (et formes) de leur camp à l\'écran', document.querySelectorAll('#assemblage [data-apparition="vert"]').length === 6 && document.querySelectorAll('#assemblage [data-apparition="rouge"]').length === 6);
+      AV2.VILLES['4x4'].forEach(function (v) { cliquerJonction(v[0], v[1]); });
+      ctrl('7 villes posées en un clic chacune', etat.doc().plateau.jetons.length === 7 && etat.doc().plateau.jetons.every(function (x) { return x.type === 'capture'; }), J(etat.doc().plateau.jetons));
       cp = compteurs();
       var pasOk = Object.keys(cp).filter(function (k) { return !cp[k].ok; }).map(function (k) { return k + '=' + cp[k].v; });
       ctrl('tous les compteurs à « ok »', pasOk.length === 0, pasOk.join(', '));
+      ctrl('compteur « Cases (tuiles et jonctions) » : 54 (≈ 60)', cp['Cases (tuiles et jonctions)'] && cp['Cases (tuiles et jonctions)'].v === '54 (≈ 60)', cp['Cases (tuiles et jonctions)'] && cp['Cases (tuiles et jonctions)'].v);
       ctrl('pastille « Plateau complet »', pastille() === 'Plateau complet' && $('pastille-alertes').classList.contains('pm-ok'), pastille());
       ctrl('panneau : « Aucune erreur ni alerte. »', !!document.querySelector('.pm-controles-vide'));
-      ctrl('compteur d\'écran « Jetons posés 9/9 »', /Jetons posés 9\/9/.test(document.querySelector('[data-role="jetons"]').textContent));
-      var ctrlPlat = M.validerPlateau(etat.doc());
-      ctrl('validerPlateau : aucune erreur', ctrlPlat.erreurs.length === 0, J(ctrlPlat.erreurs));
+      ctrl('compteur d\'écran « Villes posées 7/7 »', /Villes posées 7\/7/.test(document.querySelector('[data-role="jetons"]').textContent));
+      ctrl('validerPlateau : aucune erreur', M.validerPlateau(etat.doc()).erreurs.length === 0);
       docComplet = JSON.parse(J(etat.doc()));
     }
 
     function s2_refus() {
-      titre('S2 refus');
+      titre('S2 pose libre et refus');
       reset();
       var avant = docJ(), g;
       g = glisser('K1', 1, 1);
-      ctrl('mauvais rôle (coin sur centrale) : refusé, document inchangé', docJ() === avant && g.demarre, g.demarre);
-      ctrl('mauvais rôle : message d\'erreur en une phrase dans #barre-etat', niveau() === 'erreur' && /attend/.test(msg()) && uneSeulePhrase(msg()), msg());
-      glisser('C1', 0, 0);
-      ctrl('centrale sur coin : refusée', docJ() === avant && niveau() === 'erreur', msg());
-      glisser('A1', 0, 1);
-      ctrl('apparition sur bord : refusée', docJ() === avant && niveau() === 'erreur', msg());
+      ctrl('pose libre : un coin sur une cellule centrale est accepté', nbTuiles() === 1 && g.demarre, msg());
+      ctrl('pose libre : alerte « Tuiles hors de leur place » dans le panneau', Array.prototype.some.call(document.querySelectorAll('.pm-controles-sommaire-libelle'), function (e) { return /hors de leur place/.test(e.textContent); }));
+      reset();
       g = glisser('K1', 0, 0);
-      ctrl('pose K1 en (0,0) acceptée', nbTuiles() === 1, msg());
+      ctrl('pose K1 en (0,0) acceptée, rotation suggérée 0', nbTuiles() === 1 && M.tuileEn(etat.doc(), 0, 0).rot === 0, msg());
       var apres1 = docJ();
       glisser('K2', 0, 0);
-      ctrl('cellule occupée : refusée, document inchangé', docJ() === apres1 && /occupée/.test(msg()) && uneSeulePhrase(msg()), msg());
+      ctrl('cellule occupée : refusée, document inchangé, une phrase', docJ() === apres1 && /occupée/.test(msg()) && uneSeulePhrase(msg()) && niveau() === 'erreur', msg());
       glisser('K1', 3, 0);
       ctrl('exemplaire épuisé : refusé, document inchangé', docJ() === apres1 && /exemplaire/.test(msg()) && uneSeulePhrase(msg()), msg());
       var vig = document.querySelector('[data-vignette="K1"]');
       ctrl('vignette K1 grisée (épuisée) et bouton Poser désactivé', vig.classList.contains('pm-biblio-epuise') && vig.querySelector('[data-action="poser"]').disabled);
       ctrl('libellé « ×0 restant » sur K1', /×0 restant/.test(vig.textContent), vig.textContent);
+      ctrl('badge d\'alertes sur K1 (catalogue v1 : pas de case d\'apparition)', /alerte/.test(vig.textContent), vig.textContent);
       etat.signaler('', 'info');
       glisser('K2', 0, 0, 0, true);
       ctrl('lâcher hors plateau : pose annulée avec message', docJ() === apres1 && /annulée/.test(msg()), msg());
-      // modèle incomplet : créé par l'éditeur
       var ids0 = etat.doc().modeles.length;
       boutonRole('Coin').click();
       var nid = etat.ui().modeleSelectionne;
-      ctrl('modèle incomplet créé', etat.doc().modeles.length === ids0 + 1 && !M.validerModele(M.modeleParId(etat.doc(), nid)).complet);
+      ctrl('modèle incomplet créé (cases non reliées)', etat.doc().modeles.length === ids0 + 1 && !M.validerModele(M.modeleParId(etat.doc(), nid)).complet);
       etat.majUi({ onglet: 'plateau' });
       var av2 = docJ();
       etat.signaler('', 'info');
@@ -261,31 +250,27 @@
       ctrl('modèle incomplet : aucune pose', docJ() === av2);
       ctrl('modèle incomplet : le refus est expliqué dans #barre-etat', msg().length > 0 && /incomplet/i.test(msg()), 'glissement démarré=' + g2.demarre + ', message=«' + msg() + '»');
       ctrl('modèle incomplet : bouton Poser désactivé', document.querySelector('[data-vignette="' + nid + '"] [data-action="poser"]').disabled);
-      // pose en deux clics
       reset();
       document.querySelector('[data-vignette="K1"] [data-action="poser"]').click();
       ctrl('« Poser » arme le modèle (aPoser)', etat.ui().aPoser === 'K1');
-      cliquerCellule(1, 1);
-      ctrl('deux clics : cellule de mauvais rôle refusée, modèle toujours armé', nbTuiles() === 0 && etat.ui().aPoser === 'K1' && niveau() === 'erreur', msg());
-      cliquerCellule(0, 0);
-      ctrl('deux clics : pose en (0,0), armement levé', nbTuiles() === 1 && !etat.ui().aPoser, msg());
+      cliquerCellule(3, 3);
+      ctrl('deux clics : pose en (3,3) avec la rotation suggérée du coin SE, armement levé', nbTuiles() === 1 && M.tuileEn(etat.doc(), 3, 3).rot === 2 && !etat.ui().aPoser, msg());
       document.querySelector('[data-vignette="K2"] [data-action="poser"]').click();
       touche('Escape');
       ctrl('Échap désarme', !etat.ui().aPoser);
-      // exemplaires +/-
       var K3 = M.modeleParId(etat.doc(), 'K3').exemplaires;
       document.querySelector('[data-vignette="K3"] [data-action="plus"]').click();
       ctrl('bouton + : exemplaires +1', M.modeleParId(etat.doc(), 'K3').exemplaires === K3 + 1);
       document.querySelector('[data-vignette="K3"] [data-action="moins"]').click();
       document.querySelector('[data-vignette="K3"] [data-action="moins"]').click();
       ctrl('bouton − : retour à ' + K3 + ' puis ' + (K3 - 1), M.modeleParId(etat.doc(), 'K3').exemplaires === K3 - 1);
-      // retirer en dessous du posé
       document.querySelector('[data-vignette="K1"] [data-action="moins"]').click();
       ctrl('− sous le nombre de tuiles posées : refusé avec message', M.modeleParId(etat.doc(), 'K1').exemplaires === 1 && niveau() === 'erreur', msg());
-      // filtre
       var sel = document.querySelector('[data-role="filtre"]');
       sel.value = 'coin'; sel.dispatchEvent(new Event('change', { bubbles: true }));
       ctrl('filtre « Coins » : 5 vignettes', document.querySelectorAll('.pm-biblio-vignette').length === 5, document.querySelectorAll('.pm-biblio-vignette').length);
+      sel.value = 'bord'; sel.dispatchEvent(new Event('change', { bubbles: true }));
+      ctrl('filtre « Bords » : 7 vignettes (B1 à B5, A1, A2)', document.querySelectorAll('.pm-biblio-vignette').length === 7, document.querySelectorAll('.pm-biblio-vignette').length);
       sel.value = 'tous'; sel.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
@@ -310,46 +295,31 @@
       ctrl('bouton Rétablir', docJ() === s1);
       ctrlZ(); touche('z', { ctrlKey: true, shiftKey: true });
       ctrl('Ctrl+Maj+Z rétablit', docJ() === s1);
-      // rotation R
       cliquerCellule(1, 1);
       touche('r');
-      var rot = M.tuileEn(etat.doc(), 1, 1).rot;
-      ctrl('R pivote la centrale sélectionnée', rot === 1, rot);
+      ctrl('R pivote la tuile sélectionnée', M.tuileEn(etat.doc(), 1, 1).rot === 1);
       ctrlZ();
       ctrl('Ctrl+Z annule la rotation (état identique)', docJ() === s1);
       ctrlY();
       ctrl('Ctrl+Y refait la rotation', M.tuileEn(etat.doc(), 1, 1).rot === 1);
       ctrlZ();
-      // jeton
-      reset(docComplet ? Object.assign({}, docComplet, { plateau: Object.assign({}, docComplet.plateau, { jetons: [] }) }) : null);
+      reset(Object.assign({}, docComplet, { plateau: Object.assign({}, docComplet.plateau, { jetons: [] }) }));
       var sj0 = docJ();
       cliquerJonction(1, 1);
       var sj1 = docJ();
       ctrl('clic jonction : ville posée', etat.doc().plateau.jetons.length === 1 && etat.doc().plateau.jetons[0].type === 'capture', msg());
       cliquerJonction(1, 1);
-      ctrl('2e clic : carrefour', etat.doc().plateau.jetons[0].type === 'carrefour');
-      cliquerJonction(1, 1);
-      ctrl('3e clic : jonction vide', etat.doc().plateau.jetons.length === 0);
-      ctrlZ(); ctrlZ(); ctrlZ();
-      ctrl('3 × Ctrl+Z : état initial exact', docJ() === sj0);
+      ctrl('2e clic : la jonction redevient une case chemin', etat.doc().plateau.jetons.length === 0 && /case chemin/.test(msg()), msg());
+      ctrlZ(); ctrlZ();
+      ctrl('2 × Ctrl+Z : état initial exact', docJ() === sj0);
       ctrlY();
       ctrl('Ctrl+Y : ville de nouveau', docJ() === sj1);
-      // changement de forme
-      var avantForme = docJ();
-      var selF = document.querySelector('[data-role="forme"]');
-      selF.value = 'c00'; selF.dispatchEvent(new Event('change', { bubbles: true }));
-      ctrl('forme sans coin NO : tuile (0,0) retirée', !M.tuileEn(etat.doc(), 0, 0) && nbTuiles() === 15, nbTuiles());
-      ctrl('forme réduite : l\'effet est expliqué (tuile / jeton retiré, Ctrl+Z)', /retirée/.test(msg()) && /Ctrl\+Z/.test(msg()), msg());
-      ctrlZ();
-      ctrl('Ctrl+Z annule le changement de forme (identique)', docJ() === avantForme);
-      ctrl('le sélecteur de forme revient à « complet »', selF.value === 'complet', selF.value);
-      // éditeur
       reset();
       etat.majUi({ modeleSelectionne: 'K1', onglet: 'tuiles' });
       var sel = document.querySelector('.pm-editeur-canevas');
       var e0 = docJ();
       var c1 = M.modeleParId(etat.doc(), 'K1').cases[0];
-      touche('ArrowLeft', {}, sel); // aucune sélection : sans effet
+      touche('ArrowLeft', {}, sel);
       ctrl('flèche sans sélection : sans effet', docJ() === e0);
       var p = E.mmVersEcran(c1.x, c1.y, sel.getBoundingClientRect(), E.VUE);
       ptr('pointerdown', sel, p.x, p.y); ptr('pointerup', sel, p.x, p.y);
@@ -386,22 +356,21 @@
     function s4_editeur() {
       titre('S4 éditeur');
       reset();
-      // Nouveau, chaque rôle
-      var attendu = { Centrale: ['centrale', 4], Coin: ['coin', 3], Bord: ['bord', 3], Apparition: ['apparition', 3] };
+      var attendu = { Centrale: ['centrale', 4, 0], Bord: ['bord', 3, 1], Coin: ['coin', 2, 1] };
+      ctrl('3 boutons « Nouveau » (Centrale, Bord, Coin), plus d\'Apparition', document.querySelectorAll('.pm-editeur-boutons-roles button').length === 3 && !boutonRole('Apparition'));
       Object.keys(attendu).forEach(function (lib) {
         var n0 = etat.doc().modeles.length;
         boutonRole(lib).click();
         var m = M.modeleParId(etat.doc(), etat.ui().modeleSelectionne);
-        ctrl('Nouveau ' + lib + ' : modèle ' + attendu[lib][0] + ' avec ' + attendu[lib][1] + ' cases, sans chemin, incomplet',
-          etat.doc().modeles.length === n0 + 1 && m && m.role === attendu[lib][0] && m.cases.length === attendu[lib][1] && m.chemins.length === 0 && !M.validerModele(m).complet, J(m));
+        ctrl('Nouveau ' + lib + ' : gabarit ' + attendu[lib][0] + ', ' + attendu[lib][1] + ' cases dont ' + attendu[lib][2] + ' d\'apparition, sans chemin, incomplet',
+          etat.doc().modeles.length === n0 + 1 && m && m.gabarit === attendu[lib][0] && m.cases.length === attendu[lib][1] &&
+          m.cases.filter(function (c) { return c.type === 'apparition'; }).length === attendu[lib][2] && m.chemins.length === 0 && !M.validerModele(m).complet, J(m));
         ctrl('Nouveau ' + lib + ' : onglet Tuiles affiché, badge « incomplet » en bibliothèque',
           etat.ui().onglet === 'tuiles' && !$('ecran-tuiles').hidden && /incomplet/.test(document.querySelector('[data-vignette="' + m.id + '"]').textContent));
-        if (lib === 'Apparition') ctrl('Nouveau Apparition : 1 case d\'apparition et 2 de déplacement',
-          m.cases.filter(function (c) { return c.type === 'apparition'; }).length === 1);
       });
-      ctrl('statut « Incomplet (non posable) »', /Incomplet/.test(document.querySelector('.pm-editeur-statut').textContent));
-      // Dupliquer K1
+      ctrl('statut « Incomplet (non posable) » et erreur « case reliée à rien » listée', /Incomplet/.test(document.querySelector('.pm-editeur-statut').textContent) && /reliée à rien/.test(document.querySelector('.pm-editeur-erreurs').textContent));
       etat.majUi({ modeleSelectionne: 'K1', onglet: 'tuiles' });
+      ctrl('K1 (catalogue v1) : posable, alerte « sans case d\'apparition » listée sans bloquer', /Complet/.test(document.querySelector('.pm-editeur-statut').textContent) && /Alerte : /.test(document.querySelector('.pm-editeur-erreurs').textContent), document.querySelector('.pm-editeur-statut').textContent);
       var nDoc = etat.doc().modeles.length, plateauAvant = J(etat.doc().plateau);
       Array.prototype.filter.call(document.querySelectorAll('.pm-editeur-bouton'), function (b) { return b.textContent === 'Dupliquer'; })[0].click();
       var copie = M.modeleParId(etat.doc(), etat.ui().modeleSelectionne);
@@ -411,33 +380,26 @@
       var n2 = etat.doc().modeles.length;
       touche('d', { ctrlKey: true });
       ctrl('Ctrl+D (onglet Tuiles) duplique', etat.doc().modeles.length === n2 + 1);
-      // Travail sur la copie
       var id = copie.id;
       etat.majUi({ modeleSelectionne: id });
       var svg = document.querySelector('.pm-editeur-canevas');
       var m0 = M.modeleParId(etat.doc(), id), cles0 = cheminsCles(m0);
-      // ajout de case
       var nCases = m0.cases.length;
       var pLibre = pointMm(svg, 60, 62);
       ptr('pointerdown', svg, pLibre.x, pLibre.y); ptr('pointerup', svg, pLibre.x, pLibre.y);
       var m1 = M.modeleParId(etat.doc(), id);
       ctrl('clic sur le fond : case ajoutée', m1.cases.length === nCases + 1, m1.cases.length);
-      ctrl('case en trop : le modèle est signalé incomplet et un message d\'alerte s\'affiche', !M.validerModele(m1).complet && niveau() === 'alerte', msg());
-      // déplacement de la nouvelle case
+      ctrl('case non reliée : le modèle est incomplet (case isolée), sans message « case en trop »', !M.validerModele(m1).complet && M.validerModele(m1).erreurs.some(function (e) { return e.code === 'case_isolee'; }) && !/en trop/.test(msg()), msg());
       var nid = m1.cases[m1.cases.length - 1].id, anc = m1.cases[m1.cases.length - 1];
-      var from = pointeCase(svg, m1, nid), to = pointMm(svg, anc.x + 0, anc.y + 0);
-      var vers = pointMm(svg, anc.x + 0, anc.y + 0);
-      glisserEditeur(svg, from, pointMm(svg, 40, 60));
+      glisserEditeur(svg, pointeCase(svg, m1, nid), pointMm(svg, 40, 60));
       var m2 = M.modeleParId(etat.doc(), id), c2 = m2.cases.filter(function (c) { return c.id === nid; })[0];
       ctrl('glisser une case la déplace (aimantée sur 1 cm)', c2 && (c2.x !== anc.x || c2.y !== anc.y) && c2.x % 10 === 0 && c2.y % 10 === 0, J(c2));
-      // suppression : clic puis Suppr
       var pc = pointeCase(svg, m2, nid);
       ptr('pointerdown', svg, pc.x, pc.y); ptr('pointerup', svg, pc.x, pc.y);
       touche('Delete');
       var m3 = M.modeleParId(etat.doc(), id);
       ctrl('Suppr supprime la case sélectionnée', m3.cases.length === nCases, m3.cases.length);
       ctrl('modèle revenu complet', M.validerModele(m3).complet);
-      // coin : retirer le chemin vers le coin (port manquant) puis le retracer
       var cheminCoin = m3.chemins.filter(function (h) { return h.b.coin !== undefined || h.a.coin !== undefined; })[0];
       var coinK = cheminCoin.b.coin !== undefined ? cheminCoin.b.coin : cheminCoin.a.coin;
       var caseCoin = cheminCoin.a['case'] || cheminCoin.b['case'];
@@ -445,12 +407,10 @@
       ptr('pointerdown', svg, pkE.x, pkE.y); ptr('pointerup', svg, pkE.x, pkE.y);
       touche('Delete');
       var m4 = M.modeleParId(etat.doc(), id);
-      ctrl('sélection du coin + Suppr : chemin vers le coin retiré, modèle incomplet', m4.chemins.length === m3.chemins.length - 1 && !M.validerModele(m4).complet, J(M.validerModele(m4).erreurs.map(function (e) { return e.code; })));
-      ctrl('statut « Incomplet » et erreur « port » listée', /Incomplet/.test(document.querySelector('.pm-editeur-statut').textContent) && document.querySelectorAll('.pm-editeur-erreur-bouton').length > 0);
+      ctrl('sélection du coin + Suppr : chemin vers le coin retiré, le modèle reste posable (port non obligatoire)', m4.chemins.length === m3.chemins.length - 1 && M.validerModele(m4).complet, J(M.validerModele(m4).erreurs.map(function (e) { return e.code; })));
       glisserEditeur(svg, pointeCase(svg, m4, caseCoin), pkE);
       var m5 = M.modeleParId(etat.doc(), id);
-      ctrl('glisser case → coin : chemin retracé, modèle complet', m5.chemins.length === m3.chemins.length && M.validerModele(m5).complet, J(M.validerModele(m5).erreurs));
-      // raccord : retirer puis retracer depuis le raccord vers la case
+      ctrl('glisser case → coin : chemin retracé', m5.chemins.length === m3.chemins.length && M.validerModele(m5).complet, J(M.validerModele(m5).erreurs));
       var cheminR = m5.chemins.filter(function (h) { return h.a.raccord || h.b.raccord; })[0];
       var rac = cheminR.a.raccord || cheminR.b.raccord, caseR = cheminR.a['case'] || cheminR.b['case'];
       var pr = G.pointRaccord(rac.cote, rac.pos), prE = pointMm(svg, pr.x, pr.y);
@@ -462,27 +422,24 @@
       var m7 = M.modeleParId(etat.doc(), id);
       ctrl('glisser raccord → case : chemin retracé', m7.chemins.length === m5.chemins.length && J(cheminsCles(m7)) === J(cles0), J(cheminsCles(m7)));
       ctrl('modèle de nouveau complet', M.validerModele(m7).complet);
-      // deux clics (tactile)
-      var cr = m7.chemins.filter(function (h) { return h === cheminR || (h.a.raccord || h.b.raccord); })[0];
-      // chemin sur un raccord extérieur refusé (coin : côtés 0 et 3 sont extérieurs)
+      // côté extérieur (coin : nord et ouest) : le chemin est accepté avec une alerte
       var ext = pointMm(svg, G.pointRaccord(0, 1).x, G.pointRaccord(0, 1).y), av = docJ();
-      glisserEditeur(svg, pointeCase(svg, m7, caseR), ext);
-      ctrl('chemin vers un raccord extérieur : aucun changement', docJ() === av);
-      // clic sur raccord inactif : message
-      ptr('pointerdown', svg, ext.x, ext.y); ptr('pointerup', svg, ext.x, ext.y);
-      ctrl('clic sur un raccord inactif : message explicatif', /extérieur/.test(msg()), msg());
-      // clic droit : bascule de type
+      glisserEditeur(svg, pointeCase(svg, m7, 'c2'), ext);
+      var m8 = M.modeleParId(etat.doc(), id);
+      ctrl('chemin vers un raccord du côté extérieur : accepté, alerte « face au vide », modèle toujours posable',
+        m8.chemins.length === m7.chemins.length + 1 && M.validerModele(m8).complet && /face au vide/.test(document.querySelector('.pm-editeur-erreurs').textContent), J(M.validerModele(m8).alertes.map(function (a) { return a.code; })));
+      ctrlZ();
+      ctrl('Ctrl+Z retire ce chemin', docJ() === av);
       var pcc = pointeCase(svg, m7, m7.cases[0].id);
       var typeAv = m7.cases[0].type;
       svg.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: pcc.x, clientY: pcc.y }));
       ctrl('clic droit sur une case bascule son type', M.modeleParId(etat.doc(), id).cases[0].type !== typeAv);
       ctrlZ();
-      // changement de rôle d'un modèle non posé
-      var selRole = document.querySelectorAll('select.pm-editeur-saisie')[0];
-      selRole.value = 'bord'; selRole.dispatchEvent(new Event('change', { bubbles: true }));
-      ctrl('changement de rôle d\'un modèle non posé accepté', M.modeleParId(etat.doc(), id).role === 'bord');
-      selRole.value = 'coin'; selRole.dispatchEvent(new Event('change', { bubbles: true }));
-      // exemplaires
+      var selGab = document.querySelectorAll('select.pm-editeur-saisie')[0];
+      ctrl('champ « Gabarit » (centrale, bord, coin)', selGab.options.length === 3 && /Gabarit/.test(selGab.parentNode.textContent));
+      selGab.value = 'bord'; selGab.dispatchEvent(new Event('change', { bubbles: true }));
+      ctrl('changement de gabarit accepté', M.modeleParId(etat.doc(), id).gabarit === 'bord');
+      selGab.value = 'coin'; selGab.dispatchEvent(new Event('change', { bubbles: true }));
       var inEx = document.querySelector('input[type="number"].pm-editeur-saisie');
       inEx.value = '3'; inEx.dispatchEvent(new Event('change', { bubbles: true }));
       ctrl('exemplaires = 3', M.modeleParId(etat.doc(), id).exemplaires === 3);
@@ -492,103 +449,77 @@
       inEx.value = ''; inEx.dispatchEvent(new Event('change', { bubbles: true }));
       ctrl('exemplaires vides refusés', docJ() === avEx && inEx.value === '3', inEx.value);
 
-      // modèle posé modifié -> répercussion
+      // modèle posé rendu incomplet (case isolée) -> erreur répercutée, puis réparé
       reset();
       glisser('K1', 0, 0);
       ctrl('K1 posé', nbTuiles() === 1);
       etat.majUi({ modeleSelectionne: 'K1', onglet: 'tuiles' });
       var svg2 = document.querySelector('.pm-editeur-canevas');
       ctrl('avertissement « Utilisé 1 fois »', /Utilisé 1 fois/.test(document.querySelector('.pm-editeur-avertissement').textContent), document.querySelector('.pm-editeur-avertissement').textContent);
-      var mk = M.modeleParId(etat.doc(), 'K1');
-      var pkk = pointMm(svg2, G.pointCoin(2).x, G.pointCoin(2).y);
-      ptr('pointerdown', svg2, pkk.x, pkk.y); ptr('pointerup', svg2, pkk.x, pkk.y);
-      touche('Delete');
-      ctrl('modèle posé rendu incomplet', !M.validerModele(M.modeleParId(etat.doc(), 'K1')).complet);
+      var pl = pointMm(svg2, 60, 62);
+      ptr('pointerdown', svg2, pl.x, pl.y); ptr('pointerup', svg2, pl.x, pl.y);
+      ctrl('modèle posé rendu incomplet (case isolée)', !M.validerModele(M.modeleParId(etat.doc(), 'K1')).complet);
       ctrl('la tuile reste posée', nbTuiles() === 1);
       etat.majUi({ onglet: 'plateau' });
       var r = PM.controles.calculer(etat.doc());
       ctrl('contrôles : erreur « modèle incomplet » sur la tuile', r.erreurs.some(function (e) { return e.code === 'modele_incomplet'; }), J(r.erreurs.map(function (e) { return e.code; })));
-      ctrl('pastille : « 1 alerte » ou plus', /alerte/.test(pastille()), pastille());
-      var bouton = document.querySelector('.pm-controles-alerte');
-      ctrl('panneau de droite : l\'erreur est affichée', !!bouton && !!document.querySelector('.pm-controles-groupe--erreur'));
+      ctrl('pastille rouge : « … dont 1 erreur »', /dont 1 erreur/.test(pastille()) && $('pastille-alertes').classList.contains('pm-erreur'), pastille());
+      var bouton = document.querySelector('.pm-controles-groupe--erreur .pm-controles-alerte');
+      ctrl('panneau de droite : l\'erreur est affichée', !!bouton);
       if (bouton) bouton.click();
       ctrl('clic sur l\'erreur : surbrillance de la tuile', etat.ui().surbrillance && etat.ui().surbrillance.type === 'tuile' && !!document.querySelector('.pm-assemblage-surbrillance'), J(etat.ui().surbrillance));
-      // changement de rôle refusé
       etat.majUi({ onglet: 'tuiles', surbrillance: null });
-      var sr = document.querySelectorAll('select.pm-editeur-saisie')[0], avR = docJ();
+      var sr = document.querySelectorAll('select.pm-editeur-saisie')[0];
       sr.value = 'bord'; sr.dispatchEvent(new Event('change', { bubbles: true }));
-      ctrl('changement de rôle d\'un modèle posé refusé (message, document inchangé, liste restaurée)', docJ() === avR && /posé/.test(msg()) && sr.value === 'coin' && uneSeulePhrase(msg()), msg() + ' / ' + sr.value);
-      // compléter -> alerte disparaît
-      var svg3 = document.querySelector('.pm-editeur-canevas'), mk2 = M.modeleParId(etat.doc(), 'K1');
-      var cC = mk2.chemins.filter(function (h) { return h.a.coin !== undefined || h.b.coin !== undefined; });
-      var caseC = 'c1';
-      glisserEditeur(svg3, pointeCase(svg3, mk2, caseC), pointMm(svg3, G.pointCoin(2).x, G.pointCoin(2).y));
-      ctrl('modèle posé complété : plus d\'erreur de contrôle', PM.controles.calculer(etat.doc()).erreurs.length === 0, J(PM.controles.calculer(etat.doc()).erreurs));
+      ctrl('changement de gabarit d\'un modèle posé : accepté (jamais bloquant)', M.modeleParId(etat.doc(), 'K1').gabarit === 'bord');
+      ctrl('… et le plateau signale la tuile hors de sa place', PM.controles.calculer(etat.doc()).alertes.some(function (a) { return a.code === 'gabarit_place'; }));
+      ctrlZ();
+      var mk = M.modeleParId(etat.doc(), 'K1'), isolee = mk.cases[mk.cases.length - 1];
+      var svg3 = document.querySelector('.pm-editeur-canevas'), pi = pointeCase(svg3, mk, isolee.id);
+      ptr('pointerdown', svg3, pi.x, pi.y); ptr('pointerup', svg3, pi.x, pi.y);
+      touche('Delete');
+      ctrl('case isolée supprimée : plus d\'erreur de contrôle', PM.controles.calculer(etat.doc()).erreurs.length === 0, J(PM.controles.calculer(etat.doc()).erreurs));
     }
 
     function s5_controles() {
       titre('S5 contrôles');
-      // recherche (déterministe) d'un plateau avec un raccord mort
-      var seed = 12345;
-      function alea() { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; }
-      var base = PM.catalogue.nouveauDocument(), cells = M.cellulesActives(base.plateau.forme), trouve = null;
-      var pools = { centrale: ['C1','C2','C3','C4','C5','C6'], coin: ['K1','K2','K3','K4','K5'], bord: ['B1','B2','B3','B4','B5'], apparition: ['A1','A1','A2','A2'] };
-      for (var essai = 0; essai < 400 && !trouve; essai++) {
-        var p = {}; Object.keys(pools).forEach(function (r) { p[r] = pools[r].slice().sort(function () { return alea() - 0.5; }); });
-        var d = base;
-        cells.forEach(function (c) { d = M.poserTuile(d, p[M.roleCellule(c.col, c.lig, d.plateau.forme)].pop(), c.col, c.lig); });
-        if (PM.controles.calculer(d).alertes.some(function (a) { return a.code === 'raccord_mort'; })) trouve = d;
-      }
-      ctrl('un plateau avec raccords morts a été trouvé (catalogue réel)', !!trouve);
-      if (trouve) {
-        reset(trouve);
-        var nb = document.querySelectorAll('.pm-assemblage-alerte').length;
-        ctrl('plateau : triangles d\'alerte dessinés', nb > 0, nb);
-        ctrl('pastille : « N alerte(s) »', /^\d+ alertes?$/.test(pastille()), pastille());
-        etat.majUi({ onglet: 'tuiles' });
-        var b = document.querySelector('.pm-controles-groupe .pm-controles-alerte');
-        b.click();
-        var s = etat.ui().surbrillance;
-        ctrl('clic sur une alerte : onglet Plateau + surbrillance', etat.ui().onglet === 'plateau' && !$('ecran-plateau').hidden && s && s.type === 'raccord' && !!document.querySelector('circle.pm-assemblage-surbrillance'), J(s));
-        ptr('pointerdown', document.body, 5, 5);
-        ctrl('la surbrillance s\'efface au clic suivant', etat.ui().surbrillance === null && !document.querySelector('.pm-assemblage-surbrillance'));
-      }
-      // carrefours du même côté
-      var sansJetons = JSON.parse(J(docComplet)); sansJetons.plateau.jetons = [];
-      reset(sansJetons);
-      cliquerJonction(1, 1); cliquerJonction(1, 1);
-      cliquerJonction(3, 1); cliquerJonction(3, 1);
-      ctrl('2 carrefours en rangée nord posés', etat.doc().plateau.jetons.filter(function (j) { return j.type === 'carrefour'; }).length === 2);
-      ctrl('barre d\'état : alerte « même côté »', niveau() === 'alerte' && /même côté/.test(msg()), msg());
-      var g = document.querySelector('.pm-controles-groupe--alerte');
-      ctrl('panneau : groupe « Carrefours sur le même côté »', Array.prototype.some.call(document.querySelectorAll('.pm-controles-sommaire-libelle'), function (e) { return /même côté/.test(e.textContent); }));
-      ctrl('pastille : au moins 1 alerte', /alerte/.test(pastille()), pastille());
+      // bord retourné sur la rangée nord : raccord face au vide et ports vers le bord
+      var d = JSON.parse(J(docComplet));
+      d.plateau.tuiles.forEach(function (t) { if (t.col === 1 && t.lig === 0) t.rot = 2; });
+      reset(d);
+      var nb = document.querySelectorAll('.pm-assemblage-alerte').length;
+      ctrl('plateau : triangles d\'alerte dessinés', nb > 0, nb);
+      ctrl('pastille : « N alerte(s) »', /^\d+ alertes?$/.test(pastille()), pastille());
       etat.majUi({ onglet: 'tuiles' });
-      var bj = Array.prototype.filter.call(document.querySelectorAll('.pm-controles-alerte'), function (x) { return /carrefours/i.test(x.textContent); })[0];
-      if (bj) bj.click();
-      ctrl('clic sur l\'alerte carrefours : plateau + jonction entourée', etat.ui().onglet === 'plateau' && !!document.querySelector('circle.pm-assemblage-surbrillance'));
-      // cohérence : carrefours en colonne
-      var d2 = JSON.parse(J(docComplet)); d2.plateau.jetons = [];
-      reset(d2);
-      cliquerJonction(1, 1); cliquerJonction(1, 1); cliquerJonction(1, 3); cliquerJonction(1, 3);
-      var panneau = PM.controles.calculer(etat.doc()).alertes.some(function (a) { return a.code === 'carrefours_meme_cote'; });
-      var ecranA = A.alerteCarrefours(etat.doc()) !== null;
-      ctrl('carrefours (1,1)+(1,3) : le panneau et l\'écran du plateau jugent pareil (même côté ?)', panneau === ecranA, 'panneau=' + panneau + ' plateau=' + ecranA);
-      // formes réduites
-      reset();
-      var selF = document.querySelector('[data-role="forme"]');
-      selF.value = 'c00'; selF.dispatchEvent(new Event('change', { bubbles: true }));
+      var b = Array.prototype.filter.call(document.querySelectorAll('.pm-controles-alerte'), function (x) { return /vide/.test(x.textContent); })[0];
+      if (b) b.click();
+      var s = etat.ui().surbrillance;
+      ctrl('clic sur une alerte : onglet Plateau + surbrillance', etat.ui().onglet === 'plateau' && !$('ecran-plateau').hidden && s && s.type === 'raccord' && !!document.querySelector('circle.pm-assemblage-surbrillance'), J(s));
+      ptr('pointerdown', document.body, 5, 5);
+      ctrl('la surbrillance s\'efface au clic suivant', etat.ui().surbrillance === null && !document.querySelector('.pm-assemblage-surbrillance'));
+      // plateau complet très déséquilibré : erreur, pastille rouge, la pose reste permise
+      reset(AV2.plateauDesequilibre());
+      ctrl('déséquilibre : pastille rouge « … dont 1 erreur »', /dont 1 erreur/.test(pastille()) && $('pastille-alertes').classList.contains('pm-erreur'), pastille());
+      ctrl('déséquilibre : groupe d\'erreur « Plateau très déséquilibré » qui nomme « 5 contre 2 »', Array.prototype.some.call(document.querySelectorAll('.pm-controles-groupe--erreur'), function (e) { return /très déséquilibré/.test(e.textContent) && /5 contre 2/.test(e.textContent); }));
+      cliquerCellule(1, 1); touche('Delete');
+      ctrl('la pose / le retrait restent permis : tuile retirée, erreur levée (plateau incomplet)', !M.tuileEn(etat.doc(), 1, 1) && !/erreur/.test(pastille()), pastille());
+      ctrlZ();
+      ctrl('Ctrl+Z : erreur de nouveau', /dont 1 erreur/.test(pastille()), pastille());
+      // villes trop proches : alerte (une centrale sans relais)
+      var dz = JSON.parse(J(docComplet));
+      var z = JSON.parse(J(dz.modeles[0])); z.id = 'z'; z.exemplaires = 1;
+      z.chemins = z.chemins.filter(function (h) { return h.id !== 'r1'; }).concat([{ id: 'h9', a: { 'case': 'c1' }, b: { 'case': 'c2' } }]);
+      dz.modeles.push(z);
+      dz.plateau.tuiles.forEach(function (t) { if (t.col === 1 && t.lig === 1) { t.modeleId = 'z'; t.rot = 0; } });
+      dz.modeles[0].exemplaires = 3;
+      reset(dz);
+      ctrl('villes à moins de 3 cases : alerte « Villes trop proches », pas d\'erreur', Array.prototype.some.call(document.querySelectorAll('.pm-controles-sommaire-libelle'), function (e) { return /Villes trop proches/.test(e.textContent); }) && PM.controles.calculer(etat.doc()).erreurs.length === 0);
+      // grille 5×5
+      reset(docExemples('5x5'));
       var cp = compteurs();
-      ctrl('forme sans coin NO : tuiles 0 / 15', cp['Tuiles posées'].v === '0 / 15', cp['Tuiles posées'].v);
-      ctrl('forme sans coin NO : carrefours 0 / 1', cp['Carrefours'].v === '0 / 1', cp['Carrefours'].v);
-      ctrl('forme sans coin NO : jetons 0 / 8', cp['Jetons posés'].v === '0 / 8', cp['Jetons posés'].v);
-      ctrl('forme sans coin NO : cases de déplacement 0 / 46', cp['Cases de déplacement'].v === '0 / 46', cp['Cases de déplacement'].v);
-      selF.value = 'c00c33'; selF.dispatchEvent(new Event('change', { bubbles: true }));
-      cp = compteurs();
-      ctrl('forme sans NO et SE : tuiles 0 / 14', cp['Tuiles posées'].v === '0 / 14', cp['Tuiles posées'].v);
-      ctrl('forme sans NO et SE : carrefours 0 / 0, jetons 0 / 7', cp['Carrefours'].v === '0 / 0' && cp['Jetons posés'].v === '0 / 7', cp['Carrefours'].v + ' ' + cp['Jetons posés'].v);
-      ctrl('forme sans NO et SE : cases de déplacement 0 / 42', cp['Cases de déplacement'].v === '0 / 42', cp['Cases de déplacement'].v);
-      ctrl('formes : 15 propositions', selF.querySelectorAll('option').length === 15, selF.querySelectorAll('option').length);
+      ctrl('5×5 : 25 cellules et 16 jonctions', document.querySelectorAll('[data-cellule]').length === 25 && document.querySelectorAll('[data-jonction]').length === 16);
+      ctrl('5×5 : compteurs tuiles 0 / 25, apparitions 0 / 7, cases (≈ 75)', cp['Tuiles posées'].v === '0 / 25' && cp['Apparitions vert'].v === '0 / 7' && /≈ 75/.test(cp['Cases (tuiles et jonctions)'].v), J(cp));
+      ctrl('5×5 : rangée centrale neutre', /Bord, neutre/.test(document.querySelector('[data-cellule="0,2"]').textContent));
     }
 
     function s7_raccourcis() {
@@ -596,12 +527,11 @@
       reset(docComplet);
       cliquerCellule(1, 1);
       var av = docJ();
-      etat.majUi({ onglet: 'tuiles', modeleSelectionne: 'K1' });
+      etat.majUi({ onglet: 'tuiles', modeleSelectionne: 'ex-coin' });
       touche('r'); touche('Delete'); touche('a');
       ctrl('onglet Tuiles : R et Suppr du plateau inactifs', M.tuileEn(etat.doc(), 1, 1) && docJ() === av, msg());
-      // éditeur : sélectionner une case puis passer sur le plateau
       var svg = document.querySelector('.pm-editeur-canevas');
-      var c = M.modeleParId(etat.doc(), 'K1').cases[0], p = pointMm(svg, c.x, c.y);
+      var c = M.modeleParId(etat.doc(), 'ex-coin').cases[0], p = pointMm(svg, c.x, c.y);
       ptr('pointerdown', svg, p.x, p.y); ptr('pointerup', svg, p.x, p.y);
       etat.majUi({ onglet: 'plateau' });
       touche('Escape');
@@ -615,29 +545,27 @@
       })());
       ctrlZ();
       ctrl('Ctrl+Z rétablit la tuile retirée', !!M.tuileEn(etat.doc(), 1, 1));
-      // Ctrl+S ne plante pas (téléchargement en headless)
       var avS = docJ(); touche('s', { ctrlKey: true });
       ctrl('Ctrl+S : pas d\'exception, document inchangé', docJ() === avS, msg());
-      // touche R sur non-centrale
       cliquerCellule(0, 0); touche('r');
-      ctrl('R sur un coin : message explicatif, pas de rotation', /automatiquement/.test(msg()) && M.tuileEn(etat.doc(), 0, 0).rot === 0, msg());
-      // déplacement de tuile par glissement
-      reset();
-      glisser('C1', 1, 1);
-      var z = document.querySelector('[data-cellule="1,1"] .pm-assemblage-zone'), p0 = centre(1, 1), p1 = centre(2, 1);
-      ptr('pointerdown', z, p0.x, p0.y);
+      ctrl('R sur un coin : rotation libre (pivotée d\'un quart)', M.tuileEn(etat.doc(), 0, 0).rot === 1 && /pivotée/.test(msg()), msg());
+      ctrlZ();
+      reset(docExemples());
+      glisser('ex-centrale', 1, 1);
+      var zc = document.querySelector('[data-cellule="1,1"] .pm-assemblage-zone'), p0 = centre(1, 1), p1 = centre(0, 0);
+      ptr('pointerdown', zc, p0.x, p0.y);
       ptr('pointermove', document, p0.x + 10, p0.y);
       ptr('pointermove', document, p1.x, p1.y);
       ptr('pointerup', document, p1.x, p1.y);
-      ctrl('déplacer une centrale vers une cellule centrale libre', !M.tuileEn(etat.doc(), 1, 1) && !!M.tuileEn(etat.doc(), 2, 1), msg());
-      ptr('pointerdown', document.querySelector('[data-cellule="2,1"] .pm-assemblage-zone'), p1.x, p1.y);
+      ctrl('déplacer une centrale vers un coin : accepté (pose libre)', !M.tuileEn(etat.doc(), 1, 1) && !!M.tuileEn(etat.doc(), 0, 0), msg());
+      glisser('ex-bord', 1, 0);
+      ptr('pointerdown', document.querySelector('[data-cellule="0,0"] .pm-assemblage-zone'), p1.x, p1.y);
       ptr('pointermove', document, p1.x + 10, p1.y);
-      var p2 = centre(0, 0);
+      var p2 = centre(1, 0);
       ptr('pointermove', document, p2.x, p2.y);
       ptr('pointerup', document, p2.x, p2.y);
-      ctrl('déplacer une centrale vers un coin : refusé, tuile reste en place', !!M.tuileEn(etat.doc(), 2, 1) && niveau() === 'erreur', msg());
-      // Échap pendant un glissement
-      var img = document.querySelector('.pm-biblio-image[data-glisser="C2"]'), r = img.getBoundingClientRect();
+      ctrl('déplacer vers une cellule occupée : refusé, tuile reste en place', !!M.tuileEn(etat.doc(), 0, 0) && niveau() === 'erreur' && /occupée/.test(msg()), msg());
+      var img = document.querySelector('.pm-biblio-image[data-glisser="ex-coin"]'), r = img.getBoundingClientRect();
       ptr('pointerdown', img, r.left + 5, r.top + 5); ptr('pointermove', document, r.left + 30, r.top + 5);
       var av3 = docJ();
       touche('Escape');
@@ -649,13 +577,23 @@
       titre('S8 robustesse de l\'interface');
       reset();
       cliquerCellule(0, 0);
-      ctrl('clic sur cellule libre : explication du rôle attendu', /coin attendu/.test(msg()), msg());
+      ctrl('clic sur cellule libre : gabarit et camp de la position, pose libre', /coin, camp vert/.test(msg()) && /pose libre/.test(msg()), msg());
       cliquerJonction(2, 2);
-      ctrl('jeton sans tuiles : refusé avec message', etat.doc().plateau.jetons.length === 0 && niveau() === 'erreur', msg());
+      ctrl('ville sans tuiles autour : refusée avec message', etat.doc().plateau.jetons.length === 0 && niveau() === 'erreur', msg());
       touche('r'); touche('Delete');
       ctrl('R / Suppr sans sélection : sans effet', nbTuiles() === 0);
       ctrlZ(); ctrlY();
       ctrl('annuler / rétablir à vide : sans effet', true);
+    }
+
+    /** Document de la version 1 construit à partir du catalogue (rôles, carrefours, forme réduite). */
+    function texteV1() {
+      var d = PM.catalogue.nouveauDocument();
+      var modeles = d.modeles.map(function (m) {
+        var v = JSON.parse(J(m)); v.role = (m.id === 'A1' || m.id === 'A2') ? 'apparition' : m.gabarit; delete v.gabarit; delete v.grille; return v;
+      });
+      return J({ format: 'plateau-modulaire', version: 1, modeles: modeles,
+        plateau: { forme: { retires: [{ col: 0, lig: 0 }] }, tuiles: [{ modeleId: 'C1', col: 1, lig: 1, rot: 1 }], jetons: [{ i: 1, j: 2, type: 'carrefour' }] } });
     }
 
     function s6_sauvegarde() {
@@ -664,15 +602,13 @@
       reset(docComplet);
       var t = S.versJSON(etat.doc());
       var r = S.depuisJSON(t);
-      ctrl('versJSON → depuisJSON : ok sans alerte', r.ok && r.alertes.length === 0, J(r.erreurs) + J(r.alertes));
+      ctrl('versJSON → depuisJSON : ok sans alerte, version 2 et grille écrites', r.ok && r.alertes.length === 0 && JSON.parse(t).version === 2 && JSON.parse(t).grille === '4x4', J(r.erreurs) + J(r.alertes));
       ctrl('plateau complet assemblé par l\'interface : identique après aller-retour', CJ(r.doc) === CJ(etat.doc()));
-      // fichier corrompu
-      ['', '{', 'null', '[]', '{"format":"autre"}', '{"format":"plateau-modulaire","version":1,"modeles":"x"}', t.slice(0, t.length - 20)].forEach(function (mauvais, k) {
+      ['', '{', 'null', '[]', '{"format":"autre"}', '{"format":"plateau-modulaire","version":2,"modeles":"x"}', t.slice(0, t.length - 20)].forEach(function (mauvais, k) {
         var res;
         try { res = S.depuisJSON(mauvais); } catch (e) { res = { exception: e.message }; }
         ctrl('fichier corrompu #' + k + ' : pas d\'exception, ok:false ou ouvert prudemment', !res.exception && (res.ok === false ? (res.erreurs && res.erreurs.length && res.erreurs[0].message) : !!res.doc), J(res).slice(0, 120));
       });
-      // message de l'app à l'ouverture d'un fichier illisible (simulation via ouvrirFichier)
       var orig = S.ouvrirFichier, avant = docJ();
       S.ouvrirFichier = function () { return Promise.resolve(S.depuisJSON('{')); };
       $('btn-ouvrir').click();
@@ -686,35 +622,41 @@
         ctrl('Ouvrir un fichier valide : document remplacé', nbTuiles() === 16, nbTuiles());
         var apresOuv = docJ();
         ctrlZ();
-        ctrl('Ouvrir est annulable (Ctrl+Z restaure le document précédent), Ctrl+Y rétablit', nbTuiles() === 0);
+        ctrl('Ouvrir est annulable (Ctrl+Z restaure le document précédent)', nbTuiles() === 0);
         ctrlY();
         ctrl("Ctrl+Y après l'annulation de l'ouverture", docJ() === apresOuv);
+        S.ouvrirFichier = function () { return Promise.resolve(S.depuisJSON(texteV1())); };
+        $('btn-ouvrir').click();
+        return attendre(50);
+      }).then(function () {
+        ctrl('Ouvrir un document de la version 1 : converti (version 2, plus de carrefour ni de forme), une phrase le dit',
+          etat.doc().version === 2 && etat.doc().plateau.jetons.length === 0 && !('forme' in etat.doc().plateau) &&
+          M.modeleParId(etat.doc(), 'A1').gabarit === 'bord' && /version 1 converti/.test(msg()), msg());
         S.ouvrirFichier = orig;
-        // autosave différée (1 s)
+        reset(docComplet);
         etat.signaler('', 'info');
-        var s = S.versJSON(etat.doc());
-        cliquerJonction(1, 1);
+        cliquerJonction(1, 2);
         return attendre(1300);
       }).then(function () {
         var brut = null; try { brut = localStorage.getItem(S.CLE_AUTOSAVE); } catch (e) { /* ignoré */ }
         ctrl('autosave écrite dans localStorage après modification', typeof brut === 'string', typeof brut);
         var rr = S.restaurerAutosave();
         ctrl('restaurerAutosave : ok, identique au document courant', rr && rr.ok && CJ(rr.doc) === docJ(), rr && J(rr).slice(0, 100));
-        // remontage de l'application sur un nouvel état (simule le rechargement)
-        var rest = S.restaurerAutosave();
-        var nouveau = PM.etat.creer(rest.doc);
+        var nouveau = PM.etat.creer(rr.doc);
         var cont = {};
         ['bibliotheque', 'assemblage', 'controles', 'editeur'].forEach(function (n) { cont[n] = document.createElement('div'); document.body.appendChild(cont[n]); });
         PM.bibliotheque.monter(cont.bibliotheque, nouveau);
         PM.assemblage.monter(cont.assemblage, nouveau);
         PM.controles.monter(cont.controles, nouveau);
         PM.editeurTuile.monter(cont.editeur, nouveau);
-        ctrl('remontage : 16 tuiles et 9 jetons dessinés', cont.assemblage.querySelectorAll('.pm-assemblage-occupee').length === 16 && cont.assemblage.querySelectorAll('.pm-assemblage-jeton').length === 9, cont.assemblage.querySelectorAll('.pm-assemblage-occupee').length);
-        ctrl('remontage : bibliothèque de 18 vignettes et compteurs', cont.bibliotheque.querySelectorAll('.pm-biblio-vignette').length === 18 && cont.controles.querySelectorAll('.pm-controles-compteur').length === 9);
+        ctrl('remontage : 16 tuiles et 8 villes dessinées', cont.assemblage.querySelectorAll('.pm-assemblage-occupee').length === 16 && cont.assemblage.querySelectorAll('.pm-assemblage-jeton').length === 8, cont.assemblage.querySelectorAll('.pm-assemblage-jeton').length);
+        ctrl('remontage : bibliothèque de 3 vignettes et 7 compteurs', cont.bibliotheque.querySelectorAll('.pm-biblio-vignette').length === 3 && cont.controles.querySelectorAll('.pm-controles-compteur').length === 7);
         ctrl('remontage : état neuf sans historique', !nouveau.peutAnnuler());
-        // autosave illisible : ignorée
         localStorage.setItem(S.CLE_AUTOSAVE, '{pas du json');
         ctrl('autosave corrompue : restaurerAutosave renvoie null sans exception', S.restaurerAutosave() === null);
+        localStorage.setItem(S.CLE_AUTOSAVE, texteV1());
+        var v1 = S.restaurerAutosave();
+        ctrl('autosave de la version 1 : relue convertie, avec la phrase de migration', v1 && v1.ok && v1.doc.version === 2 && v1.alertes[0].code === 'migration_v1');
         S.effacerAutosave();
         ctrl('effacerAutosave', S.restaurerAutosave() === null);
         cont.bibliotheque.remove(); cont.assemblage.remove(); cont.controles.remove(); cont.editeur.remove();

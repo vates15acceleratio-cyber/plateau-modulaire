@@ -1,26 +1,23 @@
 /*
- * generateur.js : plateau aléatoire (sous-agent 8).
+ * generateur.js : plateau aléatoire (sous-agent 8, adapté aux règles de la version 2).
  *
  * Partie calcul (generer) : fonction pure, sans DOM, testée sous Node.
  * Partie interface (ouvrir) : remplit la boîte de dialogue commune PM.dialogue.
  *
- * Règles appliquées (docs/16-avis-mesures-equilibre.md, qui prime sur D6 de 1b et sur le doc 9 ;
- * garde-fous D7 de docs/1b-avis-design-jeu-variante-jonctions.md) :
- *  - 4×4 complet seulement ; une forme réduite est remplacée (et signalé dans le rapport) ;
- *  - tuiles tirées dans la bibliothèque du document (modèles complets, selon leurs exemplaires),
- *    selon le rôle des cellules ; rotation aléatoire des centrales, rotation déduite des autres ;
- *  - 7 villes et 2 carrefours, paire (1,2)+(3,2) par défaut ;
+ * Règles appliquées (adaptation minimale aux règles v2, docs/18 à docs/20 ; les vraies règles du
+ * générateur v2 viendront avec le catalogue v2) :
+ *  - grille pleine du format du document (4×4 ou 5×5) ;
+ *  - tuiles tirées dans la bibliothèque du document (modèles complets, selon leurs exemplaires), selon le
+ *    gabarit attendu à chaque position ; rotation suggérée des bords et coins, rotation aléatoire des centrales ;
+ *  - 7 villes tirées au hasard parmi les jonctions intérieures, les autres jonctions sont des cases chemin ;
  *  - stock plafonné à PM.modele.PLAFOND_TUILES tuiles (somme des exemplaires des modèles complets) ;
- *  - élimination (D7 n° 1 et doc 16) : validerPlateau avec erreur, cases de déplacement hors de 45 à 55 (D7),
- *    graphe non connexe (villes et apparitions hors de la composante principale), deux villes à moins de
- *    ECART_MIN_CAPTURES pas (D7), ville inaccessible, « 5 contre 2 » mesuré en villes NON traversables,
- *    écart > 2 à un rang de 1 à 7, première ville à des distances différentes pour les deux joueurs ;
- *  - classement par S = Σ |D1(k) − D2(k)| sur les 7 rangs, puis pénalité secondaire (raccords morts
- *    au-delà de 2, ports morts, apparitions à moins de 2 sorties : D7 n° 2 et 3) ;
- *  - tirage au hasard parmi les bons (S ≤ Smin + tolérance, 1 par défaut ; pénalité minimale à S égal : D7 n° 4) ;
- *  - option « carrefours variés » : une autre paire n'est permise que sans alerte (5 contre 2,
- *    D6 étendu, première ville) en villes traversables ET non traversables, avec S ≤ S de la paire
- *    par défaut sur le même plateau ; la paire est tirée au hasard parmi celles qui passent.
+ *  - villes non traversables (règle du jeu) ;
+ *  - élimination : validerPlateau avec erreur, graphe non connexe, camp sans case d'apparition, deux villes
+ *    à moins de 3 cases (jamais produit, docs/18), ville inaccessible, plateau très déséquilibré (« 5 contre 2 »,
+ *    écart > SEUIL_BLOCAGE_ECART), écart > 2 à un rang de 1 à 7, première ville à des distances différentes ;
+ *  - classement par S = Σ |D1(k) − D2(k)| sur les 7 rangs, puis pénalité secondaire (raccords morts au-delà
+ *    de 2, jonctions à moins de 2 ports, cases d'apparition à moins de 2 sorties) ;
+ *  - tirage au hasard parmi les bons (S ≤ Smin + tolérance, 1 par défaut ; pénalité minimale à S égal).
  *
  * Graine : texte ou nombre ; même graine + même bibliothèque + mêmes options = même plateau.
  */
@@ -33,19 +30,14 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
 
   var M = PM.modele, GR = PM.graphe;
 
-  // Constantes du critère d'équilibre : celles de PM.graphe (une seule définition, docs/16)
+  // Constantes du critère d'équilibre : celles de PM.graphe (une seule définition)
   var NB_VILLES = GR.NB_VILLES;
   var SEUIL_ECART = GR.SEUIL_ECART;  // écart toléré à chaque rang (doc 16, b)
-  var NB_CARREFOURS = 2;
-  var CASES_MIN = 45, CASES_MAX = 55; // garde-fou D7 : cases de déplacement (carrefours compris)
   var CANDIDATS_DEFAUT = 200;
-  var FACTEUR_ESSAIS = 5;         // essais maximaux = candidats × 5 (D7 n° 6)
-  var TOLERANCE_DEFAUT = 1;       // bons candidats : S ≤ Smin + tolérance (1 : garde de l'aléa, D7 n° 4 ; mesure 8)
-  /* Raccords morts tolérés sans pénalité : seuil « max ≤ 2 » du doc 9 ; le « mur » voulu de C6
-     produit un raccord mort, il ne doit pas être écarté par le classement. */
-  var RACCORDS_TOLERES = 2;
-  var PAIRE_DEFAUT = [{ i: 1, j: 2 }, { i: 3, j: 2 }];
-  var LIBELLES_ROLE = { centrale: 'centrale(s)', coin: 'coin(s)', bord: 'bord(s)', apparition: 'apparition(s)' };
+  var FACTEUR_ESSAIS = 5;         // essais maximaux = candidats × 5
+  var TOLERANCE_DEFAUT = 1;       // bons candidats : S ≤ Smin + tolérance (1 : garde de l'aléa)
+  var RACCORDS_TOLERES = 2;       // raccords morts tolérés sans pénalité
+  var LIBELLES_GABARIT = { centrale: 'centrale(s)', bord: 'bord(s)', coin: 'coin(s)' };
 
   /* ------------------------------------------------------------------ */
   /* Hasard reproductible                                                */
@@ -89,7 +81,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   }
 
   /* ------------------------------------------------------------------ */
-  /* Jonctions et paires de carrefours                                   */
+  /* Jonctions et villes                                                 */
   /* ------------------------------------------------------------------ */
 
   /** Jonctions intérieures d'un format, rangée par rangée (j puis i) : cet ordre fixe le tirage pour une graine. */
@@ -99,35 +91,11 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     return res;
   }
 
-  // Le générateur (règles D7, paires de carrefours) ne travaille que sur le 4×4 complet.
-  var JONCTIONS = jonctionsInterieures(PM.geometrie.format('4x4'));
-
-  /** Même camp = deux jonctions dans le même camp de joueur (règle unique PM.modele.campJonction). */
-  function memeCamp(a, b) {
-    var camp = M.campJonction(a.i, a.j);
-    return camp !== null && camp === M.campJonction(b.i, b.j);
-  }
-
-  function memeJonction(a, b) { return a.i === b.i && a.j === b.j; }
-
-  function clePaire(p) { return '(' + p[0].i + ',' + p[0].j + ')+(' + p[1].i + ',' + p[1].j + ')'; }
-
-  /** Les 30 paires permises (jamais deux carrefours dans le même camp), la paire par défaut en premier. */
-  var PAIRES = [PAIRE_DEFAUT];
-  for (var a = 0; a < JONCTIONS.length; a++) {
-    for (var b = a + 1; b < JONCTIONS.length; b++) {
-      var p = [JONCTIONS[a], JONCTIONS[b]];
-      if (memeCamp(p[0], p[1]) || clePaire(p) === clePaire(PAIRE_DEFAUT)) continue;
-      PAIRES.push(p);
-    }
-  }
-
-  /** 9 jetons : villes partout sauf la paire de carrefours. */
-  function jetonsPour(paire) {
-    return JONCTIONS.map(function (jn) {
-      var carrefour = memeJonction(jn, paire[0]) || memeJonction(jn, paire[1]);
-      return { i: jn.i, j: jn.j, type: carrefour ? 'carrefour' : 'capture' };
-    });
+  /** 7 villes tirées parmi les jonctions (ordre de lecture du plateau). */
+  function tirerVilles(jonctions, rng) {
+    return melanger(jonctions, rng).slice(0, NB_VILLES)
+      .sort(function (a, b) { return (a.j - b.j) || (a.i - b.i); })
+      .map(function (jn) { return { i: jn.i, j: jn.j, type: 'capture' }; });
   }
 
   /* ------------------------------------------------------------------ */
@@ -135,90 +103,42 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   /* ------------------------------------------------------------------ */
 
   /**
-   * Adaptateur du critère d'équilibre du doc 16 : lit les champs calculés par PM.graphe.equilibre
-   * (aucun second calcul). Renvoie { S, ecartMax (rangs 1 à 7), premiereEgale, cinqContreDeux,
-   * villeInaccessible, partage, D }. S et ecartMax valent null si une ville est inaccessible.
+   * Adaptateur du critère d'équilibre : lit les champs calculés par PM.graphe.equilibre (aucun second calcul).
+   * Renvoie { S, ecartMax (rangs 1 à 7), premiereEgale, cinqContreDeux, tresDesequilibre, villeInaccessible,
+   * partage, D }. S et ecartMax valent null si une ville est inaccessible.
    */
   function critere(e) {
     return {
       S: e.S, ecartMax: e.ecartMax7,
       premiereEgale: e.premiereEgale === true,
       cinqContreDeux: e.cinqContreDeux === true,
+      tresDesequilibre: e.tresDesequilibre === true,
       villeInaccessible: e.S === null,
       partage: { 1: e.partage[1], 2: e.partage[2], egalite: e.partage.egalite },
       D: { 1: e.D[1].slice(), 2: e.D[2].slice() }
     };
   }
 
-  /** Critère sans alerte : S mesurable, écart ≤ 2 aux 7 rangs, première ville égale (null n'est jamais accepté). */
-  function sansAlerte(c) {
-    return c.S !== null && c.ecartMax !== null && c.ecartMax <= SEUIL_ECART && c.premiereEgale;
-  }
-
-  /** Cases de déplacement d'un candidat (tuiles + carrefours), comme le compteur de PM.controles. */
-  function casesDeplacement(doc) {
-    var n = NB_CARREFOURS;
-    doc.plateau.tuiles.forEach(function (t) {
-      var m = M.modeleParId(doc, t.modeleId);
-      (m && Array.isArray(m.cases) ? m.cases : []).forEach(function (c) { if (c && c.type === 'deplacement') n++; });
-    });
-    return n;
-  }
-
-  /** Graphe connexe et villes + apparitions dans une même composante (parcours en villes traversables). */
-  function connexe(g) {
-    if (!g.noeuds.length) return false;
-    var depart = g.apparitions[1][0] || g.noeuds[0];
-    var vus = new Set([depart]), file = [depart];
-    for (var q = 0; q < file.length; q++) {
-      g.voisins.get(file[q]).forEach(function (y) { if (!vus.has(y)) { vus.add(y); file.push(y); } });
-    }
-    return vus.size === g.noeuds.length;
-  }
-
-  /** Toutes les paires de villes à au moins ECART_MIN_CAPTURES pas (plus court chemin, villes traversables). */
-  function ecartVillesRespecte(g) {
-    var mini = PM.geometrie.ECART_MIN_CAPTURES, ok = true;
-    g.villes.forEach(function (v) {
-      if (!ok) return;
-      var d = GR.distances(g, v);
-      g.villes.forEach(function (w) { if (w !== v && d.has(w) && d.get(w) < mini) ok = false; });
-    });
-    return ok;
-  }
-
   /**
-   * Évalue un plateau (tuiles déjà posées) avec une paire de carrefours.
-   * Renvoie { ok, cause, crit (mode choisi), critT, critN, cinqN, cinqT, sortiesMin }.
+   * Évalue un plateau complet (tuiles et villes posées). Renvoie { ok, cause, crit, sortiesMin }.
    */
-  function evaluer(docCandidat, paire, traversables, deuxModes) {
-    var jetons = jetonsPour(paire);
-    var gT = GR.construire(docCandidat, { jetons: jetons, villesTraversables: true });
-    var gN = GR.construire(docCandidat, { jetons: jetons, villesTraversables: false });
+  function evaluer(docCandidat) {
+    var g = GR.construire(docCandidat, { villesTraversables: false });
     var res = { ok: false, cause: null };
-    if (!connexe(gT) || gT.villes.size !== NB_VILLES || gT.apparitions[1].length !== 2 || gT.apparitions[2].length !== 2) {
-      res.cause = 'connexite';
-      return res;
-    }
-    if (!ecartVillesRespecte(gT)) { res.cause = 'ecart_villes'; return res; }
-    var eN = GR.equilibre(docCandidat, { graphe: gN });
-    var eT = (traversables || deuxModes) ? GR.equilibre(docCandidat, { graphe: gT }) : null;
-    res.critN = critere(eN);
-    res.critT = eT ? critere(eT) : null;
-    res.cinqN = res.critN.cinqContreDeux;
-    res.cinqT = eT ? res.critT.cinqContreDeux : false;
-    res.crit = traversables ? res.critT : res.critN;
-    // sorties de chaque case d'apparition (D7 n° 3)
+    if (!GR.connexe(g) || !g.apparitions[1].length || !g.apparitions[2].length) { res.cause = 'connexite'; return res; }
+    if (GR.villesProches(g).length) { res.cause = 'villes_proches'; return res; }
+    res.crit = critere(GR.equilibre(docCandidat, { graphe: g }));
+    // sorties de chaque case d'apparition
     res.sortiesMin = Infinity;
     [1, 2].forEach(function (pj) {
-      gT.apparitions[pj].forEach(function (id) { res.sortiesMin = Math.min(res.sortiesMin, gT.voisins.get(id).size); });
+      g.apparitions[pj].forEach(function (id) { res.sortiesMin = Math.min(res.sortiesMin, g.voisins.get(id).size); });
     });
     // ville inaccessible (S non mesurable) testée avant l'écart : null n'est jamais comparé à un seuil
-    if (res.critN.villeInaccessible || res.crit.villeInaccessible) res.cause = 'ville_inaccessible';
-    else if (res.cinqN || (traversables && res.cinqT)) res.cause = 'cinq_contre_deux';
+    if (res.crit.villeInaccessible) res.cause = 'ville_inaccessible';
+    else if (res.crit.tresDesequilibre) res.cause = 'desequilibre';
+    else if (res.crit.cinqContreDeux) res.cause = 'cinq_contre_deux';
     else if (res.crit.ecartMax > SEUIL_ECART) res.cause = 'ecart';
     else if (!res.crit.premiereEgale) res.cause = 'premiere_ville';
-    else if (deuxModes && (res.cinqT || !sansAlerte(res.critT) || !sansAlerte(res.critN))) res.cause = 'deux_modes';
     else res.ok = true;
     return res;
   }
@@ -227,35 +147,33 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   /* Bibliothèque et tirage des tuiles                                   */
   /* ------------------------------------------------------------------ */
 
-  /** Stock par rôle (ids répétés selon les exemplaires), modèles complets seulement, ordre du document. */
-  function stockParRole(doc) {
-    var stock = { centrale: [], coin: [], bord: [], apparition: [] }, F = M.formatDuDocument(doc);
+  /** Stock par gabarit (ids répétés selon les exemplaires), modèles complets seulement, ordre du document. */
+  function stockParGabarit(doc, F) {
+    var stock = { centrale: [], bord: [], coin: [] };
     (Array.isArray(doc.modeles) ? doc.modeles : []).forEach(function (m) {
-      if (!m || !stock[m.role] || !M.validerModele(m, F).complet) return;
+      if (!m || !Object.prototype.hasOwnProperty.call(stock, m.gabarit) || !M.validerModele(m, F).complet) return;
       var n = M.exemplairesValides(m);
-      for (var k = 0; k < n; k++) stock[m.role].push(m.id);
+      for (var k = 0; k < n; k++) stock[m.gabarit].push(m.id);
     });
     return stock;
   }
 
-  /** Besoins par rôle pour une forme : { role: nombre }. */
-  function besoinsForme(forme) {
-    var b = { centrale: 0, coin: 0, bord: 0, apparition: 0 };
-    M.cellulesActives(forme).forEach(function (c) {
-      var r = M.roleCellule(c.col, c.lig, forme);
-      if (r) b[r]++;
-    });
-    return b;
+  /** Cellules de la grille avec leur gabarit attendu : [{col, lig, gabarit}]. */
+  function cellulesDuFormat(F) {
+    var res = [];
+    for (var lig = 0; lig < F.GRILLE.lignes; lig++) {
+      for (var col = 0; col < F.GRILLE.colonnes; col++) res.push({ col: col, lig: lig, gabarit: M.gabaritCellule(col, lig, F) });
+    }
+    return res;
   }
 
-  /** Tuiles d'un candidat : [{modeleId, col, lig, rot}] (tirage sans remise par rôle). */
-  function tirerTuiles(stock, forme, rng) {
+  /** Tuiles d'un candidat : [{modeleId, col, lig, rot}] (tirage sans remise par gabarit). */
+  function tirerTuiles(stock, cellules, F, rng) {
     var paquets = {};
     Object.keys(stock).forEach(function (r) { paquets[r] = melanger(stock[r], rng); });
-    return M.cellulesActives(forme).map(function (c) {
-      var role = M.roleCellule(c.col, c.lig, forme);
-      var rot = M.rotationDeduite(c.col, c.lig, forme);
-      return { modeleId: paquets[role].pop(), col: c.col, lig: c.lig, rot: rot === null ? entier(rng, 4) : rot };
+    return cellules.map(function (c) {
+      var rot = M.rotationDeduite(c.col, c.lig, c.gabarit, F);
+      return { modeleId: paquets[c.gabarit].pop(), col: c.col, lig: c.lig, rot: rot === null ? entier(rng, 4) : rot };
     });
   }
 
@@ -267,24 +185,22 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
 
   var LIBELLES_CAUSE = {
     plateau_invalide: 'plateau refusé par la validation',
-    connexite: 'graphe non connexe',
-    ecart_villes: 'villes trop proches',
+    connexite: 'graphe non connexe ou camp sans case d\'apparition',
+    villes_proches: 'villes à moins de 3 cases',
+    ville_inaccessible: 'ville inaccessible',
+    desequilibre: 'plateau très déséquilibré',
     cinq_contre_deux: '« 5 contre 2 »',
     ecart: 'écart de plus de 2 pas à un rang',
-    premiere_ville: 'première ville à des distances différentes',
-    ville_inaccessible: 'ville inaccessible',
-    cases_deplacement: 'cases de déplacement hors de ' + CASES_MIN + ' à ' + CASES_MAX
+    premiere_ville: 'première ville à des distances différentes'
   };
 
   /**
-   * Génère un plateau aléatoire. Ne modifie pas `doc`.
+   * Génère un plateau aléatoire du format du document. Ne modifie pas `doc`.
    * options :
    *  - graine (texte ou nombre ; générée si absente) ;
    *  - candidats (défaut 200) : candidats valides à départager ; essaisMax (défaut candidats × 5) ;
-   *  - paireCarrefours : 'defaut' (défaut) ou 'varies' ('libre' accepté comme synonyme) ;
-   *  - villesTraversables (défaut false, doc 16) : mode de calcul de S, de l'écart et de la première ville ;
    *  - tolerance (défaut 1) : bons candidats = S ≤ Smin + tolérance.
-   * Renvoie { ok, doc, graine, essais, candidats, score, paire, rapport: [texte], raison, rejets }.
+   * Renvoie { ok, doc, graine, essais, candidats, score, rapport: [texte], raison, rejets }.
    */
   function generer(doc, options) {
     options = options || {};
@@ -292,36 +208,31 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       ? nouvelleGraine() : String(options.graine).trim();
     var nbCandidats = Math.max(1, Math.floor(options.candidats || CANDIDATS_DEFAUT));
     var essaisMax = Math.max(nbCandidats, Math.floor(options.essaisMax || nbCandidats * FACTEUR_ESSAIS));
-    var varies = options.paireCarrefours === 'varies' || options.paireCarrefours === 'libre';
-    var traversables = options.villesTraversables === true;
     var tolerance = typeof options.tolerance === 'number' && options.tolerance >= 0 ? options.tolerance : TOLERANCE_DEFAUT;
     var rng = mulberry32(hacher(graine));
     var rapport = [];
-    var rejets = { plateau_invalide: 0, cases_deplacement: 0, connexite: 0, ecart_villes: 0, ville_inaccessible: 0, cinq_contre_deux: 0, ecart: 0, premiere_ville: 0 };
+    var rejets = {};
+    Object.keys(LIBELLES_CAUSE).forEach(function (k) { rejets[k] = 0; });
 
     function echec(raison, essais) {
-      return { ok: false, doc: null, graine: graine, essais: essais || 0, candidats: 0, score: null, paire: null, rapport: rapport, raison: raison, rejets: rejets };
+      return { ok: false, doc: null, graine: graine, essais: essais || 0, candidats: 0, score: null, rapport: rapport, raison: raison, rejets: rejets };
     }
 
     if (!doc || typeof doc !== 'object') return echec('Aucun document à partir duquel générer.');
-
-    // Forme : 4×4 complet seulement (D7)
-    var forme = { retires: [] };
-    var ancienne = doc.plateau && doc.plateau.forme && Array.isArray(doc.plateau.forme.retires) ? doc.plateau.forme.retires : [];
-    if (ancienne.length) {
-      rapport.push('La forme réduite du plateau est remplacée par le 4×4 complet (le générateur ne travaille que sur le 4×4 complet).');
-    }
+    var F;
+    try { F = M.formatDuDocument(doc); } catch (e) { return echec(e.message); }
 
     // Stock plafonné (somme des exemplaires des modèles complets), puis bibliothèque suffisante ?
-    var stock = stockParRole(doc), besoins = besoinsForme(forme), manques = [];
-    var total = M.ROLES.reduce(function (s, r) { return s + stock[r].length; }, 0);
+    var stock = stockParGabarit(doc, F), cellules = cellulesDuFormat(F), besoins = { centrale: 0, bord: 0, coin: 0 }, manques = [];
+    cellules.forEach(function (c) { besoins[c.gabarit]++; });
+    var total = M.GABARITS.reduce(function (s, r) { return s + stock[r].length; }, 0);
     if (total > M.PLAFOND_TUILES) {
       return echec('La bibliothèque compte ' + total + ' tuiles (modèles complets, selon leurs exemplaires) : le générateur en accepte ' +
         M.PLAFOND_TUILES + ' au plus. Réduisez le nombre d\'exemplaires.');
     }
-    M.ROLES.forEach(function (r) {
+    M.GABARITS.forEach(function (r) {
       if (stock[r].length < besoins[r]) {
-        manques.push((besoins[r] - stock[r].length) + ' ' + LIBELLES_ROLE[r] + ' (' + stock[r].length + ' disponible(s), ' + besoins[r] + ' nécessaire(s))');
+        manques.push((besoins[r] - stock[r].length) + ' ' + LIBELLES_GABARIT[r] + ' (' + stock[r].length + ' disponible(s), ' + besoins[r] + ' nécessaire(s))');
       }
     });
     if (manques.length) {
@@ -329,36 +240,33 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     }
 
     // Candidats
-    var base = { forme: forme, tuiles: [], jetons: [] };
-    var modeles = doc.modeles;
+    var jonctions = jonctionsInterieures(F), modeles = doc.modeles;
     var bons = [], essais = 0;
     while (bons.length < nbCandidats && essais < essaisMax) {
       essais++;
-      var tuiles = tirerTuiles(stock, forme, rng);
-      var cand = { modeles: modeles, plateau: { forme: base.forme, tuiles: tuiles, jetons: jetonsPour(PAIRE_DEFAUT) } };
-      var v = M.validerPlateau(cand);
-      if (v.erreurs.length) { rejets.plateau_invalide++; continue; }
-      var nbCases = casesDeplacement(cand);
-      if (nbCases < CASES_MIN || nbCases > CASES_MAX) { rejets.cases_deplacement++; continue; } // garde-fou D7
-      var ev = evaluer(cand, PAIRE_DEFAUT, traversables, false);
+      var tuiles = tirerTuiles(stock, cellules, F, rng), jetons = tirerVilles(jonctions, rng);
+      var cand = { version: doc.version, grille: F.id, modeles: modeles, plateau: { tuiles: tuiles, jetons: jetons } };
+      if (M.validerPlateau(cand).erreurs.length) { rejets.plateau_invalide++; continue; }
+      var ev = evaluer(cand);
       if (!ev.ok) { rejets[ev.cause]++; continue; }
       var raccords = M.raccordsMorts(cand).filter(function (r) { return r.raison !== 'absent'; }).length;
-      var portsMorts = M.portsCoinMorts(cand).length;
-      var sortiesFaibles = ev.sortiesMin < 2 ? 1 : 0;
+      var malReliees = M.jonctionsMalReliees(cand).length;
       bons.push({
-        tuiles: tuiles, ev: ev, raccords: raccords, portsMorts: portsMorts, sortiesMin: ev.sortiesMin,
-        S: ev.crit.S, penalite: Math.max(0, raccords - RACCORDS_TOLERES) + portsMorts + 3 * sortiesFaibles
+        tuiles: tuiles, jetons: jetons, ev: ev, raccords: raccords, malReliees: malReliees,
+        S: ev.crit.S, penalite: Math.max(0, raccords - RACCORDS_TOLERES) + malReliees + (ev.sortiesMin < 2 ? 3 : 0)
       });
     }
 
     if (!bons.length) {
       var detail = Object.keys(rejets).filter(function (k) { return rejets[k]; })
         .map(function (k) { return LIBELLES_CAUSE[k] + ' : ' + rejets[k]; }).join(', ');
-      return echec('Aucun plateau acceptable en ' + essais + ' essais' + (detail ? ' (' + detail + ')' : '') +
-        '. Modifiez la bibliothèque ou essayez une autre graine.', essais);
+      var conseil = rejets.villes_proches * 2 >= essais
+        ? ' Les tuiles de cette bibliothèque rapprochent toujours deux villes à moins de 3 cases (règles R1 à R4 non respectées, cas du catalogue de la version 1) : il faut des tuiles conformes, comme le futur catalogue v2.'
+        : ' Modifiez la bibliothèque ou essayez une autre graine.';
+      return echec('Aucun plateau acceptable en ' + essais + ' essais' + (detail ? ' (' + detail + ')' : '') + '.' + conseil, essais);
     }
 
-    // Bons candidats : S ≤ Smin + tolérance ; à S égal, pénalité minimale (D7 n° 2, 3) ; tirage au hasard (D7 n° 4)
+    // Bons candidats : S ≤ Smin + tolérance ; à S égal, pénalité minimale ; tirage au hasard
     var Smin = Math.min.apply(null, bons.map(function (x) { return x.S; }));
     var parmi = bons.filter(function (x) { return x.S <= Smin + tolerance; });
     var penMin = {};
@@ -366,51 +274,30 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     parmi = parmi.filter(function (x) { return x.penalite === penMin[x.S]; });
     var choisi = parmi[entier(rng, parmi.length)];
 
-    // Paire de carrefours
-    var paire = PAIRE_DEFAUT, evPaire = choisi.ev, pairesPermises = [clePaire(PAIRE_DEFAUT)];
-    if (varies) {
-      var docChoisi = { modeles: modeles, plateau: { forme: forme, tuiles: choisi.tuiles, jetons: [] } };
-      var refDefaut = evaluer(docChoisi, PAIRE_DEFAUT, traversables, true);
-      var options2 = [];
-      PAIRES.forEach(function (pp) {
-        var e2 = memeJonction(pp[0], PAIRE_DEFAUT[0]) && memeJonction(pp[1], PAIRE_DEFAUT[1]) ? refDefaut : evaluer(docChoisi, pp, traversables, true);
-        // la paire par défaut reste toujours permise (elle a déjà passé l'élimination du mode choisi)
-        if (pp === PAIRE_DEFAUT || (e2.ok && refDefaut.crit && refDefaut.crit.S !== null && e2.crit.S !== null && e2.crit.S <= refDefaut.crit.S)) options2.push({ paire: pp, ev: pp === PAIRE_DEFAUT ? choisi.ev : e2 });
-      });
-      if (options2.length) {
-        pairesPermises = options2.map(function (x) { return clePaire(x.paire); });
-        var tir = options2[entier(rng, options2.length)];
-        paire = tir.paire;
-        evPaire = tir.ev;
-      }
-    }
-
     // Document final : modèles et autres champs inchangés, plateau remplacé
     var sortie = cloner(doc);
-    sortie.plateau = { forme: { retires: [] }, tuiles: cloner(choisi.tuiles), jetons: jetonsPour(paire) };
+    sortie.grille = F.id;
+    sortie.plateau = { tuiles: cloner(choisi.tuiles), jetons: cloner(choisi.jetons) };
     var validation = M.validerPlateau(sortie);
 
-    var crit = evPaire.crit;
+    var crit = choisi.ev.crit;
     var score = {
       S: crit.S, ecartMax: crit.ecartMax, partage: crit.partage, D: crit.D,
-      raccordsMorts: M.raccordsMorts(sortie).filter(function (r) { return r.raison !== 'absent'; }).length,
-      portsMorts: M.portsCoinMorts(sortie).length,
-      sortiesMin: evPaire.sortiesMin,
-      villesTraversables: traversables,
+      raccordsMorts: choisi.raccords, jonctionsMalReliees: choisi.malReliees, sortiesMin: choisi.ev.sortiesMin,
       bons: parmi.length, Smin: Smin
     };
+    var nomsVilles = choisi.jetons.map(function (j) { return '(' + j.i + ',' + j.j + ')'; }).join(' ');
     rapport.push('Graine « ' + graine + ' » : ' + bons.length + ' candidat(s) valide(s) en ' + essais + ' essai(s), tirage parmi ' +
       parmi.length + ' bon(s) candidat(s) (S = ' + Smin + (tolerance ? ' à ' + (Smin + tolerance) : '') + ').');
-    rapport.push('Calcul en villes ' + (traversables ? 'traversables' : 'non traversables') + ' ; « 5 contre 2 » toujours vérifié en villes non traversables.');
-    rapport.push('Carrefours ' + clePaire(paire) + (varies ? ' (carrefours variés : ' + pairesPermises.length + ' paire(s) permise(s) sur ce plateau)' : ' (paire par défaut)') + '.');
+    rapport.push('Villes ' + nomsVilles + ' ; les autres jonctions sont des cases chemin.');
     rapport.push('Score S (somme des écarts sur les 7 rangs) : ' + crit.S + ' ; écart maximal : ' + crit.ecartMax + ' pas.');
-    rapport.push('Villes plus proches du joueur 1 : ' + crit.partage[1] + ', du joueur 2 : ' + crit.partage[2] + ', à égalité : ' + crit.partage.egalite + '.');
-    rapport.push('Raccords morts : ' + score.raccordsMorts + ' ; ports de coin morts : ' + score.portsMorts + ' ; sorties minimales d\'une apparition : ' + score.sortiesMin + '.');
+    rapport.push('Villes plus proches du joueur vert : ' + crit.partage[1] + ', du joueur rouge : ' + crit.partage[2] + ', à égalité : ' + crit.partage.egalite + '.');
+    rapport.push('Raccords morts : ' + score.raccordsMorts + ' ; jonctions mal reliées : ' + score.jonctionsMalReliees + ' ; sorties minimales d\'une case d\'apparition : ' + score.sortiesMin + '.');
     if (validation.erreurs.length) rapport.push('Attention : ' + validation.erreurs[0].message);
 
     return {
       ok: validation.erreurs.length === 0, doc: sortie, graine: graine, essais: essais, candidats: bons.length,
-      score: score, paire: clePaire(paire), pairesPermises: pairesPermises, rapport: rapport,
+      score: score, rapport: rapport,
       raison: validation.erreurs.length ? validation.erreurs[0].message : '', rejets: rejets
     };
   }
@@ -438,7 +325,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       var m = M.modeleParId(doc, t.modeleId);
       if (!m) return;
       s.push('<g transform="translate(' + (t.col * C) + ' ' + (t.lig * C) + ')">' +
-        R.contenuTuile(m, { rot: t.rot, joueur: M.joueurCellule(t.col, t.lig, F), format: F }) + '</g>');
+        R.contenuTuile(m, { rot: t.rot, camp: F.campCellule(t.col, t.lig) || 'neutre', format: F }) + '</g>');
     });
     doc.plateau.jetons.forEach(function (j) { s.push(R.contenuJeton(j.type, j.i * C, j.j * C, F)); });
     s.push('</svg>');
@@ -452,8 +339,10 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     var racine = el(d, 'div', 'pm-generateur');
     var resultat = null;
 
+    var F = M.formatDuDocument(etat.doc());
     racine.appendChild(el(d, 'p', 'pm-generateur-explication',
-      'Tire un plateau 4×4 complet dans la bibliothèque : 7 villes et 2 carrefours, plateau équilibré tiré au hasard parmi les meilleurs candidats. ' +
+      'Tire un plateau ' + F.GRILLE.colonnes + '×' + F.GRILLE.lignes + ' complet dans la bibliothèque : 7 villes à 3 cases d\'écart au moins, ' +
+      'les autres jonctions restent des cases chemin ; plateau équilibré tiré au hasard parmi les meilleurs candidats. ' +
       'La même graine redonne le même plateau.'));
 
     // Graine
@@ -473,36 +362,6 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     ligneGraine.appendChild(champ);
     ligneGraine.appendChild(btnGraine);
     racine.appendChild(ligneGraine);
-
-    // Paire de carrefours
-    var groupe = el(d, 'fieldset', 'pm-generateur-groupe');
-    groupe.appendChild(el(d, 'legend', null, 'Carrefours'));
-    function radio(valeur, texte, coche) {
-      var lab = el(d, 'label', 'pm-generateur-choix');
-      var r = el(d, 'input');
-      r.type = 'radio';
-      r.name = 'pm-generateur-paire-' + n;
-      r.value = valeur;
-      r.checked = coche;
-      lab.appendChild(r);
-      lab.appendChild(d.createTextNode(' ' + texte));
-      groupe.appendChild(lab);
-      return r;
-    }
-    radio('defaut', 'Paire par défaut (1,2)+(3,2), au milieu du plateau', true);
-    var rVaries = radio('varies', 'Carrefours variés : autre paire si elle reste équilibrée', false);
-    racine.appendChild(groupe);
-
-    // Villes traversables (option conservée, doc 16)
-    var ligneTrav = el(d, 'p', 'pm-generateur-ligne');
-    var labTrav = el(d, 'label', 'pm-generateur-choix');
-    var cbTrav = el(d, 'input');
-    cbTrav.type = 'checkbox';
-    cbTrav.checked = false;
-    labTrav.appendChild(cbTrav);
-    labTrav.appendChild(d.createTextNode(' Villes traversables (par défaut, une ville n\'est qu\'une destination)'));
-    ligneTrav.appendChild(labTrav);
-    racine.appendChild(ligneTrav);
 
     // Avertissement si le plateau courant n'est pas vide
     var courant = etat.doc().plateau;
@@ -532,7 +391,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     btnGenerer.addEventListener('click', function () {
       if (btnGenerer.disabled) return;
       if (!champ.value.trim()) champ.value = nouvelleGraine();
-      var options = { graine: champ.value, paireCarrefours: rVaries.checked ? 'varies' : 'defaut', villesTraversables: cbTrav.checked };
+      var options = { graine: champ.value };
       // Calcul synchrone : le bouton est désactivé et annonce la génération, puis le calcul part au tour suivant
       // pour que le navigateur affiche cet état avant d'être occupé.
       btnGenerer.disabled = true;
@@ -571,7 +430,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       var fait = etat.appliquer(function () { return r.doc; }, libelle);
       if (!fait.ok) return;
       if (PM.dialogue) PM.dialogue.fermer();
-      etat.signaler('Plateau aléatoire appliqué (graine ' + r.graine + ', carrefours ' + r.paire + '). Ctrl+Z pour revenir.', 'info');
+      etat.signaler('Plateau aléatoire appliqué (graine ' + r.graine + '). Ctrl+Z pour revenir.', 'info');
     });
 
     conteneur.appendChild(racine);
@@ -590,8 +449,6 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   }
 
   PM.generateur = {
-    PAIRE_DEFAUT: clePaire(PAIRE_DEFAUT),
-    PAIRES: PAIRES.map(clePaire),
     generer: generer,
     critere: critere,
     hacher: hacher,

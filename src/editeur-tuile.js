@@ -10,6 +10,10 @@
  * (ou ajouterModele / changerExemplaires) : l'historique et la sauvegarde sont gérés par l'état.
  * Le modèle est édité en orientation canonique (repère local 0..COTE mm, 120 en 4×4, origine au coin NO),
  * avec le format de grille du document (PM.modele.formatDuDocument).
+ *
+ * Règles v2 (docs/20 D2) : seules les erreurs physiques rendent la tuile non posable ; les alertes (R1 à R4,
+ * côtés et coins extérieurs du gabarit, apparitions) s'affichent sans bloquer. Le gabarit (centrale, bord, coin)
+ * est déclaré, jamais bloquant ; raccords et coins extérieurs restent utilisables (avec une alerte).
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
 if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); // chargement sous Node
@@ -52,16 +56,18 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
   var NOMS_COTES = ['nord', 'est', 'sud', 'ouest'];
   var NOMS_COINS = ['NO', 'NE', 'SE', 'SO'];
-  var LIBELLES_ROLES = { centrale: 'Centrale', coin: 'Coin', bord: 'Bord', apparition: 'Apparition' };
+  var LIBELLES_GABARITS = { centrale: 'Centrale', bord: 'Bord', coin: 'Coin' };
   var PREFIXE_CASE = 'c';
   var PREFIXE_CHEMIN = 'h';
 
-  /** Cases de départ par rôle : positions valides (marge, zones de coin, sans chevauchement). */
+  /**
+   * Cases de départ par gabarit, en fraction du côté de tuile (aimantées sur la grille du format) ; la première
+   * case d'un bord ou d'un coin est sa case d'apparition (docs/18 : toutes les tuiles du pourtour en portent une).
+   */
   var CASES_DE_DEPART = {
-    centrale: [[36, 36], [84, 36], [84, 84], [36, 84]],
-    coin: [[60, 40], [30, 90], [90, 90]],
-    bord: [[60, 40], [30, 90], [90, 90]],
-    apparition: [[60, 40], [30, 90], [90, 90]]
+    centrale: [[0.3, 0.3], [0.7, 0.3], [0.7, 0.7], [0.3, 0.7]],
+    bord: [[0.5, 0.33], [0.25, 0.75], [0.75, 0.75]],
+    coin: [[0.35, 0.35], [0.75, 0.75]]
   };
 
   /* ------------------------------------------------------------------ */
@@ -77,13 +83,17 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; });
   }
 
-  function raccordActif(role, cote) {
-    var ext = M.COTES_EXTERIEURS[role];
-    return !!ext && ext.indexOf(cote) < 0;
+  /** Gabarit connu (description de PM.geometrie.GABARITS) ou null. */
+  function gabaritDe(nom) { return Object.prototype.hasOwnProperty.call(G.GABARITS, nom) ? G.GABARITS[nom] : null; }
+  /** Le côté est-il extérieur pour ce gabarit ? (un raccord y serait face au vide : alerte, pas de refus) */
+  function raccordExterieur(gabarit, cote) {
+    var g = gabaritDe(gabarit);
+    return !!g && g.cotesExterieurs.indexOf(cote) >= 0;
   }
-  function coinActif(role, k) {
-    var masque = M.PORTS_OBLIGATOIRES[role];
-    return masque !== undefined && ((masque >> k) & 1) === 1;
+  /** Le coin est-il extérieur pour ce gabarit ? (un port n'y aboutirait à aucune jonction : alerte, pas de refus) */
+  function coinExterieur(gabarit, k) {
+    var g = gabaritDe(gabarit);
+    return !!g && g.coinsInterieurs.indexOf(k) < 0;
   }
 
   /** Type d'une extrémité de chemin : 'case' | 'raccord' | 'coin' | null. */
@@ -167,16 +177,21 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   /* Elles lèvent une Error (phrase affichable) si l'action est refusée. */
   /* ------------------------------------------------------------------ */
 
-  /** Modèle de départ d'un rôle : bon nombre de cases à des positions valides, aucun chemin. */
-  function modeleDeDepart(role, idsExistants) {
-    if (M.ROLES.indexOf(role) < 0) throw new Error('Rôle inconnu : ' + role + '.');
+  /**
+   * Modèle de départ d'un gabarit pour le format `format` (4×4 par défaut) : quelques cases à des positions
+   * valides, aucun chemin (les cases isolées sont des erreurs jusqu'à ce qu'on les relie).
+   */
+  function modeleDeDepart(gabarit, idsExistants, format) {
+    if (M.GABARITS.indexOf(gabarit) < 0) throw new Error('Gabarit inconnu : ' + gabarit + '.');
+    var F = leFormat(format);
     // nouvelId ne lit que cases / chemins : on lui présente les ids des modèles comme des cases.
     var id = M.nouvelId({ cases: tab(idsExistants).map(function (i) { return { id: i }; }) }, 'modele-');
-    var m = { id: id, nom: 'Nouvelle tuile ' + LIBELLES_ROLES[role].toLowerCase(), role: role, exemplaires: 1, cases: [], chemins: [] };
-    CASES_DE_DEPART[role].forEach(function (p, i) {
+    var m = { id: id, nom: 'Nouvelle tuile ' + LIBELLES_GABARITS[gabarit].toLowerCase(), gabarit: gabarit, grille: F.id, exemplaires: 1, cases: [], chemins: [] };
+    CASES_DE_DEPART[gabarit].forEach(function (f, i) {
+      var p = aimanter(f[0] * F.COTE, f[1] * F.COTE, DIAMETRE_DEFAUT, F);
       m.cases.push({
-        id: PREFIXE_CASE + (i + 1), x: p[0], y: p[1], diametre: DIAMETRE_DEFAUT,
-        type: role === 'apparition' && i === 0 ? 'apparition' : 'deplacement'
+        id: PREFIXE_CASE + (i + 1), x: p.x, y: p.y, diametre: DIAMETRE_DEFAUT,
+        type: gabarit !== 'centrale' && i === 0 ? 'apparition' : 'deplacement'
       });
     });
     return m;
@@ -219,24 +234,17 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
   /**
    * Ajoute un chemin entre deux extrémités : { 'case': id } | { raccord: {cote, pos} } | { coin: k }.
-   * Refus : pas de case aux extrémités, boucle, doublon, raccord sur un côté extérieur, coin sans port possible.
-   * Le reste (raccord déjà pris, deux ports sur une case…) est accepté : la validation le signale.
+   * Refus : pas de case aux extrémités, boucle, doublon, case inconnue.
+   * Le reste (raccord déjà pris, côté extérieur, deux ports sur une case…) est accepté : la validation le signale.
    */
   function ajouterChemin(modele, a, b) {
     var ta = typeExt(a), tb = typeExt(b);
     if (!ta || !tb) throw new Error('Extrémité de chemin invalide.');
     if (ta !== 'case' && tb !== 'case') throw new Error('Un chemin part toujours d\'une case : choisissez une case comme extrémité.');
     if (cleExt(a) === cleExt(b)) throw new Error('Un chemin ne peut pas relier un point à lui-même.');
-    var m = clone(modele), role = m.role;
+    var m = clone(modele);
     [a, b].forEach(function (e) {
-      var t = typeExt(e);
-      if (t === 'case' && !caseParId(m, e['case'])) throw new Error('Cette case n\'existe pas.');
-      if (t === 'raccord' && !raccordActif(role, e.raccord.cote)) {
-        throw new Error('Le côté ' + NOMS_COTES[e.raccord.cote] + ' est extérieur pour ce rôle : pas de raccord possible.');
-      }
-      if (t === 'coin' && !coinActif(role, e.coin)) {
-        throw new Error('Le coin ' + NOMS_COINS[e.coin] + ' est extérieur pour ce rôle : pas de port de coin possible.');
-      }
+      if (typeExt(e) === 'case' && !caseParId(m, e['case'])) throw new Error('Cette case n\'existe pas.');
     });
     var cle = [cleExt(a), cleExt(b)].sort().join('|');
     if (tab(m.chemins).some(function (ch) { return ch && [cleExt(ch.a), cleExt(ch.b)].sort().join('|') === cle; })) {
@@ -279,11 +287,11 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     return m;
   }
 
-  /** Change le rôle (le refus éventuel, modèle posé, vient de PM.modele.remplacerModele). */
-  function changerRole(modele, role) {
-    if (M.ROLES.indexOf(role) < 0) throw new Error('Rôle inconnu : ' + role + '.');
+  /** Change le gabarit déclaré (jamais bloquant, même pour un modèle posé). */
+  function changerGabarit(modele, gabarit) {
+    if (M.GABARITS.indexOf(gabarit) < 0) throw new Error('Gabarit inconnu : ' + gabarit + '.');
     var m = clone(modele);
-    m.role = role;
+    m.gabarit = gabarit;
     return m;
   }
 
@@ -309,21 +317,21 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   }
 
   /**
-   * Élément sous le point (x, y) en mm : raccord, coin (actifs ou non), case, chemin, sinon null.
-   * Renvoie { type: 'raccord', cote, pos, actif } | { type: 'coin', coin, actif } | { type: 'case', id }
-   * | { type: 'chemin', id }. `format` : 4×4 par défaut.
+   * Élément sous le point (x, y) en mm : raccord, coin, case, chemin, sinon null.
+   * Renvoie { type: 'raccord', cote, pos, exterieur } | { type: 'coin', coin, exterieur } | { type: 'case', id }
+   * | { type: 'chemin', id } ; `exterieur` : côté ou coin extérieur pour le gabarit. `format` : 4×4 par défaut.
    */
   function cibleEn(modele, x, y, format) {
-    var F = leFormat(format), role = modele && modele.role, cote, pos, k;
+    var F = leFormat(format), gabarit = modele && modele.gabarit, cote, pos, k;
     for (cote = 0; cote < 4; cote++) {
       for (pos = 0; pos < 3; pos++) {
         var p = F.pointRaccord(cote, pos);
-        if (dist(x, y, p.x, p.y) <= RAYON_RACCORD) return { type: 'raccord', cote: cote, pos: pos, actif: raccordActif(role, cote) };
+        if (dist(x, y, p.x, p.y) <= RAYON_RACCORD) return { type: 'raccord', cote: cote, pos: pos, exterieur: raccordExterieur(gabarit, cote) };
       }
     }
     for (k = 0; k < 4; k++) {
       var q = F.pointCoin(k);
-      if (dist(x, y, q.x, q.y) <= RAYON_COIN) return { type: 'coin', coin: k, actif: coinActif(role, k) };
+      if (dist(x, y, q.x, q.y) <= RAYON_COIN) return { type: 'coin', coin: k, exterieur: coinExterieur(gabarit, k) };
     }
     var cs = tab(modele && modele.cases);
     for (var i = cs.length - 1; i >= 0; i--) {
@@ -343,8 +351,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   function extremiteDeCible(c) {
     if (!c) return null;
     if (c.type === 'case') return { 'case': c.id };
-    if (c.type === 'raccord' && c.actif) return { raccord: { cote: c.cote, pos: c.pos } };
-    if (c.type === 'coin' && c.actif) return { coin: c.coin };
+    if (c.type === 'raccord') return { raccord: { cote: c.cote, pos: c.pos } };
+    if (c.type === 'coin') return { coin: c.coin };
     return null;
   }
 
@@ -361,12 +369,12 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   function libelleCible(modele, c, format) {
     if (!c) return '';
     if (c.type === 'raccord') {
-      if (!c.actif) return 'Raccord inactif : le côté ' + NOMS_COTES[c.cote] + ' est extérieur pour ce rôle.';
-      return 'Raccord côté ' + NOMS_COTES[c.cote] + ', à ' + cm(leFormat(format).POSITIONS_RACCORD[c.pos]) + ' cm du coin ' + NOMS_COINS[c.cote] + '.';
+      return 'Raccord côté ' + NOMS_COTES[c.cote] + ', à ' + cm(leFormat(format).POSITIONS_RACCORD[c.pos]) + ' cm du coin ' + NOMS_COINS[c.cote] + '.' +
+        (c.exterieur ? ' Côté extérieur pour ce gabarit : un raccord y sera face au vide.' : '');
     }
     if (c.type === 'coin') {
-      return c.actif ? 'Coin ' + NOMS_COINS[c.coin] + ' : port de coin obligatoire pour ce rôle.'
-        : 'Coin ' + NOMS_COINS[c.coin] + ' : coin extérieur, pas de port pour ce rôle.';
+      return 'Coin ' + NOMS_COINS[c.coin] + (c.exterieur ? ' : coin extérieur pour ce gabarit, un port n\'y mènerait à aucune jonction.'
+        : ' : un port relie une case à la case de jonction (ou à la ville) de ce coin.');
     }
     if (c.type === 'case') {
       var k = caseParId(modele, c.id);
@@ -379,7 +387,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   /** Cote courte dessinée sur le canevas au survol d'un raccord ou d'une case : { x, y, texte } ou null. */
   function coteCourte(modele, c, format) {
     if (!c) return null;
-    if (c.type === 'raccord' && c.actif) {
+    if (c.type === 'raccord') {
       var F = leFormat(format), p = F.pointRaccord(c.cote, c.pos);
       return { x: p.x, y: p.y, texte: cm(F.POSITIONS_RACCORD[c.pos]) + ' cm' };
     }
@@ -418,14 +426,14 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
   /** Éléments à marquer en rouge sur le canevas d'après les erreurs de validation. */
   function marquages(erreurs) {
-    var res = { cases: [], coinsManquants: [], coinsErreur: [], raccords: [], chemins: [] };
+    var res = { cases: [], coinsErreur: [], raccords: [], chemins: [] };
     function ajouter(liste, v) { if (liste.indexOf(v) < 0) liste.push(v); }
     tab(erreurs).forEach(function (e) {
       var r = e && e.ref;
       if (!r) return;
       if (r.type === 'case') (r.ids || [r.id]).forEach(function (id) { if (id !== undefined) ajouter(res.cases, id); });
       else if (r.type === 'chemin' && r.id !== undefined) ajouter(res.chemins, r.id);
-      else if (r.type === 'coin') ajouter(e.code === 'port_manquant' ? res.coinsManquants : res.coinsErreur, r.id);
+      else if (r.type === 'coin') ajouter(res.coinsErreur, r.id);
       else if (r.type === 'raccord') ajouter(res.raccords, r.cote + ':' + r.pos);
     });
     return res;
@@ -473,11 +481,11 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
   /** Demi-disques des 12 raccords, sur le bord, côté intérieur. */
   function svgRaccords(modele, marques, format) {
-    var F = leFormat(format), role = modele.role, util = extremitesUtilisees(modele).raccords, s = '', RR = 5;
+    var F = leFormat(format), util = extremitesUtilisees(modele).raccords, s = '', RR = 5;
     for (var cote = 0; cote < 4; cote++) {
       for (var pos = 0; pos < 3; pos++) {
         var p = F.pointRaccord(0, pos), cle = cote + ':' + pos;
-        var cls = 'pm-editeur-raccord ' + (raccordActif(role, cote) ? 'pm-editeur-actif' : 'pm-editeur-inactif');
+        var cls = 'pm-editeur-raccord pm-editeur-actif' + (raccordExterieur(modele.gabarit, cote) ? ' pm-editeur-exterieur' : '');
         if (util.indexOf(cle) >= 0) cls += ' pm-editeur-utilise';
         if (marques && marques.raccords.indexOf(cle) >= 0) cls += ' pm-editeur-en-erreur';
         // tracé sur le côté nord puis tourné autour du centre : même convention que les masques
@@ -488,14 +496,13 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     return s;
   }
 
-  /** Quatre coins : gros points, grisés s'ils sont interdits par le rôle, pulsants si le port manque. */
+  /** Quatre coins : gros points, en tirets s'ils sont extérieurs pour le gabarit. */
   function svgCoins(modele, marques, format) {
-    var F = leFormat(format), role = modele.role, util = extremitesUtilisees(modele).coins, s = '';
+    var F = leFormat(format), util = extremitesUtilisees(modele).coins, s = '';
     for (var k = 0; k < 4; k++) {
       var p = F.pointCoin(k);
-      var cls = 'pm-editeur-coin ' + (coinActif(role, k) ? 'pm-editeur-actif' : 'pm-editeur-inactif');
+      var cls = 'pm-editeur-coin pm-editeur-actif' + (coinExterieur(modele.gabarit, k) ? ' pm-editeur-exterieur' : '');
       if (util.indexOf(k) >= 0) cls += ' pm-editeur-utilise';
-      if (marques && marques.coinsManquants.indexOf(k) >= 0) cls += ' pm-editeur-pulse';
       if (marques && marques.coinsErreur.indexOf(k) >= 0) cls += ' pm-editeur-en-erreur';
       s += '<circle class="' + cls + '" data-coin="' + k + '" cx="' + arrondi(p.x) + '" cy="' + arrondi(p.y) + '" r="6"/>';
     }
@@ -578,10 +585,10 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       l.appendChild(input);
       return l;
     }
-    function boutonsRoles(classe) {
+    function boutonsGabarits(classe) {
       var g = el('div', classe);
-      M.ROLES.forEach(function (role) {
-        g.appendChild(bouton(LIBELLES_ROLES[role], 'Créer une nouvelle tuile « ' + LIBELLES_ROLES[role].toLowerCase() + ' »', function () { creerModele(role); }));
+      M.GABARITS.forEach(function (gabarit) {
+        g.appendChild(bouton(LIBELLES_GABARITS[gabarit], 'Créer une nouvelle tuile « ' + LIBELLES_GABARITS[gabarit].toLowerCase() + ' »', function () { creerModele(gabarit); }));
       });
       return g;
     }
@@ -593,7 +600,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     // Invite (aucun modèle sélectionné)
     var invite = el('div', 'pm-editeur-invite');
     invite.appendChild(el('p', 'pm-editeur-invite-texte', 'Aucune tuile sélectionnée. Choisissez un modèle dans la bibliothèque, ou créez-en un :'));
-    invite.appendChild(boutonsRoles('pm-editeur-invite-boutons'));
+    invite.appendChild(boutonsGabarits('pm-editeur-invite-boutons'));
     racine.appendChild(invite);
 
     // Corps
@@ -603,15 +610,15 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     var barre = el('div', 'pm-editeur-barre');
     var groupeNouveau = el('div', 'pm-editeur-groupe');
     groupeNouveau.appendChild(el('span', 'pm-editeur-groupe-titre', 'Nouveau :'));
-    groupeNouveau.appendChild(boutonsRoles('pm-editeur-boutons-roles'));
+    groupeNouveau.appendChild(boutonsGabarits('pm-editeur-boutons-roles'));
     barre.appendChild(groupeNouveau);
     var btnDupliquer = bouton('Dupliquer', 'Copier ce modèle (Ctrl+D)', function () { dupliquerCourant(); });
     barre.appendChild(btnDupliquer);
     var inNom = el('input', 'pm-editeur-saisie'); inNom.type = 'text'; inNom.maxLength = 60;
     barre.appendChild(champ('Nom', inNom));
-    var selRole = el('select', 'pm-editeur-saisie');
-    M.ROLES.forEach(function (r) { var o = el('option', '', LIBELLES_ROLES[r]); o.value = r; selRole.appendChild(o); });
-    barre.appendChild(champ('Rôle', selRole));
+    var selGabarit = el('select', 'pm-editeur-saisie');
+    M.GABARITS.forEach(function (r) { var o = el('option', '', LIBELLES_GABARITS[r]); o.value = r; selGabarit.appendChild(o); });
+    barre.appendChild(champ('Gabarit', selGabarit));
     var inExemplaires = el('input', 'pm-editeur-saisie pm-editeur-saisie-court'); inExemplaires.type = 'number'; inExemplaires.min = '0'; inExemplaires.step = '1';
     barre.appendChild(champ('Exemplaires', inExemplaires));
     corps.appendChild(barre);
@@ -697,10 +704,10 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       return etat.appliquer(function (d) { return M.remplacerModele(d, m.id, nouveau); }, libelle);
     }
 
-    function creerModele(role) {
+    function creerModele(gabarit) {
       var ids = etat.doc().modeles.map(function (x) { return x.id; });
-      var nouveau = modeleDeDepart(role, ids);
-      var r = etat.appliquer(function (d) { return M.ajouterModele(d, nouveau); }, 'Nouvelle tuile ' + role);
+      var nouveau = modeleDeDepart(gabarit, ids, fmt());
+      var r = etat.appliquer(function (d) { return M.ajouterModele(d, nouveau); }, 'Nouvelle tuile ' + gabarit);
       if (r.ok) {
         etat.majUi({ modeleSelectionne: nouveau.id, onglet: 'tuiles' });
         etat.signaler('Tuile « ' + nouveau.nom + ' » créée : placez les cases puis reliez-les par des chemins.', 'info');
@@ -763,7 +770,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       if (d && d.type === 'case') {
         var c = caseParId(m, d.id);
         if (c) depart = { x: c.x, y: c.y };
-      } else if (d && (d.type === 'raccord' || d.type === 'coin') && d.actif) {
+      } else if (d && (d.type === 'raccord' || d.type === 'coin')) {
         depart = d.type === 'raccord' ? F.pointRaccord(d.cote, d.pos) : F.pointCoin(d.coin);
       }
       var versChemin = depart && cible2 && extremiteDeCible(cible2) && !(cible2.type === 'case' && d.type === 'case' && cible2.id === d.id);
@@ -798,8 +805,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         var meme = ext && cleExt(ext) === cleExt(arme);
         if (ext && !meme) { tracer(arme, ext); return; }
         arme = null;
-        if (cible && (cible.type === 'raccord' || cible.type === 'coin') && !cible.actif) etat.signaler(libelleCible(m, cible, fmt()), 'alerte');
-        else if (!meme) etat.signaler('Chemin annulé : cliquez d\'abord sur une case, un raccord ou un coin, puis sur l\'autre extrémité.', 'info');
+        if (!meme) etat.signaler('Chemin annulé : cliquez d\'abord sur une case, un raccord ou un coin, puis sur l\'autre extrémité.', 'info');
         rafraichir(true);
         return;
       }
@@ -808,15 +814,6 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         var avant = M.nouvelId(m, PREFIXE_CASE);
         var r = modifier(function (x) { return ajouterCase(x, p.x, p.y, undefined, fmt()); }, 'Ajouter une case');
         selection = r.ok ? { type: 'case', id: avant } : null;
-        if (r.ok && tab(m.cases).length + 1 > M.NB_CASES_PAR_ROLE[m.role]) {
-          etat.signaler('Une tuile « ' + m.role + ' » a ' + M.NB_CASES_PAR_ROLE[m.role] + ' cases : celle-ci est en trop (Suppr pour l\'enlever).', 'alerte');
-        }
-        rafraichir(true);
-        return;
-      }
-      if ((cible.type === 'raccord' || cible.type === 'coin') && !cible.actif) {
-        selection = null;
-        etat.signaler(libelleCible(m, cible, fmt()), 'alerte');
         rafraichir(true);
         return;
       }
@@ -840,15 +837,13 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         var ext = extremiteDeCible(cible2);
         if (ext && !(cible2.type === 'case' && cible2.id === d.id)) {
           tracer({ 'case': d.id }, ext);
-        } else if (cible2 && (cible2.type === 'raccord' || cible2.type === 'coin') && !cible2.actif) {
-          etat.signaler(libelleCible(m, cible2, fmt()), 'alerte');
         } else {
           var dec = g.decalage || { dx: 0, dy: 0 }, id = d.id;
           modifier(function (x) { return deplacerCase(x, id, p.x + dec.dx, p.y + dec.dy, fmt()); }, 'Déplacer une case');
           selection = { type: 'case', id: id };
           arme = null;
         }
-      } else if (d && (d.type === 'raccord' || d.type === 'coin') && d.actif) {
+      } else if (d && (d.type === 'raccord' || d.type === 'coin')) {
         if (cible2 && cible2.type === 'case') tracer({ 'case': cible2.id }, extremiteDeCible(d));
         else etat.signaler('Relâchez sur une case pour tracer le chemin.', 'info');
       }
@@ -881,7 +876,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         geste.courantMm = p;
         if (!geste.deplace && Math.hypot(ev.clientX - geste.px0, ev.clientY - geste.py0) >= SEUIL_GLISSEMENT_PX) {
           var d = geste.depart;
-          var glissable = d && (d.type === 'case' || ((d.type === 'raccord' || d.type === 'coin') && d.actif));
+          var glissable = d && (d.type === 'case' || d.type === 'raccord' || d.type === 'coin');
           if (glissable) { geste.deplace = true; arme = null; haloLocal = null; }
         }
         if (geste.deplace) dessinerApercu(m, p);
@@ -946,10 +941,10 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       var nom = inNom.value;
       modifier(function (x) { return renommer(x, nom); }, 'Renommer la tuile');
     });
-    selRole.addEventListener('change', function () {
-      var role = selRole.value;
-      var r = modifier(function (x) { return changerRole(x, role); }, 'Changer le rôle');
-      if (!r.ok) { var m = modeleCourant(); if (m) selRole.value = m.role; }
+    selGabarit.addEventListener('change', function () {
+      var gabarit = selGabarit.value;
+      var r = modifier(function (x) { return changerGabarit(x, gabarit); }, 'Changer le gabarit');
+      if (!r.ok) { var m = modeleCourant(); if (m) selGabarit.value = m.gabarit; }
     });
     inExemplaires.addEventListener('change', function () {
       var m = modeleCourant();
@@ -976,7 +971,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       gCote.innerHTML = c
         ? '<text class="pm-editeur-cote" x="' + arrondi(c.x) + '" y="' + arrondi(Math.min(c.y + 12, 112)) + '" text-anchor="middle">' + echapper(c.texte) + '</text>'
         : '';
-      svg.classList.toggle('pm-editeur-sur-cible', !!survol && survol.actif !== false);
+      svg.classList.toggle('pm-editeur-sur-cible', !!survol);
     }
 
     function haloExterne(m) {
@@ -985,16 +980,18 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       return null;
     }
 
+    /** Liste des erreurs (bloquantes) puis des alertes (la tuile reste posable), chacune cliquable pour entourer l'élément. */
     function dessinerListeErreurs(m, valid) {
       listeErreurs.innerHTML = '';
       if (!valid.erreurs.length) {
-        var ok = el('li', 'pm-editeur-erreur-ok', 'Aucune erreur : la tuile est posable.');
+        var ok = el('li', 'pm-editeur-erreur-ok', 'Aucune erreur : la tuile est posable.' + (valid.alertes.length ? ' Alertes à lire ci-dessous.' : ''));
         listeErreurs.appendChild(ok);
-        return;
       }
-      valid.erreurs.forEach(function (e) {
-        var li = el('li', 'pm-editeur-erreur');
-        var b = el('button', 'pm-editeur-erreur-bouton', e.message);
+      valid.erreurs.map(function (e) { return { e: e, alerte: false }; })
+        .concat(valid.alertes.map(function (e) { return { e: e, alerte: true }; })).forEach(function (x) {
+        var e = x.e;
+        var li = el('li', x.alerte ? 'pm-editeur-erreur pm-editeur-alerte' : 'pm-editeur-erreur');
+        var b = el('button', 'pm-editeur-erreur-bouton' + (x.alerte ? ' pm-editeur-alerte-bouton' : ''), (x.alerte ? 'Alerte : ' : '') + e.message);
         b.type = 'button';
         b.title = 'Entourer l\'élément concerné';
         b.addEventListener('click', function () {
@@ -1044,7 +1041,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
       // champs de la barre (on ne touche pas au champ qui a le focus)
       if (doc0.activeElement !== inNom) inNom.value = m.nom || '';
-      if (doc0.activeElement !== selRole) selRole.value = m.role;
+      if (doc0.activeElement !== selGabarit) selGabarit.value = M.GABARITS.indexOf(m.gabarit) >= 0 ? m.gabarit : '';
       if (doc0.activeElement !== inExemplaires) inExemplaires.value = String(m.exemplaires);
       inNom.placeholder = m.id;
 
@@ -1071,10 +1068,10 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       gCoins.innerHTML = svgCoins(m, marques, F);
 
       // statut
-      var nbCases = tab(m.cases).length, attendu = M.NB_CASES_PAR_ROLE[m.role];
+      var nbCases = tab(m.cases).length, nbAlertes = valid.alertes.length;
       statut.className = 'pm-editeur-statut ' + (valid.complet ? 'pm-editeur-complet' : 'pm-editeur-incomplet');
       statut.textContent = (valid.complet ? 'Complet : posable sur le plateau' : 'Incomplet (non posable) : ' + valid.erreurs.length + ' erreur' + (valid.erreurs.length > 1 ? 's' : '')) +
-        ' — cases ' + nbCases + ' / ' + attendu;
+        (nbAlertes ? ', ' + nbAlertes + ' alerte' + (nbAlertes > 1 ? 's' : '') : '') + ' — ' + nbCases + ' case' + (nbCases > 1 ? 's' : '');
       dessinerListeErreurs(m, valid);
 
       // aperçu des 4 rotations
@@ -1121,12 +1118,12 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     basculerType: basculerType,
     ajouterChemin: ajouterChemin,
     supprimer: supprimer,
-    changerRole: changerRole,
+    changerGabarit: changerGabarit,
     renommer: renommer,
     nbUtilisations: nbUtilisations,
     // cibles et aides (pures)
-    raccordActif: raccordActif,
-    coinActif: coinActif,
+    raccordExterieur: raccordExterieur,
+    coinExterieur: coinExterieur,
     cibleEn: cibleEn,
     extremiteDeCible: extremiteDeCible,
     refDeCible: refDeCible,

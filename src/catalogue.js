@@ -1,12 +1,18 @@
 /*
- * catalogue.js : catalogue réel des tuiles (orientation canonique, mm).
+ * catalogue.js : catalogue des tuiles du format 4×4 (orientation canonique, mm).
  * Aucun accès au DOM. Voir docs/3-synthese.md (catalogue, décompte des cases).
+ *
+ * Catalogue de la version 1, converti aux données de la version 2 en attendant le catalogue v2 (docs/18) :
+ * chaque modèle déclare un gabarit (centrale | bord | coin ; les anciennes apparitions A1 et A2 sont des bords)
+ * et sa grille ('4x4'). Il ne respecte pas les règles R1 à R4 (docs/19) : ses centrales et plusieurs bords portent
+ * des alertes, deux villes voisines y sont à moins de 3 cases, et seules A1 et A2 ont une case d'apparition.
+ * Le générateur ne trouve donc aucun plateau avec ce catalogue (aucune disposition de 7 villes à 3 cases d'écart).
  *
  * 18 modèles, 20 tuiles physiques :
  *  - 6 centrales C1..C6 (1 exemplaire), 4 cases, 4 ports ;
  *  - 5 coins K1..K5 (1 exemplaire), 3 cases, port SE, raccords E et S ;
  *  - 5 bords neutres B1..B5 (1 exemplaire), 3 cases, ports SE et SO ;
- *  - 2 apparitions A1, A2 (2 exemplaires, partagées par les deux joueurs).
+ *  - 2 bords à case d'apparition A1, A2 (2 exemplaires).
  *
  * Rappels de géométrie (docs/2-avis-geometrie.md) :
  *  - côtés 0 = N, 1 = E, 2 = S, 3 = O ; coins 0 = NO, 1 = NE, 2 = SE, 3 = SO ;
@@ -42,8 +48,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function lien(id, a, b) { return { id: id, a: { 'case': a }, b: { 'case': b } }; }
   function port(id, c, coin) { return { id: id, a: { 'case': c }, b: { coin: coin } }; }
   function raccord(id, c, cote, pos) { return { id: id, a: { 'case': c }, b: { raccord: { cote: cote, pos: pos } } }; }
-  function modele(id, nom, role, exemplaires, cases, chemins) {
-    return { id: id, nom: nom, role: role, exemplaires: exemplaires, cases: cases, chemins: chemins };
+  function modele(id, nom, gabarit, exemplaires, cases, chemins) {
+    return { id: id, nom: nom, gabarit: gabarit, grille: '4x4', exemplaires: exemplaires, cases: cases, chemins: chemins };
   }
 
   /*
@@ -165,15 +171,15 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
           raccord('r1', 'c1', 1, 1), raccord('r2', 'c3', 3, 1), raccord('r4', 'c1', 2, 1)
         ]),
 
-      /* ---------------- Apparitions (extérieur N, ports SE et SO) ---------------- */
+      /* ---------------- Bords à case d'apparition (extérieur N, ports SE et SO) ---------------- */
       // fourche : l'apparition descend vers la centrale, sorties latérales par les cases à port
-      modele('A1', 'Fourche', 'apparition', 2,
+      modele('A1', 'Fourche', 'bord', 2,
         [kase('c1', 84, 84), kase('c2', 36, 84), kase('c3', 60, 58, 'apparition')], [
           lien('h1', 'c3', 'c1'), lien('h2', 'c3', 'c2'), port('p1', 'c1', 2), port('p2', 'c2', 3),
           raccord('r1', 'c1', 1, 1), raccord('r2', 'c2', 3, 1), raccord('r3', 'c3', 2, 1)
         ]),
       // arc : l'apparition porte les trois raccords (est, ouest, sud), cases à port en retrait
-      modele('A2', 'Arc', 'apparition', 2,
+      modele('A2', 'Arc', 'bord', 2,
         [kase('c1', 84, 84), kase('c2', 36, 84), kase('c3', 60, 42, 'apparition')], [
           lien('h1', 'c3', 'c1'), lien('h2', 'c3', 'c2'), port('p1', 'c1', 2), port('p2', 'c2', 3),
           raccord('r1', 'c3', 1, 1), raccord('r2', 'c3', 3, 1), raccord('r3', 'c3', 2, 1)
@@ -192,9 +198,9 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   var MODELES = geler(construire());
 
-  /** Document neuf (PM.modele.nouveauDocument) contenant une copie modifiable des 18 modèles. */
+  /** Document neuf du format 4×4 (PM.modele.nouveauDocument) contenant une copie modifiable des 18 modèles. */
   function nouveauDocument() {
-    var doc = PM.modele.nouveauDocument();
+    var doc = PM.modele.nouveauDocument('4x4');
     doc.modeles = JSON.parse(JSON.stringify(MODELES));
     return doc;
   }

@@ -92,9 +92,10 @@
   <script src="../src/assemblage.js"></script>
   <script src="../src/editeur-tuile.js"></script>
   <script src="../src/app.js"></script>
+  <script src="../tests/aides-v2.js"></script>
   <script>
   window.addEventListener('load', function () {
-    var M = PM.modele, GR = PM.graphe, GEN = PM.generateur, E = PM.exportation;
+    var M = PM.modele, GR = PM.graphe, GEN = PM.generateur, E = PM.exportation, AV2 = PM.aidesV2;
     var etat = PM.app && PM.app.etat;
     // enregistré APRÈS celui d'app.js (qui écrit l'autosave en attente à la fermeture) : la remise en place passe en dernier
     window.addEventListener('pagehide', function () { PM_P2.remettre(); });
@@ -139,13 +140,6 @@
     function changer(input, coche) { input.checked = coche; input.dispatchEvent(new Event('change', { bubbles: true })); }
     function radio(valeur, nom) { return contenu().querySelector('input[type=radio][name$="-' + nom + '"][value="' + valeur + '"]'); }
     function caseA(valeur) { return contenu().querySelector('input[type=checkbox][value="' + valeur + '"]'); }
-    var JONCTIONS = [];
-    for (var jj = 1; jj <= 3; jj++) for (var ii = 1; ii <= 3; ii++) JONCTIONS.push({ i: ii, j: jj });
-    function jetonsPaire(a, b) {
-      var r = JONCTIONS.filter(function (x) { return !(x.i === a.i && x.j === a.j) && !(x.i === b.i && x.j === b.j); })
-        .map(function (x) { return { i: x.i, j: x.j, type: 'capture' }; });
-      return r.concat([{ i: a.i, j: a.j, type: 'carrefour' }, { i: b.i, j: b.j, type: 'carrefour' }]);
-    }
     function charger(src) {
       return new Promise(function (res, rej) { var im = new Image(); im.onload = function () { res(im); }; im.onerror = function () { rej(new Error('image illisible')); }; im.src = src; });
     }
@@ -169,26 +163,16 @@
       return clickOrigine.apply(this, arguments);
     };
 
-    // Plateaux utiles
-    var plateauAlea = GEN.generer(PM.catalogue.nouveauDocument(), { graine: 'recette-p2', candidats: 60 });
-    // Plateau complet avec « 5 contre 2 » (villes non traversables) : jetons posés à la main sur des plateaux générés.
-    var cache5c2 = undefined;
-    function chercher5c2() {
-      if (cache5c2 !== undefined) return cache5c2;
-      cache5c2 = null;
-      ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8'].forEach(function (graine) {
-        if (cache5c2) return;
-        var base = GEN.generer(PM.catalogue.nouveauDocument(), { graine: graine, candidats: 60 });
-        for (var k = 0; k < JONCTIONS.length && !cache5c2; k++) for (var l = k + 1; l < JONCTIONS.length && !cache5c2; l++) {
-          var a = JONCTIONS[k], b = JONCTIONS[l];
-          if (a.j === b.j && a.j !== 2) continue;
-          var d = clone(base.doc); d.plateau.jetons = jetonsPaire(a, b);
-          var eq = GR.equilibre(d);
-          if (eq.alertes.some(function (x) { return x.code === 'cinq_contre_deux'; })) cache5c2 = { doc: d, paire: [a, b], eq: eq };
-        }
-      });
-      return cache5c2;
+    // Plateaux utiles (règles v2 : bibliothèque d'exemples conformes à R1 à R4 ; le catalogue v1 ne permet aucun plateau)
+    function libGenerateur() {
+      var d = AV2.documentExemples();
+      var v = clone(d.modeles[0]);
+      v.id = 'ex-centrale-b'; v.nom = 'Étoile sans ouest'; v.exemplaires = 2;
+      v.chemins = v.chemins.filter(function (c) { return c.id !== 'r4'; });
+      d.modeles.push(v);
+      return d;
     }
+    var plateauAlea = GEN.generer(libGenerateur(), { graine: 'recette-p2', candidats: 60 });
     function libelles() { return [].map.call($('controles').querySelectorAll('.pm-controles-sommaire-libelle'), function (x) { return x.textContent; }); }
 
     function s0_chargement() {
@@ -363,36 +347,28 @@
       ctrl('rapport : première ville, partage, tempo, goulets', /Première ville/.test(t) && /Villes strictement plus proches/.test(t) && /Goulets/.test(t) && /≤ 3/.test(t));
       var e = GR.equilibre(etat.doc());
       ctrl('rapport : score S affiché = score calculé (' + e.S + ')', t.indexOf('Score S (somme des écarts sur les 7 rangs) : ' + e.S) >= 0);
-      var cb = contenu().querySelector('.pm-equilibre-option input[type=checkbox]');
-      ctrl('case « villes traversables » décochée par défaut', cb && cb.checked === false);
-      changer(cb, true);
-      var cb2 = contenu().querySelector('.pm-equilibre-option input[type=checkbox]');
-      ctrl('case traversables cochée : rapport redessiné', cb2 && cb2.checked === true && contenu().querySelectorAll('.pm-equilibre').length === 1);
-      changer(cb2, false);
-      ctrl('lecture seule : document inchangé après ouverture et bascule des modes', docJ() === docAvant);
+      ctrl('plus d\'option « villes traversables » (règle du jeu : villes non traversables)', !contenu().querySelector('input[type=checkbox]') && !/traversables/.test(t));
+      var entetes = [].map.call(tables[0].querySelectorAll('thead th'), function (x) { return x.textContent; }).join(',');
+      ctrl('joueurs nommés vert et rouge (en-têtes Vert / Rouge)', entetes === 'Rang,Vert,Rouge,Écart' && !/[Jj]oueur [12]/.test(t), entetes);
+      ctrl('lecture seule : document inchangé après ouverture', docJ() === docAvant);
       ctrl('lecture seule : historique inchangé', etat.peutAnnuler() === histAvant);
-      // plateau déséquilibré : alertes affichées
-      var trouve = chercher5c2();
-      ctrl('configuration « 5 contre 2 » trouvée pour la recette', !!trouve);
-      if (trouve) {
-        reset(trouve.doc);
-        var avant2 = docJ();
-        ouvrirRapport();
-        var li = contenu().querySelectorAll('.pm-equilibre-alerte');
-        var texteAl = [].map.call(li, function (x) { return x.textContent; }).join(' | ');
-        ctrl('rapport : alerte « 5 villes contre 2 » affichée', /contre 2/.test(texteAl), texteAl);
-        ctrl('lecture seule : document inchangé (plateau déséquilibré)', docJ() === avant2);
-      }
+      // plateau complet très déséquilibré : section dédiée qui nomme le critère
+      reset(AV2.plateauDesequilibre());
+      var avant2 = docJ();
+      ouvrirRapport();
+      var li = contenu().querySelectorAll('.pm-equilibre-blocage');
+      var texteAl = [].map.call(li, function (x) { return x.textContent; }).join(' | ');
+      ctrl('rapport : « Plateau très déséquilibré » avec « 5 contre 2 »', /Plateau très déséquilibré/.test(texteDialogue()) && /5 contre 2/.test(texteAl), texteAl);
+      ctrl('lecture seule : document inchangé (plateau déséquilibré)', docJ() === avant2);
       PM.dialogue.fermer();
       ctrl('boîte fermée', !dialogueOuvert());
     }
 
     function s3_generateur() {
       titre('3. Plateau aléatoire : générer, appliquer, annuler');
-      // un seul modèle posé au départ pour que l'annulation soit discriminante
-      var base = PM.catalogue.nouveauDocument();
+      var base = libGenerateur();
       reset(base);
-      var posee = etat.appliquer(function (d) { return M.poserTuile(d, 'C1', 1, 1); }, 'tuile de départ');
+      var posee = etat.appliquer(function (d) { return M.poserTuile(d, 'ex-centrale', 1, 1); }, 'tuile de départ');
       ctrl('tuile de départ posée', posee.ok);
       var docAvant = clone(etat.doc()), avantJ = docJ();
       cliquer(boutonParTexte($('controles'), 'Plateau aléatoire'));
@@ -401,111 +377,97 @@
       var bGenerer = boutonParTexte(contenu(), 'Générer'), bAppliquer = boutonParTexte(contenu(), 'Appliquer au plateau');
       ctrl('graine pré-remplie (6 chiffres), Appliquer inactif', /^\d{6}$/.test(champ.value) && bAppliquer.disabled, champ.value);
       ctrl('avertissement « le plateau actuel sera remplacé »', !!contenu().querySelector('.pm-generateur-avertissement'));
-      var rd = contenu().querySelector('input[type=radio][value=defaut]'), rv = contenu().querySelector('input[type=radio][value=varies]');
-      ctrl('carrefours : paire par défaut cochée, « variés » décoché', rd && rd.checked && rv && !rv.checked);
+      ctrl('plus d\'option de carrefours ni de « villes traversables »', !contenu().querySelector('input[type=radio]') && !contenu().querySelector('input[type=checkbox]'));
+      ctrl('explication : 7 villes à 3 cases d\'écart, cases chemin', /7 villes à 3 cases d'écart/.test(texteDialogue()) && /cases chemin/.test(texteDialogue()));
       champ.value = 'recette';
       cliquer(bGenerer);
-      // génération lancée au tour suivant (setTimeout 0) : bouton désactivé et « Génération… » en attendant
       ctrl('pendant le calcul : Générer désactivé, texte « Génération… »', bGenerer.disabled && bGenerer.textContent === 'Génération…', bGenerer.textContent);
+      var attendu;
       return attendre(50).then(function () {
-      ctrl('fin du calcul : Générer réactivé', !bGenerer.disabled && bGenerer.textContent === 'Générer', bGenerer.textContent);
-      ctrl('aperçu SVG présent après Générer', !!contenu().querySelector('.pm-generateur-apercu svg'));
-      ctrl('résumé en plusieurs lignes (graine, S, carrefours)', contenu().querySelectorAll('.pm-generateur-resume li').length >= 5 && /Graine « recette »/.test(texteDialogue()));
-      ctrl('Appliquer actif après Générer', !bAppliquer.disabled);
-      ctrl('Générer ne modifie pas le plateau', docJ() === avantJ);
-      var attendu = GEN.generer(docAvant, { graine: 'recette' });
-      ctrl('plateau généré = GEN.generer(doc, {graine}) (reproductible)', attendu.ok);
-      var svg1 = contenu().querySelector('.pm-generateur-apercu').innerHTML;
-      cliquer(bGenerer);
-      return attendre(50).then(function () {
-      ctrl('même graine : même aperçu', contenu().querySelector('.pm-generateur-apercu').innerHTML === svg1);
-      cliquer(bAppliquer);
-      ctrl('Appliquer : boîte fermée', !dialogueOuvert());
-      ctrl('plateau appliqué = plateau attendu (graine « recette »)', CJ(etat.doc().plateau) === CJ(attendu.doc.plateau));
-      ctrl('16 tuiles posées et 9 jetons dans le document', etat.doc().plateau.tuiles.length === 16 && etat.doc().plateau.jetons.length === 9);
-      return attendre(100);
+        ctrl('fin du calcul : Générer réactivé', !bGenerer.disabled && bGenerer.textContent === 'Générer', bGenerer.textContent);
+        ctrl('aperçu SVG présent après Générer, cases d\'apparition aux couleurs des camps', !!contenu().querySelector('.pm-generateur-apercu svg') && !!contenu().querySelector('.pm-generateur-apercu [data-apparition="vert"]'));
+        ctrl('résumé en plusieurs lignes (graine, villes, S)', contenu().querySelectorAll('.pm-generateur-resume li').length >= 5 && /Graine « recette »/.test(texteDialogue()) && /cases chemin/.test(texteDialogue()));
+        ctrl('Appliquer actif après Générer', !bAppliquer.disabled);
+        ctrl('Générer ne modifie pas le plateau', docJ() === avantJ);
+        attendu = GEN.generer(docAvant, { graine: 'recette' });
+        ctrl('plateau généré = GEN.generer(doc, {graine}) (reproductible)', attendu.ok);
+        var svg1 = contenu().querySelector('.pm-generateur-apercu').innerHTML;
+        cliquer(bGenerer);
+        return attendre(50).then(function () { return svg1; });
+      }).then(function (svg1) {
+        ctrl('même graine : même aperçu', contenu().querySelector('.pm-generateur-apercu').innerHTML === svg1);
+        cliquer(bAppliquer);
+        ctrl('Appliquer : boîte fermée', !dialogueOuvert());
+        ctrl('plateau appliqué = plateau attendu (graine « recette »)', CJ(etat.doc().plateau) === CJ(attendu.doc.plateau));
+        ctrl('16 tuiles posées et 7 villes dans le document', etat.doc().plateau.tuiles.length === 16 && etat.doc().plateau.jetons.length === 7);
+        return attendre(100);
       }).then(function () {
-        ctrl('plateau affiché : 16 tuiles et 9 jetons', $('assemblage').querySelectorAll('.pm-assemblage-occupee').length === 16 && $('assemblage').querySelectorAll('.pm-assemblage-jeton').length === 9,
+        ctrl('plateau affiché : 16 tuiles et 7 villes', $('assemblage').querySelectorAll('.pm-assemblage-occupee').length === 16 && $('assemblage').querySelectorAll('.pm-assemblage-jeton').length === 7,
           $('assemblage').querySelectorAll('.pm-assemblage-occupee').length + ' / ' + $('assemblage').querySelectorAll('.pm-assemblage-jeton').length);
         ctrl('barre d\'état : plateau appliqué avec la graine', /Plateau aléatoire appliqué \(graine recette/.test($('barre-etat').textContent), $('barre-etat').textContent);
-        var cpt = $('controles').textContent;
-        ctrl('contrôles : aucune alerte d\'équilibre sur le plateau généré', !/5 villes contre 2|Première ville inégale|Écart de rang|Paire de carrefours à risque/.test(cpt));
+        ctrl('contrôles : aucune erreur ni alerte d\'équilibre sur le plateau généré', !/très déséquilibré|Score S à surveiller|Première ville inégale|Écart de distance|Villes trop proches/.test($('controles').textContent));
         ctrlZ();
         ctrl('Ctrl+Z : retour exact au plateau précédent', docJ() === avantJ && CJ(etat.doc()) === CJ(docAvant));
-        ctrl('Ctrl+Z : 1 tuile affichée, aucun jeton', $('assemblage').querySelectorAll('.pm-assemblage-occupee').length === 1 && $('assemblage').querySelectorAll('.pm-assemblage-jeton').length === 0);
+        ctrl('Ctrl+Z : 1 tuile affichée, aucune ville', $('assemblage').querySelectorAll('.pm-assemblage-occupee').length === 1 && $('assemblage').querySelectorAll('.pm-assemblage-jeton').length === 0);
         ctrlY();
         ctrl('Ctrl+Y : plateau généré rétabli', CJ(etat.doc().plateau) === CJ(attendu.doc.plateau));
         ctrlZ();
-        // carrefours variés
+        // catalogue de la version 1 : aucun plateau, raison explicite
+        reset(PM.catalogue.nouveauDocument());
         cliquer(boutonParTexte($('controles'), 'Plateau aléatoire'));
-        var champ2 = contenu().querySelector('.pm-generateur-graine');
-        var rVaries = contenu().querySelector('input[type=radio][value=varies]');
-        ctrl('option « carrefours variés » proposée, décochée par défaut', rVaries && rVaries.checked === false);
-        rVaries.checked = true; rVaries.dispatchEvent(new Event('change', { bubbles: true }));
-        champ2.value = 'recette';
+        contenu().querySelector('.pm-generateur-graine').value = 'v1';
         cliquer(boutonParTexte(contenu(), 'Générer'));
         return attendre(50);
       }).then(function () {
-        var attVar = GEN.generer(docAvant, { graine: 'recette', paireCarrefours: 'varies' });
-        ctrl('carrefours variés : résumé annonce la paire', texteDialogue().indexOf('Carrefours ' + attVar.paire) >= 0 && /carrefours variés/.test(texteDialogue()), attVar.paire);
-        cliquer(boutonParTexte(contenu(), 'Appliquer au plateau'));
-        ctrl('carrefours variés appliqués = plateau attendu', CJ(etat.doc().plateau) === CJ(attVar.doc.plateau));
-        ctrlZ();
-        ctrl('Ctrl+Z après carrefours variés : retour exact', docJ() === avantJ);
-        // bibliothèque insuffisante
-        var sansCoins = PM.catalogue.nouveauDocument();
-        sansCoins.modeles.forEach(function (m) { if (m.role === 'coin') m.exemplaires = 0; });
+        var err = contenu().querySelector('.pm-generateur-erreur');
+        ctrl('catalogue v1 : « villes à moins de 3 cases » et renvoi au catalogue v2, Appliquer inactif', err && /villes à moins de 3 cases/.test(err.textContent) && /R1 à R4/.test(err.textContent) && boutonParTexte(contenu(), 'Appliquer au plateau').disabled, err && err.textContent);
+        PM.dialogue.fermer();
+        var sansCoins = libGenerateur();
+        sansCoins.modeles.forEach(function (m) { if (m.gabarit === 'coin') m.exemplaires = 0; });
         reset(sansCoins);
         var av = docJ(), hist = etat.peutAnnuler();
         cliquer(boutonParTexte($('controles'), 'Plateau aléatoire'));
         cliquer(boutonParTexte(contenu(), 'Générer'));
         return attendre(50).then(function () { return { av: av, hist: hist }; });
       }).then(function (o) {
-        var av = o.av, hist = o.hist;
         var err = contenu().querySelector('.pm-generateur-erreur');
         ctrl('bibliothèque insuffisante : raison claire dans la boîte', err && /Bibliothèque insuffisante/.test(err.textContent) && /coin/.test(err.textContent), err && err.textContent);
         ctrl('bibliothèque insuffisante : Appliquer inactif, pas d\'aperçu', boutonParTexte(contenu(), 'Appliquer au plateau').disabled && !contenu().querySelector('.pm-generateur-apercu'));
-        ctrl('bibliothèque insuffisante : document et historique inchangés', docJ() === av && etat.peutAnnuler() === hist);
+        ctrl('bibliothèque insuffisante : document et historique inchangés', docJ() === o.av && etat.peutAnnuler() === o.hist);
         PM.dialogue.fermer();
-      });
       });
     }
 
     function s4_controles() {
-      titre('4. Contrôles : alertes d équilibre et message de paire');
+      titre('4. Contrôles : plateau très déséquilibré (erreur), déséquilibre modéré (alerte), export de l\'aperçu refusé');
       reset(plateauAlea.doc);
-      var cpt = function () { return $('controles').textContent; };
-      var eqLib = ['5 villes contre 2', 'Écart de distance entre joueurs', 'Première ville inégale', 'Paire de carrefours à risque'];
+      var eqLib = ['Plateau très déséquilibré', 'Écart de distance entre joueurs', 'Première ville inégale', 'Score S à surveiller'];
       var presents = function () { return libelles().filter(function (x) { return eqLib.indexOf(x) >= 0; }); };
-      ctrl('plateau généré (paire par défaut) : aucune alerte de paire ni d équilibre', presents().length === 0, presents().join());
-      // paire à risque (2,2)+(1,3) : 8,5 %. Depuis docs/17 (mineur 1), l'alerte de paire disparaît quand l'équilibre
-      // du plateau complet est vérifié sans alerte : on retire la tuile (3,0), loin des deux carrefours, pour que
-      // l'équilibre ne soit pas mesurable et que l'alerte manuelle reste due.
-      etat.appliquer(function (d) {
-        var n = clone(d); n.plateau.jetons = jetonsPaire({ i: 2, j: 2 }, { i: 1, j: 3 });
-        n.plateau.tuiles = n.plateau.tuiles.filter(function (t) { return !(t.col === 3 && t.lig === 0); });
-        return n;
-      }, 'paire à risque');
+      ctrl('plateau généré : aucune erreur ni alerte d\'équilibre', presents().length === 0, presents().join());
+      reset(AV2.plateauDesequilibre());
       return attendre(150).then(function () {
-        ctrl('paire (2,2)+(1,3) : alerte « Paire de carrefours à risque » dans le panneau', libelles().indexOf('Paire de carrefours à risque') >= 0, libelles().join());
-        ctrl('message de paire avec taux « 8,5 % » et la paire', /8,5 %/.test(cpt()) && /Carrefours en \(2, 2\) et \(1, 3\)/.test(cpt()), cpt().slice(0, 300));
-        // plateau complet déséquilibré : alerte « 5 contre 2 » dans le panneau
-        var t = chercher5c2();
-        if (!t) { ctrl('configuration « 5 contre 2 » trouvée', false); return null; }
-        reset(t.doc);
-        return attendre(150).then(function () {
-          ctrl('plateau complet « 5 contre 2 » : groupe « 5 villes contre 2 » dans le panneau', libelles().indexOf('5 villes contre 2') >= 0, libelles().join());
-          // une tuile en moins : le plateau n'est plus complet, plus d'alerte d'équilibre
-          var col = 0, lig = 0;
-          etat.appliquer(function (d) { return M.retirerTuile(d, col, lig); }, 'retrait');
-          return attendre(150);
-        }).then(function () {
-          ctrl('tuile retirée : plus aucune alerte d équilibre dans le panneau', libelles().filter(function (x) { return ['5 villes contre 2', 'Écart de distance entre joueurs', 'Première ville inégale'].indexOf(x) >= 0; }).length === 0, libelles().join());
-          ctrlZ();
-          return attendre(100);
-        }).then(function () {
-          ctrl('Ctrl+Z : alerte « 5 contre 2 » revient avec le plateau complet', libelles().indexOf('5 villes contre 2') >= 0);
-        });
+        ctrl('plateau complet « 5 contre 2 » : groupe d\'erreur « Plateau très déséquilibré »', libelles().indexOf('Plateau très déséquilibré') >= 0 && !!$('controles').querySelector('.pm-controles-groupe--erreur'), libelles().join());
+        ctrl('pastille rouge (erreur)', $('pastille-alertes').classList.contains('pm-erreur') && /erreur/.test($('pastille-alertes').textContent), $('pastille-alertes').textContent);
+        // export : l'aperçu du plateau est refusé, les planches restent possibles
+        cliquer($('btn-exporter'));
+        changer(caseA('apercu'), true);
+        var av = contenu().querySelector('.pm-export-avertissement');
+        ctrl('export : aperçu refusé, le critère est nommé', /Aperçu du plateau refusé/.test(av.textContent) && /5 contre 2/.test(av.textContent) && contenu().querySelector('.pm-export-telecharger').disabled, av.textContent);
+        changer(caseA('apercu'), false);
+        ctrl('export : sans l\'aperçu, les planches restent exportables', !contenu().querySelector('.pm-export-telecharger').disabled && !/refusé/.test(av.textContent), av.textContent);
+        PM.dialogue.fermer();
+        etat.appliquer(function (d) { return M.retirerTuile(d, 0, 0); }, 'retrait');
+        return attendre(150);
+      }).then(function () {
+        ctrl('tuile retirée (pose toujours permise) : plus d\'erreur d\'équilibre', presents().length === 0 && !$('pastille-alertes').classList.contains('pm-erreur'), libelles().join());
+        ctrlZ();
+        return attendre(100);
+      }).then(function () {
+        ctrl('Ctrl+Z : l\'erreur revient avec le plateau complet', libelles().indexOf('Plateau très déséquilibré') >= 0);
+        reset(AV2.plateauASurveiller());
+        return attendre(150);
+      }).then(function () {
+        ctrl('déséquilibre modéré : alerte « Score S à surveiller », aucune erreur', libelles().indexOf('Score S à surveiller') >= 0 && !$('controles').querySelector('.pm-controles-groupe--erreur'), libelles().join());
       });
     }
 

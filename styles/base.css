@@ -29,6 +29,7 @@ button:focus-visible { outline: 2px solid var(--pm-accent); outline-offset: 1px;
 .pm-pastille { padding: 4px 10px; border-radius: 999px; background: #fff3e0; color: var(--pm-alerte); font-weight: 600; cursor: pointer; }
 .pm-pastille.pm-ok { background: #e6f4ec; color: var(--pm-accent); }
 .pm-pastille.pm-neutre { background: #eef0ec; color: var(--pm-discret); }
+.pm-pastille.pm-erreur { background: #fdecea; color: var(--pm-erreur); }
 
 .pm-principal { display: grid; grid-template-columns: 220px 1fr; min-height: 0; }
 .pm-colonne-gauche { border-right: 1px solid var(--pm-bord); background: var(--pm-panneau); overflow: auto; min-height: 0; }

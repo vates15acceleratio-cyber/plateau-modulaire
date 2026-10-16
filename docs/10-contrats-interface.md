@@ -58,3 +58,14 @@ Chaque sous-agent écrit **seulement** : son `src/<module>.js`, sa feuille `styl
 - **Boîte de dialogue commune** : `PM.dialogue.ouvrir(titre)` renvoie l'élément de contenu (vide) à remplir ; `PM.dialogue.fermer()`. Le module ne crée pas d'autre fenêtre.
 - Ordre de chargement dans `index.html` : … `sauvegarde.js`, `graphe.js`, `equilibre.js`, `generateur.js`, `export.js`, `controles.js`, … `app.js`.
 - Mêmes règles qu'au-dessus : périmètre d'écriture limité aux fichiers du module, tests `tests/<module>.test.js` lancés seuls, page d'essai `outils/essai-<module>.html`, vérification dans Edge sans fenêtre.
+
+## Mise à jour règles v2 (2026-10-16)
+
+Ce qui change dans les contrats ci-dessus (détail : `18-decisions-v2.md`, `19-avis-design-v2.md`, `20-avis-geometrie-v2.md`) :
+- **Document** : `doc.grille` = `'4x4'` | `'5x5'` (absent = `'4x4'`) ; grille toujours pleine (plus de forme réduite). Un fichier de la version 1 est converti à l'ouverture (`PM.sauvegarde.depuisJSON` ajoute en tête des alertes `migration_v1`, une phrase) ; `app.js` la dit au démarrage et signale une bibliothèque v1 (`PM.sauvegarde.bibliothequeVersion1(doc)`).
+- **Modèles** : `gabarit` = `centrale | bord | coin` (jamais bloquant) remplace `role` ; plus de rôle `apparition`. `PM.modele.validerModele(modele, format)` → `{complet, erreurs, alertes}` : seules les règles physiques bloquent, R1 à R4 sont des alertes expliquées.
+- **Plateau** : `PM.modele.campCellule(format, col, lig)` → `'vert' | 'rouge' | null`. `peutPoserTuile` refuse seulement : hors grille, cellule occupée, modèle incomplet, exemplaires épuisés. Rotation libre, `rotationDeduite` ne fait que suggérer (bord / coin) ; la rotation est toujours stockée.
+- **Jetons** : seul le type `capture` (ville) existe ; toute jonction intérieure sans ville est une case chemin (nœud du graphe). Villes non traversables (règle du jeu, plus d'option dans l'interface). Écart minimal : `ECART_MIN_VILLES = 3` cases, alerte seulement.
+- **Contrôles** : `PM.controles.calculer` ajoute l'erreur `desequilibre` sur un plateau complet très déséquilibré (seuils `PM.graphe.SEUIL_*`) ; la pose reste permise, l'export de l'aperçu est refusé.
+- **Rendu** : `PM.rendu.contenuTuile(modele, {rot, camp, fondPerdu, contour, identifiant, format})` (`camp` remplace `joueur` ; absent = impression noir et blanc) ; quart de case de jonction Ø 24 sur les coins intérieurs du gabarit ; `PM.rendu.contenuJeton(type, cx, cy, format)`.
+- **Formats** : `PM.geometrie.format(id)` donne les cotes du format ; `PM.geometrie.*` reste l'alias du 4×4. Le format hexagonal n'est pas commencé (en attente du feu vert).

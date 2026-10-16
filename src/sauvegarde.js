@@ -3,6 +3,11 @@
  * Fonctions pures (sans DOM) : versJSON, depuisJSON, bibliothequeVersJSON, fusionnerBibliotheque.
  * Fonctions navigateur : telecharger, ouvrirFichier, autosave, restaurerAutosave, effacerAutosave.
  * Une entrée de fichier invalide ne lève jamais d'exception : elle donne ok:false avec des erreurs.
+ *
+ * Version 2 du fichier (docs/18, docs/20) : champ `grille` ('4x4' | '5x5') du document et de chaque modèle,
+ * `gabarit` des modèles, villes seulement. Un fichier de la version 1 est converti à la lecture (migration) :
+ * jetons « carrefour » supprimés, cellules retirées ignorées (grille pleine), `role` remplacé par `gabarit`
+ * (`apparition` devient `bord`), grille 4×4 ; une phrase le dit dans les alertes.
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
 
@@ -13,18 +18,21 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   var M = PM.modele;
   var FORMAT = 'plateau-modulaire';
-  var VERSION = 1;
+  var VERSION = 2;
+  /** Versions de fichier lues : 1 (convertie à la lecture) et 2. */
+  var VERSIONS_LUES = [1, 2];
   var CLE_AUTOSAVE = 'plateau-modulaire:autosave';
   /**
    * Plafonds à l'ouverture d'un fichier (audit de sécurité : un fichier hostile ne doit pas bloquer le
-   * navigateur). Très au-dessus de tout usage normal : 4×4 tuiles, 9 jetons, une vingtaine de modèles.
+   * navigateur). Très au-dessus de tout usage normal : 5×5 tuiles, 7 villes, une trentaine de modèles.
    */
-  var LIMITES = { octets: 5e6, modeles: 500, cases: 64, chemins: 256, tuiles: 64, jetons: 64, retires: 16, texte: 200, coordonnee: 1000, exemplaires: 999 };
+  var LIMITES = { octets: 5e6, modeles: 500, cases: 64, chemins: 256, tuiles: 64, jetons: 64, texte: 200, coordonnee: 1000, exemplaires: 999 };
   /** Intervalle minimal entre deux écritures dans localStorage (ms). */
   var DELAI_AUTOSAVE = 1000;
   /** Délai de repli après retour du focus, pour détecter une annulation sans événement `cancel` (ms). */
   var DELAI_REPLI_ANNULATION = 1500;
-  var TYPES_JETON = ['capture', 'carrefour'];
+  var GABARITS = M.GABARITS;
+  var FORMATS = PM.geometrie.FORMATS;
 
   /* ------------------------------------------------------------------ */
   /* Outils                                                              */
@@ -50,8 +58,23 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /* Normalisation : ne garde que les champs connus, clone en profondeur  */
   /* ------------------------------------------------------------------ */
 
-  /** Modèle nettoyé (champs connus). Un modèle invalide est conservé comme brouillon et signalé. */
-  function normaliserModele(brut, alertes) {
+  /**
+   * Gabarit d'un modèle lu : `gabarit` s'il est donné ; sinon conversion du `role` de la version 1
+   * (`apparition` devient `bord`). Chaîne vide si rien n'est reconnu (le modèle reste lisible, avec une alerte
+   * de validation).
+   */
+  function gabaritLu(brut) {
+    if (typeof brut.gabarit === 'string') return brut.gabarit.slice(0, LIMITES.texte);
+    if (typeof brut.role !== 'string') return '';
+    if (brut.role === 'apparition') return 'bord';
+    return GABARITS.indexOf(brut.role) >= 0 ? brut.role : brut.role.slice(0, LIMITES.texte);
+  }
+
+  /**
+   * Modèle nettoyé (champs connus) pour la grille `grille` du document. Un modèle invalide est conservé comme
+   * brouillon et signalé.
+   */
+  function normaliserModele(brut, alertes, grille) {
     var nom = typeof brut.nom === 'string' ? brut.nom : '';
     var libelle = nom || brut.id;
     var exemplaires = brut.exemplaires;
@@ -99,18 +122,21 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var tronques = Math.max(0, tab(brut.cases).length - LIMITES.cases) + Math.max(0, tab(brut.chemins).length - LIMITES.chemins);
     if (tronques) ignores += tronques;
     if (ignores) alertes.push(erreur('elements_ignores', 'Le modèle « ' + libelle + ' » : ' + ignores + ' case(s) ou chemin(s) mal formé(s) ignoré(s).'));
-    var m = { id: brut.id, nom: nom.slice(0, LIMITES.texte), role: typeof brut.role === 'string' ? brut.role.slice(0, LIMITES.texte) : '', exemplaires: exemplaires, cases: cases, chemins: chemins };
-    if (!M.validerModele(m).complet) {
+    var m = {
+      id: brut.id, nom: nom.slice(0, LIMITES.texte), gabarit: gabaritLu(brut),
+      grille: FORMATS.indexOf(brut.grille) >= 0 ? brut.grille : grille, exemplaires: exemplaires, cases: cases, chemins: chemins
+    };
+    if (!M.validerModele(m, grille).complet) {
       alertes.push(erreur('modele_incomplet', 'Le modèle « ' + libelle + ' » est incomplet : conservé comme brouillon, non posable.'));
     }
     return m;
   }
 
   /**
-   * Liste de modèles nettoyée. Un identifiant déjà présent dans `pris` (dictionnaire mutable) est
-   * renommé « id-2 », « id-3 »… ; renommages renvoyés dans `renommes`.
+   * Liste de modèles nettoyée pour la grille `grille`. Un identifiant déjà présent dans `pris` (dictionnaire
+   * mutable) est renommé « id-2 », « id-3 »… ; renommages renvoyés dans `renommes`.
    */
-  function normaliserModeles(liste, alertes, pris) {
+  function normaliserModeles(liste, alertes, pris, grille) {
     var modeles = [], renommes = [];
     if (tab(liste).length > LIMITES.modeles) {
       alertes.push(erreur('modeles_en_trop', 'Trop de modèles : seuls les ' + LIMITES.modeles + ' premiers sont lus.'));
@@ -125,7 +151,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         alertes.push(erreur('modele_sans_id', 'Un modèle sans identifiant a été ignoré.'));
         return;
       }
-      var m = normaliserModele(brut, alertes);
+      var m = normaliserModele(brut, alertes, grille);
       if (pris[m.id]) {
         var nouvel = idLibre(m.id, pris);
         renommes.push({ de: m.id, a: nouvel });
@@ -138,23 +164,6 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return { modeles: modeles, renommes: renommes };
   }
 
-  /** Forme : une forme mal formée (structure) est remplacée par un plateau complet et signalée. */
-  function normaliserForme(forme, alertes) {
-    if (forme === undefined || forme === null) return { retires: [] };
-    if (!estObjet(forme) || (forme.retires !== undefined && !Array.isArray(forme.retires))) {
-      alertes.push(erreur('forme_invalide', 'La forme du plateau était mal formée : remplacée par un plateau complet.'));
-      return { retires: [] };
-    }
-    // Seuls {col, lig} entiers sont gardés, et au plus LIMITES.retires entrées (audit, points 1 et 3).
-    var retires = tab(forme.retires).slice(0, LIMITES.retires).filter(function (r) {
-      return estObjet(r) && estEntier(r.col) && estEntier(r.lig);
-    }).map(function (r) { return { col: r.col, lig: r.lig }; });
-    if (retires.length !== tab(forme.retires).length) {
-      alertes.push(erreur('forme_invalide', 'La forme du plateau contenait des retraits mal formés ou en trop : ignorés.'));
-    }
-    return { retires: retires };
-  }
-
   function normaliserTuile(brut, alertes) {
     if (!estObjet(brut) || !estId(brut.modeleId) || !estEntier(brut.col) || !estEntier(brut.lig)) {
       alertes.push(erreur('tuile_ignoree', 'Une tuile posée mal formée a été ignorée.'));
@@ -163,16 +172,20 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return { modeleId: brut.modeleId, col: brut.col, lig: brut.lig, rot: estEntier(brut.rot) ? brut.rot : 0 };
   }
 
-  function normaliserJeton(brut, alertes) {
-    if (!estObjet(brut) || !estEntier(brut.i) || !estEntier(brut.j) || TYPES_JETON.indexOf(brut.type) < 0) {
+  /** Jeton lu : une ville ; un carrefour de la version 1 est retiré (compté dans `conversion`), sans alerte propre. */
+  function normaliserJeton(brut, alertes, conversion) {
+    if (conversion && estObjet(brut) && brut.type === 'carrefour') { conversion.carrefours++; return null; }
+    if (!estObjet(brut) || !estEntier(brut.i) || !estEntier(brut.j) || M.TYPES_JETON.indexOf(brut.type) < 0) {
       alertes.push(erreur('jeton_ignore', 'Un jeton mal formé a été ignoré.'));
       return null;
     }
     return { i: brut.i, j: brut.j, type: brut.type };
   }
 
-  function normaliserPlateau(brut, alertes) {
-    var plateau = { forme: normaliserForme(brut.forme, alertes), tuiles: [], jetons: [] };
+  /** Plateau lu : tuiles et villes (la forme réduite de la version 1 est comptée dans `conversion`, puis oubliée). */
+  function normaliserPlateau(brut, alertes, conversion) {
+    var plateau = { tuiles: [], jetons: [] };
+    if (conversion && estObjet(brut.forme) && Array.isArray(brut.forme.retires)) conversion.retires = brut.forme.retires.length;
     if (tab(brut.tuiles).length > LIMITES.tuiles) alertes.push(erreur('tuiles_en_trop', 'Trop de tuiles posées : seules les ' + LIMITES.tuiles + ' premières sont lues.'));
     tab(brut.tuiles).slice(0, LIMITES.tuiles).forEach(function (t) {
       var n = normaliserTuile(t, alertes);
@@ -180,17 +193,31 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     });
     if (tab(brut.jetons).length > LIMITES.jetons) alertes.push(erreur('jetons_en_trop', 'Trop de jetons : seuls les ' + LIMITES.jetons + ' premiers sont lus.'));
     tab(brut.jetons).slice(0, LIMITES.jetons).forEach(function (j) {
-      var n = normaliserJeton(j, alertes);
+      var n = normaliserJeton(j, alertes, conversion);
       if (n) plateau.jetons.push(n);
     });
     return plateau;
+  }
+
+  /** Phrase de migration d'un document de la version 1 (une seule alerte). */
+  function phraseMigration(c) {
+    var details = ['grille pleine' + (c.retires ? ' (' + c.retires + ' cellule(s) retirée(s) remise(s))' : ''),
+      c.carrefours + ' carrefour(s) supprimé(s), les jonctions sans ville devenant des cases',
+      'rôles des tuiles remplacés par des gabarits'];
+    return 'Document de la version 1 converti aux règles de la version 2 : ' + details.join(', ') + '.';
+  }
+
+  /** Bibliothèque de la version 1 reconnue à ses modèles d'apparition A1 et A2 (le catalogue v2 la remplacera). */
+  function bibliothequeVersion1(doc) {
+    var ids = tab(doc && doc.modeles).map(function (m) { return m && m.id; });
+    return ids.indexOf('A1') >= 0 && ids.indexOf('A2') >= 0;
   }
 
   /* ------------------------------------------------------------------ */
   /* Lecture et écriture du JSON (fonctions pures)                        */
   /* ------------------------------------------------------------------ */
 
-  /** Contrôle d'enveloppe : texte, JSON, objet, format et version. Renvoie {ok, objet, erreurs}. */
+  /** Contrôle d'enveloppe : texte, JSON, objet, format, version (1 ou 2) et grille. Renvoie {ok, objet, erreurs}. */
   function analyser(texte) {
     if (typeof texte !== 'string' || texte.trim() === '') {
       return { ok: false, erreurs: [erreur('vide', 'Le fichier est vide.')] };
@@ -208,17 +235,21 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     if (objet.format !== undefined && objet.format !== FORMAT) {
       return { ok: false, erreurs: [erreur('format', 'Ce fichier n\'est pas un fichier Plateau modulaire (format inconnu).')] };
     }
-    if (objet.version !== VERSION) {
+    if (VERSIONS_LUES.indexOf(objet.version) < 0) {
       return { ok: false, erreurs: [erreur('version', 'Version de fichier absente ou inconnue : ' + String(objet.version) + '.')] };
+    }
+    if (objet.grille !== undefined && FORMATS.indexOf(objet.grille) < 0) {
+      return { ok: false, erreurs: [erreur('grille', 'Format de grille inconnu : ' + String(objet.grille).slice(0, LIMITES.texte) + '.')] };
     }
     return { ok: true, objet: objet, erreurs: [] };
   }
 
-  /** Texte JSON indenté du document : en-tête format/version/date, puis modèles et plateau. */
+  /** Texte JSON indenté du document : en-tête format/version/grille/date, puis modèles et plateau. */
   function versJSON(doc) {
     return JSON.stringify({
       format: FORMAT,
       version: VERSION,
+      grille: M.formatDuDocument(doc).id,
       date: new Date().toISOString(),
       modeles: doc.modeles,
       plateau: doc.plateau
@@ -226,9 +257,10 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   }
 
   /**
-   * Lit un texte JSON produit par versJSON (ou un document nu {version, modeles, plateau}).
-   * Ne lève jamais d'exception. Renvoie { ok, doc, erreurs, alertes }.
-   * Les problèmes du plateau deviennent des alertes : le plateau reste ouvrable.
+   * Lit un texte JSON produit par versJSON (ou un document nu {version, grille, modeles, plateau}).
+   * Ne lève jamais d'exception. Renvoie { ok, doc, erreurs, alertes, migre }.
+   * Les problèmes du plateau deviennent des alertes : le plateau reste ouvrable. Un fichier de la version 1
+   * est converti (migre: true) et la première alerte (code 'migration_v1') le dit en une phrase.
    */
   function depuisJSON(texte) {
     try {
@@ -242,10 +274,12 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         return echecLecture('jetons', 'La liste des jetons est mal formée.');
       }
 
-      var alertes = [];
-      var modeles = normaliserModeles(o.modeles, alertes, Object.create(null)).modeles;
-      var plateau = normaliserPlateau(o.plateau, alertes);
-      var doc = { version: VERSION, modeles: modeles, plateau: plateau };
+      var alertes = [], migre = o.version === 1, grille = o.grille || PM.geometrie.FORMAT_DEFAUT;
+      var conversion = migre ? { carrefours: 0, retires: 0 } : null;
+      var modeles = normaliserModeles(o.modeles, alertes, Object.create(null), grille).modeles;
+      var plateau = normaliserPlateau(o.plateau, alertes, conversion);
+      var doc = { version: VERSION, grille: grille, modeles: modeles, plateau: plateau };
+      if (migre) alertes.unshift(erreur('migration_v1', phraseMigration(conversion)));
 
       try {
         var v = M.validerPlateau(doc);
@@ -253,7 +287,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       } catch (e) {
         alertes.push(erreur('plateau_non_verifiable', 'Le plateau n\'a pas pu être vérifié : ' + texteErreur(e) + '.'));
       }
-      return { ok: true, doc: doc, erreurs: [], alertes: alertes };
+      return { ok: true, doc: doc, erreurs: [], alertes: alertes, migre: migre };
     } catch (e) {
       return echecLecture('interne', 'Fichier non exploitable (' + texteErreur(e) + ').');
     }
@@ -264,6 +298,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return JSON.stringify({
       format: FORMAT,
       version: VERSION,
+      grille: M.formatDuDocument(doc).id,
       contenu: 'bibliotheque',
       date: new Date().toISOString(),
       modeles: tab(doc.modeles)
@@ -271,7 +306,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   }
 
   /**
-   * Ajoute au document les modèles d'un texte de bibliothèque (le plateau n'est pas modifié).
+   * Ajoute au document les modèles d'un texte de bibliothèque (le plateau n'est pas modifié). Les modèles
+   * d'une bibliothèque de la version 1 reçoivent leur gabarit (conversion du rôle).
    * Conflit d'identifiant : renommage « id-2 », … signalé dans `renommes`.
    * Renvoie { ok, doc, ajoutes, renommes, erreurs, alertes }. `ajoutes` : identifiants ajoutés.
    */
@@ -288,7 +324,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       var pris = Object.create(null);
       tab(doc.modeles).forEach(function (m) { if (estObjet(m) && estId(m.id)) pris[m.id] = true; });
       var alertes = [];
-      var r = normaliserModeles(a.objet.modeles, alertes, pris);
+      var r = normaliserModeles(a.objet.modeles, alertes, pris, M.formatDuDocument(doc).id);
       var nouveau = cloner(doc);
       var ajoutes = [];
       r.modeles.forEach(function (m) {
@@ -478,12 +514,14 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   PM.sauvegarde = {
     FORMAT: FORMAT,
     VERSION: VERSION,
+    VERSIONS_LUES: VERSIONS_LUES,
     CLE_AUTOSAVE: CLE_AUTOSAVE,
     LIMITES: LIMITES,
     versJSON: versJSON,
     depuisJSON: depuisJSON,
     bibliothequeVersJSON: bibliothequeVersJSON,
     fusionnerBibliotheque: fusionnerBibliotheque,
+    bibliothequeVersion1: bibliothequeVersion1,
     telecharger: telecharger,
     ouvrirFichier: ouvrirFichier,
     autosave: autosave,

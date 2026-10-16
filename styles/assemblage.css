@@ -34,8 +34,6 @@
 /* ---------------- Plateau ---------------- */
 .pm-assemblage { display: flex; flex-direction: column; height: 100%; min-height: 320px; }
 .pm-assemblage-outils { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 12px; border-bottom: 1px solid var(--pm-bord); background: var(--pm-panneau); }
-.pm-assemblage-forme { display: flex; align-items: center; gap: 6px; }
-.pm-assemblage-forme select { font: inherit; min-height: 30px; }
 .pm-assemblage-compteur { font-weight: 600; font-variant-numeric: tabular-nums; }
 .pm-assemblage-consigne { color: var(--pm-discret); font-size: 12px; }
 .pm-assemblage-scene { flex: 1; min-height: 0; padding: 8px; display: flex; touch-action: none; }
@@ -52,8 +50,6 @@
 .pm-assemblage-occupee { cursor: grab; }
 .pm-assemblage-zone { fill: transparent; stroke: none; }
 .pm-assemblage-silhouette { fill: #f0f1ee; stroke: #b9bdb4; stroke-width: 1.2; stroke-dasharray: 5 4; }
-.pm-assemblage-fond-retire { fill: none; stroke: #e1e3de; stroke-width: 1; stroke-dasharray: 2 4; }
-.pm-assemblage-retiree { cursor: default; }
 .pm-assemblage-absent { fill: #fdecea; stroke: var(--pm-erreur); stroke-width: 1; }
 .pm-assemblage-etiquette { font-size: 12px; fill: var(--pm-discret); pointer-events: none; }
 .pm-assemblage-nord { pointer-events: none; opacity: .55; }
@@ -74,8 +70,6 @@
 .pm-assemblage-point { fill: #fff; stroke: #6b7068; stroke-width: 1.2; stroke-dasharray: 3 2; }
 .pm-assemblage-disponible:hover .pm-assemblage-point { stroke: var(--pm-accent); stroke-width: 2; }
 .pm-assemblage-refusee .pm-assemblage-point { fill: #eceee9; stroke: #b9bdb4; }
-.pm-assemblage-impossible { cursor: not-allowed; }
-.pm-assemblage-impossible .pm-assemblage-point { fill: #c9ccc5; stroke: none; }
 
 /* Alertes : raccords morts et ports de coin morts */
 .pm-assemblage-alerte-trait { stroke: var(--pm-alerte); stroke-width: 2.4; stroke-dasharray: 3 2.5; fill: none; }

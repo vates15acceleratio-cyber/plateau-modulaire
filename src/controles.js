@@ -5,9 +5,11 @@
  * testables sous Node. Partie interface (monter) : panneau de droite, construit avec
  * createElement et textContent (jamais innerHTML : les messages contiennent des noms saisis).
  *
- * Vocabulaire : une « ville » est un jeton de type 'capture', un « carrefour » un jeton 'carrefour'.
- * Dans un compteur, `cible` est la valeur visée (7, 2, 50...). Dans une erreur ou une alerte,
- * `cible` est l'objet de surbrillance défini dans l'en-tête de etat.js (ou null).
+ * Vocabulaire : une « ville » est un jeton de type 'capture' ; une jonction sans ville est une case chemin.
+ * Joueurs : vert (nord) et rouge (sud). Dans un compteur, `cible` est la valeur visée (7, 6...). Dans une
+ * erreur ou une alerte, `cible` est l'objet de surbrillance défini dans l'en-tête de etat.js (ou null).
+ * Un plateau complet très déséquilibré (PM.graphe : « 5 contre 2 » ou écart de plus de 3 pas à un rang)
+ * est une ERREUR (code 'desequilibre') ; la pose reste toujours permise.
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
 
@@ -18,47 +20,34 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   var M = PM.modele;
 
-  /** Composition visée (synthèse des advisors). */
+  /** Composition visée : 7 villes ; cases (cases des tuiles + cases de jonction) ≈ 60 en 4×4, ≈ 75 en 5×5 (docs/20). */
   var NB_VILLES = 7;
-  var NB_CARREFOURS = 2;
-  /** Cases de déplacement de la composition complète : 4x4 (centrales) + 4x3 (coins) + 4x3 (bords) + 4x2 (apparitions) + 2 carrefours. */
-  var NB_CASES_DEPLACEMENT = 50;
-  var NB_APPARITIONS_PAR_JOUEUR = 2;
-  var NB_JETONS = 9;
+  var CIBLE_CASES = { '4x4': 60, '5x5': 75 };
 
-  /** Dimensions de la boîte englobante du plateau (en cm) pour le format F. La forme retire des cellules, pas la boîte. */
+  /** Dimensions du plateau (en cm) pour le format F. */
   function dimensions(F) { return (F.GRILLE.colonnes * F.COTE / 10) + ' × ' + (F.GRILLE.lignes * F.COTE / 10) + ' cm'; }
 
   /** Libellés des groupes d'erreurs et d'alertes (un code sans libellé affiche le premier message). */
   var LIBELLES = {
+    desequilibre: 'Plateau très déséquilibré',
     exemplaires_depasses: 'Exemplaires dépassés',
     raccord_mort: 'Raccords morts',
-    port_mort: 'Ports de coin morts',
+    port_pourtour: 'Ports vers le bord du plateau',
+    jonction_ports: 'Jonctions mal reliées',
+    gabarit_place: 'Tuiles hors de leur place',
+    pourtour_sans_apparition: 'Pourtour sans case d\'apparition',
+    apparition_centre: 'Case d\'apparition au centre',
     trop_de_villes: 'Trop de villes',
-    trop_de_carrefours: 'Trop de carrefours',
-    carrefours_meme_cote: 'Carrefours sur le même côté',
-    carrefours_paire: 'Paire de carrefours à risque',
+    villes_proches: 'Villes trop proches',
+    plateau_non_connexe: 'Plateau non connexe',
     cinq_contre_deux: '5 villes contre 2',
     ecart_rang_etendu: 'Écart de distance entre joueurs',
+    score_s: 'Score S à surveiller',
     premiere_ville_inegale: 'Première ville inégale',
     ville_inaccessible: 'Ville inaccessible'
   };
-  /** Alertes d'équilibre reprises de PM.graphe (villes non traversables, avis docs/16). */
-  var CODES_EQUILIBRE = ['cinq_contre_deux', 'ecart_rang_etendu', 'premiere_ville_inegale', 'ville_inaccessible'];
-  /**
-   * Taux typique de « 5 contre 2 » (en %) par paire de carrefours, villes non traversables, tiré de
-   * docs/12-mesures-equilibre.md (1000 plateaux du catalogue, graine 20261015, section 2). Clé : « i,j+i,j »,
-   * jonctions triées par ligne puis colonne. La paire par défaut (1,2)+(3,2) vaut 0 %.
-   */
-  var TAUX_CINQ_CONTRE_DEUX = {
-    '1,1+1,2': 9.6, '1,1+2,2': 8.5, '1,1+3,2': 4.4, '1,1+1,3': 4.5, '1,1+2,3': 4.5, '1,1+3,3': 4.4,
-    '2,1+1,2': 9.6, '2,1+2,2': 8.5, '2,1+3,2': 4.4, '2,1+1,3': 4.5, '2,1+2,3': 4.5, '2,1+3,3': 4.4,
-    '3,1+1,2': 9.6, '3,1+2,2': 8.5, '3,1+3,2': 4.4, '3,1+1,3': 4.5, '3,1+2,3': 4.5, '3,1+3,3': 4.4,
-    '1,2+2,2': 0, '1,2+3,2': 0, '1,2+1,3': 5.1, '1,2+2,3': 5.1, '1,2+3,3': 4.9,
-    '2,2+3,2': 0, '2,2+1,3': 8.5, '2,2+2,3': 8.5, '2,2+3,3': 8.4,
-    '3,2+1,3': 7.9, '3,2+2,3': 7.9, '3,2+3,3': 7.9
-  };
-  var CODES_CARREFOURS = ['trop_de_carrefours', 'carrefours_meme_cote', 'carrefours_paire'];
+  /** Alertes d'équilibre reprises de PM.graphe (villes non traversables). « 5 contre 2 » n'y est que s'il n'est pas bloquant. */
+  var CODES_EQUILIBRE = ['cinq_contre_deux', 'ecart_rang_etendu', 'score_s', 'premiere_ville_inegale', 'ville_inaccessible'];
 
   function estNb(x) { return typeof x === 'number' && isFinite(x); }
 
@@ -74,7 +63,6 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /**
    * Convertit la référence `ref` d'une erreur de PM.modele en objet de surbrillance.
    * `modele` (exemplaires dépassés, pas de type de surbrillance) : on vise la première tuile posée de ce modèle.
-   * `forme` (forme invalide, pas de type de surbrillance) : renvoie null.
    */
   function cibleDepuisRef(ref, doc) {
     if (!ref) return null;
@@ -94,7 +82,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         }
         return null;
       default:
-        return null; // 'forme' et types inconnus
+        return null; // types inconnus
     }
   }
 
@@ -103,72 +91,52 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   }
 
   /* ------------------------------------------------------------------ */
-  /* Alertes propres au module : villes, carrefours                      */
+  /* Alertes et erreur propres au module : villes, connexité, équilibre  */
   /* ------------------------------------------------------------------ */
 
-  /**
-   * Côté commun à deux jetons ('rangée nord' | 'rangée sud'), ou null. « Même côté » = même camp de joueur,
-   * selon la règle unique PM.modele.campJonction (docs/11-revue-interface.md, arbitrage I3 ; 1b D7 :
-   * deux carrefours dans un camp donnent 3 villes contre 1).
-   */
-  function cotePartage(a, b, F) {
-    var camp = M.campJonction(a.i, a.j, F);
-    if (camp === null || camp !== M.campJonction(b.i, b.j, F)) return null;
-    return camp === 1 ? 'rangée nord' : 'rangée sud';
+  /** Toutes les cellules de la grille sont-elles occupées par une tuile dont le modèle existe ? */
+  function plateauRempli(doc, F) {
+    var n = 0;
+    doc.plateau.tuiles.forEach(function (t) { if (t && M.modeleParId(doc, t.modeleId)) n++; });
+    return n >= F.GRILLE.colonnes * F.GRILLE.lignes;
   }
 
   /**
-   * Alertes sur les jetons : plus de 7 villes, plus de 2 carrefours, 2 carrefours sur le même côté,
-   * paire de carrefours à risque. `equilibreVerifie` : plateau complet dont l'équilibre (villes non
-   * traversables) ne donne aucune alerte ; la paire n'est alors plus annoncée comme à risque.
+   * Alertes sur les villes et le graphe : plus de 7 villes ; deux villes à moins de 3 cases (PM.graphe chargé) ;
+   * plateau non connexe (seulement une fois toutes les tuiles posées : avant, des cases de jonction sont isolées).
    */
-  function alertesJetons(doc, equilibreVerifie) {
-    var villes = [], carrefours = [], res = [], F = M.formatDuDocument(doc);
-    doc.plateau.jetons.forEach(function (j) {
-      if (!j) return;
-      if (j.type === 'capture') villes.push(j);
-      else if (j.type === 'carrefour') carrefours.push(j);
-    });
+  function alertesGraphe(doc, g) {
+    var res = [], villes = doc.plateau.jetons.filter(function (j) { return j && j.type === 'capture'; });
     if (villes.length > NB_VILLES) {
       res.push({ code: 'trop_de_villes', niveau: 'alerte', cible: cibleJonction(villes[villes.length - 1]),
         message: 'Il y a ' + villes.length + ' villes, la composition en prévoit ' + NB_VILLES + '.' });
     }
-    if (carrefours.length > NB_CARREFOURS) {
-      res.push({ code: 'trop_de_carrefours', niveau: 'alerte', cible: cibleJonction(carrefours[carrefours.length - 1]),
-        message: 'Il y a ' + carrefours.length + ' carrefours, la composition en prévoit ' + NB_CARREFOURS + '.' });
-    }
-    for (var a = 0; a < carrefours.length; a++) {
-      for (var b = a + 1; b < carrefours.length; b++) {
-        var cote = cotePartage(carrefours[a], carrefours[b], F);
-        if (cote) {
-          res.push({ code: 'carrefours_meme_cote', niveau: 'alerte', cible: cibleJonction(carrefours[b]),
-            message: 'Deux carrefours sur la même ' + cote + ' du plateau.' });
-        }
-      }
-    }
-    // Mode manuel : une paire autre que (1,2)+(3,2) est permise, mais son risque est annoncé,
-    // sauf si l'équilibre de ce plateau est mesuré et sans alerte (cas d'un plateau « carrefours variés »)
-    if (!equilibreVerifie && carrefours.length === 2 && !cotePartage(carrefours[0], carrefours[1], F)) {
-      var tri = carrefours.slice().sort(function (a, b) { return (a.j - b.j) || (a.i - b.i); });
-      var cle = tri[0].i + ',' + tri[0].j + '+' + tri[1].i + ',' + tri[1].j;
-      var taux = TAUX_CINQ_CONTRE_DEUX[cle];
-      if (taux !== undefined && taux > 0) {
-        res.push({ code: 'carrefours_paire', niveau: 'alerte', cible: cibleJonction(carrefours[1]),
-          message: 'Carrefours en (' + tri[0].i + ', ' + tri[0].j + ') et (' + tri[1].i + ', ' + tri[1].j + ') : environ ' +
-            String(taux).replace('.', ',') + ' % des plateaux ont « 5 villes contre 2 » avec cette paire (0 % avec (1, 2) et (3, 2)).' });
-      }
+    if (!g) return res;
+    PM.graphe.villesProches(g).forEach(function (p) {
+      res.push({ code: 'villes_proches', niveau: 'alerte', cible: cibleJonction(p.b),
+        message: 'Villes (' + p.a.i + ', ' + p.a.j + ') et (' + p.b.i + ', ' + p.b.j + ') à ' + (p.pas - 1) + ' case(s) d\'écart : la règle en demande au moins ' + PM.geometrie.ECART_MIN_VILLES + '.' });
+    });
+    if (plateauRempli(doc, M.formatDuDocument(doc)) && !PM.graphe.connexe(g)) {
+      res.push({ code: 'plateau_non_connexe', niveau: 'alerte', cible: null,
+        message: 'Le plateau n\'est pas d\'un seul tenant : certaines cases ne sont reliées à aucune autre partie.' });
     }
     return res;
   }
 
+  /** Graphe du plateau (villes non traversables) si PM.graphe est chargé, sinon null ; null aussi si le calcul échoue. */
+  function grapheDuPlateau(doc) {
+    if (!PM.graphe || typeof PM.graphe.construire !== 'function') return null;
+    try { return PM.graphe.construire(doc, { villesTraversables: false }); } catch (x) { return null; }
+  }
+
   /**
    * Équilibre mesuré (villes non traversables), seulement si PM.graphe est chargé et que le plateau
-   * est complet : 7 villes, 4 apparitions, toutes les tuiles posées. Renvoie null sinon.
+   * est complet : 7 villes, une case d'apparition par camp au moins, toutes les tuiles posées. Renvoie null sinon.
    */
-  function mesureEquilibre(doc) {
-    if (!PM.graphe || typeof PM.graphe.equilibre !== 'function') return null;
+  function mesureEquilibre(doc, g) {
+    if (!g || typeof PM.graphe.equilibre !== 'function') return null;
     var e;
-    try { e = PM.graphe.equilibre(doc, { villesTraversables: false }); } catch (x) { return null; }
+    try { e = PM.graphe.equilibre(doc, { graphe: g }); } catch (x) { return null; }
     return e && e.complet ? e : null;
   }
 
@@ -180,6 +148,14 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     });
   }
 
+  /** Erreur « plateau très déséquilibré » d'une mesure complète (message qui nomme le critère), ou aucune. */
+  function erreursEquilibre(e) {
+    if (!e || !e.tresDesequilibre) return [];
+    return [{ code: 'desequilibre', niveau: 'erreur', cible: null,
+      message: 'Plateau très déséquilibré : ' + e.blocages.map(function (b) { return b.message.replace(/\.$/, ''); }).join(' ; ') +
+        '. Changez des tuiles ou des villes (la pose reste permise).' }];
+  }
+
   /* ------------------------------------------------------------------ */
   /* Compteurs                                                           */
   /* ------------------------------------------------------------------ */
@@ -188,59 +164,47 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return { cle: cle, libelle: libelle, valeur: valeur, cible: cible, etat: valeur === cible ? 'ok' : 'ecart' };
   }
 
-  /** Cases de déplacement attendues par rôle de cellule (docs/3-synthese.md : composition des tuiles). */
-  var DEPLACEMENT_PAR_ROLE = { centrale: 4, coin: 3, bord: 3, apparition: 2 };
-
-  /**
-   * Cibles qui dépendent de la forme (ajout de l'orchestrateur à l'intégration) : dans une forme réduite,
-   * moins de jonctions sont possibles, donc moins de carrefours, et moins de cases de déplacement.
-   * Sur le 4×4 complet : 2 carrefours, 9 jetons, 50 cases. `format` : 4×4 par défaut.
-   */
-  function ciblesSelonForme(forme, format) {
-    var jonctions = 0, cases = 0;
-    var F = format && typeof format === 'object' ? format : PM.geometrie.format(format || PM.geometrie.FORMAT_DEFAUT);
-    for (var i = 1; i < F.GRILLE.colonnes; i++) for (var j = 1; j < F.GRILLE.lignes; j++) if (M.jonctionPossible(forme, i, j, F)) jonctions++;
-    M.cellulesActives(forme, F).forEach(function (cel) {
-      cases += DEPLACEMENT_PAR_ROLE[M.roleCellule(cel.col, cel.lig, forme, F)] || 0;
-    });
-    var carrefours = Math.max(0, Math.min(NB_CARREFOURS, jonctions - NB_VILLES));
-    return { carrefours: carrefours, casesDeplacement: cases + carrefours };
+  /** Cellules du pourtour appartenant au camp (cases d'apparition attendues : 6 en 4×4, 7 en 5×5). */
+  function apparitionsAttendues(F, camp) {
+    var n = 0;
+    for (var lig = 0; lig < F.GRILLE.lignes; lig++) {
+      for (var col = 0; col < F.GRILLE.colonnes; col++) {
+        if (M.gabaritCellule(col, lig, F) !== 'centrale' && F.campCellule(col, lig) === camp) n++;
+      }
+    }
+    return n;
   }
 
   function compteursDuPlateau(doc) {
     var plateau = doc.plateau, F = M.formatDuDocument(doc);
-    var villes = 0, carrefours = 0, casesDeplacement = 0, petitesTuiles = 0;
-    var apparitions = { 1: 0, 2: 0 };
-    plateau.jetons.forEach(function (j) {
-      if (!j) return;
-      if (j.type === 'capture') villes++;
-      else if (j.type === 'carrefour') carrefours++;
-    });
-    // Les carrefours sont des cases de déplacement : ils comptent dans les 50.
-    casesDeplacement = carrefours;
+    var villes = 0, cases = 0, petitesTuiles = 0, apparitions = { vert: 0, rouge: 0 };
+    plateau.jetons.forEach(function (j) { if (j && j.type === 'capture') villes++; });
     plateau.tuiles.forEach(function (t) {
       var m = M.modeleParId(doc, t.modeleId);
       if (!m) return; // modèle absent : signalé par validerPlateau
-      var cases = Array.isArray(m.cases) ? m.cases : [];
-      if (cases.length < 2) petitesTuiles++;
-      cases.forEach(function (c) {
+      var cs = Array.isArray(m.cases) ? m.cases : [];
+      if (cs.length < 2) petitesTuiles++;
+      cs.forEach(function (c) {
         if (!c) return;
-        if (c.type === 'deplacement') casesDeplacement++;
-        else if (c.type === 'apparition') {
-          var joueur = M.joueurCellule(t.col, t.lig, F);
-          if (joueur) apparitions[joueur]++;
-        }
+        cases++;
+        var camp = c.type === 'apparition' ? F.campCellule(t.col, t.lig) : null;
+        if (camp) apparitions[camp]++;
       });
     });
-    var c = ciblesSelonForme(plateau.forme, F);
+    // Cases de jonction : jonctions sans ville entourées de leurs 4 tuiles
+    for (var j = 1; j < F.GRILLE.lignes; j++) {
+      for (var i = 1; i < F.GRILLE.colonnes; i++) {
+        var aVille = plateau.jetons.some(function (x) { return x && x.i === i && x.j === j && x.type === 'capture'; });
+        if (!aVille && M.portsJonction(doc, i, j).tuiles === 4) cases++;
+      }
+    }
+    var cibleCases = CIBLE_CASES[F.id];
     return [
       compteur('villes', 'Villes', villes, NB_VILLES),
-      compteur('carrefours', 'Carrefours', carrefours, c.carrefours),
-      compteur('cases_deplacement', 'Cases de déplacement', casesDeplacement, c.casesDeplacement),
-      compteur('tuiles', 'Tuiles posées', plateau.tuiles.length, M.cellulesActives(plateau.forme, F).length),
-      compteur('apparitions_j1', 'Apparitions J1', apparitions[1], NB_APPARITIONS_PAR_JOUEUR),
-      compteur('apparitions_j2', 'Apparitions J2', apparitions[2], NB_APPARITIONS_PAR_JOUEUR),
-      compteur('jetons', 'Jetons posés', plateau.jetons.length, NB_VILLES + c.carrefours),
+      { cle: 'cases', libelle: 'Cases (tuiles et jonctions)', valeur: cases, cible: '≈ ' + cibleCases, etat: 'ok' },
+      compteur('tuiles', 'Tuiles posées', plateau.tuiles.length, F.GRILLE.colonnes * F.GRILLE.lignes),
+      compteur('apparitions_vert', 'Apparitions vert', apparitions.vert, apparitionsAttendues(F, 'vert')),
+      compteur('apparitions_rouge', 'Apparitions rouge', apparitions.rouge, apparitionsAttendues(F, 'rouge')),
       { cle: 'dimensions', libelle: 'Dimensions', valeur: dimensions(F), cible: dimensions(F), etat: 'ok' },
       compteur('tuiles_petites', 'Tuiles à moins de 2 cases', petitesTuiles, 0)
     ];
@@ -250,13 +214,12 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /* Regroupement des erreurs et alertes                                 */
   /* ------------------------------------------------------------------ */
 
-  /** Rang d'affichage : erreurs, raccords morts, ports morts, carrefours, autres. */
+  /** Rang d'affichage : erreurs, raccords morts, ports vers le bord, autres. */
   function rangDe(entree) {
     if (entree.niveau === 'erreur') return 0;
     if (entree.code === 'raccord_mort') return 1;
-    if (entree.code === 'port_mort') return 2;
-    if (CODES_CARREFOURS.indexOf(entree.code) >= 0) return 3;
-    return 4;
+    if (entree.code === 'port_pourtour') return 2;
+    return 3;
   }
 
   /** Groupes { code, niveau, libelle, nombre, rang, elements: [{message, cible}] } triés par rang (stable). */
@@ -290,15 +253,14 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function calculer(doc) {
     var p = doc && doc.plateau;
     // document mal formé : refus explicite (Error lisible), jamais un TypeError natif
-    if (!p || typeof p !== 'object' || !Array.isArray(p.tuiles) || !Array.isArray(p.jetons) || !p.forme || typeof p.forme !== 'object') {
+    if (!p || typeof p !== 'object' || !Array.isArray(p.tuiles) || !Array.isArray(p.jetons)) {
       throw new Error('Document invalide : plateau absent ou mal formé.');
     }
     if (!Array.isArray(doc.modeles)) throw new Error('Document invalide : bibliothèque de modèles absente.');
-    var v = M.validerPlateau(doc);
-    var erreurs = v.erreurs.map(function (x) { return versEntree(x, 'erreur', doc); });
-    var eq = mesureEquilibre(doc), alertesEq = alertesEquilibre(eq);
+    var v = M.validerPlateau(doc), g = grapheDuPlateau(doc), eq = mesureEquilibre(doc, g);
+    var erreurs = v.erreurs.map(function (x) { return versEntree(x, 'erreur', doc); }).concat(erreursEquilibre(eq));
     var alertes = v.alertes.map(function (x) { return versEntree(x, 'alerte', doc); })
-      .concat(alertesJetons(doc, eq !== null && alertesEq.length === 0)).concat(alertesEq);
+      .concat(alertesGraphe(doc, g)).concat(alertesEquilibre(eq));
     return {
       compteurs: compteursDuPlateau(doc),
       erreurs: erreurs,
@@ -328,7 +290,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var li = el('li', 'pm-controles-compteur pm-controles-compteur--' + c.etat);
     li.appendChild(el('span', 'pm-controles-libelle', c.libelle));
     var numerique = estNb(c.valeur) && estNb(c.cible);
-    li.appendChild(el('span', 'pm-controles-valeur', numerique ? c.valeur + ' / ' + c.cible : String(c.valeur)));
+    var texte = numerique ? c.valeur + ' / ' + c.cible : (estNb(c.valeur) ? c.valeur + ' (' + c.cible + ')' : String(c.valeur));
+    li.appendChild(el('span', 'pm-controles-valeur', texte));
     if (numerique) {
       var pct = c.cible > 0 ? Math.min(100, c.valeur / c.cible * 100) : (c.valeur > 0 ? 100 : 0);
       var jauge = el('span', 'pm-controles-jauge');
@@ -463,8 +426,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   PM.controles = {
     NB_VILLES: NB_VILLES,
-    NB_CARREFOURS: NB_CARREFOURS,
-    ciblesSelonForme: ciblesSelonForme,
+    CIBLE_CASES: CIBLE_CASES,
     calculer: calculer,
     monter: monter,
     revaliderPlateau: revaliderPlateau

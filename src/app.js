@@ -48,7 +48,12 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     if (!stockageDisponible()) return { doc: neuf, message: 'Sauvegarde automatique indisponible dans ce navigateur : pensez à Enregistrer votre travail.', niveau: 'alerte' };
     if (S && typeof S.restaurerAutosave === 'function') {
       var r = S.restaurerAutosave();
-      if (r && r.ok && r.doc) return { doc: r.doc, message: 'Travail précédent repris (sauvegarde automatique).', niveau: 'info' };
+      if (r && r.ok && r.doc) {
+        // Document de la version 1 : la phrase de migration (première alerte de depuisJSON) est dite au démarrage
+        var migration = (r.alertes || []).filter(function (a) { return a.code === 'migration_v1'; })[0];
+        return migration ? { doc: r.doc, message: 'Travail précédent repris. ' + migration.message, niveau: 'alerte' }
+          : { doc: r.doc, message: 'Travail précédent repris (sauvegarde automatique).', niveau: 'info' };
+      }
       var brut = null;
       try { brut = window.localStorage.getItem(S.CLE_AUTOSAVE); } catch (e) { brut = null; }
       if (brut) {
@@ -80,8 +85,19 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     }
   };
 
+  /**
+   * Bibliothèque de la version 1 (modèles A1 / A2) : le catalogue v2 n'existe pas encore, on garde la
+   * bibliothèque convertie et on le dit (plus tard : proposer de charger le catalogue v2).
+   */
+  function avisBibliotheque(doc) {
+    if (!PM.sauvegarde || typeof PM.sauvegarde.bibliothequeVersion1 !== 'function' || !PM.sauvegarde.bibliothequeVersion1(doc)) return '';
+    return ' Bibliothèque de la version 1 (modèles A1 / A2) conservée et convertie : le catalogue de la version 2 n\'est pas encore disponible.';
+  }
+
   function demarrer() {
     var init = documentInitial();
+    var avis = avisBibliotheque(init.doc);
+    if (avis) { init.message += avis; if (init.niveau === 'info') init.niveau = 'alerte'; }
     var etat = PM.etat.creer(init.doc);
     PM.app = { etat: etat }; // accès pour le débogage dans la console
 
@@ -116,7 +132,8 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
         if (!r) return; // annulé
         if (!r.ok) { etat.signaler(r.erreurs && r.erreurs.length ? r.erreurs[0].message : 'Fichier illisible.', 'erreur'); return; }
         etat.remplacer(r.doc, 'ouverture du fichier');
-        etat.signaler('Fichier ouvert (Ctrl+Z pour revenir au plateau précédent)' + (r.alertes && r.alertes.length ? ' (' + r.alertes.length + ' alerte(s))' : '') + '.', r.alertes && r.alertes.length ? 'alerte' : 'info');
+        var migration = r.migre && r.alertes && r.alertes.length ? ' ' + r.alertes[0].message : '';
+        etat.signaler('Fichier ouvert (Ctrl+Z pour revenir au plateau précédent)' + (r.alertes && r.alertes.length ? ' (' + r.alertes.length + ' alerte(s))' : '') + '.' + migration, r.alertes && r.alertes.length ? 'alerte' : 'info');
       }, function (e) { etat.signaler(e && e.message ? e.message : 'Ouverture impossible.', 'erreur'); });
     }
 
@@ -142,10 +159,11 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       var past = $('pastille-alertes');
       if (PM.controles && typeof PM.controles.calculer === 'function') {
         var r = PM.controles.calculer(etat.doc());
-        var n = (r.erreurs ? r.erreurs.length : 0) + (r.alertes ? r.alertes.length : 0);
+        var nErr = r.erreurs ? r.erreurs.length : 0, n = nErr + (r.alertes ? r.alertes.length : 0);
         var incomplet = (r.compteurs || []).some(function (c) { return c.etat !== 'ok'; });
         past.hidden = false;
-        past.textContent = n ? n + ' alerte' + (n > 1 ? 's' : '') : (incomplet ? 'Plateau incomplet' : 'Plateau complet');
+        past.textContent = n ? n + ' alerte' + (n > 1 ? 's' : '') + (nErr ? ' dont ' + nErr + ' erreur' + (nErr > 1 ? 's' : '') : '') : (incomplet ? 'Plateau incomplet' : 'Plateau complet');
+        past.classList.toggle('pm-erreur', nErr > 0);
         past.classList.toggle('pm-ok', n === 0 && !incomplet);
         past.classList.toggle('pm-neutre', n === 0 && incomplet);
       }

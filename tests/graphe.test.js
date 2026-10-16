@@ -4,6 +4,7 @@ const assert = require('node:assert');
 require('../src/geometrie.js');
 require('../src/modele.js');
 require('../src/graphe.js');
+const A = require('./aides-v2.js');
 const M = globalThis.PM.modele;
 const GR = globalThis.PM.graphe;
 
@@ -13,14 +14,14 @@ const GR = globalThis.PM.graphe;
 
 /**
  * aretes : [['a', 'b'], ...] ; villes : ids de nœuds villes ; apparitions : {1: [ids], 2: [ids]}.
- * Les nœuds dont l'id commence par « J » sont des jonctions (ville si listés dans `villes`, sinon carrefour).
+ * Les nœuds dont l'id commence par « J » sont des jonctions (ville si listés dans `villes`, sinon case chemin).
  */
 function main(aretes, villes, apparitions, traversables) {
   const voisins = new Map(), cases = new Map();
   const noeud = (x) => { if (!voisins.has(x)) { voisins.set(x, new Set()); if (!x.startsWith('J')) cases.set(x, { id: x }); } };
   for (const [a, b] of aretes) { noeud(a); noeud(b); voisins.get(a).add(b); voisins.get(b).add(a); }
   const jonctions = [...voisins.keys()].filter((x) => x.startsWith('J')).map((id, n) => ({
-    id, i: n + 1, j: 1, type: villes.includes(id) ? 'capture' : 'carrefour', ports: voisins.get(id).size, cases: []
+    id, i: n + 1, j: 1, type: villes.includes(id) ? 'ville' : 'case', ports: voisins.get(id).size, cases: []
   }));
   return {
     noeuds: [...voisins.keys()], voisins, cases, jonctions, villes: new Set(villes),
@@ -68,8 +69,8 @@ test('villes non traversables : détour plus long, aucune distance ne diminue', 
   for (const [id, d] of dN) assert.ok(d >= dT.get(id), id);
 });
 
-test('carrefour : reste traversable même quand les villes ne le sont pas', () => {
-  const g = main([['s', 'Jc'], ['Jc', 't']], [], { 1: ['s'] }, false); // Jc n'est pas dans `villes` : carrefour
+test('case de jonction : traversable (une case chemin) quand les villes ne le sont pas', () => {
+  const g = main([['s', 'Jc'], ['Jc', 't']], [], { 1: ['s'] }, false); // Jc n'est pas dans `villes` : case chemin
   assert.strictEqual(GR.distancesJoueur(g, 1).get('t'), 2);
 });
 
@@ -114,69 +115,92 @@ test('goulets : une ville non traversable ne sert pas d\'intermédiaire', () => 
 /* Construction depuis un document                                         */
 /* ---------------------------------------------------------------------- */
 
-/** Plateau 4x4 complet avec les modèles d'exemple (4 exemplaires par rôle), jetons sur les 9 jonctions si possible. */
-function plateauExemples() {
-  let doc = M.nouveauDocument();
-  doc.modeles = M.copieExemples();
-  for (const c of M.cellulesActives(doc.plateau.forme)) {
-    const role = M.roleCellule(c.col, c.lig, doc.plateau.forme);
-    doc = M.poserTuile(doc, doc.modeles.find((m) => m.role === role).id, c.col, c.lig);
-  }
-  return doc;
-}
+/** Plateau plein des exemples (4×4 par défaut), sans ville. */
+const plateauExemples = (grille) => A.plateauComplet(grille);
 
-test('construire : plateau d\'exemples, jetons seulement là où ils sont posés', () => {
-  let doc = plateauExemples();
-  let g = GR.construire(doc);
-  assert.strictEqual(g.villesTraversables, false); // défaut
-  assert.strictEqual(g.jonctions.length, 0);           // aucun jeton : aucun nœud de jonction
-  assert.deepStrictEqual([g.apparitions[1].length, g.apparitions[2].length], [2, 2]);
-  assert.strictEqual(g.cases.size, 4 * 4 + 4 * 3 + 4 * 3 + 4 * 3);
-  doc = M.poserJeton(doc, 2, 2, 'capture');
-  doc = M.poserJeton(doc, 1, 1, 'carrefour');
-  g = GR.construire(doc);
-  assert.deepStrictEqual(g.jonctions.map((j) => [j.id, j.type]), [['J2,2', 'capture'], ['J1,1', 'carrefour']]);
-  assert.strictEqual(g.jonctions[0].ports, 4);
-  assert.strictEqual(g.voisins.get('J2,2').size, 4);
-  assert.ok(g.villes.has('J2,2') && !g.villes.has('J1,1'));
-  // symétrie du graphe
-  for (const [a, vs] of g.voisins) for (const b of vs) assert.ok(g.voisins.get(b).has(a), `${a}-${b}`);
+test('construire : toutes les jonctions intérieures sont des nœuds (case chemin ou ville), 9 en 4×4, 16 en 5×5', () => {
+  for (const [grille, nb] of [['4x4', 9], ['5x5', 16]]) {
+    let doc = plateauExemples(grille);
+    let g = GR.construire(doc);
+    assert.strictEqual(g.villesTraversables, false); // défaut : règle du jeu
+    assert.strictEqual(g.jonctions.length, nb);
+    assert.ok(g.jonctions.every((j) => j.type === 'case' && j.ports === 4 && g.voisins.get(j.id).size === 4));
+    assert.strictEqual(g.villes.size, 0);
+    doc = M.poserJeton(doc, 2, 2);
+    g = GR.construire(doc);
+    assert.deepStrictEqual(g.jonctions.filter((j) => j.type === 'ville').map((j) => j.id), ['J2,2']);
+    assert.ok(g.villes.has('J2,2'));
+    for (const [a, vs] of g.voisins) for (const b of vs) assert.ok(g.voisins.get(b).has(a), `${a}-${b}`);
+  }
 });
 
-test('construire : ne modifie pas le document et accepte l\'option jetons', () => {
+test('construire : cases d\'apparition par camp (6 par joueur en 4×4, 7 en 5×5, rangée centrale du 5×5 ignorée)', () => {
+  const g4 = GR.construire(plateauExemples('4x4')), g5 = GR.construire(plateauExemples('5x5'));
+  assert.deepStrictEqual([g4.apparitions[1].length, g4.apparitions[2].length], [6, 6]);
+  assert.deepStrictEqual([g5.apparitions[1].length, g5.apparitions[2].length], [7, 7]);
+  assert.ok(g5.apparitions[1].concat(g5.apparitions[2]).every((id) => !/^[04],2:/.test(id)));
+  assert.strictEqual(g4.cases.size, 4 * 5 + 8 * 3 + 4 * 2);
+});
+
+test('construire : ne modifie pas le document et accepte l\'option jetons (seules les villes comptent)', () => {
   const doc = plateauExemples();
   const avant = JSON.stringify(doc);
-  const g = GR.construire(doc, { jetons: [{ i: 2, j: 2, type: 'capture' }, { i: 2, j: 2, type: 'carrefour' }, null, { i: 1, j: 1, type: 'autre' }] });
+  const g = GR.construire(doc, { jetons: [{ i: 2, j: 2, type: 'capture' }, { i: 2, j: 2, type: 'capture' }, null, { i: 1, j: 1, type: 'carrefour' }] });
   assert.strictEqual(JSON.stringify(doc), avant);
-  assert.strictEqual(g.jonctions.length, 1); // doublon, jeton nul et type inconnu ignorés
+  assert.deepStrictEqual([...g.villes], ['J2,2']);
+  assert.strictEqual(g.jonctions.find((j) => j.id === 'J1,1').type, 'case');
 });
 
-test('construire : plateau vide, sans tuile ni modèle, sans exception', () => {
+test('construire : plateau vide ou incomplet sans exception ; jonctions isolées ; connexe', () => {
   const g = GR.construire(M.nouveauDocument());
-  assert.strictEqual(g.noeuds.length, 0);
+  assert.strictEqual(g.cases.size, 0);
+  assert.strictEqual(g.noeuds.length, 9);
+  assert.ok(g.jonctions.every((j) => j.ports === 0));
+  assert.strictEqual(GR.connexe(g), false);
   const doc = M.nouveauDocument();
-  doc.plateau.tuiles.push({ modeleId: 'absent', col: 0, lig: 0, rot: 0 }); // modèle introuvable
-  doc.plateau.jetons.push({ i: 1, j: 1, type: 'capture' });
-  const g2 = GR.construire(doc);
-  assert.strictEqual(g2.cases.size, 0);
-  assert.strictEqual(g2.jonctions[0].ports, 0); // jeton isolé
+  doc.plateau.tuiles.push({ modeleId: 'absent', col: 0, lig: 0, rot: 0 });
+  assert.strictEqual(GR.construire(doc).cases.size, 0);
   assert.doesNotThrow(() => GR.construire(undefined));
+  assert.strictEqual(GR.connexe(GR.construire(plateauExemples())), true);
+  assert.strictEqual(GR.connexe({ noeuds: [], voisins: new Map() }), false);
 });
 
 test('construire : filtreTuile retire des tuiles du graphe', () => {
-  const doc = plateauExemples();
-  const g = GR.construire(doc, { filtreTuile: (t) => t.col <= 1 });
-  assert.ok(g.cases.size < 4 * 4 + 4 * 3 * 3);
+  const g = GR.construire(plateauExemples(), { filtreTuile: (t) => t.col <= 1 });
   for (const id of g.cases.keys()) assert.ok(Number(id.split(',')[0]) <= 1);
 });
 
-test('villesTraversables false sur un document : aucune distance ne diminue', () => {
-  let doc = plateauExemples();
-  for (let j = 1; j <= 3; j++) for (let i = 1; i <= 3; i++) {
-    try { doc = M.poserJeton(doc, i, j, (i === 2 && j === 2) ? 'carrefour' : 'capture'); } catch (e) { /* jonction refusée */ }
-  }
-  const gT = GR.construire(doc, { villesTraversables: true }), gN = GR.construire(doc, { villesTraversables: false });
-  assert.ok(gT.villes.size >= 2);
+test('T4 (docs/20) : deux ports vers J(2,2) sans jeton, puis villes en (1,1) et (2,1) : au moins 3 cases, pas d\'alerte', () => {
+  // centrale sans le port SE, posée en (1,1) (SE vers J(2,2)) et en (2,1) tournée d'un quart (SE devient SO, vers J(2,2))
+  const sansSE = M.copieExemples()[0];
+  sansSE.id = 'sans-se';
+  sansSE.chemins = sansSE.chemins.filter((c) => c.id !== 'p3');
+  let doc = A.plateauComplet('4x4', null, (col, lig) => ((col === 1 || col === 2) && lig === 1 ? 'sans-se' : null), [sansSE]);
+  doc = M.tournerTuile(doc, 2, 1, 1);
+  let g = GR.construire(doc);
+  const j22 = g.jonctions.find((j) => j.id === 'J2,2');
+  assert.strictEqual(j22.type, 'case');
+  assert.strictEqual(j22.ports, 2);
+  doc = M.poserJeton(M.poserJeton(doc, 1, 1), 2, 1);
+  g = GR.construire(doc);
+  assert.ok(GR.distances(g, 'J1,1').get('J2,1') >= 4, 'ville–ville : ' + GR.distances(g, 'J1,1').get('J2,1') + ' pas');
+  assert.deepStrictEqual(GR.villesProches(g), []);
+  assert.strictEqual(g.voisins.get('J2,2').size, 2);
+});
+
+test('villesProches : deux villes à 3 pas (2 cases) signalées, à 4 pas non', () => {
+  const g = main([['Ja', 'x'], ['x', 'y'], ['y', 'Jb'], ['Jb', 'z'], ['z', 'u'], ['u', 'v'], ['v', 'Jc']], ['Ja', 'Jb', 'Jc'], {}, false);
+  assert.deepStrictEqual(GR.villesProches(g).map((p) => p.pas), [3]);
+  assert.strictEqual(PM_ECART(), 3);
+  // une ville intermédiaire ne raccourcit rien : villes non traversables, même si le graphe est en mode traversable
+  const gT = main([['Ja', 'Jb'], ['Jb', 'Jc']], ['Ja', 'Jb', 'Jc'], {}, true);
+  assert.deepStrictEqual(GR.villesProches(gT).map((p) => p.pas), [1, 1]);
+});
+function PM_ECART() { return globalThis.PM.geometrie.ECART_MIN_VILLES; }
+
+test('villes non traversables sur un document : aucune distance ne diminue', () => {
+  const doc = A.plateauComplet('4x4', true);
+  const gT = GR.construire(doc, { villesTraversables: true }), gN = GR.construire(doc);
   for (const p of [1, 2]) {
     const dT = GR.distancesJoueur(gT, p), dN = GR.distancesJoueur(gN, p);
     for (const [id, d] of dN) assert.ok(d >= dT.get(id), id);
@@ -184,8 +208,16 @@ test('villesTraversables false sur un document : aucune distance ne diminue', ()
 });
 
 test('profil : chaîne D1|D2 stable', () => {
-  const doc = plateauExemples();
-  assert.strictEqual(typeof GR.profil(doc), 'string');
+  const doc = A.plateauComplet('4x4', true);
   assert.strictEqual(GR.profil(doc), GR.profil(doc));
   assert.match(GR.profil(doc), /\|/);
+});
+
+test('seuils exportés (paramètres, docs/19 et arbitrages de docs/20)', () => {
+  assert.strictEqual(GR.SEUIL_BLOCAGE_ECART, 3);
+  assert.strictEqual(GR.CINQ_CONTRE_DEUX_BLOQUANT, true);
+  assert.strictEqual(GR.SEUIL_ECART, 2);
+  assert.strictEqual(GR.SEUIL_S, 4);
+  assert.strictEqual(GR.NB_VILLES, 7);
+  assert.deepStrictEqual(GR.NOM_JOUEUR, { 1: 'vert', 2: 'rouge' });
 });

@@ -1,319 +1,181 @@
 'use strict';
+/*
+ * Tests du calcul des contrôles (src/controles.js), règles v2 : compteurs, erreurs et alertes du plateau,
+ * dont l'erreur « plateau très déséquilibré » (plateau complet seulement, la pose reste permise).
+ */
 const test = require('node:test');
 const assert = require('node:assert');
 require('../src/controles.js');
+const A = require('./aides-v2.js');
 const M = globalThis.PM.modele;
 const C = globalThis.PM.controles;
 
-/** Document avec les 4 modèles d'exemple (4 exemplaires chacun). */
-function docAvecExemples() {
-  let d = M.nouveauDocument();
-  for (const m of M.copieExemples()) d = M.ajouterModele(d, m);
-  return d;
-}
+const parCle = (r) => Object.fromEntries(r.compteurs.map((c) => [c.cle, c]));
+const trouver = (liste, code) => liste.filter((x) => x.code === code);
 
-/** Plateau 4x4 complet : une tuile par cellule, du modèle du bon rôle. */
-function plateauComplet() {
-  const exemples = M.copieExemples();
-  let d = docAvecExemples();
-  for (let lig = 0; lig < 4; lig++) {
-    for (let col = 0; col < 4; col++) {
-      const role = M.roleCellule(col, lig, d.plateau.forme);
-      const m = exemples.find((x) => x.role === role);
-      d = M.poserTuile(d, m.id, col, lig);
-    }
-  }
-  return d;
-}
-
-/** Pose un jeton ('capture' ou 'carrefour') sur chaque jonction indiquée. */
-function avecJetons(d, liste) {
-  for (const [i, j, type] of liste) d = M.poserJeton(d, i, j, type);
-  return d;
-}
-
-const TOUTES_JONCTIONS = [[1, 1], [2, 1], [3, 1], [1, 2], [2, 2], [3, 2], [1, 3], [2, 3], [3, 3]];
-
-function trouver(liste, code) {
-  return liste.filter((x) => x.code === code);
+/** Charge PM.graphe le temps d'un test (les contrôles l'utilisent s'il est présent). */
+function avecGraphe(fn) {
+  require('../src/graphe.js');
+  return fn();
 }
 
 test('plateau vide : compteurs à zéro, aucune erreur ni alerte', () => {
-  const r = C.calculer(docAvecExemples());
-  const par = Object.fromEntries(r.compteurs.map((c) => [c.cle, c]));
-  assert.deepEqual(r.compteurs.map((c) => c.cle), [
-    'villes', 'carrefours', 'cases_deplacement', 'tuiles', 'apparitions_j1', 'apparitions_j2',
-    'jetons', 'dimensions', 'tuiles_petites'
-  ]);
+  const r = C.calculer(A.documentExemples());
+  const par = parCle(r);
+  assert.deepEqual(r.compteurs.map((c) => c.cle), ['villes', 'cases', 'tuiles', 'apparitions_vert', 'apparitions_rouge', 'dimensions', 'tuiles_petites']);
   assert.deepEqual([par.villes.valeur, par.villes.cible, par.villes.etat], [0, 7, 'ecart']);
-  assert.deepEqual([par.carrefours.valeur, par.carrefours.cible], [0, 2]);
-  assert.deepEqual([par.cases_deplacement.valeur, par.cases_deplacement.cible], [0, 50]);
+  assert.deepEqual([par.cases.valeur, par.cases.cible, par.cases.etat], [0, '≈ 60', 'ok']);
   assert.deepEqual([par.tuiles.valeur, par.tuiles.cible], [0, 16]);
-  assert.deepEqual([par.apparitions_j1.valeur, par.apparitions_j1.cible], [0, 2]);
-  assert.deepEqual([par.apparitions_j2.valeur, par.apparitions_j2.cible], [0, 2]);
-  assert.deepEqual([par.jetons.valeur, par.jetons.cible], [0, 9]);
+  assert.deepEqual([par.apparitions_vert.valeur, par.apparitions_vert.cible], [0, 6]);
+  assert.deepEqual([par.apparitions_rouge.valeur, par.apparitions_rouge.cible], [0, 6]);
   assert.equal(par.dimensions.valeur, '48 × 48 cm');
-  assert.equal(par.dimensions.etat, 'ok');
-  assert.deepEqual([par.tuiles_petites.valeur, par.tuiles_petites.cible, par.tuiles_petites.etat], [0, 0, 'ok']);
   assert.deepEqual(r.erreurs, []);
   assert.deepEqual(r.alertes, []);
   assert.deepEqual(r.regroupees, []);
 });
 
-test('plateau complet sans jetons : tuiles 16/16, apparitions 2/2, aucune erreur', () => {
-  const d = plateauComplet();
-  const r = C.calculer(d);
-  const par = Object.fromEntries(r.compteurs.map((c) => [c.cle, c]));
-  assert.deepEqual([par.tuiles.valeur, par.tuiles.cible, par.tuiles.etat], [16, 16, 'ok']);
-  assert.equal(par.apparitions_j1.etat, 'ok');
-  assert.equal(par.apparitions_j2.etat, 'ok');
-  assert.equal(par.jetons.etat, 'ecart');
-  // cases de déplacement attendues : somme des cases de type deplacement des modèles posés (pas de carrefours)
-  const attendu = M.copieExemples().reduce((s, m) => {
-    const n = m.cases.filter((c) => c.type === 'deplacement').length;
-    return s + n * 4;
-  }, 0);
-  assert.equal(par.cases_deplacement.valeur, attendu);
-  assert.deepEqual(r.erreurs, []);
-  // les seules alertes possibles ici sont les raccords morts des exemples : pas de jeton
-  assert.ok(r.alertes.every((a) => a.code === 'raccord_mort' && a.niveau === 'alerte'));
-});
-
-test('7 villes et 2 carrefours bien placés : aucune alerte de jeton', () => {
-  let d = plateauComplet();
-  d = avecJetons(d, [
-    [1, 2, 'carrefour'], [3, 2, 'carrefour'],
-    [1, 1, 'capture'], [2, 1, 'capture'], [3, 1, 'capture'], [2, 2, 'capture'],
-    [1, 3, 'capture'], [2, 3, 'capture'], [3, 3, 'capture']
-  ]);
-  const r = C.calculer(d);
-  const par = Object.fromEntries(r.compteurs.map((c) => [c.cle, c]));
-  assert.deepEqual([par.villes.valeur, par.villes.etat], [7, 'ok']);
-  assert.deepEqual([par.carrefours.valeur, par.carrefours.etat], [2, 'ok']);
-  assert.deepEqual([par.jetons.valeur, par.jetons.etat], [9, 'ok']);
-  assert.equal(trouver(r.alertes, 'carrefours_meme_cote').length, 0);
-  assert.equal(trouver(r.alertes, 'trop_de_villes').length, 0);
-  assert.equal(trouver(r.alertes, 'trop_de_carrefours').length, 0);
-});
-
-test('paires de carrefours : même côté (alerte) et côtés opposés (aucune alerte)', () => {
-  const base = plateauComplet();
-  const villesRestantes = (exclus) => TOUTES_JONCTIONS
-    .filter(([i, j]) => !exclus.some(([a, b]) => a === i && b === j))
-    .map(([i, j]) => [i, j, 'capture']);
-
-  // deux carrefours sur la rangée nord
-  let d = avecJetons(base, [[1, 1, 'carrefour'], [3, 1, 'carrefour'], ...villesRestantes([[1, 1], [3, 1]])]);
-  let al = trouver(C.calculer(d).alertes, 'carrefours_meme_cote');
-  assert.equal(al.length, 1);
-  assert.deepEqual(al[0].cible, { type: 'jonction', i: 3, j: 1 });
-  assert.equal(al[0].niveau, 'alerte');
-
-  // deux carrefours sur la colonne ouest : pas un camp de joueur, pas d'alerte (arbitrage I3)
-  d = avecJetons(base, [[1, 1, 'carrefour'], [1, 3, 'carrefour'], ...villesRestantes([[1, 1], [1, 3]])]);
-  assert.equal(trouver(C.calculer(d).alertes, 'carrefours_meme_cote').length, 0);
-
-  // côtés opposés : (1,2)+(3,2) et (2,1)+(2,3)
-  d = avecJetons(base, [[1, 2, 'carrefour'], [3, 2, 'carrefour'], ...villesRestantes([[1, 2], [3, 2]])]);
-  assert.equal(trouver(C.calculer(d).alertes, 'carrefours_meme_cote').length, 0);
-  d = avecJetons(base, [[2, 1, 'carrefour'], [2, 3, 'carrefour'], ...villesRestantes([[2, 1], [2, 3]])]);
-  assert.equal(trouver(C.calculer(d).alertes, 'carrefours_meme_cote').length, 0);
-});
-
-test('trop de villes ou de carrefours : alertes de la composition', () => {
-  const base = plateauComplet();
-  const huit = TOUTES_JONCTIONS.slice(0, 8).map(([i, j]) => [i, j, 'capture']);
-  let r = C.calculer(avecJetons(base, huit));
-  assert.equal(trouver(r.alertes, 'trop_de_villes').length, 1);
-  assert.equal(r.compteurs.find((c) => c.cle === 'villes').valeur, 8);
-
-  const trois = [[1, 2, 'carrefour'], [3, 2, 'carrefour'], [2, 2, 'carrefour']];
-  r = C.calculer(avecJetons(base, trois));
-  assert.equal(trouver(r.alertes, 'trop_de_carrefours').length, 1);
-});
-
-test('raccord mort : cible de surbrillance égale au raccord réel', () => {
-  const d = plateauComplet();
-  const morts = M.raccordsMorts(d).filter((x) => x.raison !== 'absent');
-  assert.ok(morts.length > 0, 'le plateau d\'exemples doit avoir des raccords morts');
-  const alertes = trouver(C.calculer(d).alertes, 'raccord_mort');
-  assert.equal(alertes.length, morts.length);
-  alertes.forEach((a, k) => {
-    assert.equal(a.niveau, 'alerte');
-    assert.deepEqual(a.cible, { type: 'raccord', col: morts[k].col, lig: morts[k].lig, cote: morts[k].cote, pos: morts[k].pos });
+test('plateau complet équilibré (4×4) : tous les compteurs à ok, aucune erreur ni alerte', () => {
+  avecGraphe(() => {
+    const r = C.calculer(A.plateauComplet('4x4', true));
+    for (const c of r.compteurs) assert.equal(c.etat, 'ok', c.cle + ' ' + c.valeur + ' / ' + c.cible);
+    const par = parCle(r);
+    // 52 cases de tuiles + 9 jonctions - 7 villes = 54 cases
+    assert.equal(par.cases.valeur, 54);
+    assert.deepEqual(r.erreurs, []);
+    assert.deepEqual(r.alertes, []);
   });
 });
 
-test('port de coin mort (forme réduite) : cible de type port', () => {
-  // retirer le coin (0,0) : le port de coin de l'apparition (1,0) et de la centrale (1,1) visent des jonctions impossibles
-  const d = M.changerForme(plateauComplet(), { retires: [{ col: 0, lig: 0 }] });
-  const r = C.calculer(d);
-  const ports = trouver(r.alertes, 'port_mort');
-  assert.ok(ports.length > 0);
-  ports.forEach((p) => {
-    assert.equal(p.cible.type, 'port');
-    assert.equal(typeof p.cible.col, 'number');
-    assert.equal(typeof p.cible.lig, 'number');
-    assert.equal(typeof p.cible.coin, 'number');
+test('5×5 : cibles (25 tuiles, 7 apparitions par camp, ≈ 75 cases, 50 × 50 cm)', () => {
+  avecGraphe(() => {
+    const r = C.calculer(A.plateauComplet('5x5', true));
+    const par = parCle(r);
+    assert.deepEqual([par.tuiles.valeur, par.tuiles.cible], [25, 25]);
+    assert.deepEqual([par.apparitions_vert.valeur, par.apparitions_vert.cible, par.apparitions_rouge.cible], [7, 7, 7]);
+    assert.equal(par.cases.cible, '≈ 75');
+    assert.equal(par.dimensions.valeur, '50 × 50 cm');
+    assert.deepEqual(r.erreurs, []);
   });
 });
 
-test('modèle incomplet posé : erreur sur la tuile', () => {
-  let d = plateauComplet();
-  const m = d.modeles.find((x) => x.role === 'coin');
-  const casse = JSON.parse(JSON.stringify(m));
-  casse.cases = casse.cases.slice(0, 1); // une seule case : modèle incomplet
-  d = M.remplacerModele(d, m.id, casse);
-  assert.equal(M.validerModele(casse).complet, false);
-  const r = C.calculer(d);
-  const e = r.erreurs.filter((x) => x.code === 'modele_incomplet');
-  assert.ok(e.length > 0);
-  assert.equal(e[0].niveau, 'erreur');
-  const tuile = d.plateau.tuiles.find((t) => t.modeleId === m.id);
-  assert.deepEqual(e[0].cible, { type: 'tuile', col: tuile.col, lig: tuile.lig });
-});
-
-test('exemplaires dépassés : erreur, cible = une tuile du modèle', () => {
-  let d = plateauComplet();
-  // le modèle a été réduit à 1 exemplaire alors que 4 tuiles sont posées
-  d = JSON.parse(JSON.stringify(d));
-  const m = d.modeles.find((x) => x.role === 'coin');
-  m.exemplaires = 1;
-  const r = C.calculer(d);
-  const e = r.erreurs.filter((x) => x.code === 'exemplaires_depasses');
-  assert.equal(e.length, 1);
-  assert.equal(e[0].niveau, 'erreur');
-  const premiere = d.plateau.tuiles.find((t) => t.modeleId === m.id);
-  assert.deepEqual(e[0].cible, { type: 'tuile', col: premiere.col, lig: premiere.lig });
-});
-
-test('revaliderPlateau renvoie exactement calculer(doc).erreurs', () => {
-  let d = plateauComplet();
-  d = JSON.parse(JSON.stringify(d));
-  d.modeles.find((x) => x.role === 'bord').exemplaires = 0;
-  assert.deepEqual(C.revaliderPlateau(d), C.calculer(d).erreurs);
-  assert.ok(C.revaliderPlateau(d).length > 0);
-});
-
-test('calculer ne modifie pas le document', () => {
-  const d = avecJetons(plateauComplet(), [[1, 1, 'capture'], [3, 1, 'carrefour'], [1, 3, 'carrefour']]);
-  const avant = JSON.stringify(d);
-  C.calculer(d);
-  assert.equal(JSON.stringify(d), avant);
-});
-
-test('regroupées : erreurs d\'abord, puis raccords morts, puis ports morts', () => {
-  // retirer (0,0) : rôle incorrect (erreur), raccords face au vide et ports morts (alertes)
-  const d = M.changerForme(plateauComplet(), { retires: [{ col: 0, lig: 0 }] });
-  const r = C.calculer(d);
-  const codes = r.regroupees.map((g) => g.code);
-  const rangs = r.regroupees.map((g) => g.rang);
-  assert.deepEqual(rangs, [...rangs].sort((a, b) => a - b));
-  assert.ok(codes.indexOf('raccord_mort') < codes.indexOf('port_mort'));
-  assert.equal(r.regroupees[0].niveau, 'erreur');
-  const total = r.regroupees.reduce((s, g) => s + g.nombre, 0);
-  assert.equal(total, r.erreurs.length + r.alertes.length);
-  const raccords = r.regroupees.find((g) => g.code === 'raccord_mort');
-  assert.equal(raccords.nombre, trouver(r.alertes, 'raccord_mort').length);
-  assert.equal(raccords.elements.length, raccords.nombre);
-});
-
-test('cibles selon la forme (intégration) : 4×4 complet = 2 carrefours / 50 cases ; formes réduites', () => {
-  const C = globalThis.PM.controles;
-  assert.deepEqual(C.ciblesSelonForme({ retires: [] }), { carrefours: 2, casesDeplacement: 50 });
-  // Sans le coin NO : la jonction (1,1) devient impossible (8 jonctions) → 1 carrefour ; 3 cases en moins.
-  assert.deepEqual(C.ciblesSelonForme({ retires: [{ col: 0, lig: 0 }] }), { carrefours: 1, casesDeplacement: 46 });
-  // Sans deux coins : 7 jonctions → 0 carrefour.
-  assert.deepEqual(C.ciblesSelonForme({ retires: [{ col: 0, lig: 0 }, { col: 3, lig: 3 }] }).carrefours, 0);
-});
-
-test('règle des carrefours identique dans les contrôles et l’assemblage (36 paires)', () => {
-  require('../src/assemblage.js');
-  const A = globalThis.PM.assemblage;
-  const base = plateauComplet();
-  for (let x = 0; x < TOUTES_JONCTIONS.length; x++) {
-    for (let y = x + 1; y < TOUTES_JONCTIONS.length; y++) {
-      const [a, b] = [TOUTES_JONCTIONS[x], TOUTES_JONCTIONS[y]];
-      const d = avecJetons(base, [[a[0], a[1], 'carrefour'], [b[0], b[1], 'carrefour']]);
-      const controle = trouver(C.calculer(d).alertes, 'carrefours_meme_cote').length > 0;
-      assert.equal(controle, A.carrefoursMemeCote(d) !== null, JSON.stringify([a, b]));
-    }
-  }
-});
-
-/* ---------------------------------------------------------------------- */
-/* Alertes d'équilibre (docs/16) : PM.graphe, villes non traversables       */
-/* ---------------------------------------------------------------------- */
-
-test('équilibre : sans PM.graphe chargé, aucune alerte d\'équilibre', () => {
-  assert.equal(globalThis.PM.graphe, undefined);
-  let d = avecJetons(plateauComplet(), TOUTES_JONCTIONS.map(([i, j]) => [i, j, (i === 1 || i === 3) && j === 2 ? 'carrefour' : 'capture']));
-  const r = C.calculer(d);
-  for (const code of ['cinq_contre_deux', 'ecart_rang_etendu', 'premiere_ville_inegale']) assert.equal(trouver(r.alertes, code).length, 0, code);
-});
-
-test('équilibre : avec PM.graphe, alertes seulement sur plateau complet (7 villes, 4 apparitions)', () => {
-  require('../src/graphe.js');
-  try {
-    // plateau incomplet : rien
-    assert.deepEqual(C.calculer(docAvecExemples()).alertes, []);
-    const incomplet = avecJetons(plateauComplet(), [[2, 2, 'capture']]);
-    for (const a of C.calculer(incomplet).alertes) assert.ok(!['cinq_contre_deux', 'ecart_rang_etendu', 'premiere_ville_inegale'].includes(a.code), a.code);
-    // plateau complet : les codes d'équilibre sont cohérents avec PM.graphe (villes non traversables)
-    const d = avecJetons(plateauComplet(), TOUTES_JONCTIONS.map(([i, j]) => [i, j, (i === 1 || i === 3) && j === 2 ? 'carrefour' : 'capture']));
-    const e = globalThis.PM.graphe.equilibre(d, { villesTraversables: false });
-    assert.equal(e.complet, true);
-    const attendu = e.alertes.map((a) => a.code).filter((c) => ['cinq_contre_deux', 'ecart_rang_etendu', 'premiere_ville_inegale'].includes(c)).sort();
-    const obtenu = C.calculer(d).alertes.map((a) => a.code).filter((c) => ['cinq_contre_deux', 'ecart_rang_etendu', 'premiere_ville_inegale'].includes(c)).sort();
-    assert.deepEqual(obtenu, attendu);
-  } finally {
-    delete globalThis.PM.graphe;
-  }
-});
-
-test('carrefours : message enrichi avec le taux de « 5 contre 2 » hors paire par défaut', () => {
-  const base = plateauComplet();
-  const jetons = (a, b) => TOUTES_JONCTIONS.map(([i, j]) => [i, j, ((i === a[0] && j === a[1]) || (i === b[0] && j === b[1])) ? 'carrefour' : 'capture']);
-  // paire par défaut : pas d'alerte de paire
-  assert.equal(trouver(C.calculer(avecJetons(base, jetons([1, 2], [3, 2]))).alertes, 'carrefours_paire').length, 0);
-  // autre paire permise : alerte avec le taux
-  const al = trouver(C.calculer(avecJetons(base, jetons([1, 1], [1, 2]))).alertes, 'carrefours_paire');
-  assert.equal(al.length, 1);
-  assert.match(al[0].message, /\(1, 1\) et \(1, 2\)/);
-  assert.match(al[0].message, /9,6 %/);
-  assert.equal(al[0].niveau, 'alerte');
-  // l'ordre de pose ne change pas la paire
-  const inverse = trouver(C.calculer(avecJetons(base, jetons([1, 2], [1, 1]))).alertes, 'carrefours_paire');
-  assert.equal(inverse[0].message, al[0].message);
-  // paire du même camp : alerte existante, pas d'alerte de paire
-  const meme = C.calculer(avecJetons(base, jetons([1, 1], [2, 1]))).alertes;
-  assert.equal(trouver(meme, 'carrefours_paire').length, 0);
-  assert.equal(trouver(meme, 'carrefours_meme_cote').length, 1);
-  // paire à 0 % (autre que la paire par défaut) : pas d'alerte
-  assert.equal(trouver(C.calculer(avecJetons(base, jetons([1, 2], [2, 2]))).alertes, 'carrefours_paire').length, 0);
-});
-
-test('équilibre vérifié : pas d\'alerte carrefours_paire ; elle reste si l\'équilibre manque ou alerte ; ville_inaccessible affichée', () => {
-  delete require.cache[require.resolve('../src/graphe.js')]; // le test précédent a retiré PM.graphe
-  require('../src/graphe.js');
-  const GR = globalThis.PM.graphe, vrai = GR.equilibre;
-  const jetons = (a, b) => TOUTES_JONCTIONS.map(([i, j]) => [i, j, ((i === a[0] && j === a[1]) || (i === b[0] && j === b[1])) ? 'carrefour' : 'capture']);
-  const d = avecJetons(plateauComplet(), jetons([1, 1], [1, 2]));
-  const remplacer = (patch) => { GR.equilibre = (doc, o) => Object.assign({}, vrai(doc, o), patch); };
-  try {
-    remplacer({ complet: true, alertes: [] });
-    assert.equal(trouver(C.calculer(d).alertes, 'carrefours_paire').length, 0, 'équilibre mesuré sans alerte');
-    remplacer({ complet: true, alertes: [{ code: 'apparition_lointaine', message: 'x' }] });
-    assert.equal(trouver(C.calculer(d).alertes, 'carrefours_paire').length, 0, 'alerte hors panneau : sans effet');
-    remplacer({ complet: false, alertes: [] });
-    assert.equal(trouver(C.calculer(d).alertes, 'carrefours_paire').length, 1, 'équilibre non mesurable');
-    remplacer({ complet: true, alertes: [{ code: 'ville_inaccessible', message: '1 ville(s) hors d\'atteinte du joueur 2.' }] });
+test('plateau complet très déséquilibré : ERREUR qui nomme le critère, sans cible ; pose toujours permise', () => {
+  avecGraphe(() => {
+    const d = A.plateauDesequilibre();
     const r = C.calculer(d);
-    assert.equal(trouver(r.alertes, 'carrefours_paire').length, 1, 'équilibre mauvais');
-    assert.equal(trouver(r.alertes, 'ville_inaccessible').length, 1);
-    assert.ok(r.regroupees.some((g) => g.code === 'ville_inaccessible' && g.libelle === 'Ville inaccessible'));
-  } finally {
-    GR.equilibre = vrai;
-    delete globalThis.PM.graphe;
-  }
+    const e = trouver(r.erreurs, 'desequilibre');
+    assert.equal(e.length, 1);
+    assert.equal(e[0].niveau, 'erreur');
+    assert.match(e[0].message, /^Plateau très déséquilibré : .*5 contre 2/);
+    assert.equal(e[0].cible, null);
+    assert.equal(r.regroupees[0].code, 'desequilibre');
+    // « 5 contre 2 » bloquant : pas aussi en alerte
+    assert.equal(trouver(r.alertes, 'cinq_contre_deux').length, 0);
+    // la pose et le retrait restent permis
+    assert.equal(M.retirerTuile(d, 0, 0).plateau.tuiles.length, 15);
+    // plateau incomplet (une tuile retirée) : plus d'erreur d'équilibre
+    assert.equal(trouver(C.calculer(M.retirerTuile(d, 1, 1)).erreurs, 'desequilibre').length, 0);
+  });
+});
+
+test('équilibre : sans PM.graphe chargé ou si PM.graphe lève, aucune erreur ni alerte d\'équilibre', () => {
+  require('../src/graphe.js');
+  const GR = globalThis.PM.graphe;
+  delete globalThis.PM.graphe;
+  try {
+    const r = C.calculer(A.plateauDesequilibre());
+    assert.equal(trouver(r.erreurs, 'desequilibre').length, 0);
+  } finally { globalThis.PM.graphe = GR; }
+  const vrai = GR.construire;
+  GR.construire = () => { throw new Error('panne'); };
+  try {
+    assert.doesNotThrow(() => C.calculer(A.plateauDesequilibre()));
+    assert.equal(trouver(C.calculer(A.plateauDesequilibre()).erreurs, 'desequilibre').length, 0);
+  } finally { GR.construire = vrai; }
+});
+
+test('villes à moins de 3 cases : alerte (jamais bloquante), cible = la seconde ville', () => {
+  avecGraphe(() => {
+    // centrales sans relais : porteuses reliées directement (alerte R2 dans l'éditeur)
+    const z = M.copieExemples()[0];
+    z.id = 'z';
+    z.chemins = z.chemins.filter((c) => c.id !== 'r1').concat([{ id: 'h9', a: { case: 'c1' }, b: { case: 'c2' } }]);
+    let d = A.plateauComplet('4x4', null, (col, lig) => (col === 1 && lig === 1 ? 'z' : null), [z]);
+    d = M.poserJeton(M.poserJeton(d, 1, 1), 2, 1);
+    const r = C.calculer(d);
+    const a = trouver(r.alertes, 'villes_proches');
+    assert.equal(a.length, 1);
+    assert.match(a[0].message, /Villes \(1, 1\) et \(2, 1\) à 2 case\(s\) d'écart : la règle en demande au moins 3\./);
+    assert.deepEqual(a[0].cible, { type: 'jonction', i: 2, j: 1 });
+    assert.deepEqual(r.erreurs, []);
+  });
+});
+
+test('plus de 7 villes : alerte ; plateau non connexe : alerte une fois la grille remplie', () => {
+  avecGraphe(() => {
+    let d = A.plateauComplet('4x4', true);
+    d = M.poserJeton(M.poserJeton(d, 1, 2), 3, 2);
+    assert.match(trouver(C.calculer(d).alertes, 'trop_de_villes')[0].message, /9 villes/);
+    // coin sans aucun raccord ni port vers le reste : îlot
+    const ilot = M.copieExemples()[2];
+    ilot.id = 'ilot';
+    ilot.chemins = [{ id: 'h1', a: { case: 'c2' }, b: { case: 'c1' } }];
+    const d2 = A.plateauComplet('4x4', null, (col, lig) => (col === 0 && lig === 0 ? 'ilot' : null), [ilot]);
+    assert.equal(trouver(C.calculer(d2).alertes, 'plateau_non_connexe').length, 1);
+    assert.equal(trouver(C.calculer(M.retirerTuile(d2, 3, 3)).alertes, 'plateau_non_connexe').length, 0);
+  });
+});
+
+test('alertes de place reprises de validerPlateau, avec leur cible de surbrillance', () => {
+  let d = A.documentExemples();
+  d = M.poserTuile(d, 'ex-centrale', 1, 0);
+  const r = C.calculer(d);
+  const a = trouver(r.alertes, 'gabarit_place')[0];
+  assert.deepEqual(a.cible, { type: 'tuile', col: 1, lig: 0 });
+  assert.equal(trouver(r.alertes, 'pourtour_sans_apparition').length, 1);
+  assert.ok(r.regroupees.some((g) => g.code === 'gabarit_place' && g.libelle === 'Tuiles hors de leur place'));
+});
+
+test('raccord mort et port vers le bord : cibles de surbrillance ; ordre des groupes', () => {
+  let d = A.documentExemples();
+  d = M.poserTuile(d, 'ex-bord', 1, 0, 2); // retourné : raccord au nord face au vide, ports vers le bord
+  d.modeles[1].exemplaires = 9;
+  d = M.poserTuile(d, 'ex-bord', 2, 0);
+  d.plateau.tuiles.push({ modeleId: 'absent', col: 3, lig: 3, rot: 0 });
+  const r = C.calculer(d);
+  const mort = trouver(r.alertes, 'raccord_mort').find((x) => x.cible.col === 1 && x.cible.cote === 0);
+  assert.deepEqual(mort.cible, { type: 'raccord', col: 1, lig: 0, cote: 0, pos: 1 });
+  assert.deepEqual(trouver(r.alertes, 'port_pourtour')[0].cible, { type: 'port', col: 1, lig: 0, coin: 0 });
+  assert.deepEqual(r.regroupees.map((g) => g.code).slice(0, 3), ['modele_absent', 'raccord_mort', 'port_pourtour']);
+});
+
+test('modèle incomplet posé et exemplaires dépassés : erreurs, cible = une tuile du modèle', () => {
+  let d = A.plateauComplet('4x4');
+  d.modeles[0].cases[0].diametre = 50;
+  d.modeles[2].exemplaires = 1;
+  const r = C.calculer(d);
+  assert.ok(trouver(r.erreurs, 'modele_incomplet').length >= 1);
+  assert.deepEqual(trouver(r.erreurs, 'exemplaires_depasses')[0].cible, { type: 'tuile', col: 0, lig: 0 });
+});
+
+test('revaliderPlateau = calculer(doc).erreurs ; calculer ne modifie pas le document ; document invalide refusé', () => {
+  avecGraphe(() => {
+    const d = A.plateauDesequilibre(), avant = JSON.stringify(d);
+    assert.deepEqual(C.revaliderPlateau(d), C.calculer(d).erreurs);
+    assert.equal(JSON.stringify(d), avant);
+  });
+  assert.throws(() => C.calculer({}), /Document invalide/);
+  assert.throws(() => C.calculer({ plateau: { tuiles: [], jetons: [] } }), /bibliothèque/);
+  // un document v2 n'a pas de forme : accepté
+  assert.doesNotThrow(() => C.calculer(M.nouveauDocument()));
+});
+
+test('équilibre modéré : alerte « à surveiller » (S ≥ 4) seulement sur plateau complet, sans erreur', () => {
+  avecGraphe(() => {
+    let d = A.plateauASurveiller();
+    const r = C.calculer(d);
+    assert.deepEqual(r.erreurs, []);
+    assert.match(trouver(r.alertes, 'score_s')[0].message, /Score S = 5/);
+    d = M.retirerJeton(d, 1, 3);
+    assert.equal(trouver(C.calculer(d).alertes, 'score_s').length, 0);
+  });
 });
