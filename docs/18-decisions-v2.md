@@ -79,3 +79,8 @@ Après les avis `28-avis-design-5x5.md` (design de jeu) et `29-avis-geometrie-5x
 - **Placement par défaut des 7 villes : « 2-3-2 »** : 2 villes sur la rangée de jonctions côté vert (j = 1), 3 sur les deux rangées du milieu (j = 2 et 3), 2 côté rouge (j = 4). Remplace le « 3 + 1 + 3 » proposé par l'advisor design de jeu ; à mesurer sur le vrai catalogue.
 - **Pions : Ø 20 au plus** (consigne maintenue ; l'advisor prépresse, `26-avis-prepresse-cases-20.md`, conseillait Ø 16 à 18).
 - Acceptés par défaut, sans objection de l'utilisateur : pas de mur (C5) en 5×5 ; aucun raccord latéral hors du raccourci sur les bords et les coins ; B7 et son miroir B7m sont deux modèles ; le générateur oriente les centrales pour nourrir les jonctions ; tempo plus lent qu'en 4×4, à confirmer à la mesure.
+
+## Orientation après essai du 5×5 (2026-10-16)
+- **Hexagonal : pas avant que les plateaux carrés soient terminés** (remarque de l'utilisateur : il pourrait être plus simple sur certains aspects ; aucune étude ni préparation d'ici là).
+- **Tuiles plus « organiques »** : sortir du quadrillage des centrales en croix (4 raccords au milieu reliés au centre) avec des **virages**, des **T** et des **tuiles coupées en deux réseaux** (dans l'esprit de C3 « Deux ponts » du 4×4, apprécié), éventuellement des chemins coudés ou courbes ; inspiration : l'appariement des bords de Carcassonne. Gros chantier accepté : « à ce stade, on peut essayer beaucoup de choses ». Chemins qui se croisent sans se rejoindre (ponts) : non.
+- Observé sur un plateau 5×5 : jonctions reliées par des ports venant toutes du même côté (cul-de-sac), jonction à un seul port (impasse), villes à 2 accès ; à traiter avec ce chantier et le générateur.

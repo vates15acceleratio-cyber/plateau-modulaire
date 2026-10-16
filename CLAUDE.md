@@ -14,7 +14,7 @@ Toujours répondre à l'utilisateur **en français**. Code, identifiants et comm
 6. Historique de la version 1 (pour le contexte seulement) : `docs/0-brief.md`, `docs/archives/3-synthese.md`, `docs/archives/` (avis, mesures et revues de la version 1).
 
 ## Interdits et règles fermes
-- **Format hexagonal : ne rien faire, pas même préparer**, tant que l'utilisateur n'a pas donné son feu vert.
+- **Format hexagonal : ne rien faire, pas même préparer**, tant que l’utilisateur n’a pas donné son feu vert ; pas avant que les plateaux carrés soient terminés (docs/18, 2026-10-16).
 - Commits avec l'**adresse anonyme GitHub** de l'utilisateur (déjà réglée dans la configuration locale du dépôt) ; ne jamais publier son adresse personnelle. Dépôt public sans licence (tous droits réservés) : https://github.com/vates15acceleratio-cyber/plateau-modulaire
 - Ne pas affaiblir la politique CSP de `index.html` (pas de script, style ou attribut `style=` en ligne ; utiliser des classes CSS).
 
