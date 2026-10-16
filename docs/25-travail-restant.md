@@ -4,6 +4,12 @@ L'utilisateur a marqué une pause ; il reprendra **après discussion**. Rien ne 
 
 ## 1. À faire (dans l'ordre prévu)
 
+### 1.0 Tuiles « organiques » — en cours (branche `tuiles-organiques`)
+- Fait : décision (docs/18, « Orientation après essai du 5×5 »), cahier `docs/34`, avis géométrie `docs/35`, croquis `docs/croquis/croquis-organiques.png` montrés à l’utilisateur.
+- **À faire à la reprise** : avis design de jeu (lancé le 2026-10-16 au soir, résultat non consigné : le relancer sur `docs/34` § 5 « Design de jeu » s’il manque, et le consigner en `docs/36`) ; retours de l’utilisateur sur les croquis ; décisions (tuiles retenues, appariement des bords en alerte ou en refus de pose, règle M4, nombre de tuiles à deux réseaux, retouches du 4×4 pour l’harmonie) ; puis production, testeur, relecteur, versionneur.
+- Remarque de l’orchestrateur sur le plateau témoin : 4 villes empilées dans une même colonne ; à soumettre à l’advisor design.
+- Le générateur 5×5 (§ 1.2) devra intégrer l’appariement des bords et le budget de ports de `docs/35` § 4.
+
 ### 1.1 Catalogue 5×5 — fait (branche `catalogue-5x5`)
 - **Fait** : cahier des charges et arbitrage (`docs/24`), avis design et géométrie (`docs/28`, `docs/29`), catalogue de 6 modèles et 30 tuiles (K2 5, B1 6, B7 4, B7m 4, C7 6, C8 5) dans `src/catalogue.js`, recette (`docs/32`), revue (`docs/33`). « Nouveau → 5×5 » crée un plateau ; la pose à la main est utilisable.
 - ~~Ancienne consigne au sous-agent~~ (environ 30 modèles, coins K1 / K3, etc.) : **obsolète**, remplacée par `docs/24` § 8.

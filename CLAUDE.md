@@ -35,7 +35,9 @@ Toujours répondre à l'utilisateur **en français**. Code, identifiants et comm
 - Dans une chaîne JS entre apostrophes droites, une apostrophe française casse la syntaxe : utiliser `’` ; lancer `node --check` après chaque modification.
 - Ne jamais modifier le fichier d'un sous-agent en cours avec une expression régulière large.
 
-## État (2026-10-16) — PAUSE
+## État (2026-10-16, soir) — PAUSE
 - **L'utilisateur a marqué une pause et reprendra après discussion : ne rien lancer sans son accord.**
-- Version 3.02.0 en PR. Le **catalogue 5×5 est fait** sur la branche `catalogue-5x5` (6 modèles, 30 tuiles, `docs/24`, `29`, `32`, `33`) : pose à la main utilisable. À faire : **générateur 5×5** (provisoire aujourd’hui), mesures sur 1000 plateaux, seuils 5×5. Méthode du brief §8 appliquée avec agents (advisors, production, testeur, relecteur, versionneur). `node --test` et les deux recettes passent.
+- **Version 3.03.0 sur `main`** (étiquettes 3.02.0 et 3.03.0) : cases Ø 20, catalogue 5×5 en pose à la main (6 modèles, 30 tuiles). Générateur 5×5 provisoire.
+- **Chantier en cours : tuiles « organiques »**, branche `tuiles-organiques` (poussée sur GitHub) : cahier `docs/34`, avis géométrie `docs/35` (10 centrales validées : virage, droite, té, impasse, deux réseaux ; une seule tuile à deux réseaux par plateau dans le budget ; courbes M3 à plus tard), croquis `docs/croquis/` (regénérés par `node outils/croquis-organiques.js <dépôt> <sortie.html>`). **Avis design de jeu à relancer ou à consigner** (`docs/36`), puis décisions de l’utilisateur (quelles tuiles garder, appariement en alerte ou en refus de pose, règle M4 « ports d’au moins 2 côtés », tuiles à deux réseaux au-delà d’une), puis production. Le générateur 5×5 attend ce chantier.
+- Méthode du brief §8 appliquée avec agents et **modèles du brief** (Opus pour advisors design / géométrie, relecteur et générateur ; Sonnet pour production et testeur ; Haiku pour le versionneur). `node --test` et les deux recettes passent.
 - **Travail restant et idées à étudier : `docs/25-travail-restant.md`** (générateur 5×5, mesures et seuils 5×5, recette / sécurité, petites dettes, hexagonal en attente, idée nouvelle des **régions thématiques** à discuter).
