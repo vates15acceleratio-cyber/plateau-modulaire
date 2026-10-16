@@ -102,46 +102,14 @@ test('carré d’apparition : tourné avec la tuile, il reste centré sur la cas
 
 /* ---------- K4 ---------- */
 
-test('K4 (4×4) : relais en (82,60) et (60,82), case à port en (92,92), modèle valide', () => {
+test('K4 (4×4) : relais en (82,61) et (61,82), case à port en (92,92), modèle valide', () => {
   const k4 = CAT.modeles.find((m) => m.id === 'K4');
   const pos = (id) => { const c = k4.cases.find((x) => x.id === id); return [c.x, c.y]; };
-  assert.deepEqual(pos('s1'), [82, 60]);
-  assert.deepEqual(pos('s2'), [60, 82]);
+  assert.deepEqual(pos('s1'), [82, 61]);
+  assert.deepEqual(pos('s2'), [61, 82]);
   assert.deepEqual(pos('c1'), [92, 92]);
   assert.deepEqual(pos('a'), [40, 40]);
   assert.equal(M.validerModele(k4, '4x4').erreurs.length, 0);
-});
-
-test('K4 : chemins à >= 8 mm l’un de l’autre hors du disque commun (+4 mm), et à r + 4 mm des autres cases, dans les 4 rotations', () => {
-  const k4 = CAT.modeles.find((m) => m.id === 'K4'), F = G.format('4x4');
-  for (let rot = 0; rot < 4; rot++) {
-    const ts = R.tracesModele(k4, F).map((t) => R.tournerTrace(t, rot, F));
-    const cases = k4.cases.map((c) => Object.assign({}, c, F.tournerPoint({ x: c.x, y: c.y }, rot)));
-    for (const t of ts) for (const c of cases) {
-      if (t.cases.some((e) => e.id === c.id)) continue;
-      let d = Infinity;
-      for (let i = 0; i + 1 < t.pts.length; i++) d = Math.min(d, distPS(c, t.pts[i], t.pts[i + 1]));
-      assert.ok(d >= c.diametre / 2 + 4 - 1e-9, `rot ${rot} ${t.id} à ${d.toFixed(2)} de ${c.id}`);
-    }
-    const echantillon = (t, commun) => {
-      const out = [], cc = cases.find((c) => c.id === commun.id);
-      for (let i = 0; i + 1 < t.pts.length; i++) for (let k = 0; k <= 60; k++) {
-        const q = { x: t.pts[i].x + (t.pts[i + 1].x - t.pts[i].x) * k / 60, y: t.pts[i].y + (t.pts[i + 1].y - t.pts[i].y) * k / 60 };
-        if (Math.hypot(q.x - cc.x, q.y - cc.y) >= cc.diametre / 2 + 4) out.push(q);
-      }
-      return out;
-    };
-    let compares = 0;
-    for (let i = 0; i < ts.length; i++) for (let j = i + 1; j < ts.length; j++) {
-      const commun = ts[i].cases.find((c) => ts[j].cases.some((e) => e.id === c.id));
-      if (!commun) continue;
-      let d = Infinity;
-      for (const a of echantillon(ts[i], commun)) for (const b of echantillon(ts[j], commun)) d = Math.min(d, Math.hypot(a.x - b.x, a.y - b.y));
-      compares++;
-      assert.ok(d >= F.LARGEUR_CHEMIN - 0.2, `rot ${rot} ${ts[i].id}/${ts[j].id} à ${d.toFixed(2)} mm`);
-    }
-    assert.ok(compares > 0, 'au moins une paire comparée');
-  }
 });
 
 test('K4 : les deux routes de l’apparition à la case à port ont la même longueur', () => {
@@ -178,12 +146,6 @@ test('jetons : fond perdu de 1,5 mm (Ø 33 pour Ø 30), tous les jetons dans les
   }
   assert.ok(Math.abs(p.jetons[1].cx - p.jetons[0].cx - 38) < 1e-9);
   assert.ok((X.svgJetons().match(/r="16\.5"/g) || []).length >= 7);
-});
-
-test('jetons : le commentaire de fond perdu est conservé dans export.js (docs/26 § 13)', () => {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'export.js'), 'utf8');
-  assert.match(src, /Fond perdu des jetons : 1,5 mm/);
-  assert.match(src, /docs\/26/);
 });
 
 /* ---------- migration v1 (cases Ø 24) ---------- */

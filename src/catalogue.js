@@ -150,7 +150,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       // losange : deux relais symétriques entre l'apparition et la case à port, deux routes de même longueur
       // (toujours 2 cases avant la jonction, 3 pas)
       modele('K4', 'Coin en losange', 'coin', 1,
-        [appar('a', 40, 40), kase('s1', 82, 60), kase('s2', 60, 82), kase('c1', 92, 92)], [
+        [appar('a', 40, 40), kase('s1', 82, 61), kase('s2', 61, 82), kase('c1', 92, 92)], [
           lien('h1', 'a', 's1'), lien('h2', 'a', 's2'), lien('h3', 's1', 'c1'), lien('h4', 's2', 'c1'), port('p1', 'c1', 2)
         ].concat(raccourciCoin('a', 'a')))
     ];

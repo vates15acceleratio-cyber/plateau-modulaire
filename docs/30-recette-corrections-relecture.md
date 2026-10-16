@@ -1,6 +1,6 @@
 # Recette des corrections de la relecture (testeur, Sonnet 5.5), 2026-10-16
 
-Objet : commit ae21cca (docs/27 et docs/26), branche `corrections-relecture`. Aucun fichier de `src/` modifié.
+Objet : commit ae21cca (docs/27 et docs/26), branche `corrections-relecture`. Aucun fichier de `src/` modifié par le testeur.
 
 ## Tests ajoutés : `tests/corrections-relecture.test.js` (13 tests)
 1. DIAMETRE_CASE : valeur 20 dans 4×4 et 5×5, égale à DIAMETRE_CASE_JONCTION, <= Ø max ; toutes les cases des exemples (2 formats) et du catalogue ; `DIAMETRE_DEFAUT` de l'éditeur.
