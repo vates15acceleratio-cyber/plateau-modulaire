@@ -46,3 +46,7 @@
 - **Villes non traversables** : c'est la **règle du jeu** (on s'arrête dans une ville). L'option « traversables » peut disparaître de l'interface.
 - **Nombre de cases** : **≈ 75 pour le 5×5** (au lieu de 80 à 90), **≈ 60 pour le 4×4** (confirmé).
 - **Conséquences arbitrées par l'orchestrateur** (détail dans `20-avis-geometrie-v2.md`) : les règles qui garantissent l'écart entre villes (R1 à R4) sont des **alertes** dans l'éditeur, pas des blocages ; un plateau **complet** très déséquilibré est une **erreur** (pose toujours permise, export de l'aperçu refusé).
+
+## Réponses de l'utilisateur aux mesures du catalogue 4×4 v2 (`21-mesures-catalogue-v2.md`)
+- **Anneau du pourtour** (raccourcis qui relient toutes les apparitions, contact vert / rouge en 1 pas sur les flancs) : **accepté**, aucun changement.
+- **Tempo** (première ville à 2 pas, 5,7 villes sur 7 à 3 pas au plus) : **voulu**, aucun changement.
