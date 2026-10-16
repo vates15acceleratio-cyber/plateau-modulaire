@@ -27,6 +27,6 @@ Aucun. Tous les tests passent ; aucun `skip` ni `todo` ajouté. (Le jeu aux coin
 
 ## git status --short
 ```
-?? docs/28-recette-corrections-relecture.md
+?? docs/30-recette-corrections-relecture.md (renuméroté par l’orchestrateur ; le n° 28 est pris sur la branche catalogue-5x5)
 ?? tests/corrections-relecture.test.js
 ```
