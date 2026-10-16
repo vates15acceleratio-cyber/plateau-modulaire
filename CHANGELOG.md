@@ -1,5 +1,21 @@
 # Journal des modifications
 
+## [3.01.0] - 2026-10-16
+
+Mineure
+
+Trois ajouts isolés et un réglage, sans changement de l'usage principal : suppression d'une tuile utilisateur, légende « Commandes » illustrée, cible de 63 cases en 4×4, et documents de reprise. Aucune capacité n'est retirée ni à réapprendre. Le format des documents reste compatible avec la 3.00.0.
+
+### Ajouté
+- Suppression d'une tuile utilisateur de la bibliothèque, par le bouton ✕ de sa vignette ou par le bouton « Supprimer cette tuile » de l'éditeur. Une confirmation annonce les tuiles posées et les villes qui seront retirées du plateau ; l'opération s'annule avec Ctrl+Z. Les tuiles du catalogue livré ne peuvent pas être supprimées.
+- Carte « Commandes » : légende illustrée des gestes de la souris (dessinés) et des touches du clavier, avec un contenu propre à chaque onglet (Plateau, Tuiles). Elle se replie, et son état est mémorisé. À partir de 1600 px de large, elle est à droite du plateau ; en dessous, elle se place sous l'écran actif.
+- Documentation de reprise : liste du travail restant avec l'idée des régions thématiques (`docs/25-travail-restant.md`), et brouillon inachevé du catalogue 5×5, à consulter seulement, non appliqué (`docs/brouillons/`).
+
+### Modifié
+- Cible de cases du plateau 4×4 : passe de ≈ 60 à ≈ 63, choix accepté par l'utilisateur ; le compteur et le générateur visent 63.
+- Disposition de l'écran : la bibliothèque occupe toute la hauteur de la colonne de gauche et défile seule.
+- Documentation : README, CLAUDE.md et décisions (`docs/18-decisions-v2.md`) mis à jour pour la 3.00.0 et l'état de pause.
+
 ## [3.00.0] - 2026-10-16
 
 Majeure
