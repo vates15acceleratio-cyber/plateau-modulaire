@@ -1,12 +1,20 @@
 # Journal des modifications
 
-## [Non publié] - Cases à Ø 20 mm et consolidation
+## [3.02.0] - 2026-10-16
 
+Mineure
+
+Les cases du catalogue, les jonctions-cases et les cases neuves de l’éditeur passent de Ø 24 à Ø 20 mm, et le rendu des cases et des traits évolue. Le format des documents reste compatible avec la 3.01.0 : les diamètres enregistrés sont inchangés, mais les quarts de jonction des anciens documents s’affichent à Ø 20.
+
+### Modifié
 - Cases du catalogue, jonctions-cases et cases neuves de l’éditeur à Ø 20 mm au lieu de 24 (`docs/18-decisions-v2.md`, « Taille des cases »). Diamètre maximal de l’éditeur inchangé ; les diamètres enregistrés dans les documents existants sont inchangés. Le rendu des anciens documents change : leurs quarts de jonction passent à Ø 20, à côté de cases restées à Ø 24.
 - B5 et K4 : cases déplacées de quelques millimètres pour garder 8 mm entre chemins voisins ; liaisons inchangées.
 - Rendu : carré d’apparition plus petit (côté r·√2 − 3) et trait d’impression de 1,0 mm au lieu de 0,6 (avis prépresse, docs/26) ; une case sans diamètre se dessine à Ø 20 au lieu du Ø maximal (constante `DIAMETRE_CASE`).
+
+### Ajouté
 - CI : installation de PyMuPDF pour que les tests PDF tournent.
 - Consolidation sans changement de comportement : historique de la version 1 déplacé dans `docs/archives/` (références mises à jour), `docs/4-architecture.md` réécrit d’après l’état réel, CI GitHub (`node --test`), retrait de trois pages d’essai cassées et de `outils/mesures-generateur.js`.
+- Documentation : avis prépresse (`docs/26`), revues du relecteur (`docs/27`, `docs/31`), recette du testeur (`docs/30`).
 
 ## [3.01.0] - 2026-10-16
 
