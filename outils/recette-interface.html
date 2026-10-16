@@ -37,7 +37,6 @@
   <main class="pm-principal">
     <div class="pm-colonne-gauche pm-colonne-pile">
       <aside id="bibliotheque" class="pm-biblio-zone" aria-label="Bibliothèque de tuiles"></aside>
-      <aside id="aide" class="pm-aide-zone" aria-label="Commandes à la souris et au clavier"></aside>
     </div>
     <section id="ecran-plateau" class="pm-ecran" data-ecran="plateau">
       <div id="assemblage" class="pm-zone-centrale"></div>
@@ -46,6 +45,7 @@
     <section id="ecran-tuiles" class="pm-ecran" data-ecran="tuiles" hidden>
       <div id="editeur" class="pm-zone-editeur"></div>
     </section>
+    <aside id="aide" class="pm-aide-zone" aria-label="Commandes à la souris et au clavier"></aside>
   </main>
   <dialog id="dialogue" class="pm-dialogue" aria-labelledby="dialogue-titre">
     <header class="pm-dialogue-entete"><h2 id="dialogue-titre"></h2><button type="button" id="dialogue-fermer" aria-label="Fermer">✕</button></header>
@@ -240,7 +240,7 @@
       cp = compteurs();
       var pasOk = Object.keys(cp).filter(function (k) { return !cp[k].ok; }).map(function (k) { return k + '=' + cp[k].v; });
       ctrl('tous les compteurs à « ok »', pasOk.length === 0, pasOk.join(', '));
-      ctrl('compteur « Cases (tuiles et jonctions) » : 54 (≈ 60)', cp['Cases (tuiles et jonctions)'] && cp['Cases (tuiles et jonctions)'].v === '54 (≈ 60)', cp['Cases (tuiles et jonctions)'] && cp['Cases (tuiles et jonctions)'].v);
+      ctrl('compteur « Cases (tuiles et jonctions) » : 54 (≈ 63)', cp['Cases (tuiles et jonctions)'] && cp['Cases (tuiles et jonctions)'].v === '54 (≈ 63)', cp['Cases (tuiles et jonctions)'] && cp['Cases (tuiles et jonctions)'].v);
       ctrl('pastille « Plateau complet »', pastille() === 'Plateau complet' && $('pastille-alertes').classList.contains('pm-ok'), pastille());
       ctrl('panneau : « Aucune erreur ni alerte. »', !!document.querySelector('.pm-controles-vide'));
       ctrl('compteur d\'écran « Villes posées 7/7 »', /Villes posées 7\/7/.test(document.querySelector('[data-role="jetons"]').textContent));
@@ -919,22 +919,25 @@
       // Bloc « Commandes »
       reset(PM.catalogue.nouveauDocument());
       var det = document.querySelector('#aide details');
-      ctrl('Commandes : bloc présent sous la bibliothèque, dans la colonne de gauche',
-        !!det && $('aide').getBoundingClientRect().top >= $('bibliotheque').getBoundingClientRect().bottom - 1 && $('aide').closest('.pm-colonne-gauche') === $('bibliotheque').closest('.pm-colonne-gauche'));
+      ctrl('Commandes : carte hors de la colonne de gauche, à droite de la bibliothèque',
+        !!det && !$('aide').closest('.pm-colonne-gauche') && (window.innerWidth <= 900 ? $('aide').getBoundingClientRect().top >= $('bibliotheque').getBoundingClientRect().bottom - 1 : $('aide').getBoundingClientRect().left >= $('bibliotheque').getBoundingClientRect().right - 1));
+      var larg = window.innerWidth >= 1600, ra = $('aide').getBoundingClientRect();
+      ctrl(larg ? 'Commandes : écran large, carte compacte (≤ 330 px) à gauche de la colonne des compteurs, en haut' : 'Commandes : écran < 1600 px, carte dans le flux sous le plateau',
+        larg ? (ra.width <= 330 && ra.right <= $('controles').getBoundingClientRect().left + 1 && ra.top < $('assemblage').getBoundingClientRect().top + 40) : (ra.top >= $('assemblage').getBoundingClientRect().bottom - 1), Math.round(ra.width) + ' px');
       // sans état mémorisé : ouvert, sauf fenêtre étroite (900 px ou moins) où la colonne est courte
       ctrl('Commandes : repliable (<details>), ouvert par défaut (replié sur écran étroit)', det.tagName === 'DETAILS' && det.open === !window.matchMedia('(max-width: 900px)').matches, window.innerWidth + ' px, open=' + det.open);
       det.open = true;
-      ctrl('Commandes : visible à l\'écran (le bas du bloc est dans la fenêtre)', $('aide').getBoundingClientRect().bottom <= window.innerHeight + 1, $('aide').getBoundingClientRect().bottom + ' / ' + window.innerHeight);
+      ctrl('Commandes : une ligne illustrée par commande (souris SVG, touches kbd, badge ×2)', document.querySelectorAll('#aide .pm-aide-ligne').length > 10 && !!document.querySelector('#aide svg.pm-aide-souris') && !!document.querySelector('#aide kbd') && !!document.querySelector('#aide .pm-aide-badge'));
       ctrl('Commandes : onglet Plateau — souris et clavier dans le même bloc', aideOnglet() === 'plateau' && !!document.querySelector('#aide [data-groupe="souris"]') && !!document.querySelector('#aide [data-groupe="clavier"]'));
-      ctrl('Commandes (Plateau) : jonction, clic droit sur une tuile posée, alerte, ✕, Ctrl+Z',
-        /Clic sur une jonction/.test(aideTexte()) && /Clic droit sur une tuile posée/.test(aideTexte()) && /alerte/.test(aideTexte()) && /✕/.test(aideTexte()) && /Ctrl\+Z/.test(aideTexte()));
-      ctrl('Commandes (Plateau) : ni flèches ni gestes de l\'éditeur', !/Flèches/.test(aideTexte()) && !/Clic sur le fond/.test(aideTexte()));
+      ctrl('Commandes (Plateau) : ville / case chemin, retirer la tuile, alerte, ✕, Annuler et touche Ctrl',
+        /Ville \/ case chemin/.test(aideTexte()) && /Retirer la tuile/.test(aideTexte()) && /alerte/.test(aideTexte()) && /✕/.test(aideTexte()) && /Annuler/.test(aideTexte()) && /Ctrl/.test(aideTexte()));
+      ctrl('Commandes (Plateau) : ni déplacement de case ni gestes de l\'éditeur',!/Déplacer la case/.test(aideTexte()) && !/Ajouter une case/.test(aideTexte()));
       ouvrirOnglet('tuiles');
-      ctrl('Commandes : le contenu change avec l\'onglet Tuiles', aideOnglet() === 'tuiles' && /Clic sur le fond du canevas/.test(aideTexte()) && /Clic droit sur une case/.test(aideTexte()) && /Flèches/.test(aideTexte()) && /Ctrl\+D/.test(aideTexte()) && /Ctrl\+Z/.test(aideTexte()));
-      ctrl('Commandes (Tuiles) : plus de geste propre au plateau', !/Clic sur une jonction/.test(aideTexte()) && !/Clic droit sur une tuile posée/.test(aideTexte()));
+      ctrl('Commandes : le contenu change avec l\'onglet Tuiles', aideOnglet() === 'tuiles' && /Ajouter une case/.test(aideTexte()) && /Changer le type/.test(aideTexte()) && /Déplacer la case/.test(aideTexte()) && /Dupliquer la tuile/.test(aideTexte()) && /Annuler/.test(aideTexte()));
+      ctrl('Commandes (Tuiles) : plus de geste propre au plateau', !/Ville \/ case chemin/.test(aideTexte()) && !/Montrer l’alerte/.test(aideTexte()));
       ctrl('Commandes : le <details> n\'a pas été recréé au changement d\'onglet', document.querySelector('#aide details') === det);
       ouvrirOnglet('plateau');
-      ctrl('Commandes : retour à l\'onglet Plateau', aideOnglet() === 'plateau' && /Clic sur une jonction/.test(aideTexte()));
+      ctrl('Commandes : retour à l\'onglet Plateau', aideOnglet() === 'plateau' && /Ville \/ case chemin/.test(aideTexte()));
       return attendre(40).then(function () {
         det.open = false;
         return attendre(40);

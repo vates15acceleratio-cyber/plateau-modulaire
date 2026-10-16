@@ -32,9 +32,11 @@ button:focus-visible { outline: 2px solid var(--pm-accent); outline-offset: 1px;
 .pm-pastille.pm-neutre { background: #eef0ec; color: var(--pm-discret); }
 .pm-pastille.pm-erreur { background: #fdecea; color: var(--pm-erreur); }
 
-.pm-principal { display: grid; grid-template-columns: 360px 1fr; min-height: 0; }
+.pm-principal { display: grid; grid-template-columns: 360px 1fr; grid-template-rows: minmax(0, 1fr); min-height: 0; }
+.pm-principal > .pm-colonne-gauche { grid-row: 1 / -1; }
+.pm-principal > .pm-ecran { grid-column: 2; grid-row: 1; }
 .pm-colonne-gauche { border-right: 1px solid var(--pm-bord); background: var(--pm-panneau); overflow: auto; min-height: 0; }
-/* Colonne de gauche en pile : la bibliothèque défile, le bloc « Commandes » reste en bas (la colonne ne défile pas elle-même) */
+/* Colonne de gauche : la bibliothèque défile et occupe toute la hauteur */
 .pm-colonne-pile { display: flex; flex-direction: column; overflow: hidden; }
 .pm-biblio-zone { flex: 1 1 auto; overflow: auto; min-height: 0; }
 .pm-aide-zone { flex: 0 0 auto; }
@@ -69,12 +71,15 @@ button:focus-visible { outline: 2px solid var(--pm-accent); outline-offset: 1px;
 
 /* Écran moyen : bibliothèque un peu moins large pour laisser la place au plateau et au panneau de droite. */
 @media (max-width: 1200px) {
-  .pm-principal { grid-template-columns: 290px 1fr; }
+  .pm-principal { grid-template-columns: 290px 1fr; grid-template-rows: minmax(0, 1fr) auto; }
+  .pm-principal > .pm-colonne-gauche { grid-row: 1 / 3; }
 }
 
 /* Écran étroit : colonnes empilées, plateau sur toute la largeur, cibles tactiles de 44 px (recette B1). */
 @media (max-width: 900px) {
-  .pm-principal { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .pm-principal { grid-template-columns: 1fr; grid-template-rows: auto auto auto; min-height: auto; }
+  .pm-principal > .pm-colonne-gauche { grid-row: 1; }
+  .pm-principal > .pm-ecran { grid-column: 1; grid-row: 2; }
   .pm-colonne-gauche { max-height: 38vh; border-right: 0; border-bottom: 1px solid var(--pm-bord); }
   .pm-ecran { grid-template-columns: 1fr; grid-template-rows: minmax(60vh, 1fr) auto; }
   .pm-zone-centrale { min-height: 60vh; }

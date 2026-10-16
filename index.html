@@ -36,10 +36,9 @@
   </header>
 
   <main class="pm-principal">
-    <!-- Colonne de gauche commune aux deux onglets : bibliothèque (défile) et, en bas, bloc « Commandes » (repliable) -->
+    <!-- Colonne de gauche commune aux deux onglets : la bibliothèque (défile) -->
     <div class="pm-colonne-gauche pm-colonne-pile">
       <aside id="bibliotheque" class="pm-biblio-zone" aria-label="Bibliothèque de tuiles"></aside>
-      <aside id="aide" class="pm-aide-zone" aria-label="Commandes à la souris et au clavier"></aside>
     </div>
     <section id="ecran-plateau" class="pm-ecran" data-ecran="plateau">
       <div id="assemblage" class="pm-zone-centrale"></div>
@@ -48,6 +47,8 @@
     <section id="ecran-tuiles" class="pm-ecran" data-ecran="tuiles" hidden>
       <div id="editeur" class="pm-zone-editeur"></div>
     </section>
+    <!-- Carte « Commandes » : posée par la grille de .pm-principal en haut à droite de la zone centrale (styles/aide.css) -->
+    <aside id="aide" class="pm-aide-zone" aria-label="Commandes à la souris et au clavier"></aside>
   </main>
 
   <!-- Boîte de dialogue commune (export, rapport d'équilibre, plateau aléatoire) : PM.dialogue dans app.js. -->

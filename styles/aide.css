@@ -1,17 +1,40 @@
-/* aide.css : bloc « Commandes » (pm-aide-…), en bas de la colonne de gauche. */
+/*
+ * aide.css : carte « Commandes » (pm-aide-…), légende illustrée façon écran de commandes de jeu.
+ * Écran large : posée par la grille de .pm-principal dans la zone centrale, en haut à droite, à gauche de la colonne des compteurs
+ * (onglet Plateau) ou au bord droit de l'éditeur (onglet Tuiles). Écran < 1600 px : dans le flux, sous l'écran actif (en dessous, la place à droite du plateau ne suffit pas sans le masquer).
+ */
 
-.pm-aide { border-top: 2px solid var(--pm-bord); background: #f9faf8; }
-.pm-aide-titre { display: flex; align-items: baseline; gap: 4px; padding: 8px 10px; font-weight: 700; font-size: 14px; cursor: pointer; user-select: none; }
+.pm-aide-zone { grid-column: 2; grid-row: 1; align-self: start; justify-self: end; z-index: 5; width: 280px; max-height: calc(100% - 16px); margin: 8px 276px 0 0; display: flex; }
+body[data-vue="tuiles"] .pm-aide-zone { margin-right: 24px; }
+.pm-aide { flex: 1; min-height: 0; display: flex; background: #fbfcfa; border: 1px solid var(--pm-bord); border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, .15); }
+.pm-aide-bloc { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.pm-aide-titre { display: flex; align-items: baseline; gap: 4px; padding: 7px 10px; font-weight: 700; font-size: 14px; cursor: pointer; user-select: none; }
 .pm-aide-titre:focus-visible { outline: 2px solid var(--pm-accent); outline-offset: -2px; }
 .pm-aide-onglet { font-weight: 400; color: var(--pm-discret); font-size: 12px; }
-/* Le bloc défile seul quand la liste dépasse : la bibliothèque garde la plus grande partie de la colonne */
-.pm-aide-corps { max-height: 32vh; overflow: auto; padding: 0 10px 10px; }
-.pm-aide-groupe-titre { margin: 6px 0 4px; padding: 2px 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--pm-accent); background: #e6f4ec; border-radius: 3px; }
-.pm-aide-liste { margin: 0; }
-.pm-aide-geste { margin: 6px 0 0; font-size: 12px; font-weight: 700; line-height: 1.3; }
-.pm-aide-effet { margin: 1px 0 0 10px; font-size: 12px; line-height: 1.35; color: var(--pm-texte); }
+/* La carte défile seule quand la liste dépasse la hauteur disponible */
+.pm-aide-corps { overflow: auto; padding: 0 10px 8px; min-height: 0; max-height: calc(100vh - 170px); }
+.pm-aide-groupe-titre { margin: 4px 0 3px; padding: 1px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--pm-accent); background: #e6f4ec; border-radius: 3px; }
+.pm-aide-liste { margin: 0; padding: 0; list-style: none; }
+.pm-aide-ligne { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 2px 0; border-bottom: 1px dotted var(--pm-bord); }
+.pm-aide-picto { flex: 0 0 108px; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 3px; }
+.pm-aide-court { font-size: 12.5px; line-height: 1.25; }
+.pm-aide-souris { display: block; }
+.pm-aide-badge { padding: 0 5px; border-radius: 9px; background: #c46a00; color: #fff; font-size: 11px; font-weight: 700; line-height: 16px; }
+.pm-aide-fleche { color: var(--pm-accent); font-size: 17px; line-height: 1; }
+.pm-aide-plus { color: var(--pm-discret); font-size: 11px; }
+/* Touches de clavier : touches arrondies avec ombre */
+.pm-aide kbd { display: inline-block; min-width: 24px; padding: 2px 6px 3px; box-sizing: border-box; text-align: center; font: 700 11px/1.2 system-ui, "Segoe UI", sans-serif; color: var(--pm-texte); background: linear-gradient(#fff, #e8eae5); border: 1px solid #a9ada5; border-radius: 5px; box-shadow: 0 2px 0 #8d9189, 0 3px 2px rgba(0, 0, 0, .2); }
 
-/* Écran étroit : la colonne est limitée à 38 vh, la liste reste courte et défile */
+/* Écran moyen ou étroit : la carte reprend sa place dans le flux, sous le plateau (ou l'éditeur) */
+@media (max-width: 1599px) {
+  .pm-principal { grid-template-rows: minmax(0, 1fr) auto; }
+  .pm-principal > .pm-colonne-gauche { grid-row: 1 / 3; }
+  .pm-aide-zone, body[data-vue="tuiles"] .pm-aide-zone { grid-row: 2; justify-self: stretch; width: auto; max-height: 40vh; margin: 0; }
+  .pm-aide { border-radius: 0; border-width: 1px 0 0; box-shadow: none; }
+  .pm-aide-corps { max-height: calc(40vh - 40px); }
+  .pm-aide-liste { column-width: 260px; column-gap: 16px; }
+  .pm-aide-ligne { break-inside: avoid; }
+}
 @media (max-width: 900px) {
-  .pm-aide-corps { max-height: 16vh; }
+  .pm-aide-zone, body[data-vue="tuiles"] .pm-aide-zone { grid-column: 1; grid-row: 3; }
 }

@@ -259,6 +259,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     // Mise à jour de la coquille
     function rafraichir(evt) {
       var ui = etat.ui();
+      document.body.setAttribute('data-vue', ui.onglet); // sert à la mise en page de la carte « Commandes »
       boutonsOnglets.forEach(function (b) { b.setAttribute('aria-selected', String(b.getAttribute('data-onglet') === ui.onglet)); });
       document.querySelectorAll('[data-ecran]').forEach(function (s) { s.hidden = s.getAttribute('data-ecran') !== ui.onglet; });
       if ($('indicateur-grille')) {
