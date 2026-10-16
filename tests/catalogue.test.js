@@ -528,7 +528,7 @@ test('simulation : distance de chaque case d\'apparition à sa jonction, par mod
 });
 
 /* ====================================================================== */
-/* Équilibre (critère de docs/archives/16 et docs/19)                               */
+/* Équilibre (critère de docs/archives/16 et docs/19)                     */
 /* ====================================================================== */
 
 const STATS = MS.mesurer(MS.tirerPlateaux(NB_PLATEAUX, GRAINE), { paires: 'toutes' });

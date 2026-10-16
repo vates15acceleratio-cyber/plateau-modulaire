@@ -29,6 +29,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   /** Cotes et règles identiques sur tous les formats. */
   var COMMUNES = {
     RAYON_ZONE_COIN: 20,
+    DIAMETRE_CASE: 20,               // Ø d'une case (catalogue, cases neuves de l'éditeur, exemples) ; docs/18, « Taille des cases »
     DIAMETRE_CASE_JONCTION: 20,
     DIAMETRE_JETON: 30,
     MARGE_COUPE_CASE: 4,             // bord du disque à >= 4 mm du bord de tuile
@@ -146,6 +147,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       POSITIONS_RACCORD: positions,
       RAYON_ZONE_COIN: COMMUNES.RAYON_ZONE_COIN,
       DIAMETRE_CASE_MAX: def.DIAMETRE_CASE_MAX,
+      DIAMETRE_CASE: COMMUNES.DIAMETRE_CASE,
       DIAMETRE_CASE_JONCTION: COMMUNES.DIAMETRE_CASE_JONCTION,
       MARGE_COUPE_CASE: COMMUNES.MARGE_COUPE_CASE,
       LARGEUR_CHEMIN: COMMUNES.LARGEUR_CHEMIN,

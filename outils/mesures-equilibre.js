@@ -83,7 +83,7 @@ for (let a = 0; a < JONCTIONS.length; a++) {
 const PAIRES_DEFAUT = PAIRES.filter((p) => p.cases[0].j === 2 && p.cases[1].j === 2);
 const PAIRES_VARIEES = PAIRES.filter((p) => !(p.cases[0].j === p.cases[1].j && p.cases[0].j !== 2));
 
-/** Placement de référence pour comparer une sortie du générateur à un tirage uniforme (outils/mesures-generateur.js) : jonctions-cases dans la rangée centrale. */
+/** Placement de référence pour comparer une sortie du générateur à un tirage uniforme (ancien outil de mesure du générateur, retiré) : jonctions-cases dans la rangée centrale. */
 const CLE_DEFAUT = '(1,2)+(3,2)';
 
 /* ---------------------------------------------------------------------- */

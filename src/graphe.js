@@ -190,7 +190,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function distancesJoueur(g, joueur) { return parcours(g, g.apparitions[joueur] || [], null); }
 
   /* ------------------------------------------------------------------ */
-  /* Équilibre (critère de docs/archives/16)                                       */
+  /* Équilibre (critère de docs/archives/16)                            */
   /* ------------------------------------------------------------------ */
 
   function tri(t) { return t.slice().sort(function (a, b) { return a - b; }); }
