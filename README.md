@@ -50,7 +50,7 @@ Les pages `outils/recette-interface.html` et `outils/recette-p2.html` jouent des
 
 ## État
 
-Version 3.00.0 : règles de la version 2 sur la grille 4×4 (grilles pleines, apparitions sur tout le pourtour, jonctions-cases, tuiles libres, nouveau catalogue), poses illimitées, bibliothèque élargie, choix de la grille au bouton « Nouveau ». Un document de la version 1 se rouvre converti, et le nouveau catalogue est proposé. À venir : le catalogue 5×5 (l'interface 5×5 est prête). Restent à valider en conditions réelles : une impression et la mesure de la barre de 100 mm à la règle, l'usage au doigt sur tablette, et l'équilibre ressenti en parties réelles.
+Version 3.01.0 : règles de la version 2 sur la grille 4×4 (grilles pleines, apparitions sur tout le pourtour, jonctions-cases, tuiles libres, nouveau catalogue), poses illimitées, bibliothèque élargie, choix de la grille au bouton « Nouveau ». Un document de la version 1 se rouvre converti, et le nouveau catalogue est proposé. À venir : le catalogue 5×5 (l'interface 5×5 est prête). Restent à valider en conditions réelles : une impression et la mesure de la barre de 100 mm à la règle, l'usage au doigt sur tablette, et l'équilibre ressenti en parties réelles.
 
 ## Droits
 
