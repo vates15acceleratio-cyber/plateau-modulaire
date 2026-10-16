@@ -32,7 +32,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   /* ------------------------------------------------------------------ */
 
   /** Diamètre d'une case neuve (mm), identique à celui du catalogue. */
-  var DIAMETRE_DEFAUT = 20;
+  var DIAMETRE_DEFAUT = G.DIAMETRE_CASE;
   /** Format de grille à partir d'un objet format, d'un identifiant ou de rien (4×4). */
   function leFormat(f) {
     if (f && typeof f === 'object') return f;
@@ -414,7 +414,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       R.tracesModele(modele, F).forEach(function (t) { if (t.id === ref.id) res.lignes.push(t.pts); });
     } else if (ref.type === 'coin') {
       var k = F.pointCoin(ref.id);
-      if (k) res.cercles.push({ x: k.x, y: k.y, r: 12 });
+      if (k) res.cercles.push({ x: k.x, y: k.y, r: F.DIAMETRE_CASE_JONCTION / 2 + 3 });
     } else if (ref.type === 'raccord') {
       var p = F.pointRaccord(ref.cote, ref.pos);
       if (p) res.cercles.push({ x: p.x, y: p.y, r: 9 });

@@ -353,6 +353,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
   /** Jetons de la planche : 7 villes ('capture', seul type de jeton). */
   var JETONS = ['capture', 'capture', 'capture', 'capture', 'capture', 'capture', 'capture'];
+  // Fond perdu des jetons : 1,5 mm autour du Ø 30 (33 mm), choix voulu et moindre que les 3 mm des tuiles. Le passer à 3 mm
+  // (Ø 36, pas de 42 mm) fait sortir la rangée de 5 jetons des marges de l'A4 (bord à 3 mm, repères hors feuille) : avis prépresse, docs/26 § 13.
   var PAS_JETON = 38, DIAMETRE_JETON_FP = 33, COLONNES_JETONS = 5;
 
   /** Géométrie de la planche de jetons (A4) : centres, rayon de coupe, textes. */

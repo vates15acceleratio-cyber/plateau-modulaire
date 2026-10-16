@@ -12,5 +12,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # PyMuPDF : sans lui, les 7 tests de rendu des PDF sont sautés.
+      - run: pip install pymupdf
       # Les recettes navigateur (outils/recette-*.html) restent manuelles.
       - run: node --test

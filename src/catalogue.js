@@ -38,7 +38,7 @@
  * verte ou rouge selon le camp de sa cellule.
  *
  * Tracés : segments droits, amorce perpendiculaire de 10 mm à chaque raccord, amorce de 28 mm sur la
- * bissectrice à chaque port ; à 16 mm au moins des autres cases, 24 mm des coins (sauf le port), sans
+ * bissectrice à chaque port ; à 14 mm au moins des autres cases, 24 mm des coins (sauf le port), sans
  * contact entre chemins (contrôlé par tests/catalogue.test.js).
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
@@ -48,7 +48,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 (function () {
   'use strict';
 
-  var DIAMETRE = 20;                 // Ø des cases du catalogue (docs/18, décision du 2026-10-16)
+  var DIAMETRE = PM.geometrie.DIAMETRE_CASE; // Ø des cases du catalogue (docs/18, décision du 2026-10-16)
 
   /* Petits constructeurs pour garder les modèles lisibles. */
   function kase(id, x, y, type) { return { id: id, x: x, y: y, diametre: DIAMETRE, type: type || 'deplacement' }; }
@@ -150,7 +150,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       // losange : deux relais symétriques entre l'apparition et la case à port, deux routes de même longueur
       // (toujours 2 cases avant la jonction, 3 pas)
       modele('K4', 'Coin en losange', 'coin', 1,
-        [appar('a', 40, 40), kase('s1', 82, 62), kase('s2', 62, 82), kase('c1', 92, 92)], [
+        [appar('a', 40, 40), kase('s1', 82, 60), kase('s2', 60, 82), kase('c1', 92, 92)], [
           lien('h1', 'a', 's1'), lien('h2', 'a', 's2'), lien('h3', 's1', 'c1'), lien('h4', 's2', 'c1'), port('p1', 'c1', 2)
         ].concat(raccourciCoin('a', 'a')))
     ];

@@ -58,14 +58,14 @@ test('ecranVersMm : le centre du rect est le centre de la vue ; échelle meet', 
 test('aimanter : grille de 1 cm, marge de coupe et zones de coin respectées', () => {
   assert.deepEqual(E.aimanter(61, 59), { x: 60, y: 60 });
   assert.deepEqual(E.aimanter(63, 47), { x: 60, y: 50 });
-  // hors de la tuile : ramené dans les limites (4 mm + rayon 12 => 20..100)
+  // hors de la tuile : ramené dans les limites (4 mm + rayon 10 => 14..106, grille de 10 mm => 100)
   assert.deepEqual(E.aimanter(500, 60), { x: 100, y: 60 });
-  // dans une zone de coin : écarté du coin (distance >= 20 + 12)
+  // dans une zone de coin : écarté du coin (distance >= 20 + rayon d’une case neuve)
   const p = E.aimanter(0, 0);
-  assert.ok(Math.hypot(p.x, p.y) >= 32 - 1e-9, JSON.stringify(p));
+  assert.ok(Math.hypot(p.x, p.y) >= 20 + E.DIAMETRE_DEFAUT / 2 - 1e-9, JSON.stringify(p));
   for (let x = -20; x <= 140; x += 7) {
     for (let y = -20; y <= 140; y += 7) {
-      const m = Object.assign({}, exemple('coin'), { cases: [{ id: 'z', x: E.aimanter(x, y).x, y: E.aimanter(x, y).y, diametre: 24, type: 'deplacement' }] });
+      const m = Object.assign({}, exemple('coin'), { cases: [{ id: 'z', x: E.aimanter(x, y).x, y: E.aimanter(x, y).y, diametre: E.DIAMETRE_DEFAUT, type: 'deplacement' }] });
       const c = codes(m);
       assert.ok(!c.includes('hors_tuile') && !c.includes('zone_coin'), `(${x},${y}) -> ${c}`);
     }
@@ -290,7 +290,7 @@ test('haloDe : une forme pour chaque type de ref de validerModele', () => {
   assert.equal(E.haloDe(m, { type: 'case', id: 'c1' }).cercles.length, 1);
   assert.equal(E.haloDe(m, { type: 'case', id: 'c1', ids: ['c1', 'c2'] }).cercles.length, 2);
   assert.equal(E.haloDe(m, { type: 'chemin', id: 'h1' }).lignes.length, 1);
-  assert.deepEqual(E.haloDe(m, { type: 'coin', id: 2 }).cercles[0], { x: 120, y: 120, r: 12 });
+  assert.deepEqual(E.haloDe(m, { type: 'coin', id: 2 }).cercles[0], { x: 120, y: 120, r: PM.geometrie.DIAMETRE_CASE_JONCTION / 2 + 3 });
   assert.equal(E.haloDe(m, { type: 'raccord', id: '1:0', cote: 1, pos: 0 }).cercles.length, 1);
   assert.equal(E.haloDe(m, { type: 'modele', id: 'x' }).tuile, true);
   assert.deepEqual(E.haloDe(m, null), { cercles: [], lignes: [], tuile: false });

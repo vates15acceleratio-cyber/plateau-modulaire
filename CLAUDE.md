@@ -10,7 +10,8 @@ Toujours répondre à l'utilisateur **en français**. Code, identifiants et comm
 2. Avis des advisors v2 : `docs/19-avis-design-v2.md` (R1 à R4, apparitions, raccourci de coin), `docs/20-avis-geometrie-v2.md` (cotes 4×4 / 5×5, règles des tuiles, arbitrages), `docs/22-avis-seuils-v2.md` (seuils d'équilibre, cadrage 5×5).
 3. Mesures : `docs/21-mesures-catalogue-v2.md` (catalogue 4×4 v2) ; audits : `docs/23-audit-securite-v2.md`.
 4. Conventions de code et contrats entre modules : `docs/4-architecture.md`, `docs/10-contrats-interface.md`.
-5. Historique de la version 1 (pour le contexte seulement) : `docs/0-brief.md`, `docs/archives/3-synthese.md`, `docs/archives/` (avis, mesures et revues de la version 1).
+5. Encore en vigueur malgré l'archivage : `docs/archives/2` (conventions côtés / coins, D3 / D4 / D10), `archives/6` (prépresse, palette), `archives/16` (critère d'équilibre), `archives/11` (B1 sécurité, I1, I2).
+6. Historique de la version 1 (pour le contexte seulement) : `docs/0-brief.md`, `docs/archives/3-synthese.md`, `docs/archives/` (avis, mesures et revues de la version 1).
 
 ## Interdits et règles fermes
 - **Format hexagonal : ne rien faire, pas même préparer**, tant que l'utilisateur n'a pas donné son feu vert.

@@ -1,13 +1,10 @@
 # Journal des modifications
 
-## [Non publié] - Cases à Ø 20 mm
+## [Non publié] - Cases à Ø 20 mm et consolidation
 
-- Cases du catalogue, jonctions-cases et cases neuves de l’éditeur à Ø 20 mm au lieu de 24 (`docs/18-decisions-v2.md`, « Taille des cases »). Diamètre maximal de l’éditeur inchangé ; documents existants inchangés.
-- B5 et K4 : deux cases déplacées de quelques millimètres pour garder 8 mm entre chemins voisins ; liaisons inchangées.
-
-## [Non publié] - 2026-10-16
-
-Consolidation sans changement de comportement : historique de la version 1 déplacé dans `docs/archives/` (références mises à jour), `docs/4-architecture.md` réécrit d’après l’état réel, CI GitHub (`node --test`), retrait de trois pages d’essai cassées et de `outils/mesures-generateur.js`.
+- Cases du catalogue, jonctions-cases et cases neuves de l’éditeur à Ø 20 mm au lieu de 24 (`docs/18-decisions-v2.md`, « Taille des cases »). Diamètre maximal de l’éditeur inchangé ; les diamètres enregistrés dans les documents existants sont inchangés. Le rendu des anciens documents change : leurs quarts de jonction passent à Ø 20, à côté de cases restées à Ø 24.
+- B5 et K4 : cases déplacées de quelques millimètres pour garder 8 mm entre chemins voisins ; liaisons inchangées.
+- Consolidation sans changement de comportement : historique de la version 1 déplacé dans `docs/archives/` (références mises à jour), `docs/4-architecture.md` réécrit d’après l’état réel, CI GitHub (`node --test`), retrait de trois pages d’essai cassées et de `outils/mesures-generateur.js`.
 
 ## [3.01.0] - 2026-10-16
 
