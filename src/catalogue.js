@@ -3,9 +3,9 @@
  * Aucun accès au DOM. Règles : docs/18-decisions-v2.md, docs/19-avis-design-v2.md (R1 à R4, § 5),
  * docs/20-avis-geometrie-v2.md (cotes, D5 raccourci de coin) ; mesures : docs/21-mesures-catalogue-v2.md.
  *
- * 22 tuiles physiques, 18 modèles :
+ * 22 tuiles physiques, 14 modèles :
  *  - 6 centrales C1..C6 (1 exemplaire), 4 à 6 cases ;
- *  - 6 modèles de bord B1..B6 (10 tuiles), 3 ou 4 cases, une case d'apparition ;
+ *  - 5 modèles de bord B1, B3..B6 (10 tuiles dont 6 exemplaires de B1), 3 ou 4 cases, une case d'apparition ;
  *  - 3 modèles de coin K1..K3 (2 exemplaires chacun), 2 ou 3 cases, une case d'apparition.
  *  Environ 60 cases par plateau (cases des 16 tuiles + 2 jonctions-cases), voir tests/catalogue.test.js.
  *
@@ -23,8 +23,8 @@
  *
  * Positions de raccord :
  *  - côté qui regarde une centrale (S d'un bord, côtés d'une centrale) : milieu (pos 1) seulement,
- *    car une centrale tourne librement et ses raccords partent du centre de l'étoile ; seuls B2 (bord fermé)
- *    et C5 (étoile fermée) ont un côté sans raccord, les seuls « murs » du catalogue ;
+ *    car une centrale tourne librement et ses raccords partent du centre de l'étoile ; seule C5 (étoile fermée)
+ *    a un côté sans raccord, le seul « mur » du catalogue (docs/22 : B2, bord fermé, supprimé) ;
  *  - raccourci de coin (D5), côtés latéraux des bords et des coins, tous à 30 mm du bord extérieur :
  *    bord canonique (extérieur N) E pos 0 + O pos 2 (masque 0x808), coin canonique (extérieurs N et O)
  *    E pos 0 + S pos 2 (masque 0x108) ; ils se rencontrent dans toutes les rotations.
@@ -110,15 +110,10 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
       /* ---------------- Bords (extérieur N, ports SE et SO, raccourci E pos 0 + O pos 2) ---------------- */
       // V : l'apparition tient les deux ports et tous les raccords
-      modele('B1', 'Bord en V', 'bord', 5,
+      modele('B1', 'Bord en V', 'bord', 6,
         [appar('a', 60, 50), kase('c1', 94, 94), kase('c2', 26, 94)], [
           lien('h1', 'a', 'c1'), lien('h2', 'a', 'c2'), port('p1', 'c1', 2), port('p2', 'c2', 3)
         ].concat(raccourciBord('a'), [raccord('r3', 'a', 2, 1)])),
-      // V fermé : aucun raccord vers le centre, le bord ne rejoint la centrale que par ses ports
-      modele('B2', 'Bord fermé', 'bord', 1,
-        [appar('a', 60, 44), kase('c1', 90, 90), kase('c2', 30, 90)], [
-          lien('h1', 'a', 'c1'), lien('h2', 'a', 'c2'), port('p1', 'c1', 2), port('p2', 'c2', 3)
-        ].concat(raccourciBord('a'))),
       // Y : un relais entre l'apparition et les deux ports, le raccord central part du relais
       modele('B3', 'Bord en Y', 'bord', 1,
         [appar('a', 60, 34), kase('r', 60, 72), kase('c1', 90, 92), kase('c2', 30, 92)], [
@@ -171,7 +166,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   var MODELES = geler(construire());
 
-  /** Document neuf du format 4×4 (PM.modele.nouveauDocument) contenant une copie modifiable des 15 modèles. */
+  /** Document neuf du format 4×4 (PM.modele.nouveauDocument) contenant une copie modifiable des 14 modèles. */
   function nouveauDocument() {
     var doc = PM.modele.nouveauDocument('4x4');
     doc.modeles = JSON.parse(JSON.stringify(MODELES));

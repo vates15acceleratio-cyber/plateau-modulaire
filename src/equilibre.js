@@ -21,7 +21,8 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   var EXPLICATION = 'Pour chaque joueur (vert, rouge), on mesure en pas la distance de chaque ville à sa case d\'apparition la plus proche, ' +
     'puis on trie les 7 distances. Plateau très déséquilibré (erreur) : un joueur plus proche de 5 villes ou plus (« 5 contre 2 ») ' +
     'ou plus de ' + GR.SEUIL_BLOCAGE_ECART + ' pas d\'écart à un rang de 1 à 7. Alerte : plus de ' + GR.SEUIL_ECART + ' pas d\'écart à un rang. ' +
-    'Le score S est la somme de ces écarts sur les 7 rangs (à surveiller à partir de ' + GR.SEUIL_S + '). ' +
+    'Le score S est la somme de ces écarts sur les 7 rangs (à surveiller à partir de ' + GR.SEUIL_S + ' ; S = ' + GR.SEUIL_S_INFORMATION + ' est une simple information). ' +
+    'Pour éviter « 5 contre 2 » en 4×4, placez les deux jonctions-cases (sans ville) dans la rangée centrale. ' +
     'La première ville doit être à la même distance pour les deux joueurs. Une ville n\'est qu\'une destination : on ne la traverse pas.';
 
   /** Analyse complète : graphe, résultat d'équilibre et goulets des deux joueurs (villes non traversables). */
@@ -62,7 +63,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       });
     }
     return {
-      S: r.S, scoreTexte: r.S === null ? '—' : String(r.S), aSurveiller: !!r.aSurveiller,
+      S: r.S, scoreTexte: r.S === null ? '—' : String(r.S), aSurveiller: !!r.aSurveiller, sInformation: !!r.sInformation,
       villesA4: { j1: r.villesA4[1], j2: r.villesA4[2], ecart: r.villesA4.ecart },
       explication: EXPLICATION,
       complet: r.complet,
@@ -172,7 +173,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
         ? 'Écart maximal aux rangs 1 à 7 : non calculable (ville manquante ou inaccessible).'
         : 'Écart maximal aux rangs 1 à 7 : ' + m.ecartMax7 + (m.ecartMax7 > GR.SEUIL_ECART ? ' (supérieur à ' + GR.SEUIL_ECART + ').' : '.')));
       var pS = el(doc, 'p', 'pm-equilibre-score' + (m.aSurveiller ? ' pm-equilibre-surveiller' : ''),
-        'Score S (somme des écarts sur les 7 rangs) : ' + m.scoreTexte + (m.aSurveiller ? ' : à surveiller (4 ou plus).' : '.'));
+        'Score S (somme des écarts sur les 7 rangs) : ' + m.scoreTexte + (m.aSurveiller ? ' : à surveiller (' + GR.SEUIL_S + ' ou plus).' : (m.sInformation ? ' (information : ' + GR.SEUIL_S_INFORMATION + ', sans alerte).' : '.')));
       sDist.appendChild(pS);
     } else {
       sDist.appendChild(el(doc, 'p', 'pm-equilibre-note', 'Aucune distance à afficher : il faut des villes et des apparitions reliées.'));

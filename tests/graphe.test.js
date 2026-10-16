@@ -217,7 +217,8 @@ test('seuils exportés (paramètres, docs/19 et arbitrages de docs/20)', () => {
   assert.strictEqual(GR.SEUIL_BLOCAGE_ECART, 3);
   assert.strictEqual(GR.CINQ_CONTRE_DEUX_BLOQUANT, true);
   assert.strictEqual(GR.SEUIL_ECART, 2);
-  assert.strictEqual(GR.SEUIL_S, 4);
+  assert.strictEqual(GR.SEUIL_S, 5); // docs/22 : S = 4 n'est qu'une information
+  assert.strictEqual(GR.SEUIL_S_INFORMATION, 4);
   assert.strictEqual(GR.NB_VILLES, 7);
   assert.deepStrictEqual(GR.NOM_JOUEUR, { 1: 'vert', 2: 'rouge' });
 });

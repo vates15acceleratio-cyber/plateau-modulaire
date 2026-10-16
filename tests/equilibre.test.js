@@ -155,8 +155,10 @@ test('equilibre : distances triées, écart par rang, partage, tempo, première 
   assert.deepStrictEqual(e.partage, { 1: 3, 2: 1, egalite: 3 });
   assert.deepStrictEqual(e.tempo, { 1: { 3: 3, 4: 4, 5: 5 }, 2: { 3: 2, 4: 4, 5: 5 } });
   assert.deepStrictEqual(e.premiereVille, { 1: 2, 2: 3, ecart: 1 });
-  // S = 1 + 0 + 1 + 0 + 0 + 0 + 2 = 4 (à surveiller) ; première ville à 2 pas contre 3
-  assert.deepStrictEqual(e.alertes.map((x) => x.code), ['score_s', 'premiere_ville_inegale']);
+  // S = 1 + 0 + 1 + 0 + 0 + 0 + 2 = 4 (information, sans alerte depuis docs/22) ; première ville à 2 pas contre 3
+  assert.strictEqual(e.S, 4);
+  assert.strictEqual(e.sInformation, true);
+  assert.deepStrictEqual(e.alertes.map((x) => x.code), ['premiere_ville_inegale']);
   assert.deepStrictEqual(e.inaccessibles, { 1: [], 2: [] });
   assert.strictEqual(e.villes.length, 7);
 });
@@ -273,7 +275,7 @@ test('equilibre : plateau d\'exemples, 4×4 et 5×5 : sans ville partiel, avec 7
   }
 });
 
-test('equilibre : plateau complet très déséquilibré (« 5 contre 2 ») et plateau à surveiller (S ≥ 4)', () => {
+test('equilibre : plateau complet très déséquilibré (« 5 contre 2 ») et plateau à surveiller (S ≥ 5)', () => {
   let e = GR.equilibre(A.plateauDesequilibre());
   assert.strictEqual(e.complet, true);
   assert.strictEqual(e.tresDesequilibre, true);
@@ -438,10 +440,17 @@ test('equilibre : score S, écart aux rangs 1 à 7, D6 étendu, première ville,
   assert.strictEqual(e.ecartMax7, 3);
   assert.strictEqual(e.ecartRang, 0);
   assert.deepStrictEqual(e.alertes.map((a) => a.code), ['ecart_rang_etendu']);
-  // S = 4 : à surveiller, alerte score_s
+  // S = 4 : information seulement (docs/22), aucune alerte score_s
   e = GR.equilibre(DOC_VIDE, { graphe: grapheDistances([2, 3, 3, 4, 5, 6, 6], [2, 4, 4, 5, 6, 6, 6]) });
   assert.strictEqual(e.S, 4);
+  assert.strictEqual(e.aSurveiller, false);
+  assert.strictEqual(e.sInformation, true);
+  assert.ok(!e.alertes.some((a) => a.code === 'score_s'));
+  // S = 5 : à surveiller, alerte score_s
+  e = GR.equilibre(DOC_VIDE, { graphe: grapheDistances([2, 3, 3, 4, 5, 6, 6], [2, 4, 4, 5, 6, 6, 7]) });
+  assert.strictEqual(e.S, 5);
   assert.strictEqual(e.aSurveiller, true);
+  assert.strictEqual(e.sInformation, false);
   assert.ok(e.alertes.some((a) => a.code === 'score_s'));
   // première ville inégale
   e = GR.equilibre(DOC_VIDE, { graphe: grapheDistances([2, 3, 3, 4, 5, 6, 6], [3, 3, 3, 4, 5, 6, 6]) });

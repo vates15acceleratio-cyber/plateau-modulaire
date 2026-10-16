@@ -169,7 +169,7 @@ test('revaliderPlateau = calculer(doc).erreurs ; calculer ne modifie pas le docu
   assert.doesNotThrow(() => C.calculer(M.nouveauDocument()));
 });
 
-test('équilibre modéré : alerte « à surveiller » (S ≥ 4) seulement sur plateau complet, sans erreur', () => {
+test('équilibre modéré : alerte « à surveiller » (S ≥ 5) seulement sur plateau complet, sans erreur', () => {
   avecGraphe(() => {
     let d = A.plateauASurveiller();
     const r = C.calculer(d);

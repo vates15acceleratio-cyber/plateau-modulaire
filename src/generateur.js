@@ -8,7 +8,9 @@
  *  - grille pleine du format du document (4×4 ou 5×5) ;
  *  - tuiles tirées dans la bibliothèque du document (modèles complets, selon leurs exemplaires), selon le
  *    gabarit attendu à chaque position ; rotation suggérée des bords et coins, rotation aléatoire des centrales ;
- *  - 7 villes tirées au hasard parmi les jonctions intérieures, les autres jonctions sont des cases chemin ;
+ *  - 7 villes sur les jonctions intérieures, les autres jonctions sont des cases chemin (jonctions-cases) : en 4×4,
+ *    par défaut les 2 jonctions-cases sont dans la rangée centrale (aucun « 5 contre 2 », docs/22), avec l'option
+ *    « jonctions variées » elles sont libres sauf deux dans une même rangée extérieure ; 5×5 : villes tirées librement ;
  *  - stock plafonné à PM.modele.PLAFOND_TUILES tuiles (somme des exemplaires des modèles complets) ;
  *  - villes non traversables (règle du jeu) ;
  *  - élimination : validerPlateau avec erreur, graphe non connexe, camp sans case d'apparition, deux villes
@@ -90,10 +92,39 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     return res;
   }
 
-  /** 7 villes tirées parmi les jonctions (ordre de lecture du plateau). */
-  function tirerVilles(jonctions, rng) {
-    return melanger(jonctions, rng).slice(0, NB_VILLES)
-      .sort(function (a, b) { return (a.j - b.j) || (a.i - b.i); })
+  /**
+   * Paires de jonctions-cases (les 2 jonctions sans ville) que le générateur peut tirer, propres à chaque format
+   * (docs/22). Renvoie null quand le format n'a pas de règle (5×5 : 7 villes tirées librement parmi les jonctions).
+   *  - par défaut (4×4) : les 3 paires de la rangée centrale (j = 2), qui ne donnent jamais « 5 contre 2 » ;
+   *  - jonctions variées (4×4) : toutes les paires sauf celles d'une même rangée extérieure (j = 1 ou j = 3).
+   * Chaque paire est [{i, j}, {i, j}] dans l'ordre de lecture.
+   */
+  function pairesJonctionsCases(F, variees) {
+    if (F.id !== '4x4') return null;
+    var jonctions = jonctionsInterieures(F), paires = [];
+    for (var a = 0; a < jonctions.length; a++) {
+      for (var b = a + 1; b < jonctions.length; b++) {
+        var p = jonctions[a], q = jonctions[b];
+        var memeRangee = p.j === q.j;
+        if (variees ? !(memeRangee && (p.j === 1 || p.j === F.GRILLE.lignes - 1)) : (memeRangee && p.j === 2)) paires.push([p, q]);
+      }
+    }
+    return paires;
+  }
+
+  /**
+   * 7 villes (ordre de lecture du plateau) : si `paires` est donné, une paire est tirée comme jonctions-cases et
+   * les 7 autres jonctions portent une ville ; sinon 7 jonctions tirées au hasard. Renvoie { villes, casesChemin }.
+   */
+  function tirerVilles(jonctions, rng, paires) {
+    var choisies;
+    if (paires && paires.length) {
+      var paire = paires[entier(rng, paires.length)];
+      choisies = jonctions.filter(function (jn) { return !paire.some(function (c) { return c.i === jn.i && c.j === jn.j; }); });
+    } else {
+      choisies = melanger(jonctions, rng).slice(0, NB_VILLES);
+    }
+    return choisies.sort(function (a, b) { return (a.j - b.j) || (a.i - b.i); })
       .map(function (jn) { return { i: jn.i, j: jn.j, type: 'capture' }; });
   }
 
@@ -198,7 +229,8 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
    * options :
    *  - graine (texte ou nombre ; générée si absente) ;
    *  - candidats (défaut 200) : candidats valides à départager ; essaisMax (défaut candidats × 5) ;
-   *  - tolerance (défaut 1) : bons candidats = S ≤ Smin + tolérance.
+   *  - tolerance (défaut 1) : bons candidats = S ≤ Smin + tolérance ;
+   *  - jonctionsVariees (défaut false) : 4×4, voir pairesJonctionsCases (par défaut, rangée centrale).
    * Renvoie { ok, doc, graine, essais, candidats, score, rapport: [texte], raison, rejets }.
    */
   function generer(doc, options) {
@@ -240,10 +272,11 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
 
     // Candidats
     var jonctions = jonctionsInterieures(F), modeles = doc.modeles;
+    var paires = pairesJonctionsCases(F, options.jonctionsVariees === true);
     var bons = [], essais = 0;
     while (bons.length < nbCandidats && essais < essaisMax) {
       essais++;
-      var tuiles = tirerTuiles(stock, cellules, F, rng), jetons = tirerVilles(jonctions, rng);
+      var tuiles = tirerTuiles(stock, cellules, F, rng), jetons = tirerVilles(jonctions, rng, paires);
       var cand = { version: doc.version, grille: F.id, modeles: modeles, plateau: { tuiles: tuiles, jetons: jetons } };
       if (M.validerPlateau(cand).erreurs.length) { rejets.plateau_invalide++; continue; }
       var ev = evaluer(cand);
@@ -288,7 +321,8 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     var nomsVilles = choisi.jetons.map(function (j) { return '(' + j.i + ',' + j.j + ')'; }).join(' ');
     rapport.push('Graine « ' + graine + ' » : ' + bons.length + ' candidat(s) valide(s) en ' + essais + ' essai(s), tirage parmi ' +
       parmi.length + ' bon(s) candidat(s) (S = ' + Smin + (tolerance ? ' à ' + (Smin + tolerance) : '') + ').');
-    rapport.push('Villes ' + nomsVilles + ' ; les autres jonctions sont des cases chemin.');
+    rapport.push('Villes ' + nomsVilles + ' ; les autres jonctions sont des cases chemin' +
+      (paires ? (options.jonctionsVariees === true ? ' (jonctions variées).' : ' (rangée centrale).') : '.'));
     rapport.push('Score S (somme des écarts sur les 7 rangs) : ' + crit.S + ' ; écart maximal : ' + crit.ecartMax + ' pas.');
     rapport.push('Villes plus proches du joueur vert : ' + crit.partage[1] + ', du joueur rouge : ' + crit.partage[2] + ', à égalité : ' + crit.partage.egalite + '.');
     rapport.push('Raccords morts : ' + score.raccordsMorts + ' ; jonctions mal reliées : ' + score.jonctionsMalReliees + ' ; sorties minimales d\'une case d\'apparition : ' + score.sortiesMin + '.');
@@ -341,7 +375,8 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     var F = M.formatDuDocument(etat.doc());
     racine.appendChild(el(d, 'p', 'pm-generateur-explication',
       'Tire un plateau ' + F.GRILLE.colonnes + '×' + F.GRILLE.lignes + ' complet dans la bibliothèque : 7 villes à 3 cases d\'écart au moins, ' +
-      'les autres jonctions restent des cases chemin ; plateau équilibré tiré au hasard parmi les meilleurs candidats. ' +
+      'les autres jonctions restent des cases chemin (en 4×4, les deux jonctions-cases sont placées dans la rangée centrale, sauf option « jonctions variées ») ; ' +
+      'plateau équilibré tiré au hasard parmi les meilleurs candidats. ' +
       'La même graine redonne le même plateau.'));
 
     // Graine
@@ -361,6 +396,20 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     ligneGraine.appendChild(champ);
     ligneGraine.appendChild(btnGraine);
     racine.appendChild(ligneGraine);
+
+    // Option « jonctions variées » (4×4 seulement) : décochée, les jonctions-cases restent dans la rangée centrale
+    var caseVariees = null;
+    if (pairesJonctionsCases(F, false)) {
+      var ligneVariees = el(d, 'p', 'pm-generateur-ligne');
+      caseVariees = el(d, 'input', 'pm-generateur-variees');
+      caseVariees.type = 'checkbox';
+      caseVariees.id = 'pm-generateur-variees-' + n;
+      var labVariees = el(d, 'label', 'pm-generateur-libelle', 'Jonctions variées (les deux jonctions-cases peuvent sortir de la rangée centrale, sauf deux dans une même rangée extérieure ; plateau un peu moins équilibré en moyenne)');
+      labVariees.setAttribute('for', caseVariees.id);
+      ligneVariees.appendChild(caseVariees);
+      ligneVariees.appendChild(labVariees);
+      racine.appendChild(ligneVariees);
+    }
 
     // Avertissement si le plateau courant n'est pas vide
     var courant = etat.doc().plateau;
@@ -390,7 +439,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     btnGenerer.addEventListener('click', function () {
       if (btnGenerer.disabled) return;
       if (!champ.value.trim()) champ.value = nouvelleGraine();
-      var options = { graine: champ.value };
+      var options = { graine: champ.value, jonctionsVariees: !!(caseVariees && caseVariees.checked) };
       // Calcul synchrone : le bouton est désactivé et annonce la génération, puis le calcul part au tour suivant
       // pour que le navigateur affiche cet état avant d'être occupé.
       btnGenerer.disabled = true;
@@ -434,6 +483,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
 
     conteneur.appendChild(racine);
     racine.champGraine = champ;
+    racine.caseVariees = caseVariees;
     racine.boutonGenerer = btnGenerer;
     racine.boutonAppliquer = btnAppliquer;
     return racine;
@@ -450,6 +500,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   PM.generateur = {
     generer: generer,
     critere: critere,
+    pairesJonctionsCases: pairesJonctionsCases,
     hacher: hacher,
     mulberry32: mulberry32,
     nouvelleGraine: nouvelleGraine,

@@ -271,9 +271,9 @@ test('export : bibliothèque modifiée, exemplaires pris en compte, modèle inco
   assert.strictEqual(nb('C1'), 3);
   assert.strictEqual(nb('K1'), 0);
   assert.strictEqual(nb('B1'), 3);
-  assert.strictEqual(liste.tuiles.length, 22 - 1 /* C3 */ + 2 /* C1 */ - 2 /* K1 */ - 2 /* B1 : 5 -> 3 */);
+  assert.strictEqual(liste.tuiles.length, 22 - 1 /* C3 */ + 2 /* C1 */ - 2 /* K1 */ - 3 /* B1 : 6 -> 3 */);
   const a3 = E.calepiner(doc, { format: 'A3' });
-  assert.deepStrictEqual(a3.map((p) => p.tuiles.length), [6, 6, 6, 1]);
+  assert.deepStrictEqual(a3.map((p) => p.tuiles.length), [6, 6, 6]);
   // suffixe -n seulement pour les modèles à plusieurs exemplaires
   const etiq = a3.flatMap((p) => p.tuiles.map((t) => t.etiquette));
   assert.ok(etiq.includes('C1-1') && etiq.includes('C1-3') && etiq.includes('B1-3'));
@@ -283,7 +283,7 @@ test('export : bibliothèque modifiée, exemplaires pris en compte, modèle inco
   const sortie = E.preparerSorties(doc, { format: 'A3' });
   assert.deepStrictEqual(sortie.exclus.map((x) => x.id), ['C3']);
   assert.strictEqual(sortie.nbTuiles, liste.tuiles.length);
-  assert.strictEqual(sortie.feuilles.length, 4);
+  assert.strictEqual(sortie.feuilles.length, 3);
 });
 
 test('export : tuiles posées d\'abord, portée « posées », tuiles imprimées neutres (aucun joueur)', () => {
@@ -471,7 +471,7 @@ test('export : PDF A4 du catalogue (11 pages 210 x 297) et PDF de la bibliothèq
   const mod = docModifie();
   const pm = E.calepiner(mod, { format: 'A3' });
   const rm = analysePdf(E.pdfDepuisPlanches(pm, mod), 'modifie-A3', pm);
-  assert.strictEqual(rm.n, 4);
+  assert.strictEqual(rm.n, 3);
   const texte = rm.textes.join('\n').split('\n');
   assert.ok(texte.includes('C1-3') && texte.includes('B1-2'));
   assert.ok(!texte.includes('C3') && !texte.some((t) => t.startsWith('K1')));

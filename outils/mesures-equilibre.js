@@ -89,9 +89,13 @@ function villes9sauf(casesChemin) {
 const PAIRES = [];
 for (let a = 0; a < JONCTIONS.length; a++) {
   for (let b = a + 1; b < JONCTIONS.length; b++) {
-    PAIRES.push({ cle: cleJonction(JONCTIONS[a]) + '+' + cleJonction(JONCTIONS[b]), jetons: villes9sauf([JONCTIONS[a], JONCTIONS[b]]) });
+    PAIRES.push({ cle: cleJonction(JONCTIONS[a]) + '+' + cleJonction(JONCTIONS[b]), cases: [JONCTIONS[a], JONCTIONS[b]], jetons: villes9sauf([JONCTIONS[a], JONCTIONS[b]]) });
   }
 }
+
+/** Paires du générateur (docs/22, voir PM.generateur.pairesJonctionsCases) : par défaut la rangée centrale ; « variées » : toutes sauf deux jonctions-cases d'une même rangée extérieure. */
+const PAIRES_DEFAUT = PAIRES.filter((p) => p.cases[0].j === 2 && p.cases[1].j === 2);
+const PAIRES_VARIEES = PAIRES.filter((p) => !(p.cases[0].j === p.cases[1].j && p.cases[0].j !== 2));
 
 /** Placement de référence pour comparer une sortie du générateur à un tirage uniforme (outils/mesures-generateur.js) : jonctions-cases dans la rangée centrale. */
 const CLE_DEFAUT = '(1,2)+(3,2)';
@@ -308,7 +312,7 @@ function rediger(stats, meta) {
     'Villes non traversables (règle du jeu). D(k) : distance du rang k de villes, depuis la case d\'apparition la plus proche de chaque joueur. ' +
     'S = somme des |D1(k) − D2(k)| sur les rangs 1 à 7 ; « écart max » = plus grand |D1(k) − D2(k)| sur les rangs 1 à 7 ; « 5 contre 2 » = un joueur strictement plus proche de 5 villes ou plus.');
   out();
-  out('Seuils actuellement codés dans `src/graphe.js` (provisoires, docs/19) : blocage si « 5 contre 2 » ou écart max > 3 ; alerte si écart max > 2 ou S ≥ 4.');
+  out('Seuils actuellement codés dans `src/graphe.js` (figés par docs/22) : blocage si « 5 contre 2 » ou écart max > 3 ; alerte si écart max > 2 ou S ≥ 5 (S = 4 : information seulement).');
   out();
 
   /* 1 */
@@ -431,13 +435,25 @@ function rediger(stats, meta) {
   if (!stats.fixe) {
     out('## 11. Les 36 combinaisons de jonctions-cases');
     out();
-    out('| Jonctions-cases | S moyen | S ≥ 4 | Écart max > 2 | Écart max > 3 | 5 contre 2 |\n|---|---|---|---|---|---|');
+    out('| Jonctions-cases | S moyen | S ≥ 4 | S ≥ 5 | Écart max > 2 | Écart max > 3 | 5 contre 2 |\n|---|---|---|---|---|---|---|');
     for (const p of PAIRES) {
       const a = stats.parPaire[p.cle];
-      out(`| ${p.cle} | ${f2(moyHist(a.S))} | ${pc(partHist(a.S, 4), a.n)} | ${pc(partHist(a.ecartMax, 3), a.n)} | ${pc(partHist(a.ecartMax, 4), a.n)} | ${pc(a.cinqDeux, a.n)} |`);
+      out(`| ${p.cle} | ${f2(moyHist(a.S))} | ${pc(partHist(a.S, 4), a.n)} | ${pc(partHist(a.S, 5), a.n)} | ${pc(partHist(a.ecartMax, 3), a.n)} | ${pc(partHist(a.ecartMax, 4), a.n)} | ${pc(a.cinqDeux, a.n)} |`);
     }
     out();
     const triees = PAIRES.map((p) => ({ cle: p.cle, a: stats.parPaire[p.cle] })).sort((x, y) => moyHist(x.a.S) - moyHist(y.a.S));
+    // modes du générateur : moyenne sur les paires autorisées (chaque paire équiprobable)
+    const mode = (liste) => {
+      const accs = liste.map((p) => stats.parPaire[p.cle]), n = accs.reduce((t, a) => t + a.n, 0);
+      const sMoy = accs.reduce((t, a) => t + moyHist(a.S) * a.n, 0) / n;
+      return `${liste.length} | ${f2(sMoy)} | ${pc(accs.reduce((t, a) => t + partHist(a.S, 4), 0), n)} | ${pc(accs.reduce((t, a) => t + partHist(a.S, 5), 0), n)} | ${pc(accs.reduce((t, a) => t + a.cinqDeux, 0), n)}`;
+    };
+    out('Modes du générateur (une paire autorisée tirée au hasard, avant le filtre du critère) :');
+    out();
+    out('| Mode | Paires | S moyen | S ≥ 4 | S ≥ 5 | 5 contre 2 |\n|---|---|---|---|---|---|');
+    out(`| Par défaut (rangée centrale) | ${mode(PAIRES_DEFAUT)} |`);
+    out(`| Jonctions variées | ${mode(PAIRES_VARIEES)} |`);
+    out();
     out(`Meilleure combinaison : ${triees[0].cle} (S moyen ${f2(moyHist(triees[0].a.S))}) ; la moins bonne : ${triees[triees.length - 1].cle} (S moyen ${f2(moyHist(triees[triees.length - 1].a.S))}).`);
     out();
   }
@@ -463,7 +479,7 @@ function rediger(stats, meta) {
   out('| Critère | Configurations touchées |\n|---|---|');
   out(`| « 5 contre 2 » | ${pc(A.cinqDeux, A.n)} |`);
   for (const k of [2, 3, 4]) out(`| Écart max ≥ ${k} | ${pc(partHist(A.ecartMax, k), A.n)} |`);
-  for (const k of [4, 5, 6, 7]) out(`| S ≥ ${k} | ${pc(partHist(A.S, k), A.n)} |`);
+  for (const k of [4, 5, 6, 7]) out(`| S ≥ ${k}${k === 4 ? ' (information)' : (k === 5 ? ' (alerte)' : '')} | ${pc(partHist(A.S, k), A.n)} |`);
   out(`| Blocage actuel (« 5 contre 2 » ou écart max > 3) | ${pc(A.bloquees, A.n)} |`);
   out();
   if (!stats.fixe) {
@@ -506,6 +522,6 @@ function principal() {
   console.log(`Rapport écrit : ${sortie} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 }
 
-module.exports = { mulberry32, tirerPlateau, tirerPlateaux, PAIRES, CLE_DEFAUT, villes9sauf, mesurer, rediger };
+module.exports = { mulberry32, tirerPlateau, tirerPlateaux, PAIRES, PAIRES_DEFAUT, PAIRES_VARIEES, CLE_DEFAUT, villes9sauf, mesurer, rediger };
 
 if (require.main === module) principal();

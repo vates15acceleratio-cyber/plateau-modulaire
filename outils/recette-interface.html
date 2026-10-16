@@ -172,7 +172,7 @@
       titre('S0 chargement');
       ['bibliotheque', 'assemblage', 'controles', 'editeurTuile', 'sauvegarde', 'graphe', 'app'].forEach(function (n) { ctrl('module PM.' + n + ' présent', !!PM[n]); });
       ctrl('aucun module absent dans la coquille', !document.querySelector('.pm-module-absent'));
-      ctrl('bibliothèque : 15 vignettes (catalogue v2)', document.querySelectorAll('.pm-biblio-vignette').length === 15, document.querySelectorAll('.pm-biblio-vignette').length);
+      ctrl('bibliothèque : 14 vignettes (catalogue v2)', document.querySelectorAll('.pm-biblio-vignette').length === 14, document.querySelectorAll('.pm-biblio-vignette').length);
       ctrl('bibliothèque : 3 groupes (Centrales, Bords, Coins)', Array.prototype.map.call(document.querySelectorAll('.pm-biblio-groupe-titre'), function (h) { return h.textContent.split(' ')[0]; }).join(',') === 'Centrales,Bords,Coins');
       ctrl('plateau : 16 cellules et 9 jonctions', document.querySelectorAll('[data-cellule]').length === 16 && document.querySelectorAll('[data-jonction]').length === 9);
       ctrl('plateau : camps vert (nord) et rouge (sud)', /Camp vert \(nord\)/.test(document.querySelector('#assemblage svg').textContent) && /Camp rouge \(sud\)/.test(document.querySelector('#assemblage svg').textContent));
@@ -180,7 +180,7 @@
       ctrl('onglet Plateau sélectionné, écran Tuiles caché', document.querySelector('[data-onglet="plateau"]').getAttribute('aria-selected') === 'true' && $('ecran-tuiles').hidden);
       ctrl('Annuler / Rétablir désactivés au départ', $('btn-annuler').disabled && $('btn-retablir').disabled);
       ctrl('pastille « Plateau incomplet » au départ', pastille() === 'Plateau incomplet', pastille());
-      ctrl('document initial = catalogue (pas de reprise), version 2, grille 4×4', etat.doc().modeles.length === 15 && nbTuiles() === 0 && etat.doc().version === 2 && etat.doc().grille === '4x4');
+      ctrl('document initial = catalogue (pas de reprise), version 2, grille 4×4', etat.doc().modeles.length === 14 && nbTuiles() === 0 && etat.doc().version === 2 && etat.doc().grille === '4x4');
       ctrl('barre d\'état : message d\'accueil (catalogue v2 chargé, rien à signaler)', /Glissez une tuile/.test(msg()) && niveau() === 'info', msg());
     }
 
@@ -273,7 +273,7 @@
       sel.value = 'coin'; sel.dispatchEvent(new Event('change', { bubbles: true }));
       ctrl('filtre « Coins » : 3 vignettes', document.querySelectorAll('.pm-biblio-vignette').length === 3, document.querySelectorAll('.pm-biblio-vignette').length);
       sel.value = 'bord'; sel.dispatchEvent(new Event('change', { bubbles: true }));
-      ctrl('filtre « Bords » : 6 vignettes (B1 à B6)', document.querySelectorAll('.pm-biblio-vignette').length === 6, document.querySelectorAll('.pm-biblio-vignette').length);
+      ctrl('filtre « Bords » : 5 vignettes (B1, B3 à B6)', document.querySelectorAll('.pm-biblio-vignette').length === 5, document.querySelectorAll('.pm-biblio-vignette').length);
       sel.value = 'tous'; sel.dispatchEvent(new Event('change', { bubbles: true }));
     }
 

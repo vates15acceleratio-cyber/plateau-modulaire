@@ -227,3 +227,71 @@ test('entrées invalides : document absent, grille inconnue', () => {
   assert.match(GEN.generer(null).raison, /Aucun document/);
   assert.match(GEN.generer({ grille: 'hexagone', modeles: [], plateau: { tuiles: [], jetons: [] } }).raison, /inconnu/);
 });
+
+/* ---------------------------------------------------------------------- */
+/* Jonctions-cases (docs/22)                                                */
+/* ---------------------------------------------------------------------- */
+
+/** Les 2 jonctions intérieures du 4×4 sans ville dans un plateau généré. */
+function jonctionsCases(doc) {
+  const villes = new Set(doc.plateau.jetons.map((j) => j.i + ',' + j.j));
+  const res = [];
+  for (let j = 1; j <= 3; j++) for (let i = 1; i <= 3; i++) if (!villes.has(i + ',' + j)) res.push({ i, j });
+  return res;
+}
+const cle = (p) => p.map((c) => '(' + c.i + ',' + c.j + ')').join('+');
+
+test('jonctions-cases : 3 paires de la rangée centrale par défaut, 30 en mode varié (sans les paires d\'une même rangée extérieure), aucune règle en 5×5', () => {
+  const F4 = PM.geometrie.format('4x4'), F5 = PM.geometrie.format('5x5');
+  assert.deepStrictEqual(GEN.pairesJonctionsCases(F4, false).map(cle), ['(1,2)+(2,2)', '(1,2)+(3,2)', '(2,2)+(3,2)']);
+  const variees = GEN.pairesJonctionsCases(F4, true);
+  assert.strictEqual(variees.length, 30);
+  assert.ok(!variees.some((p) => p[0].j === p[1].j && p[0].j !== 2), 'aucune paire d\'une même rangée extérieure');
+  assert.ok(variees.some((p) => p[0].j === 2 && p[1].j === 2), 'la rangée centrale reste permise');
+  assert.strictEqual(GEN.pairesJonctionsCases(F5, false), null);
+  assert.strictEqual(GEN.pairesJonctionsCases(F5, true), null);
+});
+
+test('générateur par défaut : jonctions-cases dans la rangée centrale et aucun « 5 contre 2 » sur 200 plateaux du catalogue', () => {
+  const CAT = PM.catalogue;
+  let essais = 0, cinq = 0, ok = 0;
+  const vues = new Set();
+  for (let k = 0; k < 200; k++) {
+    // un seul candidat par graine : les rejets comptent les tirages avant tout filtrage par le critère
+    const r = GEN.generer(CAT.nouveauDocument(), { graine: 'defaut-' + k, candidats: 1, essaisMax: 1 });
+    essais += r.essais;
+    // « 5 contre 2 » est un blocage : l'évaluation le range sous « desequilibre » (cinq_contre_deux n'est pas atteint)
+    cinq += r.rejets.desequilibre + r.rejets.cinq_contre_deux;
+    if (r.ok) { ok++; const c = jonctionsCases(r.doc); assert.ok(c.length === 2 && c.every((x) => x.j === 2), cle(c)); vues.add(cle(c)); }
+  }
+  assert.ok(essais >= 200);
+  assert.strictEqual(cinq, 0, '« 5 contre 2 » sur ' + essais + ' tirages');
+  assert.ok(ok >= 150, 'plateaux acceptés : ' + ok);
+  assert.strictEqual(vues.size, 3, 'les 3 paires sont tirées : ' + [...vues]);
+});
+
+test('jonctions variées : le test précédent n’est pas vide : des tirages bloqués apparaissent hors rangée centrale (1,7 % mesuré)', () => {
+  let bloques = 0;
+  for (let k = 0; k < 600; k++) {
+    const r = GEN.generer(PM.catalogue.nouveauDocument(), { graine: 'bloc-' + k, candidats: 1, essaisMax: 1, jonctionsVariees: true });
+    bloques += r.rejets.desequilibre;
+  }
+  assert.ok(bloques > 0, 'tirages bloqués : ' + bloques);
+});
+
+test('jonctions variées : reproductible, jamais deux jonctions-cases dans une même rangée extérieure, paires hors rangée centrale tirées', () => {
+  const CAT = PM.catalogue;
+  const a = GEN.generer(CAT.nouveauDocument(), { graine: 'v', candidats: 20, jonctionsVariees: true });
+  const b = GEN.generer(CAT.nouveauDocument(), { graine: 'v', candidats: 20, jonctionsVariees: true });
+  assert.ok(a.ok, a.raison);
+  assert.deepStrictEqual(a.doc, b.doc);
+  let horsCentre = 0;
+  for (let k = 0; k < 60; k++) {
+    const r = GEN.generer(CAT.nouveauDocument(), { graine: 'var-' + k, candidats: 1, essaisMax: 1, jonctionsVariees: true });
+    if (!r.ok) continue;
+    const c = jonctionsCases(r.doc);
+    assert.ok(!(c[0].j === c[1].j && c[0].j !== 2), cle(c));
+    if (c.some((x) => x.j !== 2)) horsCentre++;
+  }
+  assert.ok(horsCentre > 10, 'paires hors rangée centrale : ' + horsCentre);
+});

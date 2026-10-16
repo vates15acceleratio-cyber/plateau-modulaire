@@ -32,7 +32,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var SEUIL_ECART = 2;          // alerte si l'écart dépasse 2 à un rang de 1 à 7 (docs/16 b)
   var SEUIL_CINQ_CONTRE_DEUX = 5;
   var SEUIL_APPARITION_LOINTAINE = 7;
-  var SEUIL_S = 4;                 // alerte « à surveiller » à partir de S = 4 (docs/19)
+  var SEUIL_S = 5;                 // alerte « à surveiller » à partir de S = 5 (docs/22 : S >= 4 touchait 11,6 % des configurations, S >= 5 : 2,7 %)
+  var SEUIL_S_INFORMATION = 4;     // S = 4 : simple information, sans alerte (docs/22)
   /**
    * Plateau très déséquilibré (docs/19, arbitrage de docs/20) : écart de plus de SEUIL_BLOCAGE_ECART pas à un
    * rang de 1 à 7, ou « 5 contre 2 » si CINQ_CONTRE_DEUX_BLOQUANT. Seuils provisoires jusqu'à la mesure du
@@ -212,6 +213,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    *  - inaccessibles : {1: [{i, j}], 2: [{i, j}]} ; apparitions : {1, 2} (nombre de cases d'apparition) ;
    *  - blocages : [{code, message}] (plateau très déséquilibré : « 5 contre 2 », écart > SEUIL_BLOCAGE_ECART) ;
    *    tresDesequilibre : blocages non vide ;
+   *  - aSurveiller : S >= SEUIL_S (5) ; sInformation : S = 4, information sans alerte (docs/22) ;
    *  - alertes : [{code, message}] ; lacunes : [texte] ; complet : booléen (7 villes, au moins une case
    *    d'apparition par camp, toutes les tuiles posées avec un modèle présent dans la bibliothèque) ; partiel : !complet.
    * Ne lève pas d'exception sur un plateau incomplet.
@@ -297,7 +299,9 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var blocages = [], alertes = [];
     if (cinqContreDeux) {
       var fort = partage[1] >= partage[2] ? 1 : 2;
-      var cinq = { code: 'cinq_contre_deux', message: 'Le joueur ' + NOM_JOUEUR[fort] + ' est plus proche de ' + partage[fort] + ' villes contre ' + partage[3 - fort] + ' pour le joueur ' + NOM_JOUEUR[3 - fort] + ' (« 5 contre 2 »).' };
+      var cinq = { code: 'cinq_contre_deux', message: 'Le joueur ' + NOM_JOUEUR[fort] + ' est plus proche de ' + partage[fort] + ' villes contre ' + partage[3 - fort] + ' pour le joueur ' + NOM_JOUEUR[3 - fort] + ' (« 5 contre 2 »).' +
+        // conseil propre au 4×4 (docs/22) ; le 5×5 aura le sien après mesure
+        (M.formatDuDocument(doc).id === '4x4' ? ' Conseil : placer les deux jonctions-cases (sans ville) dans la rangée centrale, par exemple (1, 2) et (3, 2).' : '') };
       (CINQ_CONTRE_DEUX_BLOQUANT ? blocages : alertes).push(cinq);
     }
     if (ecartMax7 !== null && ecartMax7 > SEUIL_BLOCAGE_ECART) {
@@ -330,7 +334,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
     return {
       villes: villes.map(function (v) { return { id: v.id, i: v.i, j: v.j }; }),
-      D: D, parRang: parRang, ecartRang: ecartRang, S: S, ecartMax7: ecartMax7, aSurveiller: S !== null && S >= SEUIL_S, villesA4: villesA4, partage: partage, alertes: alertes, tempo: tempo,
+      D: D, parRang: parRang, ecartRang: ecartRang, S: S, ecartMax7: ecartMax7, aSurveiller: S !== null && S >= SEUIL_S, sInformation: S !== null && S >= SEUIL_S_INFORMATION && S < SEUIL_S, villesA4: villesA4, partage: partage, alertes: alertes, tempo: tempo,
       cinqContreDeux: cinqContreDeux, premiereEgale: premiereEgale, blocages: blocages, tresDesequilibre: blocages.length > 0,
       apparitions: { 1: g.apparitions[1].length, 2: g.apparitions[2].length },
       premiereVille: premiereVille, inaccessibles: inaccessibles, lacunes: lacunes,
@@ -461,6 +465,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     SEUIL_ECART: SEUIL_ECART,
     SEUIL_CINQ_CONTRE_DEUX: SEUIL_CINQ_CONTRE_DEUX,
     SEUIL_S: SEUIL_S,
+    SEUIL_S_INFORMATION: SEUIL_S_INFORMATION,
     SEUIL_BLOCAGE_ECART: SEUIL_BLOCAGE_ECART,
     CINQ_CONTRE_DEUX_BLOQUANT: CINQ_CONTRE_DEUX_BLOQUANT,
     NOM_JOUEUR: NOM_JOUEUR,
