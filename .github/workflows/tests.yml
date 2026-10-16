@@ -16,6 +16,6 @@ jobs:
         with:
           python-version: '3.12'
       # PyMuPDF : sans lui, les 7 tests de rendu des PDF sont sautés.
-      - run: pip install pymupdf
+      - run: pip install pymupdf==1.28.2
       # Les recettes navigateur (outils/recette-*.html) restent manuelles.
       - run: node --test
