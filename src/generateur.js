@@ -375,7 +375,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     var F = M.formatDuDocument(etat.doc());
     racine.appendChild(el(d, 'p', 'pm-generateur-explication',
       'Tire un plateau ' + F.GRILLE.colonnes + '×' + F.GRILLE.lignes + ' complet dans la bibliothèque : 7 villes à 3 cases d\'écart au moins, ' +
-      'les autres jonctions restent des cases chemin (en 4×4, les deux jonctions-cases sont placées dans la rangée centrale, sauf option « jonctions variées ») ; ' +
+      'les autres jonctions restent des cases chemin' + (pairesJonctionsCases(F, false) ? ' (les deux jonctions-cases sont placées dans la rangée centrale, sauf option « jonctions variées »)' : ' (tirées librement, classées par équilibre)') + ' ; ' +
       'plateau équilibré tiré au hasard parmi les meilleurs candidats. ' +
       'La même graine redonne le même plateau.'));
 

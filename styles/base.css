@@ -26,6 +26,7 @@ button:focus-visible { outline: 2px solid var(--pm-accent); outline-offset: 1px;
 .pm-onglets { display: flex; gap: 4px; }
 .pm-onglets button[aria-selected="true"] { background: var(--pm-accent); border-color: var(--pm-accent); color: #fff; }
 .pm-actions { display: flex; gap: 6px; margin-left: auto; }
+.pm-grille { padding: 4px 10px; border-radius: 6px; border: 1px solid var(--pm-bord); background: #fff; color: var(--pm-texte); font-weight: 600; white-space: nowrap; }
 .pm-pastille { padding: 4px 10px; border-radius: 999px; background: #fff3e0; color: var(--pm-alerte); font-weight: 600; cursor: pointer; }
 .pm-pastille.pm-ok { background: #e6f4ec; color: var(--pm-accent); }
 .pm-pastille.pm-neutre { background: #eef0ec; color: var(--pm-discret); }
@@ -43,6 +44,17 @@ button:focus-visible { outline: 2px solid var(--pm-accent); outline-offset: 1px;
 .pm-barre-etat[data-niveau="alerte"] { color: var(--pm-alerte); }
 .pm-barre-etat[data-niveau="erreur"] { color: var(--pm-erreur); font-weight: 600; }
 .pm-module-absent { padding: 24px; color: var(--pm-discret); font-style: italic; }
+
+/* Boîte de dialogue « Nouveau » (choix de la grille) */
+.pm-nouveau { padding: 12px 16px; display: grid; gap: 12px; }
+.pm-nouveau-choix { border: 1px solid var(--pm-bord); border-radius: 8px; padding: 8px 12px; display: grid; gap: 8px; }
+.pm-nouveau-option { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; cursor: pointer; min-height: 32px; }
+.pm-nouveau-nom { font-weight: 700; }
+.pm-nouveau-detail { color: var(--pm-discret); }
+.pm-nouveau-avertissement { margin: 0; color: var(--pm-alerte); }
+.pm-nouveau-erreur { margin: 0; color: var(--pm-erreur); font-weight: 600; }
+.pm-nouveau-erreur[hidden] { display: none; }
+.pm-nouveau-actions { margin: 0; }
 
 /* Boîte de dialogue commune */
 .pm-dialogue { border: 1px solid var(--pm-bord); border-radius: 10px; padding: 0; width: min(920px, 94vw); max-height: 90vh; color: var(--pm-texte); }

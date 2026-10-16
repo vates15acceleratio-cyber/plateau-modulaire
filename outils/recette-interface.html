@@ -22,7 +22,9 @@
       <button type="button" role="tab" data-onglet="plateau">Plateau</button>
       <button type="button" role="tab" data-onglet="tuiles">Tuiles</button>
     </nav>
+    <span id="indicateur-grille" class="pm-grille" title="Format de grille de ce document"></span>
     <div class="pm-actions">
+      <button type="button" id="btn-nouveau" title="Nouveau plateau : choisir la grille (4×4 ou 5×5)">Nouveau</button>
       <button type="button" id="btn-annuler" title="Annuler (Ctrl+Z)">↶ Annuler</button>
       <button type="button" id="btn-retablir" title="Rétablir (Ctrl+Y)">Rétablir ↷</button>
       <button type="button" id="btn-ouvrir" title="Ouvrir un fichier JSON">Ouvrir</button>
@@ -41,6 +43,10 @@
       <div id="editeur" class="pm-zone-editeur"></div>
     </section>
   </main>
+  <dialog id="dialogue" class="pm-dialogue" aria-labelledby="dialogue-titre">
+    <header class="pm-dialogue-entete"><h2 id="dialogue-titre"></h2><button type="button" id="dialogue-fermer" aria-label="Fermer">✕</button></header>
+    <div id="dialogue-contenu" class="pm-dialogue-contenu"></div>
+  </dialog>
   <footer id="barre-etat" class="pm-barre-etat" role="status" aria-live="polite"></footer>
 
   <div id="recette"><div id="erreurs"></div><pre id="rapport"></pre></div>
@@ -121,8 +127,9 @@
       etat.signaler('', 'info');
     }
     function rectPlateau() { return document.querySelector('#assemblage svg').getBoundingClientRect(); }
-    function ecranMm(x, y) { return A.mmVersEcran(x, y, rectPlateau(), A.VUE); }
-    function centre(col, lig) { return ecranMm(col * 120 + 60, lig * 120 + 60); }
+    function formatCourant() { return M.formatDuDocument(etat.doc()); }
+    function ecranMm(x, y) { return A.mmVersEcran(x, y, rectPlateau(), A.vuePour(formatCourant())); }
+    function centre(col, lig) { var C = formatCourant().COTE; return ecranMm(col * C + C / 2, lig * C + C / 2); }
     /** Glisser-déposer d'un modèle de la bibliothèque vers (col, lig) ; `quarts` appuis sur R pendant le glissement. */
     function glisser(id, col, lig, quarts, horsPlateau) {
       var img = document.querySelector('.pm-biblio-image[data-glisser="' + id + '"]');
@@ -144,7 +151,7 @@
     }
     function cliquerJonction(i, j) {
       var z = document.querySelector('[data-jonction="' + i + ',' + j + '"] .pm-assemblage-zone-jonction');
-      var p = ecranMm(i * 120, j * 120);
+      var p = ecranMm(i * formatCourant().COTE, j * formatCourant().COTE);
       ptr('pointerdown', z, p.x, p.y); ptr('pointerup', document, p.x, p.y);
     }
     function compteurs() {
@@ -669,11 +676,77 @@
       });
     }
 
+    /** (Avant s6_sauvegarde, qui remonte les modules et remplace l'instance de glissement.) Nouveau → 5×5 : choix de la grille, refus si le catalogue 5×5 manque, pose, camps, mélange refusé, annulation. */
+    function s8_nouveau5x5() {
+      titre('S9 Nouveau → 5×5 (modèles d\'essai 5×5 : le catalogue 5×5 n\'est pas requis)');
+      var origine = PM.catalogue.nouveauDocument;
+      function dialogueOuvert() { return $('dialogue').open; }
+      function choisir(id) { var r = document.querySelector('#dialogue-contenu input[name="pm-nouveau-grille"][value="' + id + '"]'); r.checked = true; }
+      function creer() { document.querySelector('#dialogue-contenu .pm-nouveau-creer').click(); }
+      function restaurer() { PM.catalogue.nouveauDocument = origine; }
+      try {
+        reset(docExemples('4x4'));
+        ctrl('indicateur de grille en 4×4', $('indicateur-grille').textContent === 'Grille 4×4 · 48 × 48 cm', $('indicateur-grille').textContent);
+        $('btn-nouveau').click();
+        var cont = $('dialogue-contenu'), radios = cont.querySelectorAll('input[name="pm-nouveau-grille"]');
+        ctrl('Nouveau : la boîte de dialogue s\'ouvre avec deux choix, 4×4 coché', dialogueOuvert() && radios.length === 2 && radios[0].value === '4x4' && radios[0].checked && !radios[1].checked);
+        ctrl('Nouveau : dimensions et tuiles de chaque grille', /48 × 48 cm, tuiles de 12 cm/.test(cont.textContent) && /50 × 50 cm, tuiles de 10 cm/.test(cont.textContent), cont.textContent);
+        ctrl('Nouveau : avertissement de remplacement et Ctrl+Z', /seront remplacés/.test(cont.textContent) && /Ctrl\+Z/.test(cont.textContent));
+        // catalogue qui ne connaît pas encore le 5×5 : il renvoie du 4×4
+        PM.catalogue.nouveauDocument = function () { return docExemples('4x4'); };
+        var avant = docJ();
+        choisir('5x5'); creer();
+        var err = cont.querySelector('.pm-nouveau-erreur');
+        ctrl('catalogue sans 5×5 : refus expliqué dans la boîte, plateau intact', dialogueOuvert() && err && !err.hidden && /5×5.*pas encore disponible/.test(err.textContent) && docJ() === avant, err && err.textContent);
+        ctrl('catalogue sans 5×5 : message d\'erreur dans la barre d\'état', niveau() === 'erreur' && uneSeulePhrase(msg()), msg());
+        cont.querySelector('.pm-nouveau-annuler').click();
+        ctrl('Annuler ferme la boîte sans rien changer', !dialogueOuvert() && docJ() === avant);
+        // catalogue qui sait faire du 5×5 (modèles d'essai)
+        PM.catalogue.nouveauDocument = function (g) { return docExemples(g === '5x5' ? '5x5' : '4x4'); };
+        $('btn-nouveau').click();
+        choisir('5x5'); creer();
+        ctrl('Créer 5×5 : boîte fermée, document 5×5 sans tuile', !dialogueOuvert() && etat.doc().grille === '5x5' && nbTuiles() === 0);
+        ctrl('indicateur de grille en 5×5', $('indicateur-grille').textContent === 'Grille 5×5 · 50 × 50 cm', $('indicateur-grille').textContent);
+        ctrl('plateau 5×5 : 25 cellules et 16 jonctions', document.querySelectorAll('[data-cellule]').length === 25 && document.querySelectorAll('[data-jonction]').length === 16);
+        ctrl('plateau 5×5 : rangée centrale neutre affichée', document.querySelectorAll('[data-rangee-neutre]').length === 1 && /Neutre/.test(document.querySelector('#assemblage svg').textContent));
+        ctrl('plateau 5×5 : étiquette d\'une cellule libre de la rangée centrale', /Bord, neutre/.test(document.querySelector('[data-cellule="0,2"]').getAttribute('aria-label')), document.querySelector('[data-cellule="0,2"]').getAttribute('aria-label'));
+        ctrl('bibliothèque 5×5 : 3 vignettes', document.querySelectorAll('.pm-biblio-vignette').length === 3);
+        var c = compteurs();
+        ctrl('compteurs 5×5 : tuiles 0 / 25, apparitions 0 / 7 par camp, 50 × 50 cm', c['Tuiles posées'].v === '0 / 25' && c['Apparitions vert'].v === '0 / 7' && c['Apparitions rouge'].v === '0 / 7' && /50 × 50 cm/.test(c['Dimensions'].v), J(c));
+        ctrl('Nouveau : message qui annonce Ctrl+Z', /5×5/.test(msg()) && /Ctrl\+Z/.test(msg()), msg());
+        ctrlZ();
+        ctrl('Ctrl+Z revient au plateau 4×4 (indicateur et 16 cellules)', etat.doc().grille === '4x4' && $('indicateur-grille').textContent === 'Grille 4×4 · 48 × 48 cm' && document.querySelectorAll('[data-cellule]').length === 16);
+        ctrlY();
+        ctrl('Ctrl+Y rétablit le plateau 5×5', etat.doc().grille === '5x5' && document.querySelectorAll('[data-cellule]').length === 25);
+        // pose en 5×5 : coin au nord-ouest, bord dans la rangée neutre
+        var g1 = glisser('ex-coin', 0, 0, 0), g2 = glisser('ex-bord', 0, 2, 0);
+        ctrl('pose en 5×5 par glisser-déposer (coin en (0,0), bord en (0,2))', g1.demarre && g2.demarre && nbTuiles() === 2, J(g1) + J(g2) + nbTuiles() + ' ' + msg());
+        ctrl('pose en 5×5 : rotations suggérées (coin 0, bord de l\'ouest 3)', M.tuileEn(etat.doc(), 0, 0).rot === 0 && M.tuileEn(etat.doc(), 0, 2).rot === 3, J(etat.doc().plateau.tuiles));
+        c = compteurs();
+        ctrl('apparition du coin vert comptée, celle de la rangée neutre ignorée', c['Apparitions vert'].v === '1 / 7' && c['Apparitions rouge'].v === '0 / 7', J(c));
+        cliquerCellule(4, 2);
+        ctrl('clic sur une cellule libre de la rangée neutre : « neutre » dans le message', /neutre/.test(msg()), msg());
+        // mélange refusé : un modèle 4×4 dans une bibliothèque 5×5
+        var m4 = JSON.parse(JSON.stringify(PM.modele.copieExemples('4x4')[1]));
+        m4.id = 'ex4-bord'; m4.nom = 'Bord 4×4'; m4.exemplaires = 3;
+        etat.appliquer(function (d) { var n = M.clonerDocument(d); n.modeles.push(m4); return n; }, 'ajout d\'un modèle 4×4');
+        var vign = document.querySelector('.pm-biblio-vignette[data-vignette="ex4-bord"]');
+        ctrl('mélange : la vignette du modèle 4×4 est grisée et badgée « grille 4×4 »', vign && /pm-biblio-autre-grille/.test(vign.className) && /grille 4×4/.test(vign.textContent) && vign.querySelector('.pm-biblio-poser').disabled);
+        var avant2 = docJ(), g3 = glisser('ex4-bord', 2, 3, 0);
+        ctrl('mélange : glisser le modèle 4×4 est refusé en une phrase, plateau intact', !g3.demarre && docJ() === avant2 && niveau() === 'erreur' && /grille 4×4/.test(msg()) && /plateau 5×5/.test(msg()) && uneSeulePhrase(msg()), msg());
+        ctrl('mélange : aucune cellule ne s\'allume pour le modèle 4×4', A.cellulesCompatibles(etat.doc(), 'ex4-bord').length === 0);
+      } finally {
+        restaurer();
+      }
+      reset(docExemples('4x4'));
+      ctrl('fin du scénario : retour à un plateau 4×4', etat.doc().grille === '4x4' && $('indicateur-grille').textContent === 'Grille 4×4 · 48 × 48 cm');
+    }
+
     var chaine = Promise.resolve();
     function etape(f) { chaine = chaine.then(function () { try { return f(); } catch (e) { nEchec++; rapportEl.textContent += 'ÉCHEC  exception dans ' + f.name + ' : ' + (e && e.stack || e) + '\n'; } }); }
     if (!etat) { rapportEl.textContent = 'ÉCHEC  application non démarrée (PM.app.etat absent)\n'; nEchec++; }
     else {
-      [s0_chargement, s1_assemblage, s2_refus, s3_historique, s4_editeur, s5_controles, s7_raccourcis, robustesse, s6_sauvegarde].forEach(etape);
+      [s0_chargement, s1_assemblage, s2_refus, s3_historique, s4_editeur, s5_controles, s7_raccourcis, robustesse, s8_nouveau5x5, s6_sauvegarde].forEach(etape);
     }
     chaine.then(function () {
       var nErr = (document.getElementById('erreurs').textContent.match(/ERREUR JS/g) || []).length;

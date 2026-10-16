@@ -27,7 +27,7 @@
 .pm-biblio-restants { flex: 1; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
 .pm-biblio-epuise .pm-biblio-restants { color: var(--pm-discret); }
 .pm-biblio-epuise .pm-biblio-image { opacity: .4; }
-.pm-biblio-incomplet .pm-biblio-image { opacity: .55; filter: grayscale(1); }
+.pm-biblio-incomplet .pm-biblio-image, .pm-biblio-autre-grille .pm-biblio-image { opacity: .55; filter: grayscale(1); }
 .pm-biblio-poser[aria-pressed="true"] { background: var(--pm-accent); color: #fff; border-color: var(--pm-accent); }
 .pm-biblio-vide { color: var(--pm-discret); font-style: italic; padding: 12px 4px; }
 
@@ -92,3 +92,7 @@
 @media (max-width: 700px) {
   .pm-assemblage-consigne { flex-basis: 100%; }
 }
+
+/* Rangée neutre du 5×5 : bande grise sous les cellules et repère dans la marge */
+.pm-assemblage-bande-neutre { fill: #dcdfd8; stroke: none; pointer-events: none; }
+.pm-assemblage-etiquette-neutre { font-size: 11px; fill: var(--pm-discret); font-style: italic; }

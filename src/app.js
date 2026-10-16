@@ -120,6 +120,89 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     c.appendChild(actions);
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Nouveau plateau : choix de la grille (un document = un format)       */
+  /* ------------------------------------------------------------------ */
+
+  /** Libellés d'une grille tirés de ses cotes : { id, nom: '5×5', dimensions: '50 × 50 cm', tuile: '10 cm' }. */
+  function descriptionGrille(id) {
+    var F = PM.geometrie.format(id), nc = F.GRILLE.colonnes, nl = F.GRILLE.lignes;
+    return { id: id, nom: nc + '×' + nl, dimensions: (nc * F.COTE / 10) + ' × ' + (nl * F.COTE / 10) + ' cm', tuile: (F.COTE / 10) + ' cm' };
+  }
+
+  /** Texte court de l'indicateur de la barre : « Grille 5×5 · 50 × 50 cm ». */
+  function libelleIndicateur(doc) {
+    var d = descriptionGrille(PM.modele.formatDuDocument(doc).id);
+    return 'Grille ' + d.nom + ' · ' + d.dimensions;
+  }
+
+  /**
+   * Document neuf de la grille demandée, fourni par le catalogue. Renvoie { ok, doc } ou { ok: false, raison }.
+   * Le catalogue peut ne pas encore connaître cette grille (il renverrait alors un document 4×4, ou lèverait
+   * une erreur) : on vérifie que le document et tous ses modèles sont bien de la grille demandée.
+   */
+  function documentPourGrille(grille) {
+    if (!PM.geometrie || PM.geometrie.FORMATS.indexOf(grille) < 0) return { ok: false, raison: 'Grille inconnue : ' + String(grille) + '.' };
+    var nom = descriptionGrille(grille).nom;
+    var indispo = { ok: false, raison: 'Le catalogue de tuiles ' + nom + ' n’est pas encore disponible : le plateau actuel est conservé.' };
+    if (!PM.catalogue || typeof PM.catalogue.nouveauDocument !== 'function') return indispo;
+    var doc;
+    try { doc = PM.catalogue.nouveauDocument(grille); } catch (e) { return indispo; }
+    if (!doc || typeof doc !== 'object' || !Array.isArray(doc.modeles) || !doc.plateau) return indispo;
+    if ((doc.grille || PM.geometrie.FORMAT_DEFAUT) !== grille) return indispo;
+    if (doc.modeles.some(function (m) { return m && m.grille !== undefined && m.grille !== grille; })) return indispo;
+    return { ok: true, doc: doc };
+  }
+
+  /** Boîte de dialogue « Nouveau » : choix 4×4 / 5×5, avertissement, bouton Créer. */
+  function ouvrirDialogueNouveau(etat) {
+    var c = PM.dialogue.ouvrir('Nouveau plateau');
+    function el(tag, classe, texte) {
+      var e = document.createElement(tag);
+      if (classe) e.className = classe;
+      if (texte !== undefined) e.textContent = texte;
+      return e;
+    }
+    var racine = el('div', 'pm-nouveau');
+    var jeu = el('fieldset', 'pm-nouveau-choix');
+    jeu.appendChild(el('legend', 'pm-nouveau-legende', 'Grille du nouveau plateau (un document garde sa grille)'));
+    var radios = [];
+    PM.geometrie.FORMATS.forEach(function (id, k) {
+      var d = descriptionGrille(id), ligne = el('label', 'pm-nouveau-option');
+      var r = el('input'); r.type = 'radio'; r.name = 'pm-nouveau-grille'; r.value = id; r.checked = k === 0;
+      ligne.appendChild(r);
+      ligne.appendChild(el('span', 'pm-nouveau-nom', d.nom));
+      ligne.appendChild(el('span', 'pm-nouveau-detail', d.dimensions + ', tuiles de ' + d.tuile + (id === '5x5' ? ', rangée centrale neutre' : '')));
+      jeu.appendChild(ligne);
+      radios.push(r);
+    });
+    racine.appendChild(jeu);
+    var avertissement = el('p', 'pm-nouveau-avertissement', 'Le plateau et la bibliothèque actuels seront remplacés par ceux du nouveau plateau (Ctrl+Z pour revenir).');
+    avertissement.setAttribute('role', 'note');
+    racine.appendChild(avertissement);
+    var erreur = el('p', 'pm-nouveau-erreur'); erreur.setAttribute('role', 'alert'); erreur.hidden = true;
+    racine.appendChild(erreur);
+    var actions = el('p', 'pm-nouveau-actions');
+    var creer = el('button', 'pm-nouveau-creer', 'Créer'); creer.type = 'button';
+    var annuler = el('button', 'pm-nouveau-annuler', 'Annuler'); annuler.type = 'button';
+    actions.appendChild(creer); actions.appendChild(document.createTextNode(' ')); actions.appendChild(annuler);
+    racine.appendChild(actions);
+    c.appendChild(racine);
+
+    annuler.addEventListener('click', function () { PM.dialogue.fermer(); });
+    creer.addEventListener('click', function () {
+      var choix = radios.filter(function (r) { return r.checked; })[0];
+      var r = documentPourGrille(choix ? choix.value : PM.geometrie.FORMAT_DEFAUT);
+      if (!r.ok) { erreur.textContent = r.raison; erreur.hidden = false; etat.signaler(r.raison, 'erreur'); return; }
+      etat.remplacer(r.doc, 'nouveau plateau ' + descriptionGrille(r.doc.grille || PM.geometrie.FORMAT_DEFAUT).nom);
+      etat.majUi({ aPoser: null, onglet: 'plateau' }); // un même identifiant de modèle peut exister dans l'autre grille
+      PM.dialogue.fermer();
+      etat.signaler('Nouveau plateau ' + descriptionGrille(r.doc.grille || PM.geometrie.FORMAT_DEFAUT).nom + ' créé (Ctrl+Z pour revenir au plateau précédent).', 'info');
+    });
+    radios[0].focus();
+    return racine;
+  }
+
   function demarrer() {
     var init = documentInitial();
     var avis = avisBibliotheque(init.doc);
@@ -134,6 +217,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     });
 
     // Barre du haut
+    if ($('btn-nouveau')) $('btn-nouveau').addEventListener('click', function () { ouvrirDialogueNouveau(etat); });
     $('btn-annuler').addEventListener('click', function () { etat.annuler(); });
     $('btn-retablir').addEventListener('click', function () { etat.retablir(); });
     $('btn-enregistrer').addEventListener('click', enregistrer);
@@ -177,6 +261,9 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       var ui = etat.ui();
       boutonsOnglets.forEach(function (b) { b.setAttribute('aria-selected', String(b.getAttribute('data-onglet') === ui.onglet)); });
       document.querySelectorAll('[data-ecran]').forEach(function (s) { s.hidden = s.getAttribute('data-ecran') !== ui.onglet; });
+      if ($('indicateur-grille')) {
+        try { $('indicateur-grille').textContent = libelleIndicateur(etat.doc()); } catch (e) { $('indicateur-grille').textContent = ''; }
+      }
       $('btn-annuler').disabled = !etat.peutAnnuler();
       $('btn-retablir').disabled = !etat.peutRetablir();
       var be = $('barre-etat');
@@ -213,6 +300,11 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     if (avis) proposerCatalogueV2(etat);
   }
 
+  PM.nouveau = { descriptionGrille: descriptionGrille, libelleIndicateur: libelleIndicateur, documentPourGrille: documentPourGrille, ouvrirDialogue: ouvrirDialogueNouveau };
+
+  if (typeof document === 'undefined') return; // chargement sous Node (tests) : pas de coquille à démarrer
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', demarrer);
   else demarrer();
 })();
+
+if (typeof module !== 'undefined' && module.exports) module.exports = PM.nouveau;

@@ -1,7 +1,7 @@
 /*
  * bibliotheque.js : colonne gauche, bibliothèque des modèles de tuile (commune aux deux onglets).
  * Vignettes SVG, filtre par gabarit (centrale, bord, coin), exemplaires restants, +/− sur le nombre d'exemplaires,
- * badge « incomplet ». Clic = ouvrir dans l'éditeur ; glisser = poser sur le plateau
+ * badge « incomplet » ; un modèle dessiné pour l'autre grille est grisé, badgé et non posable. Clic = ouvrir dans l'éditeur ; glisser = poser sur le plateau
  * (le glissement est confié à PM.assemblage.demarrerGlissement) ; bouton « Poser » = pose en deux clics.
  * Les fonctions de calcul (vignettesBibliotheque, ...) n'accèdent pas au DOM : testables sous Node.
  */
@@ -19,6 +19,20 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     return String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
+  }
+
+  /** « 4×4 » à partir de l'identifiant de grille « 4x4 ». */
+  function nomGrille(id) { return String(id).replace('x', '×'); }
+
+  /**
+   * Le modèle est-il dessiné pour une autre grille que celle du document ? (un document = une grille : pas de mélange)
+   * Renvoie la phrase de refus (une phrase), ou '' si le modèle va sur ce plateau. Un modèle sans grille va partout.
+   */
+  function phraseAutreGrille(modele, doc) {
+    if (!modele || typeof modele !== 'object' || modele.grille === undefined) return '';
+    var F = PM.modele.formatDuDocument(doc);
+    if (modele.grille === F.id) return '';
+    return 'Cette tuile est dessinée pour la grille ' + nomGrille(modele.grille) + ' : elle ne se pose pas sur un plateau ' + nomGrille(F.id) + '.';
   }
 
   function nbPosees(doc, id) {
@@ -44,7 +58,8 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       var restants = M.exemplairesRestants(doc, m.id);
       groupes[gabarit].push({
         id: m.id, nom: m.nom || '', gabarit: gabarit, exemplaires: m.exemplaires, posees: nbPosees(doc, m.id),
-        restants: restants, complet: v.complet, posable: v.complet && restants > 0, alertes: v.alertes.length
+        restants: restants, complet: v.complet, posable: v.complet && restants > 0, alertes: v.alertes.length,
+        autreGrille: phraseAutreGrille(m, doc) !== ''
       });
     });
     return ordre.filter(function (r) {
@@ -84,24 +99,28 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     selFiltre.addEventListener('change', function () { filtre = selFiltre.value; dessiner(); });
 
     function vignetteHtml(v, ui) {
-      var m = PM.modele.modeleParId(etat.doc(), v.id), F = PM.modele.formatDuDocument(etat.doc()), t = F.COTE + 6;
+      var m = PM.modele.modeleParId(etat.doc(), v.id), F = PM.modele.formatDuDocument(etat.doc());
+      // vignette à l'échelle de la grille du modèle (100 mm en 5×5, 120 mm en 4×4), pour ne pas rogner un modèle d'une autre grille
+      if (v.autreGrille && PM.geometrie.FORMATS.indexOf(m.grille) >= 0) F = PM.geometrie.format(m.grille);
+      var t = F.COTE + 6;
       var svg = '<svg class="pm-biblio-svg" viewBox="-3 -3 ' + t + ' ' + t + '" aria-hidden="true">' +
         PM.rendu.contenuTuile(m, { rot: 0, format: F }) + '</svg>';
       var classes = ['pm-biblio-vignette'];
       if (!v.complet) classes.push('pm-biblio-incomplet');
+      if (v.autreGrille) classes.push('pm-biblio-autre-grille');
       if (v.restants <= 0) classes.push('pm-biblio-epuise');
       if (ui.modeleSelectionne === v.id) classes.push('pm-biblio-selection');
       if (ui.aPoser === v.id) classes.push('pm-biblio-arme');
       var id = echapper(v.id);
       return '<li class="' + classes.join(' ') + '" data-vignette="' + id + '">' +
         '<button type="button" class="pm-biblio-ouvrir" data-action="ouvrir" data-id="' + id + '"' +
-          ' title="' + (v.complet ? 'Ouvrir dans l\'éditeur ; glisser pour poser sur le plateau' : 'Modèle incomplet : ouvrir dans l\'éditeur (non posable)') + '"' +
+          ' title="' + (v.autreGrille ? echapper(phraseAutreGrille(m, etat.doc())) : v.complet ? 'Ouvrir dans l\'éditeur ; glisser pour poser sur le plateau' : 'Modèle incomplet : ouvrir dans l\'éditeur (non posable)') + '"' +
           (ui.modeleSelectionne === v.id ? ' aria-current="true"' : '') + '>' +
           '<span class="pm-biblio-image' + (v.complet ? ' pm-biblio-glissable' : '') + '" data-glisser="' + id + '">' + svg + '</span>' +
           '<span class="pm-biblio-texte">' +
             '<span class="pm-biblio-id">' + id + '</span>' +
             '<span class="pm-biblio-nom">' + echapper(v.nom) + '</span>' +
-            (v.complet ? '' : '<span class="pm-biblio-badge">incomplet</span>') +
+            (v.autreGrille ? '<span class="pm-biblio-badge">grille ' + echapper(nomGrille(m.grille)) + '</span>' : v.complet ? '' : '<span class="pm-biblio-badge">incomplet</span>') +
             (v.complet && v.alertes ? '<span class="pm-biblio-badge" title="Alertes de l’éditeur (par exemple règles R1 à R4)">' + v.alertes + ' alerte' + (v.alertes > 1 ? 's' : '') + '</span>' : '') +
           '</span>' +
         '</button>' +
@@ -147,6 +166,8 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       var id = zone.getAttribute('data-glisser');
       var m = PM.modele.modeleParId(etat.doc(), id);
       if (!m) return;
+      var autre = phraseAutreGrille(m, etat.doc());
+      if (autre) { etat.signaler(autre, 'erreur'); return; } // modèle d'une autre grille : non glissable
       if (!PM.modele.validerModele(m, PM.modele.formatDuDocument(etat.doc())).complet) { // incomplet : non glissable, et on dit pourquoi (recette B2)
         etat.signaler('Ce modèle est incomplet : complétez-le dans l’éditeur avant de le poser.', 'erreur');
         return;
@@ -198,6 +219,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   PM.bibliotheque = {
     vignettesBibliotheque: vignettesBibliotheque,
     libelleRestants: libelleRestants,
+    phraseAutreGrille: phraseAutreGrille,
     SEUIL_GLISSEMENT: SEUIL_GLISSEMENT,
     monter: monter
   };

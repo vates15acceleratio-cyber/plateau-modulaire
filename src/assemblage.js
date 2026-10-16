@@ -195,6 +195,16 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return res;
   }
 
+  /**
+   * Raison d'un refus de pose pour la barre d'état : si le modèle est dessiné pour l'autre grille, la phrase qui le dit
+   * (une phrase), sinon la raison donnée par PM.modele. Pure.
+   */
+  function raisonRefus(doc, modeleId, raison) {
+    var m = M().modeleParId(doc, modeleId), B = PM.bibliotheque;
+    var autre = m && B && typeof B.phraseAutreGrille === 'function' ? B.phraseAutreGrille(m, doc) : '';
+    return autre || raison;
+  }
+
   /** Phrase pour la barre d'état décrivant les effets (null s'il n'y en a pas). Se termine par « Ctrl+Z pour annuler. ». */
   function messageEffets(effets) {
     var jr = effets.jetonsRetires || [];
@@ -322,6 +332,12 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     s.push('<text class="pm-assemblage-camp pm-assemblage-camp-j2" x="' + milieu + '" y="' + (haut + 32) + '" text-anchor="middle">Camp rouge (sud)</text>');
     s.push('<text class="pm-assemblage-dimensions" x="' + milieu + '" y="' + (haut + 56) + '" text-anchor="middle">' + dimensions + '</text>');
     s.push('<rect class="pm-assemblage-cadre" x="0" y="0" width="' + larg + '" height="' + haut + '"/>');
+    // Rangées neutres (5×5 : la rangée centrale, dont les cases d'apparition ne servent à personne) : bande et repère permanents
+    for (var rn = 0; rn < NL; rn++) {
+      if (F.campCellule(0, rn)) continue;
+      s.push('<g class="pm-assemblage-neutre" data-rangee-neutre="' + rn + '"><rect class="pm-assemblage-bande-neutre" x="0" y="' + (rn * COTE) + '" width="' + larg + '" height="' + COTE + '"/>' +
+        '<text class="pm-assemblage-etiquette-neutre" x="' + (larg + 4) + '" y="' + (rn * COTE + demi + 4) + '">Neutre</text></g>');
+    }
 
     // Cellules
     for (var lig = 0; lig < NL; lig++) {
@@ -495,7 +511,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
     function poserIci(modeleId, col, lig, quarts) {
       var doc = etat.doc(), test = M().peutPoserTuile(doc, modeleId, col, lig);
-      if (!test.ok) { faireClignoter({ cellule: cle(col, lig) }); etat.signaler(test.raison, 'erreur'); return false; }
+      if (!test.ok) { faireClignoter({ cellule: cle(col, lig) }); etat.signaler(raisonRefus(doc, modeleId, test.raison), 'erreur'); return false; }
       var r = etat.appliquer(function (d) { return poserTuileTournee(d, modeleId, col, lig, quarts); }, 'pose de ' + modeleId);
       if (r.ok) {
         selection = { col: col, lig: lig };
@@ -508,7 +524,12 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     function deplacerIci(de, vers) {
       var test = testerDeplacement(etat.doc(), de, vers);
       if (test.identique) { dessiner(); return; }
-      if (!test.ok) { faireClignoter({ cellule: cle(vers.col, vers.lig) }); etat.signaler(test.raison, 'erreur'); return; }
+      if (!test.ok) {
+        var tp = M().tuileEn(etat.doc(), de.col, de.lig);
+        faireClignoter({ cellule: cle(vers.col, vers.lig) });
+        etat.signaler(tp ? raisonRefus(etat.doc(), tp.modeleId, test.raison) : test.raison, 'erreur');
+        return;
+      }
       if (appliquerAvecEffets(function (d) { return deplacerTuile(d, de, vers); }, 'déplacement de tuile',
         'Tuile déplacée de (' + de.col + ',' + de.lig + ') en (' + vers.col + ',' + vers.lig + ').')) {
         selection = { col: vers.col, lig: vers.lig };
@@ -736,6 +757,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     deplacerTuile: deplacerTuile,
     effetsDeAction: effetsDeAction,
     messageEffets: messageEffets,
+    raisonRefus: raisonRefus,
     compterJetons: compterJetons,
     messageJeton: messageJeton,
     etiquetteCellule: etiquetteCellule,

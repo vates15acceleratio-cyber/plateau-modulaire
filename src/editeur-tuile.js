@@ -969,7 +969,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       info.textContent = libelleCible(m, survol, fmt());
       var c = coteCourte(m, survol, fmt());
       gCote.innerHTML = c
-        ? '<text class="pm-editeur-cote" x="' + arrondi(c.x) + '" y="' + arrondi(Math.min(c.y + 12, 112)) + '" text-anchor="middle">' + echapper(c.texte) + '</text>'
+        ? '<text class="pm-editeur-cote" x="' + arrondi(c.x) + '" y="' + arrondi(Math.min(c.y + 12, fmt().COTE - 8)) + '" text-anchor="middle">' + echapper(c.texte) + '</text>'
         : '';
       svg.classList.toggle('pm-editeur-sur-cible', !!survol);
     }

@@ -18,11 +18,13 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
 
   var GR = PM.graphe;
 
+  /** Conseil propre au 4×4 (deux jonctions-cases) : absent du rapport d'un plateau 5×5. */
+  var CONSEIL_4X4 = 'Pour éviter « 5 contre 2 » en 4×4, placez les deux jonctions-cases (sans ville) dans la rangée centrale. ';
   var EXPLICATION = 'Pour chaque joueur (vert, rouge), on mesure en pas la distance de chaque ville à sa case d\'apparition la plus proche, ' +
     'puis on trie les 7 distances. Plateau très déséquilibré (erreur) : un joueur plus proche de 5 villes ou plus (« 5 contre 2 ») ' +
     'ou plus de ' + GR.SEUIL_BLOCAGE_ECART + ' pas d\'écart à un rang de 1 à 7. Alerte : plus de ' + GR.SEUIL_ECART + ' pas d\'écart à un rang. ' +
     'Le score S est la somme de ces écarts sur les 7 rangs (à surveiller à partir de ' + GR.SEUIL_S + ' ; S = ' + GR.SEUIL_S_INFORMATION + ' est une simple information). ' +
-    'Pour éviter « 5 contre 2 » en 4×4, placez les deux jonctions-cases (sans ville) dans la rangée centrale. ' +
+    CONSEIL_4X4 +
     'La première ville doit être à la même distance pour les deux joueurs. Une ville n\'est qu\'une destination : on ne la traverse pas.';
 
   /** Analyse complète : graphe, résultat d'équilibre et goulets des deux joueurs (villes non traversables). */
@@ -30,7 +32,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     options = options || {};
     var graphe = GR.construire(doc, options);
     var resultat = GR.equilibre(doc, Object.assign({}, options, { graphe: graphe }));
-    return { graphe: graphe, resultat: resultat, goulets: { 1: GR.goulets(graphe, 1), 2: GR.goulets(graphe, 2) } };
+    return { grille: PM.modele.formatDuDocument(doc).id, graphe: graphe, resultat: resultat, goulets: { 1: GR.goulets(graphe, 1), 2: GR.goulets(graphe, 2) } };
   }
 
   function texteDistance(d) { return d === null || d === undefined ? '—' : (isFinite(d) ? String(d) : '∞'); }
@@ -65,7 +67,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     return {
       S: r.S, scoreTexte: r.S === null ? '—' : String(r.S), aSurveiller: !!r.aSurveiller, sInformation: !!r.sInformation,
       villesA4: { j1: r.villesA4[1], j2: r.villesA4[2], ecart: r.villesA4.ecart },
-      explication: EXPLICATION,
+      explication: analyse.grille === '5x5' ? EXPLICATION.replace(CONSEIL_4X4, '') : EXPLICATION,
       complet: r.complet,
       blocages: r.blocages.map(function (b) { return b.message; }),
       lacunes: r.lacunes.slice(),
