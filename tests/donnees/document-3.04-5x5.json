@@ -1,0 +1,596 @@
+{
+  "format": "plateau-modulaire",
+  "version": 2,
+  "grille": "5x5",
+  "date": "2026-10-17T22:53:23.759Z",
+  "modeles": [
+    {
+      "id": "C7",
+      "nom": "Pont",
+      "gabarit": "centrale",
+      "grille": "5x5",
+      "exemplaires": 6,
+      "cases": [
+        {
+          "id": "c0",
+          "x": 50,
+          "y": 50,
+          "diametre": 20,
+          "type": "deplacement"
+        },
+        {
+          "id": "c1",
+          "x": 28,
+          "y": 28,
+          "diametre": 20,
+          "type": "deplacement"
+        },
+        {
+          "id": "c3",
+          "x": 72,
+          "y": 72,
+          "diametre": 20,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c0"
+          },
+          "b": {
+            "case": "c1"
+          }
+        },
+        {
+          "id": "h3",
+          "a": {
+            "case": "c0"
+          },
+          "b": {
+            "case": "c3"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 0
+          }
+        },
+        {
+          "id": "p3",
+          "a": {
+            "case": "c3"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c0"
+          },
+          "b": {
+            "raccord": {
+              "cote": 0,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c0"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r3",
+          "a": {
+            "case": "c0"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r4",
+          "a": {
+            "case": "c0"
+          },
+          "b": {
+            "raccord": {
+              "cote": 3,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "C8",
+      "nom": "Équerre",
+      "gabarit": "centrale",
+      "grille": "5x5",
+      "exemplaires": 5,
+      "cases": [
+        {
+          "id": "c0",
+          "x": 50,
+          "y": 50,
+          "diametre": 20,
+          "type": "deplacement"
+        },
+        {
+          "id": "c1",
+          "x": 28,
+          "y": 28,
+          "diametre": 20,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 72,
+          "y": 28,
+          "diametre": 20,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "c0"
+          },
+          "b": {
+            "case": "c1"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "c0"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 0
+          }
+        },
+        {
+          "id": "p2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "coin": 1
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "c0"
+          },
+          "b": {
+            "raccord": {
+              "cote": 0,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "c0"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r3",
+          "a": {
+            "case": "c0"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        },
+        {
+          "id": "r4",
+          "a": {
+            "case": "c0"
+          },
+          "b": {
+            "raccord": {
+              "cote": 3,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "B1",
+      "nom": "Bord en V",
+      "gabarit": "bord",
+      "grille": "5x5",
+      "exemplaires": 6,
+      "cases": [
+        {
+          "id": "a",
+          "x": 50,
+          "y": 40,
+          "diametre": 20,
+          "type": "apparition"
+        },
+        {
+          "id": "c1",
+          "x": 82,
+          "y": 66,
+          "diametre": 20,
+          "type": "deplacement"
+        },
+        {
+          "id": "c2",
+          "x": 18,
+          "y": 66,
+          "diametre": 20,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "a"
+          },
+          "b": {
+            "case": "c1"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "a"
+          },
+          "b": {
+            "case": "c2"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "p2",
+          "a": {
+            "case": "c2"
+          },
+          "b": {
+            "coin": 3
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "a"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 0
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "a"
+          },
+          "b": {
+            "raccord": {
+              "cote": 3,
+              "pos": 2
+            }
+          }
+        },
+        {
+          "id": "r3",
+          "a": {
+            "case": "a"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "B7",
+      "nom": "Bord simple",
+      "gabarit": "bord",
+      "grille": "5x5",
+      "exemplaires": 4,
+      "cases": [
+        {
+          "id": "a",
+          "x": 56,
+          "y": 38,
+          "diametre": 20,
+          "type": "apparition"
+        },
+        {
+          "id": "c1",
+          "x": 84,
+          "y": 64,
+          "diametre": 20,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "a"
+          },
+          "b": {
+            "case": "c1"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "a"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 0
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "a"
+          },
+          "b": {
+            "raccord": {
+              "cote": 3,
+              "pos": 2
+            }
+          }
+        },
+        {
+          "id": "r3",
+          "a": {
+            "case": "a"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "B7m",
+      "nom": "Bord simple miroir",
+      "gabarit": "bord",
+      "grille": "5x5",
+      "exemplaires": 4,
+      "cases": [
+        {
+          "id": "a",
+          "x": 44,
+          "y": 38,
+          "diametre": 20,
+          "type": "apparition"
+        },
+        {
+          "id": "c1",
+          "x": 16,
+          "y": 64,
+          "diametre": 20,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "a"
+          },
+          "b": {
+            "case": "c1"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 3
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "a"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 0
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "a"
+          },
+          "b": {
+            "raccord": {
+              "cote": 3,
+              "pos": 2
+            }
+          }
+        },
+        {
+          "id": "r3",
+          "a": {
+            "case": "a"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "K2",
+      "nom": "Coin à relais",
+      "gabarit": "coin",
+      "grille": "5x5",
+      "exemplaires": 5,
+      "cases": [
+        {
+          "id": "a",
+          "x": 32,
+          "y": 32,
+          "diametre": 20,
+          "type": "apparition"
+        },
+        {
+          "id": "r",
+          "x": 53,
+          "y": 53,
+          "diametre": 20,
+          "type": "deplacement"
+        },
+        {
+          "id": "c1",
+          "x": 74,
+          "y": 74,
+          "diametre": 20,
+          "type": "deplacement"
+        }
+      ],
+      "chemins": [
+        {
+          "id": "h1",
+          "a": {
+            "case": "a"
+          },
+          "b": {
+            "case": "r"
+          }
+        },
+        {
+          "id": "h2",
+          "a": {
+            "case": "r"
+          },
+          "b": {
+            "case": "c1"
+          }
+        },
+        {
+          "id": "p1",
+          "a": {
+            "case": "c1"
+          },
+          "b": {
+            "coin": 2
+          }
+        },
+        {
+          "id": "r1",
+          "a": {
+            "case": "a"
+          },
+          "b": {
+            "raccord": {
+              "cote": 1,
+              "pos": 0
+            }
+          }
+        },
+        {
+          "id": "r2",
+          "a": {
+            "case": "a"
+          },
+          "b": {
+            "raccord": {
+              "cote": 2,
+              "pos": 2
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "plateau": {
+    "tuiles": [
+      {
+        "modeleId": "C7",
+        "col": 1,
+        "lig": 1,
+        "rot": 0
+      }
+    ],
+    "jetons": []
+  }
+}

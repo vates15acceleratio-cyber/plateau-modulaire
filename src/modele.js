@@ -271,6 +271,9 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     if (!estEntier(m.exemplaires) || m.exemplaires < 0) {
       e.push(err('exemplaires_invalides', 'Le nombre d\'exemplaires doit être un entier positif ou nul.', refModele(m)));
     }
+    if (m.poids !== undefined && (!estEntier(m.poids) || m.poids < 1)) {
+      e.push(err('poids_invalide', 'Le poids de tirage doit être un entier d\'au moins 1 (ou absent : les exemplaires font alors le poids).', refModele(m)));
+    }
     var vus = dict();
     function verifier(el, type) {
       if (!estObjet(el)) return;
@@ -935,6 +938,16 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return estEntier(n) && n >= 0 ? n : 0;
   }
 
+  /**
+   * Poids de tirage d'un modèle dans le générateur : le champ facultatif `poids` (entier ≥ 1) s'il est présent, sinon le nombre
+   * d'exemplaires. Le poids règle la fréquence du modèle dans les plateaux aléatoires ; les exemplaires sont le stock à imprimer.
+   * Un modèle à 0 exemplaire n'est jamais tiré, quel que soit son poids.
+   */
+  function poidsTirage(modele) {
+    var p = modele && typeof modele === 'object' ? modele.poids : undefined;
+    return estEntier(p) && p >= 1 ? p : exemplairesValides(modele);
+  }
+
   function jonctionInterieure(i, j, F) {
     var NC = F.GRILLE.colonnes, NL = F.GRILLE.lignes;
     return estEntier(i) && estEntier(j) && i >= 1 && i <= NC - 1 && j >= 1 && j <= NL - 1;
@@ -1376,6 +1389,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     jonctionDuCoin: jonctionDuCoin,
     PLAFOND_TUILES: PLAFOND_TUILES,
     exemplairesValides: exemplairesValides,
+    poidsTirage: poidsTirage,
     aUneApparition: aUneApparition,
     nouveauDocument: nouveauDocument,
     clonerDocument: clonerDocument,

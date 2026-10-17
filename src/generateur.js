@@ -7,8 +7,8 @@
  * Règles appliquées (docs/18 à docs/20, docs/36 ; catalogues « centrales ouvertes » branchés en docs/46) :
  *  - grille pleine du format du document (4×4 ou 5×5) ;
  *  - tuiles tirées dans la bibliothèque du document (modèles complets), selon le gabarit attendu à chaque position ; un modèle peut
- *    servir plusieurs fois (poses illimitées) mais le tirage favorise la variété : poids du modèle = son nombre d'exemplaires
- *    (0 = jamais tiré), divisé par (1 + 0,5 × usages) à chaque réutilisation sur le plateau en cours ; rotation de la place pour les
+ *    servir plusieurs fois (poses illimitées) mais le tirage favorise la variété : poids du modèle = son champ `poids`, à défaut son nombre
+ *    d'exemplaires (0 exemplaire = jamais tiré ; le stock imprimé peut dépasser le poids, docs/47), divisé par (1 + 0,5 × usages) à chaque réutilisation sur le plateau en cours ; rotation de la place pour les
  *    bords et les coins ;
  *  - CASES ÉGALES ENTRE MOITIÉS (docs/18, réponse 2) : autant de cases dans la moitié verte que dans la moitié rouge (rangée neutre du
  *    5×5 à part), par échanges de tuiles du même gabarit, sinon par remplacement au poids (equilibrerMoities) ; chemins et tuiles
@@ -267,15 +267,16 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   function facteurRepetition(usages) { return 1 / (1 + PENALITE_REPETITION * usages); }
 
   /**
-   * Modèles tirables par gabarit : [{id, poids}], modèles complets seulement, ordre du document.
-   * Le poids est le nombre d'exemplaires du modèle (un modèle à 0 exemplaire n'est jamais tiré).
+   * Modèles tirables par gabarit : [{id, poids, stock}], modèles complets seulement, ordre du document (stock : exemplaires, plafond
+   * de B1 et des autres bords dans la composition 5×5).
+   * Le poids est le champ `poids` du modèle s'il existe, sinon son nombre d'exemplaires (PM.modele.poidsTirage) ; un modèle à
+   * 0 exemplaire n'est jamais tiré. Le stock à imprimer (exemplaires) peut ainsi dépasser le poids sans changer les plateaux tirés.
    */
   function modelesParGabarit(doc, F) {
     var res = { centrale: [], bord: [], coin: [] };
     (Array.isArray(doc.modeles) ? doc.modeles : []).forEach(function (m) {
       if (!m || !Object.prototype.hasOwnProperty.call(res, m.gabarit) || !M.validerModele(m, F).complet) return;
-      var n = M.exemplairesValides(m);
-      if (n > 0) res[m.gabarit].push({ id: m.id, poids: n });
+      if (M.exemplairesValides(m) > 0) res[m.gabarit].push({ id: m.id, poids: M.poidsTirage(m), stock: M.exemplairesValides(m) });
     });
     return res;
   }
@@ -839,14 +840,14 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       cellules.forEach(function (c, k) { if (c.gabarit === 'bord') bords.push(k); });
       var neutres = bords.filter(function (k) { return F.campCellule(cellules[k].col, cellules[k].lig) === null; });
       var ordre = neutres.concat(melanger(bords.filter(function (k) { return neutres.indexOf(k) < 0; }), rng));
-      var stockB1 = modeles.bord.filter(function (m) { return m.id === ID_B1; })[0].poids, nJc = (F.GRILLE.colonnes - 1) * (F.GRILLE.lignes - 1) - NB_VILLES;
+      var stockB1 = modeles.bord.filter(function (m) { return m.id === ID_B1; })[0].stock, nJc = (F.GRILLE.colonnes - 1) * (F.GRILLE.lignes - 1) - NB_VILLES;
       var bilan = function (n) { // cases et ports du plateau avec n B1 posés dans `ordre`
         var cases = nJc, ports = 0;
         ids.forEach(function (id, k) { var idk = ordre.indexOf(k) >= 0 && ordre.indexOf(k) < n ? ID_B1 : id; cases += nbCases[idk]; ports += profils[idk].nbPorts; });
         return { cases: cases, ports: ports };
       };
       // de préférence, assez de B1 pour que les autres bords tiennent dans leurs exemplaires (le jeu imprimé suffit au plateau)
-      var stockAutres = ctx.bordsSansB1.reduce(function (s, m) { return s + m.poids; }, 0), nMax = Math.min(bords.length, stockB1);
+      var stockAutres = ctx.bordsSansB1.reduce(function (s, m) { return s + m.stock; }, 0), nMax = Math.min(bords.length, stockB1);
       var bornes = function (nMin) { // valeurs de nB1 qui tiennent la cible, et la plus proche (ports suffisants dans les deux cas)
         var exactes = [], proche = null;
         for (var n = nMin; n <= nMax; n++) {
@@ -1191,7 +1192,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
 
     var F = M.formatDuDocument(etat.doc());
     racine.appendChild(el(d, 'p', 'pm-generateur-explication',
-      'Tire un plateau ' + F.GRILLE.colonnes + '×' + F.GRILLE.lignes + ' complet dans la bibliothèque (un modèle peut servir plusieurs fois, la variété est favorisée ; les exemplaires pèsent dans le tirage) : 7 villes à 3 cases d\'écart au moins, ' +
+      'Tire un plateau ' + F.GRILLE.colonnes + '×' + F.GRILLE.lignes + ' complet dans la bibliothèque (un modèle peut servir plusieurs fois, la variété est favorisée ; le poids du modèle, à défaut ses exemplaires, pèse dans le tirage) : 7 villes à 3 cases d\'écart au moins, ' +
       'les autres jonctions restent des cases chemin' + (F.id === '4x4' ? ' (les deux jonctions-cases sont placées dans la rangée centrale, sauf option « jonctions variées »)' : ' (villes en 2-3-2 sur des jonctions à 3 ports au moins, 78 à 81 cases, centrales orientées pour couvrir les jonctions)') + ' ; ' +
       'autant de cases dans la moitié verte que dans la moitié rouge ; centrales orientées selon les ports puis pour le rythme (au plus 3 cases d’affilée sans ville, passage ni raccourci, visé) et l’équilibre des accès au centre ; ' +
       'plateau équilibré tiré au hasard parmi les meilleurs candidats. ' +

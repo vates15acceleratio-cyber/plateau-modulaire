@@ -198,14 +198,14 @@ test('export : catalogue en A3 = 4 planches (6, 6, 6, 4) de 297 x 420 ; en A4 = 
   assert.strictEqual(total(a4), 22);
 });
 
-test('export : catalogue livré (docs/46) en A3 = 4 planches (6, 6, 6, 3) ; en A4 = 11 planches (10 de 2, 1 de 1), 21 tuiles', () => {
+test('export : catalogue livré (docs/47) en A3 = 4 planches (6, 6, 6, 6) ; en A4 = 12 planches de 2, 24 tuiles', () => {
   const doc = PM.catalogue.nouveauDocument();
   const a3 = E.calepiner(doc, { format: 'A3' }), a4 = E.calepiner(doc, { format: 'A4' });
-  assert.deepStrictEqual(a3.map((p) => p.tuiles.length), [6, 6, 6, 3]);
-  assert.strictEqual(a4.length, 11);
+  assert.deepStrictEqual(a3.map((p) => p.tuiles.length), [6, 6, 6, 6]);
+  assert.strictEqual(a4.length, 12);
   const total = (ps) => ps.reduce((s, p) => s + p.tuiles.length, 0);
-  assert.strictEqual(total(a3), 21);
-  assert.strictEqual(total(a4), 21);
+  assert.strictEqual(total(a3), 24);
+  assert.strictEqual(total(a4), 24);
   // les passages (courbes) sont imprimés : Q1, Q2 et B8 en ont
   assert.ok(a3.some((p) => /data-passage/.test(p.svg)), 'passages absents des planches');
 });

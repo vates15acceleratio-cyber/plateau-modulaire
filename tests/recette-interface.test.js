@@ -211,11 +211,11 @@ test('bibliothèque : groupes par gabarit, filtre, posable / incomplet, gabarit 
   assert.equal(v.complet, false); assert.equal(v.posable, false);
   assert.deepEqual(B.vignettesBibliotheque(d, 'bord').map((x) => x.gabarit), ['bord']);
   assert.deepEqual(B.vignettesBibliotheque(d, 'zzz'), []);
-  // poses illimitées : K4 n'a qu'un exemplaire, il se pose dans les 4 coins et reste posable
+  // poses illimitées : K4 n'a que 2 exemplaires, il se pose dans les 4 coins et reste posable
   let p = d;
   for (const [c, l, r] of [[0, 0, 0], [3, 0, 1], [3, 3, 2], [0, 3, 3]]) p = A.poserTuileTournee(p, 'K4', c, l, r);
   const k4 = B.vignettesBibliotheque(p, 'coin')[0].modeles.find((m) => m.id === 'K4');
-  assert.equal(k4.exemplaires, 1);
+  assert.equal(k4.exemplaires, 2);
   assert.equal(k4.posees, 4);
   assert.equal(k4.posable, true);
   assert.equal('restants' in k4, false);

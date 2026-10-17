@@ -152,6 +152,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     // pivots et passages : champs facultatifs, présents seulement s'ils sont dans le fichier (les anciens modèles ne changent pas)
     if (Array.isArray(brut.pivots)) m.pivots = pivots;
     if (Array.isArray(brut.passages)) m.passages = passages;
+    // poids de tirage du générateur : facultatif (absent : les exemplaires font le poids) ; une valeur invalide est ignorée
+    if (estEntier(brut.poids) && brut.poids >= 1 && brut.poids <= LIMITES.exemplaires) m.poids = brut.poids;
     if (!M.validerModele(m, grille).complet) {
       alertes.push(erreur('modele_incomplet', 'Le modèle « ' + libelle + ' » est incomplet : conservé comme brouillon, non posable.'));
     }
@@ -237,6 +239,36 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function bibliothequeVersion1(doc) {
     var ids = tab(doc && doc.modeles).map(function (m) { return m && m.id; });
     return ids.indexOf('A1') >= 0 && ids.indexOf('A2') >= 0;
+  }
+
+  /** Signature stable d'un modèle : clés triées, sans exemplaires, poids ni nom, sans tableau vide (un 3.04 enregistré n'a ni pivots ni passages). */
+  function signatureModele(valeur) {
+    if (Array.isArray(valeur)) return '[' + valeur.map(signatureModele).join(',') + ']';
+    if (valeur && typeof valeur === 'object') {
+      return '{' + Object.keys(valeur).sort().filter(function (k) {
+        var v = valeur[k];
+        return k !== 'exemplaires' && k !== 'poids' && k !== 'nom' && v !== undefined && !(Array.isArray(v) && !v.length);
+      }).map(function (k) { return JSON.stringify(k) + ':' + signatureModele(valeur[k]); }).join(',') + '}';
+    }
+    return JSON.stringify(valeur);
+  }
+
+  /**
+   * Bibliothèque du catalogue précédent (version 3.04, PM.catalogue.precedent) : mêmes modèles, mêmes tracés, aux exemplaires et aux
+   * noms près. Un modèle modifié, ajouté ou retiré par l'utilisateur donne faux : le nouveau catalogue n'est alors pas proposé
+   * (il remplacerait un travail personnel). Faux aussi pour un catalogue de la version 1 ou pour le catalogue courant.
+   */
+  function bibliothequeCataloguePrecedent(doc) {
+    try {
+      var C = PM.catalogue, g = M.formatDuDocument(doc).id;
+      if (!C || !C.precedent || !C.precedent[g] || !Array.isArray(doc.modeles)) return false;
+      var ref = C.precedent[g];
+      if (doc.modeles.length !== ref.length) return false;
+      return ref.every(function (m) {
+        var q = doc.modeles.filter(function (x) { return x && x.id === m.id; })[0];
+        return !!q && signatureModele(q) === signatureModele(m);
+      });
+    } catch (e) { return false; }
   }
 
   /* ------------------------------------------------------------------ */
@@ -552,6 +584,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     bibliothequeVersJSON: bibliothequeVersJSON,
     fusionnerBibliotheque: fusionnerBibliotheque,
     bibliothequeVersion1: bibliothequeVersion1,
+    bibliothequeCataloguePrecedent: bibliothequeCataloguePrecedent,
     telecharger: telecharger,
     ouvrirFichier: ouvrirFichier,
     autosave: autosave,

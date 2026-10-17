@@ -56,12 +56,14 @@ test('catalogue : version 3, 6 modèles, ids attendus et uniques, gabarit et gri
   assert.ok(CAT.modeles.every((m) => m.grille === '4x4' && !('role' in m)));
 });
 
-test('catalogue : 21 exemplaires à imprimer (7 centrales, 9 bords, 5 coins), poids du générateur', () => {
-  // l'exemplaire n'est pas une limite de pose (poses illimitées) : il fixe l'impression et le poids du tirage
+test('catalogue : 24 exemplaires à imprimer (7 centrales, 11 bords, 6 coins) ; poids du générateur distincts (21 : docs/47)', () => {
+  // l'exemplaire n'est pas une limite de pose (poses illimitées) : il fixe l'impression ; le poids du tirage est le champ `poids`
   const total = (g) => parGabarit(g).reduce((s, m) => s + m.exemplaires, 0);
-  assert.deepStrictEqual([total('centrale'), total('bord'), total('coin')], [7, 9, 5]);
-  assert.deepStrictEqual(Object.fromEntries(CAT.modeles.map((m) => [m.id, m.exemplaires])), { Q1: 4, Q2: 3, B1: 8, B8: 1, K2: 4, K4: 1 });
-  assert.strictEqual(CAT.modeles.reduce((s, m) => s + m.exemplaires, 0), 21);
+  assert.deepStrictEqual([total('centrale'), total('bord'), total('coin')], [7, 11, 6]);
+  assert.deepStrictEqual(Object.fromEntries(CAT.modeles.map((m) => [m.id, m.exemplaires])), { Q1: 4, Q2: 3, B1: 8, B8: 3, K2: 4, K4: 2 });
+  assert.strictEqual(CAT.modeles.reduce((s, m) => s + m.exemplaires, 0), 24);
+  assert.deepStrictEqual(Object.fromEntries(CAT.modeles.map((m) => [m.id, m.poids])), { Q1: 4, Q2: 3, B1: 8, B8: 1, K2: 4, K4: 1 });
+  assert.deepStrictEqual(Object.fromEntries(CAT.modeles.map((m) => [m.id, M.poidsTirage(m)])), { Q1: 4, Q2: 3, B1: 8, B8: 1, K2: 4, K4: 1 });
   // de quoi remplir une grille 4×4 : 4 centrales, 8 bords, 4 coins
   assert.ok(total('centrale') >= 4 && total('bord') >= 8 && total('coin') >= 4);
 });
@@ -74,7 +76,7 @@ test('catalogue précédent (version 3.04) : gardé, gelé et intact (13 modèle
   // B1, K2 et K4 désignent les mêmes tuiles dans les deux révisions (seuls les exemplaires de B1 changent : 6 -> 8)
   for (const id of ['B1', 'K2', 'K4']) {
     const a = JSON.parse(JSON.stringify(modele(id))), b = JSON.parse(JSON.stringify(p.find((m) => m.id === id)));
-    delete a.exemplaires; delete b.exemplaires;
+    delete a.exemplaires; delete b.exemplaires; delete a.poids; delete b.poids;
     assert.deepStrictEqual(a, b, id);
   }
 });
@@ -82,7 +84,11 @@ test('catalogue précédent (version 3.04) : gardé, gelé et intact (13 modèle
 test('catalogue : identique aux modèles de outils/catalogue-organique.js (révision « centrales ouvertes », docs/45)', () => {
   require('../outils/catalogue-organique.js');
   const o = globalThis.PM.catalogueOrganique.modelesParGrille['4x4'];
-  assert.deepStrictEqual(JSON.parse(JSON.stringify(CAT.modeles)), JSON.parse(JSON.stringify(o)));
+  // mêmes tracés ; le POIDS du catalogue livré est l'exemplaire de l'outil (docs/46), le stock imprimé est plus grand (docs/47)
+  const sans = (m) => { const c = JSON.parse(JSON.stringify(m)); delete c.exemplaires; delete c.poids; return c; };
+  assert.deepStrictEqual(CAT.modeles.map(sans), o.map(sans));
+  assert.deepStrictEqual(CAT.modeles.map((m) => m.poids), o.map((m) => m.exemplaires));
+  assert.ok(CAT.modeles.every((m, k) => m.exemplaires >= o[k].exemplaires));
 });
 
 test('catalogue : aucune poche (case en impasse sans raccord, port ni passage) dans aucun modèle, par la règle et par un calcul indépendant', () => {

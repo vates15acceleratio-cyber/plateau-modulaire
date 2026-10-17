@@ -221,6 +221,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     c.id = M.nouvelId({ cases: tab(idsExistants).map(function (i) { return { id: i }; }) }, 'modele-');
     c.nom = (modele.nom || modele.id) + ' (copie)';
     c.exemplaires = 1;
+    delete c.poids; // la copie est tirée selon ses exemplaires
     return c;
   }
 
@@ -819,7 +820,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     M.GABARITS.forEach(function (r) { var o = el('option', '', LIBELLES_GABARITS[r]); o.value = r; selGabarit.appendChild(o); });
     barre.appendChild(champ('Gabarit', selGabarit));
     var inExemplaires = el('input', 'pm-editeur-saisie pm-editeur-saisie-court'); inExemplaires.type = 'number'; inExemplaires.min = '0'; inExemplaires.step = '1';
-    inExemplaires.title = 'Nombre d’exemplaires à imprimer (jeu complet) et poids dans le plateau aléatoire ; il ne limite pas les poses.';
+    inExemplaires.title = 'Nombre d’exemplaires à imprimer (jeu complet) et, sauf poids propre du modèle (catalogue livré), poids dans le plateau aléatoire ; il ne limite pas les poses.';
     barre.appendChild(champ('Exemplaires à imprimer', inExemplaires));
     corps.appendChild(barre);
 

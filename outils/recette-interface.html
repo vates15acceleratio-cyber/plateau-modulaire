@@ -740,11 +740,44 @@
         ctrl('Ouvrir un document de la version 1 : converti (version 2, plus de carrefour ni de forme), une phrase le dit',
           etat.doc().version === 2 && etat.doc().plateau.jetons.length === 0 && !('forme' in etat.doc().plateau) &&
           M.modeleParId(etat.doc(), 'A1').gabarit === 'bord' && /version 1 converti/.test(msg()), msg());
-        S.ouvrirFichier = orig;
-        reset(docComplet);
-        etat.signaler('', 'info');
-        cliquerJonction(1, 2);
-        return attendre(1300);
+        // Document du catalogue précédent (3.04) : le nouveau catalogue est proposé ; refuser ne change rien, accepter vide le plateau (Ctrl+Z)
+        var ancien = PM.catalogue.nouveauDocument();
+        ancien.modeles = JSON.parse(J(PM.catalogue.precedent['4x4']));
+        ancien.plateau.tuiles = [{ modeleId: 'C1', col: 1, lig: 1, rot: 0 }];
+        var texteAncien = S.versJSON(ancien);
+        function boutonDialogue(texte) { return Array.prototype.filter.call($('dialogue-contenu').querySelectorAll('button'), function (b) { return b.textContent === texte; })[0]; }
+        reset();
+        S.ouvrirFichier = function () { return Promise.resolve(S.depuisJSON(texteAncien)); };
+        $('btn-ouvrir').click();
+        return attendre(50).then(function () {
+          var c = $('dialogue-contenu');
+          ctrl('Ouvrir un document du catalogue précédent : le nouveau catalogue est proposé (texte, Ctrl+Z, document inchangé si refus)',
+            $('dialogue').open && /catalogue précédent/.test(c.textContent) && /vide le plateau/.test(c.textContent) && /Ctrl\+Z/.test(c.textContent) && /reste inchangé/.test(c.textContent) &&
+            !!boutonDialogue('Charger le nouveau catalogue') && !!boutonDialogue('Garder mes tuiles'), c.textContent.slice(0, 120));
+          ctrl('proposition : aucun attribut style en ligne dans la boîte', !c.querySelector('[style]'));
+          ctrl('document ouvert tel quel pendant la proposition (ancien catalogue, 1 tuile)', !!M.modeleParId(etat.doc(), 'C1') && !M.modeleParId(etat.doc(), 'Q1') && nbTuiles() === 1, nbTuiles());
+          var ouvert = docJ();
+          boutonDialogue('Garder mes tuiles').click();
+          ctrl('Garder mes tuiles : boîte fermée, document inchangé', !$('dialogue').open && docJ() === ouvert);
+          return attendre(20);
+        }).then(function () {
+          reset();
+          $('btn-ouvrir').click();
+          return attendre(50);
+        }).then(function () {
+          var ouvert = docJ();
+          boutonDialogue('Charger le nouveau catalogue').click();
+          ctrl('Charger le nouveau catalogue : bibliothèque du nouveau catalogue (Q1, plus de C1), plateau vidé, boîte fermée, message',
+            !$('dialogue').open && !!M.modeleParId(etat.doc(), 'Q1') && !M.modeleParId(etat.doc(), 'C1') && nbTuiles() === 0 && etat.doc().grille === '4x4' && /Nouveau catalogue chargé/.test(msg()), msg());
+          ctrl('nouveau catalogue chargé : stock de B8 à 3 exemplaires, poids de tirage 1', M.modeleParId(etat.doc(), 'B8').exemplaires === 3 && M.poidsTirage(M.modeleParId(etat.doc(), 'B8')) === 1);
+          ctrlZ();
+          ctrl('Ctrl+Z après le chargement : document tel qu’il avait été ouvert (ancien catalogue, 1 tuile)', docJ() === ouvert && !!M.modeleParId(etat.doc(), 'C1') && nbTuiles() === 1);
+          S.ouvrirFichier = orig;
+          reset(docComplet);
+          etat.signaler('', 'info');
+          cliquerJonction(1, 2);
+          return attendre(1300);
+        });
       }).then(function () {
         var brut = null; try { brut = localStorage.getItem(S.CLE_AUTOSAVE); } catch (e) { /* ignoré */ }
         ctrl('autosave écrite dans localStorage après modification', typeof brut === 'string', typeof brut);

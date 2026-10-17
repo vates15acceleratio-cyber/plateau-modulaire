@@ -3,10 +3,10 @@
  *
  * Catalogues « organiques », révision « centrales ouvertes » (docs/45, réponses de l'utilisateur en fin de docs/18), branchés le
  * 2026-10-17 (docs/46) : centrales à virages sans case (passages, docs/39 et docs/40), servis par PM.catalogue.modelesParGrille :
- *  - 4×4 (tuiles de 120 mm, tests/catalogue.test.js) : 6 modèles, 21 exemplaires à imprimer :
+ *  - 4×4 (tuiles de 120 mm, tests/catalogue.test.js) : 6 modèles, 24 exemplaires à imprimer (21 de poids de tirage, docs/47) :
  *      centrales Q1 « Trident à virage » (4 cases, 3 coins, 1 virage sans case ; ×4) et Q2 « Étoile à crochet » (5 cases, 4 coins,
  *      1 crochet ; ×3) ; bords B1 « Bord en V » (×8) et B8 « Bord à virage » (1 passage ; ×1) ; coins K2 (×4) et K4 (×1) ;
- *  - 5×5 (tuiles de 100 mm, tests/catalogue-5x5.test.js) : 8 modèles, 30 exemplaires (5 coins, 14 bords, 11 centrales) :
+ *  - 5×5 (tuiles de 100 mm, tests/catalogue-5x5.test.js) : 8 modèles, 37 exemplaires (5 coins, 14 bords, 18 centrales ; 30 de poids de tirage, docs/47) :
  *      centrales U1 « Trident à virage » (4 cases, 3 coins ; ×5), P1 « Virage double » (×1), P2 « Équerre à virage » (×1),
  *      P3 « T sans case » (×2), P5 « Double virage » (2 passages ; ×2), toutes à 3 cases et 2 coins sauf U1 ; bords B1 (×6) et
  *      B7 « Bord simple » (×8, sans miroir : sert par rotation) ; coin K2 (×5).
@@ -14,6 +14,8 @@
  *      vise 78 à 81 cases (docs/18, réponse 1), donc 40 à 43 ports : 1 à 4 ports de plus que le minimum (39 = 16 × 2 + 7) pour
  *      7 villes à 3 accès, d'où plusieurs placements de villes admissibles. Il faut nB1 + nU1 = 6 à 9 ; B1 passe à 6 exemplaires
  *      (3 dans docs/45, qui visait 77 cases et n'avait qu'un placement admissible), B7 à 8.
+ * Les nombres de modèle écrits ci-dessous (« ×4 », « ×5 »…) sont les POIDS de tirage (champ `poids`) ; le stock à imprimer (`exemplaires`)
+ * vient de STOCK (B8 ×3 et K4 ×2 en 4×4 ; P3 ×4, P5 ×3, P1 ×3 et P2 ×3 en 5×5), pour que 90 % des plateaux générés se montent (docs/47).
  * Les catalogues précédents (version 3.04 : 4×4 C1 à C6, B1, B3 à B6, K2, K4 ; 5×5 C7, C8, B1, B7, B7m, K2) restent lisibles dans
  * PM.catalogue.precedent (gelé) : un document enregistré porte ses propres copies de modèles et s'ouvre sans changement ; ce champ
  * sert aux tests de compatibilité et de référence. Les ids communs aux deux révisions (B1, K2, K4 en 4×4 ; B1, B7, K2 en 5×5)
@@ -338,8 +340,23 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return o;
   }
 
-  var MODELES = geler(construire4());
-  var MODELES_5X5 = geler(construire5());
+  /*
+   * Stock à imprimer (exemplaires) distinct du poids de tirage du générateur (champ `poids`, PM.modele.poidsTirage) : les nombres écrits
+   * dans construire4() et construire5() sont les POIDS (ceux de docs/46, qui règlent la fréquence des modèles et la composition des
+   * plateaux : mesures d'équilibre inchangées) ; les exemplaires sont ceux de ce tableau, relevés pour qu'au moins 90 % des plateaux
+   * générés se montent avec la boîte imprimée (docs/47). Le stock ne limite jamais la pose.
+   */
+  var STOCK = { '4x4': { Q1: 4, Q2: 3, B1: 8, B8: 3, K2: 4, K4: 2 }, '5x5': { U1: 5, P3: 4, P5: 3, P1: 3, P2: 3, B1: 6, B7: 8, K2: 5 } };
+  function avecStock(liste, stock) {
+    liste.forEach(function (m) {
+      m.poids = m.exemplaires;
+      if (Object.prototype.hasOwnProperty.call(stock, m.id)) m.exemplaires = stock[m.id];
+    });
+    return liste;
+  }
+
+  var MODELES = geler(avecStock(construire4(), STOCK['4x4']));
+  var MODELES_5X5 = geler(avecStock(construire5(), STOCK['5x5']));
   var PAR_GRILLE = geler({ '4x4': MODELES, '5x5': MODELES_5X5 });
   var PRECEDENT = geler({ '4x4': construirePrecedent4(), '5x5': construirePrecedent5() });
 

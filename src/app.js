@@ -92,21 +92,21 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   }
 
   /**
-   * Propose de remplacer une bibliothèque de la version 1 par le catalogue de la version 2.
-   * Le remplacement vide le plateau ; il est annulable (Ctrl+Z).
+   * Boîte commune des propositions de catalogue : un texte, un bouton qui charge un document neuf (remplace la bibliothèque et
+   * vide le plateau, annulable par Ctrl+Z) et un bouton « Garder mes tuiles » qui ne change rien.
    */
-  function proposerCatalogueV2(etat) {
+  function proposerRemplacement(etat, titre, texte, libelleOui, creerDoc, raison, messageFait) {
     if (!PM.catalogue || !PM.dialogue || !$('dialogue')) return;
-    var c = PM.dialogue.ouvrir('Catalogue de la version 2');
+    var c = PM.dialogue.ouvrir(titre);
     var p = document.createElement('p');
-    p.textContent = 'Ce document utilise encore les tuiles de la version 1, converties. Le catalogue de la version 2 (cases d’apparition sur tout le pourtour, raccourcis de coin, 3 cases entre villes) est disponible. Le charger remplace la bibliothèque et vide le plateau ; Ctrl+Z permet de revenir en arrière.';
+    p.textContent = texte;
     var oui = document.createElement('button');
     oui.type = 'button';
-    oui.textContent = 'Charger le catalogue v2';
+    oui.textContent = libelleOui;
     oui.addEventListener('click', function () {
-      etat.remplacer(PM.catalogue.nouveauDocument(), 'catalogue de la version 2');
+      etat.remplacer(creerDoc(), raison);
       PM.dialogue.fermer();
-      etat.signaler('Catalogue de la version 2 chargé (Ctrl+Z pour revenir à l’ancien document).', 'info');
+      etat.signaler(messageFait, 'info');
     });
     var non = document.createElement('button');
     non.type = 'button';
@@ -118,6 +118,36 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     actions.appendChild(non);
     c.appendChild(p);
     c.appendChild(actions);
+  }
+
+  /**
+   * Propose de remplacer une bibliothèque de la version 1 par le catalogue de la version 2.
+   * Le remplacement vide le plateau ; il est annulable (Ctrl+Z).
+   */
+  function proposerCatalogueV2(etat) {
+    proposerRemplacement(etat, 'Catalogue de la version 2',
+      'Ce document utilise encore les tuiles de la version 1, converties. Le catalogue de la version 2 (cases d’apparition sur tout le pourtour, raccourcis de coin, 3 cases entre villes) est disponible. Le charger remplace la bibliothèque et vide le plateau ; Ctrl+Z permet de revenir en arrière.',
+      'Charger le catalogue v2', function () { return PM.catalogue.nouveauDocument(); }, 'catalogue de la version 2',
+      'Catalogue de la version 2 chargé (Ctrl+Z pour revenir à l’ancien document).');
+  }
+
+  /** Le document porte-t-il la bibliothèque du catalogue précédent (version 3.04), sans modification ? */
+  function aCataloguePrecedent(doc) {
+    return !!(PM.sauvegarde && typeof PM.sauvegarde.bibliothequeCataloguePrecedent === 'function' && PM.sauvegarde.bibliothequeCataloguePrecedent(doc));
+  }
+
+  /**
+   * Propose le nouveau catalogue (tuiles organiques, passages sans case) à un document qui porte encore celui de la version 3.04.
+   * Refuser ne change rien au document. Accepter remplace la bibliothèque par le nouveau catalogue de la même grille et VIDE le
+   * plateau : les tuiles posées sont celles de l’ancien catalogue, qui ne se mélangent pas au nouveau (le générateur tire dans toute la
+   * bibliothèque). C’est une seule étape d’historique : Ctrl+Z rend l’ancien document tel qu’il était, plateau compris.
+   */
+  function proposerNouveauCatalogue(etat) {
+    var grille = etat.doc().grille || PM.geometrie.FORMAT_DEFAUT;
+    proposerRemplacement(etat, 'Nouveau catalogue de tuiles',
+      'Ce document utilise encore le catalogue précédent. Un nouveau catalogue (' + descriptionGrille(grille).nom + ') aux tracés plus organiques, avec des virages sans case, est disponible. Le charger remplace la bibliothèque par le nouveau catalogue et vide le plateau ; Ctrl+Z permet de revenir au document tel qu’il était. Si vous gardez vos tuiles, le document reste inchangé.',
+      'Charger le nouveau catalogue', function () { return PM.catalogue.nouveauDocument(grille); }, 'nouveau catalogue',
+      'Nouveau catalogue chargé, plateau vidé (Ctrl+Z pour revenir à l’ancien document).');
   }
 
   /* ------------------------------------------------------------------ */
@@ -244,6 +274,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
         etat.remplacer(r.doc, 'ouverture du fichier');
         var migration = r.migre && r.alertes && r.alertes.length ? ' ' + r.alertes[0].message : '';
         etat.signaler('Fichier ouvert (Ctrl+Z pour revenir au plateau précédent)' + (r.alertes && r.alertes.length ? ' (' + r.alertes.length + ' alerte(s))' : '') + '.' + migration, r.alertes && r.alertes.length ? 'alerte' : 'info');
+        if (aCataloguePrecedent(r.doc)) proposerNouveauCatalogue(etat);
       }, function (e) { etat.signaler(e && e.message ? e.message : 'Ouverture impossible.', 'erreur'); });
     }
 
@@ -300,6 +331,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     rafraichir();
     etat.signaler(init.message, init.niveau);
     if (avis) proposerCatalogueV2(etat);
+    else if (aCataloguePrecedent(init.doc)) proposerNouveauCatalogue(etat);
   }
 
   PM.nouveau = { descriptionGrille: descriptionGrille, libelleIndicateur: libelleIndicateur, documentPourGrille: documentPourGrille, ouvrirDialogue: ouvrirDialogueNouveau };

@@ -195,7 +195,7 @@
       ctrl('boîte ouverte, titre « Exporter pour impression »', dialogueOuvert() && $('dialogue-titre').textContent === 'Exporter pour impression');
       ctrl('formulaire rempli (.pm-export)', !!contenu().querySelector('.pm-export .pm-export-formulaire'));
       var resume = contenu().querySelector('.pm-export-resume');
-      ctrl('résumé : 4 feuilles, 21 tuiles (catalogue livré, A3)', /4 feuille\(s\) : 21 tuile\(s\)/.test(resume.textContent), resume.textContent);
+      ctrl('résumé : 4 feuilles, 24 tuiles (catalogue livré, A3)', /4 feuille\(s\) : 24 tuile\(s\)/.test(resume.textContent), resume.textContent);
       ctrl('aucun avertissement avec le catalogue', contenu().querySelector('.pm-export-avertissement').textContent === '');
       var img = contenu().querySelector('img.pm-export-apercu');
       ctrl('aperçu : image avec adresse blob', img && /^blob:/.test(img.src) && !img.hidden, img && img.src.slice(0, 20));
@@ -206,7 +206,7 @@
         var bouton = contenu().querySelector('.pm-export-telecharger');
         ctrl('bouton Télécharger actif', bouton && !bouton.disabled);
         changer(radio('A4', 'format'), true);
-        ctrl('A4 : 11 feuilles, 21 tuiles', /11 feuille\(s\) : 21 tuile\(s\)/.test(resume.textContent), resume.textContent);
+        ctrl('A4 : 12 feuilles, 24 tuiles', /12 feuille\(s\) : 24 tuile\(s\)/.test(resume.textContent), resume.textContent);
         changer(radio('A3', 'format'), true);
         ctrl('retour A3 : 4 feuilles', /4 feuille\(s\)/.test(resume.textContent));
         changer(radio('posees', 'portee'), true);

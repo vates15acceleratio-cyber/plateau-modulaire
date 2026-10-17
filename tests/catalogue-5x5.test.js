@@ -58,11 +58,12 @@ test('catalogue 5×5 : 8 modèles (K2 ; B1, B7 ; U1, P1, P2, P3, P5), grille 5×
   for (const id of ['C5', 'K4', 'B7m', 'C7', 'C8', 'P6', 'B9', 'P0']) assert.equal(modele(id), undefined, id);
 });
 
-test('catalogue 5×5 : 30 exemplaires (5 coins, 14 bords, 11 centrales), B1 porté à 6 (78 à 81 cases), coordonnées de docs/45', () => {
+test('catalogue 5×5 : 37 exemplaires (5 coins, 14 bords, 18 centrales) pour 30 de poids de tirage (docs/47), B1 à 6 (78 à 81 cases), coordonnées de docs/45', () => {
   const total = (g) => parGabarit(g).reduce((s, m) => s + m.exemplaires, 0);
-  assert.deepEqual([total('coin'), total('bord'), total('centrale')], [5, 14, 11]);
-  assert.deepEqual(Object.fromEntries(C5.map((m) => [m.id, m.exemplaires])), { U1: 5, P3: 2, P5: 2, P1: 1, P2: 1, B1: 6, B7: 8, K2: 5 });
-  assert.equal(C5.reduce((s, m) => s + m.exemplaires, 0), 30);
+  assert.deepEqual([total('coin'), total('bord'), total('centrale')], [5, 14, 18]);
+  assert.deepEqual(Object.fromEntries(C5.map((m) => [m.id, m.exemplaires])), { U1: 5, P3: 4, P5: 3, P1: 3, P2: 3, B1: 6, B7: 8, K2: 5 });
+  assert.equal(C5.reduce((s, m) => s + m.exemplaires, 0), 37);
+  assert.deepEqual(Object.fromEntries(C5.map((m) => [m.id, m.poids])), { U1: 5, P3: 2, P5: 2, P1: 1, P2: 1, B1: 6, B7: 8, K2: 5 });
   const pos = (m) => Object.fromEntries(m.cases.map((c) => [c.id, [c.x, c.y]]));
   assert.deepEqual(pos(modele('K2')), { a: [32, 32], r: [53, 53], c1: [74, 74] });
   assert.deepEqual(pos(modele('B1')), { a: [50, 40], c1: [82, 66], c2: [18, 66] });
@@ -73,7 +74,7 @@ test('catalogue 5×5 : 30 exemplaires (5 coins, 14 bords, 11 centrales), B1 port
   // identiques aux modèles de outils/catalogue-organique.js, aux exemplaires près (B1 3 -> 6, B7 12 -> 8 : docs/46)
   require('../outils/catalogue-organique.js');
   const o = PM.catalogueOrganique.modelesParGrille['5x5'];
-  const sans = (m) => { const c = copie(m); delete c.exemplaires; return c; };
+  const sans = (m) => { const c = copie(m); delete c.exemplaires; delete c.poids; return c; };
   assert.deepEqual(C5.map(sans), o.map(sans));
 });
 
@@ -202,7 +203,7 @@ test('catalogue précédent 5×5 (version 3.04) : gardé, gelé et intact ; B1, 
   assert.ok(Object.isFrozen(p) && Object.isFrozen(p[0].chemins[0].b));
   for (const id of ['B1', 'B7', 'K2']) {
     const a = copie(modele(id)), b = copie(p.find((m) => m.id === id));
-    delete a.exemplaires; delete b.exemplaires;
+    delete a.exemplaires; delete b.exemplaires; delete a.poids; delete b.poids;
     assert.deepEqual(a, b, id);
   }
 });
@@ -552,20 +553,20 @@ test('chaîne : rapport d\'équilibre du plateau 5×5 complet (grille 5x5, 7 vil
   assert.equal(sans.complet, false);
 });
 
-test('chaîne : export du jeu complet 5×5 : 30 tuiles, planches A3 (2×3) et A4 (1×2), pas de 112 mm, tuile de 106 mm', () => {
+test('chaîne : export du jeu complet 5×5 : 37 tuiles, planches A3 (2×3) et A4 (1×2), pas de 112 mm, tuile de 106 mm', () => {
   const E = PM.exportation;
   const doc = CAT.nouveauDocument('5x5');
   const liste = E.listeTuiles(doc, { portee: 'stock' });
-  assert.equal(liste.tuiles.length, 30);
+  assert.equal(liste.tuiles.length, 37);
   assert.deepEqual(liste.exclus, []);
   const a3 = E.calepiner(doc, { format: 'A3' });
-  assert.equal(a3.length, 5);                    // 30 / 6
-  assert.ok(a3.every((p) => p.pas === 112 && p.tuiles.length === 6));
+  assert.equal(a3.length, 7);                    // 37 / 6 : 6 planches pleines et une d'une tuile (30 tuiles : 5 planches avant docs/47)
+  assert.ok(a3.every((p) => p.pas === 112) && a3.slice(0, 6).every((p) => p.tuiles.length === 6) && a3[6].tuiles.length === 1);
   assert.equal(a3[0].tuiles[1].x - a3[0].tuiles[0].x, 112);
   assert.equal(a3[0].tuiles[2].y - a3[0].tuiles[0].y, 112);
   const a4 = E.calepiner(doc, { format: 'A4' });
-  assert.equal(a4.length, 15);                   // 30 / 2
-  assert.ok(a4.every((p) => p.colonnes === 1 && p.tuiles.length === 2));
+  assert.equal(a4.length, 19);                   // 37 / 2 : 18 planches de 2 et une d'une tuile
+  assert.ok(a4.every((p) => p.colonnes === 1) && a4.slice(0, 18).every((p) => p.tuiles.length === 2) && a4[18].tuiles.length === 1);
   for (const p of a3.concat(a4)) {
     assert.ok(p.margeX >= E.MARGE_MIN - 1e-9 && p.margeY >= E.MARGE_MIN - 1e-9, `${p.nom} marges ${p.margeX} / ${p.margeY}`);
     const droite = p.margeX + (p.colonnes - 1) * p.pas + 106, bas = p.margeY + (p.lignes - 1) * p.pas + 106;
@@ -579,7 +580,7 @@ test('chaîne : export du jeu complet 5×5 : 30 tuiles, planches A3 (2×3) et A4
   }
   const pdf = Buffer.from(E.pdfDepuisPlanches(a3, doc)).toString('latin1');
   assert.ok(pdf.startsWith('%PDF-'));
-  assert.ok(pdf.includes('/Count 5'));
+  assert.ok(pdf.includes('/Count 7'));
   assert.ok(pdf.includes('/MediaBox [0 0 841.89 1190.55]'));
   assert.ok(Buffer.from(E.pdfDepuisPlanches(a4.slice(0, 1), doc)).toString('latin1').includes('/MediaBox [0 0 595.28 841.89]'));
 });
@@ -614,7 +615,7 @@ test('chaîne : exemplaires modifiés d\'un document 5×5 : export du stock et r
   const doc = CAT.nouveauDocument('5x5');
   doc.modeles.find((m) => m.id === 'K2').exemplaires = 0;
   doc.modeles.find((m) => m.id === 'U1').exemplaires = 2;
-  assert.equal(PM.exportation.listeTuiles(doc, { portee: 'stock' }).tuiles.length, 30 - 5 - 3);
+  assert.equal(PM.exportation.listeTuiles(doc, { portee: 'stock' }).tuiles.length, 37 - 5 - 3);
   const r = PM.sauvegarde.depuisJSON(PM.sauvegarde.versJSON(doc));
   assert.equal(r.doc.modeles.find((m) => m.id === 'K2').exemplaires, 0);
   assert.equal(r.doc.modeles.find((m) => m.id === 'U1').exemplaires, 2);
@@ -640,7 +641,8 @@ test('nouveauDocument : copies indépendantes entre elles, du catalogue gelé et
   assert.equal(M.modeleParId(b, 'U1').cases[0].x, 58);
   assert.equal(M.modeleParId(b, 'U1').nom, 'Trident à virage');
   assert.equal(M.modeleParId(b, 'U1').passages.length, 1);
-  assert.equal(M.modeleParId(b, 'P3').exemplaires, 2);
+  assert.equal(M.modeleParId(b, 'P3').exemplaires, 4);
+  assert.equal(M.modeleParId(b, 'P3').poids, 2);
   assert.deepEqual(b.plateau, { tuiles: [], jetons: [] });
   assert.deepEqual(CAT.nouveauDocument('5x5').plateau, { tuiles: [], jetons: [] });
   assert.equal(JSON.stringify(C5), instantane);
