@@ -490,6 +490,38 @@ function rediger(stats, meta) {
 }
 
 /* ---------------------------------------------------------------------- */
+/* Plateaux 5×5 du générateur (préparation des mesures 5×5, docs/28 § 6)    */
+/* ---------------------------------------------------------------------- */
+
+/**
+ * Tire `nb` tirages 5×5 du générateur, SANS filtre sur l'équilibre ni choix des villes : pour mesurer les placements de villes (les
+ * 2016 placements 2-3-2 de PM.generateur.placementsVilles5x5(), à essayer sur chaque plateau comme PAIRES en 4×4), le « 5 contre 2 »,
+ * le meilleur S atteignable, les plateaux sans placement valide (docs/28 § 6, points 4 et 12).
+ * Renvoie { entrees: [{ doc, b1, jonctions3 }], sansOrientation, ms, generateur } :
+ *  - entrees : plateaux dont les tuiles sont tirées (B1 imposés) puis orientées, sans ville (doc.plateau.jetons = []) ;
+ *  - sansOrientation : tirages où aucune orientation ne relie chaque jonction par 2 ports (rejet « jonction_ports ») ;
+ *  - generateur : { essais, acceptes, rejets (par cause) } du générateur complet, UN candidat par graine (villes comprises,
+ *    donc ici les rejets d'équilibre et de placement sont comptés, et les plateaux acceptés dans `acceptes`).
+ * mesurer() reste propre au 4×4 : l'étape « mesures sur 1000 plateaux » devra l'adapter (rangées, 36 paires).
+ */
+function tirerPlateaux5x5(nb, graine) {
+  const GEN = PM.generateur, t0 = Date.now(), rng = mulberry32(graine);
+  const res = { entrees: [], sansOrientation: 0, ms: 0, generateur: { essais: 0, acceptes: 0, rejets: {} } };
+  for (let n = 0; n < nb; n++) {
+    const doc = CAT.nouveauDocument('5x5');
+    const t = GEN.tuilesOrientees5x5(GEN.contexteDocument5x5(doc), rng);
+    if (t.cause) res.sansOrientation++;
+    else { doc.plateau.tuiles = t.tuiles; res.entrees.push({ doc, b1: t.b1, jonctions3: t.jonctions3 }); }
+    const r = GEN.generer(CAT.nouveauDocument('5x5'), { graine: 'mesure-' + graine + '-' + n, candidats: 1, essaisMax: 1 });
+    res.generateur.essais += r.essais;
+    if (r.ok) res.generateur.acceptes++;
+    for (const c of Object.keys(r.rejets)) res.generateur.rejets[c] = (res.generateur.rejets[c] || 0) + r.rejets[c];
+  }
+  res.ms = Date.now() - t0;
+  return res;
+}
+
+/* ---------------------------------------------------------------------- */
 /* Lancement                                                               */
 /* ---------------------------------------------------------------------- */
 
@@ -508,6 +540,6 @@ function principal() {
   console.log(`Rapport écrit : ${sortie} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 }
 
-module.exports = { mulberry32, tirerPlateau, tirerPlateaux, PAIRES, PAIRES_DEFAUT, PAIRES_VARIEES, CLE_DEFAUT, villes9sauf, mesurer, rediger };
+module.exports = { mulberry32, tirerPlateau, tirerPlateaux, PAIRES, PAIRES_DEFAUT, PAIRES_VARIEES, CLE_DEFAUT, villes9sauf, mesurer, rediger, tirerPlateaux5x5 };
 
 if (require.main === module) principal();
