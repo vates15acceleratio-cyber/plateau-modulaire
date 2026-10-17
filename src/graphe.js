@@ -34,7 +34,14 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var SEUIL_APPARITION_LOINTAINE = 7;
   var SEUIL_S = 5;                 // constante unique pour les deux formats, lue par le générateur et l'interface (docs/36 : S >= 5 définitif)
   var SEUIL_S_INFORMATION = 4;     // S = 4 : simple information, sans alerte (docs/22)
-  var PORTS_VILLE_INFORMATION = 3; // 5×5 : une ville sur une jonction à moins de 3 ports est signalée en information seulement (docs/36)
+  var PORTS_VILLE_MIN = 3;         // 5×5 : ports minimum d'une jonction qui porte une ville ; en dessous, information seulement (docs/36) ; lu par le générateur et les outils
+  var PORTS_JONCTION_MIN = G.MIN_PORTS_JONCTION; // ports minimum de toute jonction intérieure (condition ferme du générateur 5×5)
+  /** Villes du 5×5 en « 2-3-2 » (docs/18) : groupes de rangées de jonctions et nombre de villes dans chaque groupe. */
+  var REPARTITION_VILLES_5X5 = Object.freeze([
+    Object.freeze({ rangees: Object.freeze([1]), nb: 2 }),
+    Object.freeze({ rangees: Object.freeze([2, 3]), nb: 3 }),
+    Object.freeze({ rangees: Object.freeze([4]), nb: 2 })
+  ]);
   var CONSEIL_5X5 = ' Les 3 villes du milieu sont sur une seule rangée : en mettre 2 sur l’une et 1 sur l’autre rétablit presque toujours l’équilibre.';
   /**
    * Plateau très déséquilibré (docs/19, arbitrage de docs/20) : écart de plus de SEUIL_BLOCAGE_ECART pas à un
@@ -203,10 +210,17 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * et que les 3 villes du milieu sont toutes sur la même rangée (j = 2 ou j = 3).
    */
   function conseil5x5Applicable(villes) {
-    var par = { 1: 0, 2: 0, 3: 0, 4: 0 };
-    villes.forEach(function (v) { if (par[v.j] !== undefined) par[v.j]++; });
-    if (villes.length !== NB_VILLES || par[1] !== 2 || par[4] !== 2 || par[2] + par[3] !== 3) return false;
-    return par[2] === 3 || par[3] === 3;
+    if (villes.length !== NB_VILLES) return false;
+    var par = {};
+    villes.forEach(function (v) { par[v.j] = (par[v.j] || 0) + 1; });
+    var total = 0;
+    return REPARTITION_VILLES_5X5.every(function (g) {
+      var n = 0, max = 0;
+      g.rangees.forEach(function (j) { n += par[j] || 0; max = Math.max(max, par[j] || 0); });
+      total += n;
+      // le groupe a son effectif ; un groupe de plusieurs rangées (le milieu) doit tenir sur une seule
+      return n === g.nb && (g.rangees.length === 1 || max === g.nb);
+    }) && total === NB_VILLES;
   }
 
   /**
@@ -316,8 +330,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var conseil5x5 = est5x5 && conseil5x5Applicable(villes) ? CONSEIL_5X5 : '';
     if (est5x5) {
       villes.forEach(function (v) {
-        if (v.ports < PORTS_VILLE_INFORMATION) {
-          informations.push({ code: 'ville_peu_de_ports', message: 'La ville (' + v.i + ', ' + v.j + ') est sur une jonction à ' + v.ports + ' port(s), moins de ' + PORTS_VILLE_INFORMATION + ' (information, sans alerte).' });
+        if (v.ports < PORTS_VILLE_MIN) {
+          informations.push({ code: 'ville_peu_de_ports', message: 'La ville (' + v.i + ', ' + v.j + ') est sur une jonction à ' + v.ports + ' port(s), moins de ' + PORTS_VILLE_MIN + ' (information, sans alerte).' });
         }
       });
     }
@@ -334,7 +348,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       alertes.push({ code: 'ecart_rang_etendu', message: 'Un rang de villes (de 1 à 7) est à ' + ecartMax7 + ' pas d\'écart entre les deux joueurs (plus de ' + SEUIL_ECART + ').' });
     }
     if (S !== null && S >= SEUIL_S) {
-      alertes.push({ code: 'score_s', message: 'Score S = ' + S + ' (somme des écarts sur les 7 rangs) : plateau à surveiller (à partir de ' + SEUIL_S + ').' + conseil5x5 });
+      alertes.push({ code: 'score_s', message: 'Score S = ' + S + ' (somme des écarts sur les 7 rangs) : plateau à surveiller (à partir de ' + SEUIL_S + ').' + (cinqContreDeux ? '' : conseil5x5) });
     }
     if (premiereVille.ecart !== null && premiereVille.ecart !== 0) {
       alertes.push({ code: 'premiere_ville_inegale', message: 'La première ville est à ' + premiereVille[1] + ' pas du joueur vert et à ' + premiereVille[2] + ' pas du joueur rouge (elle devrait être à la même distance).' });
@@ -457,7 +471,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * Autoroutes de flanc : pour chaque joueur, distance de ses apparitions à la ligne de jonctions adverse
    * (j = lignes - 1, soit 3 en 4×4, pour le vert ; j = 1 pour le rouge), dans le sous-graphe « flancs »
    * (première et dernière colonnes + tuiles à case d'apparition des rangées nord et sud) et dans le
-   * sous-graphe « centre » (colonnes 1 et colonnes - 2). Toutes les jonctions portent une ville, traversable
+   * sous-graphe « centre » (colonnes 1 à colonnes - 2). Toutes les jonctions portent une ville, traversable
    * avec l'option villesTraversables: true (mesure de tests/catalogue.test.js). Renvoie [{flanc, centre}] pour
    * le vert puis le rouge (Infinity si inatteignable).
    */
@@ -470,7 +484,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       if (t.col === 0 || t.col === grille.colonnes - 1) return true;
       return (t.lig === 0 || t.lig === grille.lignes - 1) && M.aUneApparition(M.modeleParId(doc, t.modeleId));
     };
-    var centre = function (t) { return t.col === 1 || t.col === grille.colonnes - 2; };
+    var centre = function (t) { return t.col >= 1 && t.col <= grille.colonnes - 2; };
     return [1, 2].map(function (p) {
       var cible = p === 1 ? grille.lignes - 1 : 1;
       function mesure(filtre) {
@@ -485,6 +499,9 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   PM.graphe = {
     NB_VILLES: NB_VILLES,
+    PORTS_VILLE_MIN: PORTS_VILLE_MIN,
+    PORTS_JONCTION_MIN: PORTS_JONCTION_MIN,
+    REPARTITION_VILLES_5X5: REPARTITION_VILLES_5X5,
     RANGS_COMPARES: RANGS_COMPARES,
     SEUIL_ECART: SEUIL_ECART,
     SEUIL_CINQ_CONTRE_DEUX: SEUIL_CINQ_CONTRE_DEUX,

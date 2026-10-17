@@ -32,6 +32,7 @@ const M = PM.modele, GR = PM.graphe, GEN = PM.generateur, CAT = PM.catalogue;
 const GRAINE_REF = 20261017;   // tirage de référence (constats rédigés à la main dans outils/constats-5x5.md)
 const NB_REF = 1000;
 const NB_J = 16;               // jonctions intérieures du 5×5, indice (j - 1) * 4 + (i - 1)
+const PORTS_VILLE = GR.PORTS_VILLE_MIN;   // une ville sur une jonction à ce nombre de ports au moins (constante du générateur)
 const indexJonction = (i, j) => (j - 1) * 4 + (i - 1);
 const num = (a, b) => a - b;
 const LIBRES_ECH = 40;         // placements tirés au hasard par plateau dans la pose libre (2016 placements 2-3-2)
@@ -65,15 +66,14 @@ function deriver(r) {
   const rang = r.t1.map((a, k) => Math.abs(a - r.t2[k]));
   return { rang, S: rang.reduce((a, b) => a + b, 0), em: Math.max(...rang), cinq: Math.max(r.pa[0], r.pa[1]) >= GR.SEUIL_CINQ_CONTRE_DEUX, quatre: Math.max(r.pa[0], r.pa[1]) === 4, eg: r.pa[2] };
 }
-/** Chaîne de filtres du générateur : 'I' inaccessible, 'D' très déséquilibré, 'E' écart > 2, 'P' première ville inégale, 'S' S >= seuil, 'o' tout passe. */
+/** Lettre de chaque cause de rejet du générateur (PM.generateur.causeRejet) ; 'o' : passe tout. */
+const LETTRE_CAUSE = { ville_inaccessible: 'I', desequilibre: 'D', cinq_contre_deux: 'D', ecart: 'E', premiere_ville: 'P', score_s: 'S' };
+/** Chaîne de filtres du générateur (une seule définition : GEN.causeRejet) : 'I' inaccessible, 'D' très déséquilibré, 'E' écart > 2, 'P' première ville inégale, 'S' S >= seuil, 'o' tout passe. */
 function codeFiltre(r) {
   if (r.f === 'I') return 'I';
   const d = deriver(r);
-  if (d.cinq || d.em > GR.SEUIL_BLOCAGE_ECART) return 'D';
-  if (d.em > GR.SEUIL_ECART) return 'E';
-  if (r.t1[0] !== r.t2[0]) return 'P';
-  if (d.S >= GR.SEUIL_S) return 'S';
-  return 'o';
+  const cause = GEN.causeRejet({ accessible: true, cinq: d.cinq, ecartMax: d.em, premiereEgale: r.t1[0] === r.t2[0], S: d.S }, '5x5');
+  return cause ? LETTRE_CAUSE[cause] : 'o';
 }
 /** Mesure les villes (indices de jonctions) sur un graphe rapide : { v, f, t1?, t2?, pa? }. */
 function configurer(P, noeudsJonction, indices) {
@@ -98,20 +98,13 @@ const noeudsJonctions = (g, P) => g.jonctions.map((jn) => P.idx.get(jn.id));
 
 const surPourtour = (t) => t.col === 0 || t.col === 4 || t.lig === 0 || t.lig === 4;
 const surCentre = (t) => t.col >= 1 && t.col <= 3;
-/** Sous-graphes « flanc » (colonnes 0 et 4 + tuiles d'apparition des rangées 0 et 4) et « centre » (colonnes 1 à 3) : PM.graphe.flancs prend les colonnes 1 et 3 seulement. */
-const surFlanc = (doc) => (t) => t.col === 0 || t.col === 4 || ((t.lig === 0 || t.lig === 4) && M.aUneApparition(M.modeleParId(doc, t.modeleId)));
 
-function distanceRangeeAdverse(doc, p, filtre, jetons, traversables) {
-  const g = GR.construire(doc, { jetons: jetons || [], filtreTuile: filtre, villesTraversables: traversables });
+function distanceRangeeAdverse(doc, p, filtre) {
+  const g = GR.construire(doc, { jetons: [], filtreTuile: filtre });
   const cible = p === 1 ? 4 : 1, d = GR.distancesJoueur(g, p);
   let m = Infinity;
   for (const jn of g.jonctions) if (jn.j === cible && d.has(jn.id)) m = Math.min(m, d.get(jn.id));
   return m;
-}
-function toutesVilles() {
-  const r = [];
-  for (let j = 1; j <= 4; j++) for (let i = 1; i <= 4; i++) r.push({ i, j, type: 'capture' });
-  return r;
 }
 
 /** Propriétés d'un plateau 5×5 sans ville (g0 = GR.construire(doc, { jetons: [] })). Valeurs numériques ou petits tableaux (JSON). */
@@ -143,10 +136,10 @@ function proprietesPlateau(doc, g0) {
   p.ecartApp = m;
   p.pourtour = [1, 2].map((q) => distanceRangeeAdverse(doc, q, surPourtour));
   p.centre = [1, 2].map((q) => distanceRangeeAdverse(doc, q, surCentre));
-  // flancs : toutes les jonctions portent une ville (comme PM.graphe.flancs), villes non traversables puis traversables
+  // flancs : PM.graphe.flancs (toutes les jonctions portent une ville), villes non traversables puis traversables
   p.flancs = {};
   for (const mode of ['N', 'T']) {
-    p.flancs[mode] = [1, 2].map((q) => [distanceRangeeAdverse(doc, q, surFlanc(doc), toutesVilles(), mode === 'T'), distanceRangeeAdverse(doc, q, surCentre, toutesVilles(), mode === 'T')]);
+    p.flancs[mode] = GR.flancs(doc, { villesTraversables: mode === 'T' }).map((f) => [f.flanc, f.centre]);
   }
   return p;
 }
@@ -184,7 +177,7 @@ function tirerEntreesF2(prep) {
 /** Famille 2 : tous les placements 2-3-2 admissibles d'un plateau orienté, filtres, sélection comme le générateur (avec / sans rejet S). */
 function traiterPlateauF2(doc, ctx, rng, ech) {
   const g0 = GR.construire(doc, { jetons: [] }), P = grapheRapide(g0), noeuds = noeudsJonctions(g0, P);
-  const admissible = g0.jonctions.map((jn) => jn.ports >= 3);
+  const admissible = g0.jonctions.map((jn) => jn.ports >= PORTS_VILLE);
   const configs = [];
   ctx.placements.forEach((pl) => {
     if (!pl.indices.every((x) => admissible[x])) return;

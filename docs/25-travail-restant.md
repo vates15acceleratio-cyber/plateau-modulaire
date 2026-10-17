@@ -9,18 +9,14 @@ L'utilisateur a marqué une pause ; il reprendra **après discussion**. Rien ne 
 - ~~Ancienne consigne au sous-agent~~ (environ 30 modèles, coins K1 / K3, etc.) : **obsolète**, remplacée par `docs/24` § 8.
 - ~~Brouillon inachevé `docs/brouillons/catalogue-5x5-inacheve.patch`~~ (règles plus anciennes : poches permises, coins K1 / K3) : **obsolète**, ne pas l'appliquer.
 
-### 1.2 Générateur 5×5, mesures, seuils (à faire, dans cet ordre)
-1. **Générateur 5×5** (provisoire aujourd'hui : villes tirées librement, centrales tournées au hasard, jonctions mal reliées en simple pénalité). Il doit :
-   - **orienter les centrales** (pas de rotation au hasard) ;
-   - imposer **5 ou 6 B1** (cases = 72 + nB1, ports = 34 + nB1 avec 4 K2 et 9 centrales à 3 cases), avec les B1 de préférence sur la rangée neutre ;
-   - placer les **villes en 2-3-2** sur des jonctions à au moins 3 ports ;
-   - faire de « **au moins 2 ports par jonction** » une condition de **rejet**, et non plus une pénalité ;
-   - `pairesJonctionsCases` renvoie aujourd'hui `null` en 5×5 (placement par défaut des jonctions-cases à définir).
-2. **Mesures sur 1000 plateaux** : les 12 points de `docs/28`, puis rapport de mesures dans `docs/` (prochain numéro libre).
-3. **Seuils d'équilibre 5×5** : validés par l'advisor design de jeu, puis appliqués.
+### 1.2 Générateur 5×5, mesures, seuils — fait (branche `generateur-5x5`, 2026-10-17)
+- **Générateur 5×5** (`docs/34`) : centrales orientées, 5 ou 6 B1 (rangée neutre), villes en 2-3-2 sur jonctions à ≥ 3 ports, rejets sur les ports, abandon rapide sur une bibliothèque impossible ; 4×4 inchangé.
+- **Mesures sur 1000 plateaux** (`docs/35`) et **seuils définitifs du 5×5** (`docs/36`, identiques au 4×4), conseil « 3 villes du milieu sur une rangée », information « ville sur jonction à moins de 3 ports ».
+- Recette et revue (`docs/37`), corrections faites.
+- **À soumettre à l'utilisateur** (`docs/36`) : le **tempo du 5×5** (4,75 villes sur 7 à ≤ 3 pas, contre 5,7 en 4×4) et le **rôle des centrales** (villes à 70 % sur les flancs, 7 % au centre) ; pistes pour plus tard : une centrale à 3 ou 4 ports, un bord de plus.
 
-### 1.3 Seuils du 4×4 à revoir
-- Les mesures ont changé avec le tirage avec répétition (63 cases ; « 5 contre 2 » 4,1 % ; S ≥ 5 : 4,3 % ; première ville inégale 0,2 % ; goulet à un chemin 0,4 %) : faire revalider les seuils de `src/graphe.js` par l'advisor design de jeu (`docs/21-mesures-catalogue-v2.md`).
+### 1.3 Seuils du 4×4 — décidé
+- Gardés tels quels (`docs/36` § 7) : mêmes seuils dans les deux formats.
 
 ### 1.4 Recette, relecture, sécurité, version
 - Testeur et relecteur sur les derniers ajouts (interface 5×5, retouches du 4×4, suppression des tuiles, légende illustrée). Le catalogue 5×5 est recetté (`docs/32`) et relu (`docs/33`) ; reste la recette du générateur 5×5 une fois fait.

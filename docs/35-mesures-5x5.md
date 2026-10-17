@@ -356,7 +356,7 @@ valeur |       n |      % |
 | générateur | rouge | pourtour | 4.09 | 4 | 6 |
 | générateur | rouge | centre | 5.00 | 5 | 5 |
 
-Toutes les jonctions portent une ville (sous-graphes « flanc » : colonnes 0 et 4 + tuiles d'apparition des rangées 0 et 4 ; « centre » : colonnes 1 à 3 ; `PM.graphe.flancs` prend les colonnes 1 et 3 seulement en 5×5, d'où ce calcul propre aux mesures) :
+Toutes les jonctions portent une ville (sous-graphes « flanc » : colonnes 0 et 4 + tuiles d'apparition des rangées 0 et 4 ; « centre » : colonnes 1 à 3 ; calculés par `PM.graphe.flancs`) :
 
 | Famille | Villes | Mesures | Flanc plus court que le centre | Égal | Flanc − centre moyen |
 |---|---|---|---|---|---|

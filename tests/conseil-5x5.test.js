@@ -59,10 +59,13 @@ test('conseil 5×5 : présent si et seulement si squelette 2-3-2 et 3 villes du 
     const e = GR.equilibre(doc5, { jetons: jetons(vs) });
     const msgs = e.blocages.concat(e.alertes).filter((a) => a.code === 'cinq_contre_deux' || a.code === 'score_s');
     const attendu = squeletteUneRangee(vs);
+    // « 5 contre 2 » et S >= 5 ensemble : le conseil n’est écrit qu’une fois (au message « 5 contre 2 »)
+    const aCinq = msgs.some((a) => a.code === 'cinq_contre_deux');
     msgs.forEach((a) => {
-      assert.strictEqual(a.message.includes(CONSEIL), attendu, genre + ' ' + a.code + ' : ' + a.message);
+      assert.strictEqual(a.message.includes(CONSEIL), attendu && (a.code === 'cinq_contre_deux' || !aCinq), genre + ' ' + a.code + ' : ' + a.message);
       if (attendu) vus.avec++; else if (genre === 'deux-un') vus.deuxPlusUn++; else if (genre === 'libre') vus.horsSquelette++;
     });
+    assert.ok(msgs.filter((a) => a.message.includes(CONSEIL)).length <= 1, 'conseil en double : ' + genre);
     if (!msgs.length) assert.ok(!JSON.stringify(e).includes('seule rangée'), 'sans alerte, pas de conseil');
   }
   assert.ok(vus.avec > 0 && vus.deuxPlusUn > 0 && vus.horsSquelette > 0, JSON.stringify(vus));

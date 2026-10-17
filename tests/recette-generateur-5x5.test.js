@@ -5,7 +5,7 @@
  * Les contrôles de ports passent par PM.modele.portsJonction (pas par le contrôle interne du générateur) ;
  * « aucune alerte » est vérifié aux deux sources de l’interface : PM.controles.calculer (panneau) et
  * PM.equilibre.rapport (rapport d’équilibre).
- * Les défauts connus sont des tests { todo: 'BUG: …' } : leur échec n’échoue pas la suite.
+ * Les défauts connus seraient marqués { todo: 'BUG: …' } (leur échec n’échouerait pas la suite) ; il n’y en a plus.
  */
 const test = require('node:test');
 const assert = require('node:assert');
@@ -282,15 +282,18 @@ test('conseil 5×5 : présent aux messages « 5 contre 2 » et S ≥ 5 si et seu
   Object.keys(cl).forEach((k) => cl[k].forEach(({ vs, d, e }) => {
     const un = conseilAttendu(vs), txt = vs.map(cle).join(' ');
     // 1) moteur
+    // « 5 contre 2 » et S >= 5 ensemble : le conseil n’est écrit qu’une fois (au message « 5 contre 2 »)
+    const aCinq = e.blocages.concat(e.alertes).some((a) => a.code === 'cinq_contre_deux');
     e.blocages.concat(e.alertes).forEach((a) => {
       const porteur = a.code === 'cinq_contre_deux' || a.code === 'score_s';
-      assert.strictEqual(a.message.includes(CONSEIL), porteur && un, a.code + ' · ' + txt);
+      assert.strictEqual(a.message.includes(CONSEIL), porteur && un && (a.code === 'cinq_contre_deux' || !aCinq), a.code + ' · ' + txt);
     });
     // 2) panneau et rapport : le conseil figure dans un message si et seulement s’il y a un message porteur et un squelette en une rangée
     const porteur = e.blocages.concat(e.alertes).some((a) => a.code === 'cinq_contre_deux' || a.code === 'score_s');
     const m = messagesInterface(d);
     assert.strictEqual(m.panneau.some((t) => t.includes(CONSEIL)), porteur && un, 'panneau · ' + txt);
     assert.strictEqual(m.rapport.some((t) => t.includes(CONSEIL)), porteur && un, 'rapport · ' + txt);
+    assert.ok(m.panneau.filter((t) => t.includes(CONSEIL)).length <= 1 && m.rapport.filter((t) => t.includes(CONSEIL)).length <= 1, 'conseil en double · ' + txt);
     // le conseil n’est jamais dupliqué dans les informations
     assert.ok(!m.informations.some((t) => t.includes('seule rangée')));
     if (porteur && un) avec++; else if (porteur) sans++;
@@ -307,7 +310,7 @@ test('conseil 5×5 : jamais sans squelette 2-3-2, ni avec 6 ou 8 villes, ni en 4
     const messages = e.blocages.concat(e.alertes);
     messages.forEach((a) => {
       if (a.code === 'cinq_contre_deux' || a.code === 'score_s') porteurs++;
-      assert.strictEqual(a.message.includes('seule rangée'), (a.code === 'cinq_contre_deux' || a.code === 'score_s') && conseilAttendu(vs), n + ' villes · ' + a.code + ' · ' + vs.map(cle).join(' '));
+      assert.strictEqual(a.message.includes('seule rangée'), (a.code === 'cinq_contre_deux' || (a.code === 'score_s' && !messages.some((x) => x.code === 'cinq_contre_deux'))) && conseilAttendu(vs), n + ' villes · ' + a.code + ' · ' + vs.map(cle).join(' '));
     });
   }
   assert.ok(porteurs > 100, porteurs + ' messages porteurs rencontrés');
@@ -450,7 +453,7 @@ test('entrées invalides : jamais d’exception (documents, options, documents a
   assert.doesNotThrow(() => EQ.rapport(EQ.analyser(avecVilles(plateaux()[0].doc, [{ i: 9, j: 9 }, { i: 0, j: 0 }]))));
 });
 
-test('entrées invalides : un nombre de candidats non numérique se comporte comme NaN (valeur par défaut)', { todo: 'BUG mineur : candidats ou essaisMax en chaîne ("abc") donnent 0 essai et un message qui accuse à tort les villes proches' }, () => {
+test('entrées invalides : un nombre de candidats non numérique se comporte comme NaN (valeur par défaut)', () => {
   const a = GEN.generer(doc5(), { graine: 'a', candidats: 'abc', essaisMax: 3 });
   assert.strictEqual(a.ok, true, a.raison);
   const b = GEN.generer(doc5(), { graine: 'a', candidats: 2, essaisMax: 'x' });
@@ -458,7 +461,7 @@ test('entrées invalides : un nombre de candidats non numérique se comporte com
   assert.ok(!/villes à moins de 3 cases|rapprochent presque toujours/.test(b.raison));
 });
 
-test('entrées invalides : candidats ou essaisMax infinis ne bloquent pas le programme', { todo: 'BUG mineur : candidats: Infinity boucle sans fin (generateur.js, boucle while des candidats) ; l’interface ne passe pas cette option' }, () => {
+test('entrées invalides : candidats ou essaisMax infinis ne bloquent pas le programme', () => {
   const racine = path.join(__dirname, '..');
   for (const opt of ['candidats:Infinity']) {
     const script = "require(" + JSON.stringify(path.join(racine, 'src', 'catalogue.js')) + ");require(" + JSON.stringify(path.join(racine, 'src', 'generateur.js')) + ");" +

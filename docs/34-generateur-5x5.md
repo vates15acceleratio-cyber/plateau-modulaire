@@ -14,7 +14,7 @@ Branche `generateur-5x5`. Mission : `docs/25` § 1.2 et `docs/24` § 8.
 - 200 candidats : ≈ 1,3 s ; ≈ 7 ms par candidat.
 - 1000 graines à 1 candidat : 97 % acceptés ; rejets : 15 `villes_ports`, 9 `desequilibre`, 6 `score_s`, 0 `jonction_ports`. 469 plateaux à 5 B1, 501 à 6 B1.
 - Jonctions à ≥ 3 ports : 7 (52 %) ou 8 (48 %) ; toujours ≥ 2 ports partout. Rotation au hasard : plus d'un tiers des plateaux auraient une jonction à < 2 ports.
-- Tests : 536 (dont `tests/generateur-5x5.test.js`, 12 tests sur 200 graines) ; recettes 250 et 116 OK, 0 échec (vérifié par l'orchestrateur).
+- Tests à l'écriture de ce document : 536 (dont `tests/generateur-5x5.test.js`, 12 tests sur 200 graines) ; recettes 250 et 116 OK. Après les corrections de `docs/37` : 572 tests (0 échec, 0 todo, 0 ignoré) ; recettes 289 et 116 OK, 0 échec.
 
 ## Arbitrages de l'orchestrateur
 Les arbitrages 1 à 3 sont **confirmés par `docs/36`** (S ≥ 5 définitif, B1 forcés gardés, villes vers les flancs acceptable).

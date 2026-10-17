@@ -35,7 +35,7 @@ Toujours répondre à l'utilisateur **en français**. Code, identifiants et comm
 - Dans une chaîne JS entre apostrophes droites, une apostrophe française casse la syntaxe : utiliser `’` ; lancer `node --check` après chaque modification.
 - Ne jamais modifier le fichier d'un sous-agent en cours avec une expression régulière large.
 
-## État (2026-10-16) — PAUSE
-- **L'utilisateur a marqué une pause et reprendra après discussion : ne rien lancer sans son accord.**
-- Version 3.02.0 en PR. Le **catalogue 5×5 est fait** sur la branche `catalogue-5x5` (6 modèles, 30 tuiles, `docs/24`, `29`, `32`, `33`) : pose à la main utilisable. À faire : **générateur 5×5** (provisoire aujourd’hui), mesures sur 1000 plateaux, seuils 5×5. Méthode du brief §8 appliquée avec agents (advisors, production, testeur, relecteur, versionneur). `node --test` et les deux recettes passent.
-- **Travail restant et idées à étudier : `docs/25-travail-restant.md`** (générateur 5×5, mesures et seuils 5×5, recette / sécurité, petites dettes, hexagonal en attente, idée nouvelle des **régions thématiques** à discuter).
+## État (2026-10-17)
+- Le travail se fait aussi sur un autre poste : **toujours commencer par `git fetch` puis `git pull`**. Les fonctionnalités se font sur une branche, fusionnée par PR.
+- Version 3.03.0 sur `main` ; branche `generateur-5x5` : générateur 5×5, mesures (`docs/35`), seuils définitifs (`docs/36`), recette et revue (`docs/37`).
+- **Travail restant et idées à étudier : `docs/25-travail-restant.md`** (questions à soumettre sur le tempo du 5×5 et le rôle des centrales, audit de sécurité des derniers ajouts, petites dettes dont l'affichage mobile, hexagonal en attente, idée des **régions thématiques** à discuter).

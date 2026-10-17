@@ -971,8 +971,7 @@
         var t = texteControles();
         ctrl('pose manuelle (a) : le panneau affiche l’erreur de déséquilibre avec le conseil', /Plateau très déséquilibré/.test(t) && t.indexOf(CONSEIL) >= 0, t.replace(/\s+/g, ' ').slice(0, 300));
         var rap = ouvrirRapport();
-        var nbPorteurs = codes(e).filter(function (c) { return c === 'cinq_contre_deux' || c === 'score_s'; }).length;
-        ctrl('pose manuelle (a) : le rapport d’équilibre affiche le conseil avec chaque message porteur (5 contre 2, et S ≥ 5 s’il y est aussi)', rap.indexOf(CONSEIL) >= 0 && rap.split(CONSEIL).length - 1 === nbPorteurs && /Plateau très déséquilibré/.test(rap), nbPorteurs + ' porteur(s) ; ' + (rap.split(CONSEIL).length - 1) + ' conseil(s)');
+        ctrl('pose manuelle (a) : le rapport d’équilibre affiche le conseil une seule fois (au message « 5 contre 2 », même si S ≥ 5 s’y ajoute)', rap.indexOf(CONSEIL) >= 0 && rap.split(CONSEIL).length - 1 === 1 && /Plateau très déséquilibré/.test(rap), (rap.split(CONSEIL).length - 1) + ' conseil(s)');
         PM.dialogue.fermer();
         // (b) 2 + 1 et S >= 5 : pas de conseil
         poserVilles(trouve.deuxUn);

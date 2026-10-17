@@ -40,6 +40,9 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   var NB_VILLES = GR.NB_VILLES;
   var SEUIL_ECART = GR.SEUIL_ECART;  // écart toléré à chaque rang (doc 16, b)
   var CANDIDATS_DEFAUT = 200;
+  var CANDIDATS_MAX = 1000;       // borne des candidats demandés (au-delà : le calcul synchrone gèlerait l'interface)
+  var ESSAIS_MAX_BORNE = 50000;   // borne des essais demandés
+  var ECHECS_STRUCTURELS_MAX = 25; // 5×5 : abandon après tant d'essais consécutifs rejetés pour manque de ports (bibliothèque impossible)
   var FACTEUR_ESSAIS = 5;         // essais maximaux = candidats × 5
   var TOLERANCE_DEFAUT = 1;       // bons candidats : S ≤ Smin + tolérance (1 : garde de l'aléa)
   var RACCORDS_TOLERES = 2;       // raccords morts tolérés sans pénalité
@@ -97,8 +100,8 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     return res;
   }
 
-  /** Villes du 5×5 en « 2-3-2 » (docs/18) : groupes de rangées de jonctions et nombre de villes dans chaque groupe. */
-  var REPARTITION_VILLES_5X5 = [{ rangees: [1], nb: 2 }, { rangees: [2, 3], nb: 3 }, { rangees: [4], nb: 2 }];
+  /** Villes du 5×5 en « 2-3-2 » (docs/18) : définition unique dans PM.graphe (groupes de rangées et nombre de villes par groupe). */
+  var REPARTITION_VILLES_5X5 = GR.REPARTITION_VILLES_5X5;
 
   function combinaisons(liste, k) {
     var res = [];
@@ -110,8 +113,17 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   }
 
   var CACHE_PLACEMENTS = null;
+  /** Gèle récursivement un objet (le cache partagé ne doit pas être modifié par un appelant). */
+  function geler(o) {
+    if (o && typeof o === 'object' && !Object.isFrozen(o)) {
+      Object.freeze(o);
+      Object.keys(o).forEach(function (k) { geler(o[k]); });
+    }
+    return o;
+  }
   /**
-   * Les placements de 7 villes en « 2-3-2 » du 5×5 : 2016 tableaux de 7 jonctions {i, j} (ordre de lecture), calculés une fois.
+   * Les placements de 7 villes en « 2-3-2 » du 5×5 : 2016 tableaux de 7 jonctions {i, j} (ordre de lecture), calculés une fois
+   * et gelés (le même objet est rendu à chaque appel : ni copie ni modification possible).
    * 2 villes parmi les 4 jonctions de la rangée j = 1, 3 parmi les 8 des rangées j = 2 et 3, 2 parmi les 4 de la rangée j = 4.
    */
   function placementsVilles5x5() {
@@ -123,8 +135,8 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     });
     var res = [];
     groupes[0].forEach(function (a) { groupes[1].forEach(function (b) { groupes[2].forEach(function (c) { res.push(a.concat(b, c)); }); }); });
-    CACHE_PLACEMENTS = res;
-    return res;
+    CACHE_PLACEMENTS = geler(res);
+    return CACHE_PLACEMENTS;
   }
 
   /**
@@ -191,6 +203,25 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     };
   }
 
+  /** Seuils propres à chaque format (docs/28 § 6) : en 5×5, S >= PM.graphe.SEUIL_S rejette le candidat ; en 4×4, S n'est qu'un classement. */
+  var REJET_S = { '4x4': false, '5x5': true };
+
+  /**
+   * Cause de rejet d'une mesure d'équilibre (une seule chaîne de filtres, pour evaluer, le chemin 5×5 et les outils de mesure) :
+   * m = { accessible, cinq (« 5 contre 2 »), ecartMax (rangs 1 à 7), premiereEgale, S } ; renvoie une clé de `rejets` ou null (accepté).
+   * Ordre : ville inaccessible (S non mesurable : jamais comparé à un seuil), plateau très déséquilibré (écart > SEUIL_BLOCAGE_ECART,
+   * ou « 5 contre 2 » s'il est bloquant), « 5 contre 2 » seul, écart > SEUIL_ECART, première ville inégale, puis S >= SEUIL_S si le format le rejette.
+   */
+  function causeRejet(m, formatId) {
+    if (!m.accessible) return 'ville_inaccessible';
+    if ((GR.CINQ_CONTRE_DEUX_BLOQUANT && m.cinq) || m.ecartMax > GR.SEUIL_BLOCAGE_ECART) return 'desequilibre';
+    if (m.cinq) return 'cinq_contre_deux';
+    if (m.ecartMax > SEUIL_ECART) return 'ecart';
+    if (!m.premiereEgale) return 'premiere_ville';
+    if (REJET_S[formatId] && m.S >= GR.SEUIL_S) return 'score_s';
+    return null;
+  }
+
   /**
    * Évalue un plateau complet (tuiles et villes posées). Renvoie { ok, cause, crit, sortiesMin }.
    */
@@ -205,13 +236,11 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     [1, 2].forEach(function (pj) {
       g.apparitions[pj].forEach(function (id) { res.sortiesMin = Math.min(res.sortiesMin, g.voisins.get(id).size); });
     });
-    // ville inaccessible (S non mesurable) testée avant l'écart : null n'est jamais comparé à un seuil
-    if (res.crit.villeInaccessible) res.cause = 'ville_inaccessible';
-    else if (res.crit.tresDesequilibre) res.cause = 'desequilibre';
-    else if (res.crit.cinqContreDeux) res.cause = 'cinq_contre_deux';
-    else if (res.crit.ecartMax > SEUIL_ECART) res.cause = 'ecart';
-    else if (!res.crit.premiereEgale) res.cause = 'premiere_ville';
-    else res.ok = true;
+    res.cause = causeRejet({
+      accessible: !res.crit.villeInaccessible, cinq: res.crit.cinqContreDeux, ecartMax: res.crit.ecartMax,
+      premiereEgale: res.crit.premiereEgale, S: res.crit.S
+    }, M.formatDuDocument(docCandidat).id);
+    res.ok = res.cause === null;
     return res;
   }
 
@@ -278,19 +307,54 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
 
   var ID_B1 = 'B1';                 // le modèle dont le nombre est imposé (cases = 72 + nB1, ports = 34 + nB1, docs/29)
   var NB_B1_5X5 = [5, 6];           // 5 ou 6 B1 par plateau : en dessous il manque des ports, au-dessus il n'y a plus de B1 imprimé
-  var MIN_PORTS_JONCTION_5X5 = 2;   // condition de rejet : toute jonction intérieure reliée par 2 ports au moins
-  var MIN_PORTS_VILLE_5X5 = 3;      // condition de rejet : une ville sur une jonction à 3 ports au moins
+  var MIN_PORTS_JONCTION_5X5 = GR.PORTS_JONCTION_MIN; // condition de rejet : toute jonction intérieure reliée par 2 ports au moins
+  var MIN_PORTS_VILLE_5X5 = GR.PORTS_VILLE_MIN;       // condition de rejet : une ville sur une jonction à 3 ports au moins
   var BUDGET_NOEUDS = 3000000;      // garde-fou de la recherche d'orientation (nombre de nœuds, donc déterministe)
   var ESSAIS_PLACEMENT = 12;        // placements de villes essayés (du meilleur S au moins bon) avant de rejeter le candidat
-  /** Seuils propres à chaque format (docs/28 § 6) : en 5×5, S >= PM.graphe.SEUIL_S rejette le candidat ; en 4×4, S n'est qu'un classement. */
-  var REJET_S = { '4x4': false, '5x5': true };
-
   function bitsPorts(masque) { var n = 0; for (var k = 0; k < 4; k++) n += (masque >> k) & 1; return n; }
 
-  /** Profil d'un modèle : masques de ports et de raccords, nombre de cases et de ports (lu sur ses chemins). */
+  /**
+   * Profil d'un modèle : masques de ports et de raccords, nombre de cases et de ports (lu sur ses chemins), cases d'apparition
+   * [{x, y}] (repère de la tuile).
+   */
   function profilModele(m) {
     var mm = M.masquesDuModele(m);
-    return { id: m.id, ports: mm.portsCoin, raccords: mm.raccords, cases: m.cases.length, nbPorts: bitsPorts(mm.portsCoin) };
+    return {
+      id: m.id, ports: mm.portsCoin, raccords: mm.raccords, cases: m.cases.length, nbPorts: bitsPorts(mm.portsCoin),
+      apparitions: m.cases.filter(function (c) { return c.type === 'apparition'; }).map(function (c) { return { x: c.x, y: c.y }; })
+    };
+  }
+
+  /** Reflet gauche-droite (x -> côté − x) d'un masque de ports de coin : NO <-> NE (bits 0, 1), SE <-> SO (bits 2, 3). */
+  function refletPorts(c) { return ((c & 5) << 1) | ((c & 10) >> 1); }
+
+  /** Reflet gauche-droite d'un masque de raccords (12 bits) : N et S pos p -> 2 - p ; E pos p <-> O pos 2 - p. */
+  function refletRaccords(r) {
+    var res = 0;
+    for (var cote = 0; cote < 4; cote++) {
+      for (var pos = 0; pos < 3; pos++) {
+        if (!((r >> (3 * cote + pos)) & 1)) continue;
+        var cote2 = cote === 1 ? 3 : (cote === 3 ? 1 : cote);
+        res |= 1 << (3 * cote2 + (2 - pos));
+      }
+    }
+    return res;
+  }
+
+  /**
+   * Vrai miroir : `b` est le reflet gauche-droite de `a` (même nombre de cases, mêmes ports et mêmes raccords après réflexion,
+   * mêmes cases d'apparition à 0,5 mm près). Un bord de même taille mais de forme différente n'est pas un miroir (B7 <-> B7m seulement).
+   */
+  function estMiroir(a, b, cote) {
+    if (a.cases !== b.cases || a.apparitions.length !== b.apparitions.length) return false;
+    if (refletPorts(a.ports) !== b.ports || refletRaccords(a.raccords) !== b.raccords) return false;
+    var vus = a.apparitions.map(function (p) { return { x: cote - p.x, y: p.y }; });
+    return b.apparitions.every(function (q) {
+      var k = vus.findIndex(function (p) { return Math.abs(p.x - q.x) <= 0.5 && Math.abs(p.y - q.y) <= 0.5; });
+      if (k < 0) return false;
+      vus.splice(k, 1);
+      return true;
+    });
   }
 
   /** Indice d'une jonction intérieure (i, j) dans l'ordre de lecture (j puis i). */
@@ -332,14 +396,15 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   /**
    * Orientation du 5×5. Parmi les options de chaque cellule (rotation des centrales, miroir des bords simples B7 / B7m), cherche par
    * exploration complète (avec élagage) l'ensemble qui, par ordre de priorité :
-   *   1. relie chaque jonction par 2 ports au moins (condition ferme : sinon aucune solution, renvoie null) ;
+   *   1. relie chaque jonction par 2 ports au moins (condition ferme : sinon aucune solution, renvoie choix = null) ;
    *   2. permet de placer 7 villes en 2-3-2 sur des jonctions à 3 ports au moins ;
    *   3. maximise le nombre de jonctions à 3 ports au moins ;
    *   4. équilibre la somme des ports entre la moitié nord (j <= 2) et la moitié sud (j >= 3).
    * Les égalités sont départagées au hasard (rng à graine fixe). `options[d]` : options de la d-ième cellule en ordre de lecture.
-   * Renvoie { choix: [option par cellule], compte: [ports par jonction], n3, noeuds, cle } ou null.
+   * Renvoie { choix: [option par cellule] (null si aucune solution), n3, noeuds, tronque } ; tronque = vrai si BUDGET_NOEUDS a été dépassé
+   * (la recherche s'est arrêtée : la meilleure orientation trouvée jusque-là est rendue, peut-être pas la meilleure).
    */
-  function orienter5x5(options, cellules, F, rng) {
+  function orienter5x5(options, cellules, F, rng, budget) {
     var NC = F.GRILLE.colonnes, nJ = (NC - 1) * (F.GRILLE.lignes - 1), n = cellules.length;
     var compte = [], choix = [], x, d;
     for (x = 0; x < nJ; x++) compte.push(0);
@@ -357,7 +422,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       return { membres: membres, nb: g.nb };
     });
     var moitie = Math.floor((F.GRILLE.lignes - 1) / 2); // j <= moitie : moitié nord
-    var meilleur = null, egaux = 0, noeuds = 0, cle = null;
+    var meilleur = null, egaux = 0, noeuds = 0, cle = null, tronque = false;
 
     /** Après la cellule `prof` : null si une jonction n'atteindra plus 2 ports ; sinon { faisable, ub } (bornes optimistes). */
     function borne(prof) {
@@ -394,7 +459,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       if (prof === n) { feuille(); return; }
       var opts = options[prof];
       for (var o = 0; o < opts.length; o++) {
-        if (++noeuds > BUDGET_NOEUDS) return;
+        if (++noeuds > budget) { tronque = true; return; }
         var op = opts[o], k;
         for (k = 0; k < op.jn.length; k++) compte[op.jn[k]]++;
         choix[prof] = op;
@@ -405,12 +470,12 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       }
     }
     visiter(0);
-    if (!meilleur) return null;
+    if (!meilleur) return { choix: null, n3: 0, noeuds: noeuds, tronque: tronque };
     var final = [];
     for (x = 0; x < nJ; x++) final.push(0);
     meilleur.forEach(function (o) { o.jn.forEach(function (y) { final[y]++; }); });
     return {
-      choix: meilleur, compte: final, noeuds: noeuds, cle: cle,
+      choix: meilleur, noeuds: noeuds, tronque: tronque,
       n3: final.filter(function (v) { return v >= MIN_PORTS_VILLE_5X5; }).length
     };
   }
@@ -441,21 +506,25 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
 
   /**
    * Mesures rapides d'un placement (mêmes définitions que PM.graphe.equilibre : rangs triés, S, écart maximal, partage,
-   * première ville). Renvoie { accessible, S, ecartMax, partage: {1, 2, egalite}, premiereEgale }.
+   * première ville). Renvoie { accessible, S, ecartMax, cinq, partage: {1, 2, egalite}, premiereEgale } (cinq : « 5 contre 2 »).
    */
   function mesurePlacement(P, noeudsVilles) {
     var estVille = new Uint8Array(P.n);
     noeudsVilles.forEach(function (v) { estVille[v] = 1; });
     var d1 = distancesRapides(P, 1, estVille, noeudsVilles), d2 = distancesRapides(P, 2, estVille, noeudsVilles);
-    var res = { accessible: true, S: null, ecartMax: null, partage: { 1: 0, 2: 0, egalite: 0 }, premiereEgale: false };
+    var res = { accessible: true, S: null, ecartMax: null, cinq: false, partage: { 1: 0, 2: 0, egalite: 0 }, premiereEgale: false };
     if (d1.concat(d2).some(function (x) { return !isFinite(x); })) { res.accessible = false; return res; }
     d1.forEach(function (a, k) { var b = d2[k]; if (a < b) res.partage[1]++; else if (b < a) res.partage[2]++; else res.partage.egalite++; });
     var t1 = d1.slice().sort(function (a, b) { return a - b; }), t2 = d2.slice().sort(function (a, b) { return a - b; });
     var S = 0, em = 0;
     t1.forEach(function (a, k) { var e = Math.abs(a - t2[k]); S += e; if (e > em) em = e; });
     res.S = S; res.ecartMax = em; res.premiereEgale = t1[0] === t2[0];
+    res.cinq = Math.max(res.partage[1], res.partage[2]) >= GR.SEUIL_CINQ_CONTRE_DEUX;
     return res;
   }
+
+  /** Les deux modèles (objets du document) sont-ils miroirs l'un de l'autre dans le format F (voir estMiroir) ? */
+  function sontMiroirs(a, b, F) { return estMiroir(profilModele(a), profilModele(b), F.COTE); }
 
   /** Contexte 5×5 d'un document (bibliothèque, cellules, placements) : pour tuilesOrientees5x5 hors de generer (outils de mesure). */
   function contexteDocument5x5(doc) {
@@ -508,7 +577,8 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
 
   /**
    * Première moitié d'un candidat 5×5 (appelable seule : outils de mesure) : modèles (B1 imposés) puis orientation.
-   * Renvoie { cause: 'jonction_ports' } si aucune orientation ne relie chaque jonction par 2 ports, sinon { tuiles, b1, jonctions3, noeuds }.
+   * Renvoie { cause: 'jonction_ports', tronque } si aucune orientation ne relie chaque jonction par 2 ports, sinon { tuiles, b1, jonctions3, noeuds, tronque }
+   * (tronque : budget de nœuds de la recherche dépassé, voir orienter5x5 ; `ctx.budgetNoeuds` remplace BUDGET_NOEUDS, pour les tests).
    */
   function tuilesOrientees5x5(ctx, rng) {
     var F = ctx.F, cellules = ctx.cellules, modeles = ctx.modelesDispo, profils = ctx.profils;
@@ -527,55 +597,51 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       usages[id] = (usages[id] || 0) + 1;
       ids.push(id);
     });
-    // 2. orientation : centrales tournées, bord simple remplacé au besoin par son équivalent (même nombre de cases et de ports : B7 / B7m)
+    // 2. orientation : centrales tournées, bord simple remplacé au besoin par son vrai miroir (B7 / B7m : reflet exact, pas seulement même taille)
     var options = cellules.map(function (c, k) {
       var liste = [ids[k]];
       if (c.gabarit === 'bord' && !b1[k]) {
         liste = modeles.bord.map(function (m) { return m.id; }).filter(function (id) {
-          return id !== ID_B1 && profils[id].cases === profils[ids[k]].cases && profils[id].nbPorts === profils[ids[k]].nbPorts;
+          return id !== ID_B1 && (id === ids[k] || estMiroir(profils[ids[k]], profils[id], F.COTE));
         });
       }
       return optionsCellule(c, liste, profils, F);
     });
-    var sol = orienter5x5(options, cellules, F, rng);
-    if (!sol) return { cause: 'jonction_ports' };
+    var sol = orienter5x5(options, cellules, F, rng, ctx.budgetNoeuds || BUDGET_NOEUDS);
+    if (!sol.choix) return { cause: 'jonction_ports', tronque: sol.tronque };
     var tuiles = cellules.map(function (c, k) {
       var o = sol.choix[k];
       return { modeleId: o.modeleId, col: c.col, lig: c.lig, rot: o.rots[entier(rng, o.rots.length)] };
     });
-    return { tuiles: tuiles, b1: nB1, jonctions3: sol.n3, noeuds: sol.noeuds };
+    return { tuiles: tuiles, b1: nB1, jonctions3: sol.n3, noeuds: sol.noeuds, tronque: sol.tronque };
   }
 
   /**
    * Tirage d'un candidat 5×5 : modèles (B1 imposés), orientation, puis meilleur placement de villes en 2-3-2.
-   * Renvoie { cause } si rejeté (cause = clé de `rejets`), sinon { tuiles, jetons, ev, b1, jonctions3, noeuds }.
+   * Renvoie { cause, tronque } si rejeté (cause = clé de `rejets`), sinon { tuiles, jetons, ev, tronque }
+   * (tronque : la recherche d'orientation a dépassé son budget de nœuds).
    */
   function candidat5x5(ctx, rng) {
-    var F = ctx.F, orientes = tuilesOrientees5x5(ctx, rng);
+    var F = ctx.F, orientes = tuilesOrientees5x5(ctx, rng), tronque = orientes.tronque === true;
     if (orientes.cause) return orientes;
-    var tuiles = orientes.tuiles, nB1 = orientes.b1, sol = { n3: orientes.jonctions3, noeuds: orientes.noeuds };
+    var tuiles = orientes.tuiles;
     // 3. graphe sans ville ; seules les jonctions à 3 ports au moins reçoivent une ville
     var cand0 = { version: ctx.doc.version, grille: F.id, modeles: ctx.doc.modeles, plateau: { tuiles: tuiles, jetons: [] } };
     var g = GR.construire(cand0, { villesTraversables: false });
-    if (!GR.connexe(g) || !g.apparitions[1].length || !g.apparitions[2].length) return { cause: 'connexite' };
+    if (!GR.connexe(g) || !g.apparitions[1].length || !g.apparitions[2].length) return { cause: 'connexite', tronque: tronque };
     var admissible = g.jonctions.map(function (jn) { return jn.ports >= MIN_PORTS_VILLE_5X5; });
     var P = grapheRapide(g), noeuds = g.jonctions.map(function (jn) { return P.idx.get(jn.id); });
     var valides = [], raisons = {}, nbAdmissibles = 0;
     ctx.placements.forEach(function (pl) {
       if (!pl.indices.every(function (x) { return admissible[x]; })) return;
       nbAdmissibles++;
-      var m = mesurePlacement(P, pl.indices.map(function (x) { return noeuds[x]; })), raison = null;
-      if (!m.accessible) raison = 'ville_inaccessible';
-      else if (Math.max(m.partage[1], m.partage[2]) >= GR.SEUIL_CINQ_CONTRE_DEUX || m.ecartMax > GR.SEUIL_BLOCAGE_ECART) raison = 'desequilibre';
-      else if (m.ecartMax > SEUIL_ECART) raison = 'ecart';
-      else if (!m.premiereEgale) raison = 'premiere_ville';
-      else if (REJET_S[F.id] && m.S >= GR.SEUIL_S) raison = 'score_s';
+      var m = mesurePlacement(P, pl.indices.map(function (x) { return noeuds[x]; })), raison = causeRejet(m, F.id);
       if (raison) { raisons[raison] = (raisons[raison] || 0) + 1; return; }
       valides.push({ pl: pl, S: m.S, egal: m.partage.egalite > 0 ? 0 : 1, alea: rng() });
     });
-    if (!nbAdmissibles) return { cause: 'villes_ports' };
+    if (!nbAdmissibles) return { cause: 'villes_ports', tronque: tronque };
     if (!valides.length) { // cause la plus fréquente parmi les placements admissibles
-      return { cause: Object.keys(raisons).sort(function (a, b) { return raisons[b] - raisons[a] || (a < b ? -1 : 1); })[0] };
+      return { cause: Object.keys(raisons).sort(function (a, b) { return raisons[b] - raisons[a] || (a < b ? -1 : 1); })[0], tronque: tronque };
     }
     // meilleur S d'abord ; à S égal, un placement où une ville est équidistante (docs/18 : « 4 contre 3 » compensé, la 7e ville à égalité), puis le hasard
     valides.sort(function (a, b) { return (a.S - b.S) || (a.egal - b.egal) || (a.alea - b.alea); });
@@ -585,11 +651,10 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       var jetons = valides[t].pl.villes.map(function (jn) { return { i: jn.i, j: jn.j, type: 'capture' }; });
       var cand = { version: ctx.doc.version, grille: F.id, modeles: ctx.doc.modeles, plateau: { tuiles: tuiles, jetons: jetons } };
       var ev = evaluer(cand);
-      if (ev.ok && REJET_S[F.id] && ev.crit.S >= GR.SEUIL_S) { derniere = 'score_s'; continue; }
-      if (ev.ok) return { tuiles: tuiles, jetons: jetons, ev: ev, b1: nB1, jonctions3: sol.n3, noeuds: sol.noeuds };
+      if (ev.ok) return { tuiles: tuiles, jetons: jetons, ev: ev, tronque: tronque };
       derniere = ev.cause;
     }
-    return { cause: derniere };
+    return { cause: derniere, tronque: tronque };
   }
 
   /* ------------------------------------------------------------------ */
@@ -613,11 +678,31 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     score_s: 'score S au-dessus du seuil'
   };
 
+  /** Entier (partie entière) d'un nombre fini d'au moins 1 ; toute autre valeur (texte, NaN, Infinity, négatif, 0) donne `defaut`. */
+  function entierValide(x, defaut) {
+    return typeof x === 'number' && isFinite(x) && x >= 1 ? Math.floor(x) : defaut;
+  }
+
+  /**
+   * Explication claire d'un abandon pour manque de ports (5×5) : quelle tuile manque ou comment y remédier.
+   * `cause` : 'jonction_ports' ou 'villes_ports' ; ctx : contexte 5×5.
+   */
+  function expliquerManquePorts(cause, ctx) {
+    var aB1 = ctx.modelesDispo.bord.some(function (m) { return m.id === ID_B1; }); // B1 tirable (complet, exemplaires > 0), pas seulement présent
+    var besoin = cause === 'jonction_ports'
+      ? 'aucune orientation des tuiles ne relie chaque jonction par ' + MIN_PORTS_JONCTION_5X5 + ' ports au moins'
+      : 'aucune jonction n’atteint ' + MIN_PORTS_VILLE_5X5 + ' ports en nombre suffisant pour les villes en 2-3-2';
+    return besoin + (aB1
+      ? ' : les tuiles de la bibliothèque n’apportent pas assez de ports (ajoutez des bords ou des centrales à plus de ports).'
+      : ' : il manque le bord « ' + ID_B1 + ' » (bord en V, deux ports), qui apporte les ports manquants.');
+  }
+
   /**
    * Génère un plateau aléatoire du format du document. Ne modifie pas `doc`.
    * options :
    *  - graine (texte ou nombre ; générée si absente) ;
-   *  - candidats (défaut 200) : candidats valides à départager ; essaisMax (défaut candidats × 5) ;
+   *  - candidats (défaut 200, borné à 1000) : candidats valides à départager ; essaisMax (défaut candidats × 5, borné) ;
+   *    une valeur qui n'est pas un nombre fini d'au moins 1 (texte, NaN, Infinity, négatif, 0) donne la valeur par défaut ;
    *  - tolerance (défaut 1) : bons candidats = S ≤ Smin + tolérance ;
    *  - jonctionsVariees (défaut false) : 4×4, voir pairesJonctionsCases (par défaut, rangée centrale).
    * Renvoie { ok, doc, graine, essais, candidats, score, rapport: [texte], raison, rejets }.
@@ -626,8 +711,8 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     options = options || {};
     var graine = options.graine === undefined || options.graine === null || String(options.graine).trim() === ''
       ? nouvelleGraine() : String(options.graine).trim();
-    var nbCandidats = Math.max(1, Math.floor(options.candidats || CANDIDATS_DEFAUT));
-    var essaisMax = Math.max(nbCandidats, Math.floor(options.essaisMax || nbCandidats * FACTEUR_ESSAIS));
+    var nbCandidats = Math.min(CANDIDATS_MAX, entierValide(options.candidats, CANDIDATS_DEFAUT));
+    var essaisMax = Math.max(nbCandidats, Math.min(ESSAIS_MAX_BORNE, entierValide(options.essaisMax, nbCandidats * FACTEUR_ESSAIS)));
     var tolerance = typeof options.tolerance === 'number' && options.tolerance >= 0 ? options.tolerance : TOLERANCE_DEFAUT;
     var rng = mulberry32(hacher(graine));
     var rapport = [];
@@ -665,12 +750,15 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     } else {
       paires = pairesJonctionsCases(F, options.jonctionsVariees === true);
     }
-    var bons = [], essais = 0;
+    var bons = [], essais = 0, tronques = 0, echecsStructurels = 0, dernierStructurel = null, abandon = null;
     while (bons.length < nbCandidats && essais < essaisMax) {
+      if (echecsStructurels >= ECHECS_STRUCTURELS_MAX) { abandon = dernierStructurel; break; } // la bibliothèque ne pourra pas donner de plateau
       essais++;
       var tuiles, jetons, ev, cand;
       if (est5x5) { // orientation des centrales, B1 imposés, villes en 2-3-2 : tout est décidé par candidat5x5
         var c5 = candidat5x5(ctx5, rng);
+        if (c5.tronque) tronques++;
+        if (c5.cause === 'jonction_ports' || c5.cause === 'villes_ports') { dernierStructurel = c5.cause; echecsStructurels++; } else echecsStructurels = 0;
         if (c5.cause) { rejets[c5.cause]++; continue; }
         tuiles = c5.tuiles; jetons = c5.jetons; ev = c5.ev;
         cand = { version: doc.version, grille: F.id, modeles: modeles, plateau: { tuiles: tuiles, jetons: jetons } };
@@ -693,10 +781,14 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     if (!bons.length) {
       var detail = Object.keys(rejets).filter(function (k) { return rejets[k]; })
         .map(function (k) { return libelles[k] + ' : ' + rejets[k]; }).join(', ');
-      var conseil = rejets.villes_proches * 2 >= essais
+      var conseil = abandon ? ' Abandon après ' + echecsStructurels + ' échecs consécutifs : ' + expliquerManquePorts(abandon, ctx5)
+        : rejets.villes_proches * 2 >= essais
         ? ' Les tuiles de cette bibliothèque rapprochent presque toujours deux villes à moins de 3 cases (règles R1 à R4 non respectées) : utilisez des tuiles conformes, comme celles du catalogue.'
         : ' Modifiez la bibliothèque ou essayez une autre graine.';
-      return echec('Aucun plateau acceptable en ' + essais + ' essais' + (detail ? ' (' + detail + ')' : '') + '.' + conseil, essais);
+      var echecFinal = echec('Aucun plateau acceptable en ' + essais + ' essais' + (detail ? ' (' + detail + ')' : '') + '.' + conseil +
+        (tronques ? ' ' + tronques + ' recherche(s) d’orientation interrompue(s) (budget de calcul dépassé).' : ''), essais);
+      if (est5x5) echecFinal.orientationsTronquees = tronques;
+      return echecFinal;
     }
 
     // Bons candidats : S ≤ Smin + tolérance ; à S égal, pénalité minimale ; tirage au hasard
@@ -725,6 +817,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       score.portsParJonction = portsJn;
       score.jonctions3 = portsJn.filter(function (p) { return p >= MIN_PORTS_VILLE_5X5; }).length;
       score.jonctionsAMoins2 = portsJn.filter(function (p) { return p < MIN_PORTS_JONCTION_5X5; }).length;
+      score.orientationsTronquees = tronques;
     }
     var nomsVilles = choisi.jetons.map(function (j) { return '(' + j.i + ',' + j.j + ')'; }).join(' ');
     rapport.push('Graine « ' + graine + ' » : ' + bons.length + ' candidat(s) valide(s) en ' + essais + ' essai(s), tirage parmi ' +
@@ -740,6 +833,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     rapport.push('Score S (somme des écarts sur les 7 rangs) : ' + crit.S + ' ; écart maximal : ' + crit.ecartMax + ' pas.');
     rapport.push('Villes plus proches du joueur vert : ' + crit.partage[1] + ', du joueur rouge : ' + crit.partage[2] + ', à égalité : ' + crit.partage.egalite + '.');
     rapport.push('Raccords morts : ' + score.raccordsMorts + (est5x5 ? '' : ' ; jonctions mal reliées : ' + score.jonctionsMalReliees) + ' ; sorties minimales d\'une case d\'apparition : ' + score.sortiesMin + '.');
+    if (tronques) rapport.push('Attention : ' + tronques + ' recherche(s) d’orientation interrompue(s) (budget de calcul dépassé) : l’orientation retenue n’est peut-être pas la meilleure.');
     if (validation.erreurs.length) rapport.push('Attention : ' + validation.erreurs[0].message);
 
     return {
@@ -928,6 +1022,8 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     facteurRepetition: facteurRepetition,
     PENALITE_REPETITION: PENALITE_REPETITION,
     hacher: hacher,
+    causeRejet: causeRejet,
+    sontMiroirs: sontMiroirs,
     mulberry32: mulberry32,
     nouvelleGraine: nouvelleGraine,
     svgApercu: svgApercu,

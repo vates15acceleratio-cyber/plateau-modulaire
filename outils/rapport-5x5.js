@@ -8,7 +8,8 @@ const fs = require('fs');
 const path = require('path');
 const E = require('./mesures-equilibre.js');
 const MS = require('./mesures-5x5.js');
-const GEN = globalThis.PM.generateur;
+const GEN = globalThis.PM.generateur, GR = globalThis.PM.graphe;
+const PORTS_VILLE = GR.PORTS_VILLE_MIN, PORTS_JONCTION = GR.PORTS_JONCTION_MIN;   // constantes du générateur (PM.graphe)
 const { moy, f2, pc, ajouterHist, cles, totalHist, moyHist, partHist, texteHist } = E;
 
 const num = (a, b) => a - b;
@@ -159,13 +160,13 @@ function rapport(dossier, sortie) {
   out('Cases, plateaux tirés et orientés :'); out(texteHist(hist(props2.map((x) => x.cases))));
   out('Ports par plateau (34 + nB1), plateaux tirés :'); out(texteHist(hist(props2.map((x) => x.ports))));
   out('Ports par jonction (16 jonctions × plateaux tirés) :'); out(texteHist(hist([].concat(...props2.map((x) => x.pj)))));
-  out('Jonctions à 3 ports ou plus par plateau, générateur :'); out(texteHist(hist(props1.map((x) => x.pj.filter((p) => p >= 3).length))));
-  out('Jonctions à 3 ports ou plus par plateau, plateaux tirés :'); out(texteHist(hist(props2.map((x) => x.pj.filter((p) => p >= 3).length))));
-  out(`Jonctions à moins de 2 ports : ${props2.reduce((s, x) => s + x.pj.filter((p) => p < 2).length, 0)} sur ${props2.length * 16} (plateaux tirés), ${props1.reduce((s, x) => s + x.pj.filter((p) => p < 2).length, 0)} sur ${props1.length * 16} (générateur).`);
-  const villes3 = b1ok.reduce((s, b) => s + b.cfg.v.filter((x) => b.props.pj[x] >= 3).length, 0);
+  out('Jonctions à 3 ports ou plus par plateau, générateur :'); out(texteHist(hist(props1.map((x) => x.pj.filter((p) => p >= PORTS_VILLE).length))));
+  out('Jonctions à 3 ports ou plus par plateau, plateaux tirés :'); out(texteHist(hist(props2.map((x) => x.pj.filter((p) => p >= PORTS_VILLE).length))));
+  out(`Jonctions à moins de 2 ports : ${props2.reduce((s, x) => s + x.pj.filter((p) => p < PORTS_JONCTION).length, 0)} sur ${props2.length * 16} (plateaux tirés), ${props1.reduce((s, x) => s + x.pj.filter((p) => p < PORTS_JONCTION).length, 0)} sur ${props1.length * 16} (générateur).`);
+  const villes3 = b1ok.reduce((s, b) => s + b.cfg.v.filter((x) => b.props.pj[x] >= PORTS_VILLE).length, 0);
   out(`Villes du générateur sur une jonction à 3 ports ou plus : ${villes3} sur ${b1ok.length * 7} (${pc(villes3, b1ok.length * 7)}).`);
   let nbV3 = 0, nbV = 0;
-  bF2.forEach((b) => b.libre.ech.forEach((c) => { c.v.forEach((x) => { nbV++; if (b.props.pj[x] >= 3) nbV3++; }); }));
+  bF2.forEach((b) => b.libre.ech.forEach((c) => { c.v.forEach((x) => { nbV++; if (b.props.pj[x] >= PORTS_VILLE) nbV3++; }); }));
   out(`Pose libre (échantillon) : ${pc(nbV3, nbV)} des villes sont sur une jonction à 3 ports ou plus (hasard) ; ${pc(bF2.reduce((s, b) => s + b.nbAdm, 0), bF2.reduce((s, b) => s + b.libre.n, 0))} des 2016 placements sont admissibles.`);
   out();
   out('B1 par plateau (générateur) :'); out(texteHist(hist(props1.map((x) => x.modeles.B1))));
@@ -275,7 +276,7 @@ function rapport(dossier, sortie) {
   });
   out(table(['Famille', 'Joueur', 'Voie', 'Moyenne', 'Minimum', 'Maximum'], lignesP));
   out();
-  out('Toutes les jonctions portent une ville (sous-graphes « flanc » : colonnes 0 et 4 + tuiles d\'apparition des rangées 0 et 4 ; « centre » : colonnes 1 à 3 ; `PM.graphe.flancs` prend les colonnes 1 et 3 seulement en 5×5, d\'où ce calcul propre aux mesures) :');
+  out('Toutes les jonctions portent une ville (sous-graphes « flanc » : colonnes 0 et 4 + tuiles d\'apparition des rangées 0 et 4 ; « centre » : colonnes 1 à 3 ; calculés par `PM.graphe.flancs`) :');
   out();
   const lf = [];
   [['plateaux tirés', props2], ['générateur', props1]].forEach(([nom, ps]) => {
@@ -369,7 +370,7 @@ function rapport(dossier, sortie) {
     ['Placements admissibles par plateau', m2(bF2, (b) => b.nbAdm), m2(bF2b, (b) => b.nbAdm)],
     ['Plateaux sans placement admissible', pc(bF2.filter((b) => b.nbAdm === 0).length, bF2.length), pc(bF2b.filter((b) => b.nbAdm === 0).length, bF2b.length)],
     ['Plateaux sans placement valide (filtres complets)', pc(bF2.filter((b) => b.selAvec < 0).length, bF2.length), pc(bF2b.filter((b) => b.selAvec < 0).length, bF2b.length)],
-    ['Jonctions à 3 ports ou plus (moyenne)', m2(bF2, (b) => b.props.pj.filter((p) => p >= 3).length), m2(bF2b, (b) => b.props.pj.filter((p) => p >= 3).length)],
+    ['Jonctions à 3 ports ou plus (moyenne)', m2(bF2, (b) => b.props.pj.filter((p) => p >= PORTS_VILLE).length), m2(bF2b, (b) => b.props.pj.filter((p) => p >= PORTS_VILLE).length)],
     ['|ports nord − ports sud| (moyenne)', m2(bF2, (b) => Math.abs(b.props.nord - b.props.sud)), m2(bF2b, (b) => Math.abs(b.props.nord - b.props.sud))],
     ['Ports nord = ports sud', pc(bF2.filter((b) => b.props.nord === b.props.sud).length, bF2.length), pc(bF2b.filter((b) => b.props.nord === b.props.sud).length, bF2b.length)],
     ['S moyen, placements admissibles', f2(moy(FAM.adm.a.S)), f2(moy(aF2b.S))],
@@ -427,7 +428,7 @@ function rapport(dossier, sortie) {
   out(table(['Répartition', 'Configurations', 'S moyen', '5 contre 2', 'S ≥ 5'], reparti(cfgLib)));
   out();
   const nbP = props2.length, portsMoy = new Array(16).fill(0), parts3 = new Array(16).fill(0);
-  props2.forEach((x) => x.pj.forEach((p, k) => { portsMoy[k] += p / nbP; if (p >= 3) parts3[k] += 1 / nbP; }));
+  props2.forEach((x) => x.pj.forEach((p, k) => { portsMoy[k] += p / nbP; if (p >= PORTS_VILLE) parts3[k] += 1 / nbP; }));
   out('**Origine de la tendance : jonctions à 3 ports ou plus** (plateaux tirés et orientés, part des plateaux où la jonction a 3 ports ou plus) :');
   out();
   out(carteValeurs(parts3, (v) => (100 * v).toFixed(1) + ' %'));

@@ -2,8 +2,8 @@
 /*
  * Tests du générateur 5×5 (src/generateur.js), règles de docs/18 (« Décisions de l'utilisateur pour le catalogue 5×5 »),
  * docs/24 § 8, docs/28 et docs/29 : centrales et bords orientés, 5 ou 6 B1 (de préférence sur la rangée neutre), villes en 2-3-2
- * sur des jonctions à 3 ports au moins, toute jonction à 2 ports au moins (rejet), seuils d'équilibre provisoires du 5×5,
- * et 4×4 inchangé (empreintes). Bibliothèque : le vrai catalogue 5×5 (PM.catalogue).
+ * sur des jonctions à 3 ports au moins, toute jonction à 2 ports au moins (rejet), seuils d'équilibre définitifs du 5×5 (docs/36),
+ * abandon sur bibliothèque impossible, vrais miroirs, bornes des options, PM.graphe.flancs en 5×5 et 4×4 inchangé (empreintes). Bibliothèque : le vrai catalogue 5×5 (PM.catalogue).
  */
 const test = require('node:test');
 const assert = require('node:assert');
@@ -264,6 +264,146 @@ test('taux de rejet par cause et temps (200 candidats) sur le catalogue 5×5', (
   assert.strictEqual(rej.plateau_invalide, 0);
   assert.strictEqual(rej.connexite, 0);
   assert.strictEqual(rej.villes_proches, 0);
+});
+
+/* ---------- abandon, miroirs, options, flancs, budget ---------- */
+
+test('abandon : bibliothèque impossible en 5×5 = 25 échecs structurels consécutifs, message clair, sans geler', () => {
+  const t0 = Date.now();
+  const pauvre = doc5();
+  pauvre.modeles = pauvre.modeles.filter((m) => m.id !== 'B1' && m.id !== 'B7m' && m.id !== 'C8');
+  const p = GEN.generer(pauvre, { graine: 'abandon-1' });
+  assert.strictEqual(p.ok, false);
+  assert.strictEqual(p.essais, 25, 'abandon après 25 essais, pas 1000');
+  assert.strictEqual(p.rejets.villes_ports, 25, JSON.stringify(p.rejets));
+  assert.match(p.raison, /Abandon après 25 échecs consécutifs/);
+  assert.match(p.raison, /il manque le bord « B1 »/);
+  // B1 présent mais à 0 exemplaire (non tirable) : le message le nomme quand même
+  const sansExemplaire = doc5();
+  sansExemplaire.modeles.find((m) => m.id === 'B1').exemplaires = 0;
+  const z = GEN.generer(sansExemplaire, { graine: 'abandon-0' });
+  assert.strictEqual(z.ok, false);
+  assert.strictEqual(z.essais, 25);
+  assert.match(z.raison, /il manque le bord « B1 »/);
+  // B1 tirable mais trop peu de ports (centrale C7 amputée) : conseil général, B1 n'est pas accusé à tort
+  const maigre = doc5();
+  maigre.modeles = maigre.modeles.filter((m) => m.id !== 'B7m' && m.id !== 'C8');
+  const c7 = maigre.modeles.find((m) => m.id === 'C7');
+  c7.cases = c7.cases.filter((c) => c.id !== 'c3');
+  c7.chemins = c7.chemins.filter((c) => c.id !== 'h3' && c.id !== 'p3');
+  const q = GEN.generer(maigre, { graine: 'abandon-2' });
+  assert.strictEqual(q.ok, false);
+  assert.strictEqual(q.essais, 25);
+  assert.match(q.raison, /Abandon après 25 échecs consécutifs/);
+  assert.match(q.raison, /n’apportent pas assez de ports/);
+  assert.ok(!/il manque le bord/.test(q.raison));
+  assert.ok(Date.now() - t0 < 5000, 'abandon rapide : ' + (Date.now() - t0) + ' ms');
+});
+
+test('abandon : le catalogue normal n\'est pas touché (aucun abandon, aucune recherche interrompue)', () => {
+  for (let k = 0; k < 40; k++) {
+    const r = GEN.generer(doc5(), { graine: 'ab-' + k, candidats: 3 });
+    assert.ok(r.ok, r.raison);
+    assert.strictEqual(r.score.orientationsTronquees, 0);
+  }
+});
+
+test('vrais miroirs : B7 <-> B7m seulement ; un bord de même taille mais de forme différente n\'est pas substitué', () => {
+  const F = PM.geometrie.format('5x5'), cat = doc5().modeles, id = (x) => cat.find((m) => m.id === x);
+  assert.strictEqual(GEN.sontMiroirs(id('B7'), id('B7m'), F), true);
+  assert.strictEqual(GEN.sontMiroirs(id('B7m'), id('B7'), F), true);
+  assert.strictEqual(GEN.sontMiroirs(id('B7'), id('B7'), F), false);
+  assert.strictEqual(GEN.sontMiroirs(id('B1'), id('B1'), F), true, 'B1 est symétrique');
+  assert.strictEqual(GEN.sontMiroirs(id('B1'), id('B7'), F), false);
+  // même nombre de cases et de ports que B7 (SE), apparition ailleurs : l'ancienne règle l'acceptait
+  const b7x = JSON.parse(JSON.stringify(id('B7')));
+  b7x.id = 'B7x';
+  b7x.cases.find((c) => c.type === 'apparition').x = 40;
+  assert.strictEqual(GEN.sontMiroirs(id('B7'), b7x, F), false);
+  assert.strictEqual(GEN.sontMiroirs(id('B7m'), b7x, F), false);
+  // port du côté opposé (SO) mais apparition mal placée : pas un miroir de B7
+  const b7y = JSON.parse(JSON.stringify(id('B7m')));
+  b7y.id = 'B7y';
+  b7y.cases.find((c) => c.type === 'apparition').y = 30;
+  assert.strictEqual(GEN.sontMiroirs(id('B7'), b7y, F), false);
+  // tirage forcé : tous les bords simples tirés sont B7 ; B7y (même taille et même nombre de ports que B7m) est dans la bibliothèque
+  const doc = doc5();
+  b7y.exemplaires = 4;
+  doc.modeles.push(b7y);
+  assert.ok(M.validerModele(b7y, '5x5').complet, 'B7y est un modèle complet (donc tirable)');
+  const ctx = GEN.contexteDocument5x5(doc);
+  assert.ok(ctx.modelesDispo.bord.some((m) => m.id === 'B7y'));
+  ctx.bordsSansB1 = ctx.modelesDispo.bord.filter((m) => m.id === 'B7');
+  const vus = {};
+  for (let k = 0; k < 40; k++) {
+    const t = GEN.tuilesOrientees5x5(ctx, GEN.mulberry32(k));
+    if (t.cause) continue;
+    t.tuiles.forEach((x) => { vus[x.modeleId] = (vus[x.modeleId] || 0) + 1; });
+  }
+  assert.strictEqual(vus.B7y, undefined, 'B7y ne remplace jamais un B7 : ' + JSON.stringify(vus));
+  assert.ok(vus.B7m > 0, 'le vrai miroir B7m reste permis : ' + JSON.stringify(vus));
+});
+
+test('options : candidats et essaisMax invalides donnent la valeur par défaut, candidats est borné', () => {
+  const d4 = () => CAT.nouveauDocument('4x4');
+  const ref = GEN.generer(d4(), { graine: 'opt', candidats: 200 });
+  for (const mauvais of [Infinity, -Infinity, 'abc', '5', -3, 0, NaN, null, {}, [], true]) {
+    const r = GEN.generer(d4(), { graine: 'opt', candidats: mauvais });
+    assert.deepStrictEqual(r.doc, ref.doc, 'candidats = ' + String(mauvais));
+    assert.strictEqual(r.candidats, ref.candidats);
+  }
+  assert.strictEqual(GEN.generer(d4(), { graine: 'opt', candidats: 2, essaisMax: 'x' }).ok, true);
+  assert.strictEqual(GEN.generer(d4(), { graine: 'opt', candidats: 2, essaisMax: Infinity }).ok, true);
+  const gros = GEN.generer(d4(), { graine: 'opt', candidats: 1e9, essaisMax: 1e9 });
+  assert.ok(gros.ok && gros.candidats <= 1000 && gros.essais <= 5000, gros.candidats + ' candidats, ' + gros.essais + ' essais');
+});
+
+test('PM.graphe.flancs : « centre » = colonnes 1 à colonnes - 2 (5×5 : 1, 2 et 3), 4×4 inchangé', () => {
+  for (const [id, n] of [['5x5', 5], ['4x4', 4]]) {
+    const doc = GEN.generer(CAT.nouveauDocument(id), { graine: 'flancs-' + id, candidats: 2 }).doc;
+    const jetons = [];
+    for (let j = 1; j < n; j++) for (let i = 1; i < n; i++) jetons.push({ i, j, type: 'capture' });
+    const mesure = (filtre, p, trav) => {
+      const g = GR.construire(doc, { jetons, filtreTuile: filtre, villesTraversables: trav }), d = GR.distancesJoueur(g, p);
+      let m = Infinity;
+      g.jonctions.forEach((jn) => { if (jn.j === (p === 1 ? n - 1 : 1) && d.has(jn.id)) m = Math.min(m, d.get(jn.id)); });
+      return m;
+    };
+    for (const trav of [false, true]) {
+      const f = GR.flancs(doc, { villesTraversables: trav });
+      [1, 2].forEach((p) => {
+        assert.strictEqual(f[p - 1].centre, mesure((t) => t.col >= 1 && t.col <= n - 2, p, trav), id + ' joueur ' + p);
+        const flanc = (t) => t.col === 0 || t.col === n - 1 || ((t.lig === 0 || t.lig === n - 1) && M.aUneApparition(M.modeleParId(doc, t.modeleId)));
+        assert.strictEqual(f[p - 1].flanc, mesure(flanc, p, trav), id + ' flanc');
+      });
+    }
+  }
+});
+
+test('constantes partagées : ports minimum, répartition 2-3-2, causeRejet et placements gelés', () => {
+  assert.strictEqual(GR.PORTS_VILLE_MIN, 3);
+  assert.strictEqual(GR.PORTS_JONCTION_MIN, 2);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(GR.REPARTITION_VILLES_5X5)), [{ rangees: [1], nb: 2 }, { rangees: [2, 3], nb: 3 }, { rangees: [4], nb: 2 }]);
+  assert.strictEqual(GEN.REPARTITION_VILLES_5X5, GR.REPARTITION_VILLES_5X5);
+  assert.ok(Object.isFrozen(GEN.placementsVilles5x5()) && Object.isFrozen(GEN.placementsVilles5x5()[0]));
+  assert.strictEqual(GEN.placementsVilles5x5().length, 2016);
+  const ok = { accessible: true, cinq: false, ecartMax: 1, premiereEgale: true, S: 3 };
+  const avec = (o) => Object.assign({}, ok, o);
+  assert.strictEqual(GEN.causeRejet(ok, '5x5'), null);
+  assert.strictEqual(GEN.causeRejet(avec({ S: 5 }), '5x5'), 'score_s');
+  assert.strictEqual(GEN.causeRejet(avec({ S: 5 }), '4x4'), null);
+  assert.strictEqual(GEN.causeRejet(avec({ accessible: false }), '5x5'), 'ville_inaccessible');
+  assert.strictEqual(GEN.causeRejet(avec({ cinq: true }), '4x4'), 'desequilibre');
+  assert.strictEqual(GEN.causeRejet(avec({ ecartMax: 4 }), '4x4'), 'desequilibre');
+  assert.strictEqual(GEN.causeRejet(avec({ ecartMax: 3 }), '4x4'), 'ecart');
+  assert.strictEqual(GEN.causeRejet(avec({ premiereEgale: false }), '4x4'), 'premiere_ville');
+});
+
+test('budget de nœuds : une recherche d\'orientation interrompue est signalée (tronque)', () => {
+  const ctx = GEN.contexteDocument5x5(doc5());
+  assert.strictEqual(GEN.tuilesOrientees5x5(ctx, GEN.mulberry32(1)).tronque, false);
+  ctx.budgetNoeuds = 40;
+  assert.strictEqual(GEN.tuilesOrientees5x5(ctx, GEN.mulberry32(1)).tronque, true);
 });
 
 /* ---------- 4×4 inchangé ---------- */
