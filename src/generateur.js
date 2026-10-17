@@ -16,7 +16,7 @@
  *  - 5×5 (docs/18 « Décisions de l'utilisateur pour le catalogue 5×5 », docs/24 § 8, docs/28, docs/29) : 5 ou 6 B1 (de préférence sur
  *    les bords de la rangée neutre), centrales et bords simples (B7 / B7m) ORIENTÉS pour couvrir les jonctions (critère explicite,
  *    voir orienter5x5), villes en 2-3-2 (2 en j = 1, 3 en j = 2 ou 3, 2 en j = 4) sur des jonctions à 3 ports au moins ;
- *    jonction à moins de 2 ports = rejet du candidat (non plus une pénalité) ; seuils d'équilibre provisoires de docs/28 § 6 ;
+ *    jonction à moins de 2 ports = rejet du candidat (non plus une pénalité) ; seuils d'équilibre définitifs (docs/36) ;
  *  - villes non traversables (règle du jeu) ;
  *  - élimination : validerPlateau avec erreur, graphe non connexe, camp sans case d'apparition, deux villes
  *    à moins de 3 cases (jamais produit, docs/18), ville inaccessible, plateau très déséquilibré (« 5 contre 2 »,

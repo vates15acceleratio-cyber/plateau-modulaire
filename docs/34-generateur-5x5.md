@@ -8,7 +8,7 @@ Branche `generateur-5x5`. Mission : `docs/25` § 1.2 et `docs/24` § 8.
 - **Orientation des centrales** (et miroir B7 ↔ B7m) par exploration complète avec élagage. Priorités : toutes les jonctions à ≥ 2 ports (condition ferme) ; 7 villes possibles en 2-3-2 sur jonctions à ≥ 3 ports ; maximum de jonctions à ≥ 3 ports ; équilibre des ports nord / sud. Budget jamais atteint (max 477 378 nœuds sur 1000 tirages).
 - **Villes en 2-3-2** : les 2016 placements sont énumérés, filtrés (≥ 3 ports), triés par S puis par la présence d'une ville équidistante (7e ville équidistante : 100 % des plateaux à 200 candidats).
 - `pairesJonctionsCases` ne renvoie plus `null` en 5×5 (2016 listes de 9 jonctions-cases) ; option « jonctions variées » masquée en 5×5 (sans objet).
-- **Rejets** : `jonction_ports`, `villes_ports`, `desequilibre` (« 5 contre 2 » ou écart > 3), `ecart` (> 2), `premiere_ville`, `score_s` (S ≥ 5, provisoire), `ville_inaccessible`, connexité, villes proches. « 4 contre 3 » : aucune alerte.
+- **Rejets** : `jonction_ports`, `villes_ports`, `desequilibre` (« 5 contre 2 » ou écart > 3), `ecart` (> 2), `premiere_ville`, `score_s` (S ≥ 5, définitif, `docs/36`), `ville_inaccessible`, connexité, villes proches. « 4 contre 3 » : aucune alerte.
 
 ## Mesures rapides (pas encore les 1000 plateaux)
 - 200 candidats : ≈ 1,3 s ; ≈ 7 ms par candidat.
@@ -17,6 +17,8 @@ Branche `generateur-5x5`. Mission : `docs/25` § 1.2 et `docs/24` § 8.
 - Tests : 536 (dont `tests/generateur-5x5.test.js`, 12 tests sur 200 graines) ; recettes 250 et 116 OK, 0 échec (vérifié par l'orchestrateur).
 
 ## Arbitrages de l'orchestrateur
-1. **S ≥ 5 rejeté en 5×5** : gardé **provisoirement** (coût 0,6 % des tirages) ; à revoir avec les seuils définitifs après les mesures sur 1000 plateaux.
+Les arbitrages 1 à 3 sont **confirmés par `docs/36`** (S ≥ 5 définitif, B1 forcés gardés, villes vers les flancs acceptable).
+
+1. **S ≥ 5 rejeté en 5×5** : gardé (coût 0,6 % des tirages) ; confirmé comme définitif par `docs/36`.
 2. **B1 systématiques sur (0,2) et (4,2)** : gardé (c'est la préférence de `docs/24` § 8 appliquée pleinement) ; à reconsidérer si les mesures montrent un manque de variété.
 3. **Tendance des villes vers les flancs** (colonnes 1 et 4) avec le placement au meilleur S : à vérifier dans les mesures (point 5 de `docs/28` : 7e ville sur chacune des 8 jonctions du milieu).

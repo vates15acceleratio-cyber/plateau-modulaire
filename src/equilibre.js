@@ -42,7 +42,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
    * Modèle de présentation (sans DOM) :
    *  { explication, complet, blocages: [texte], lacunes: [texte], rangs: [{rang, d1, d2, ecart, fort, compte}],
    *    ecartRang (rangs 1 à 4, information), ecartMax7 (rangs 1 à 7), partage: {j1, j2, egalite}, tempo: [{pas, j1, j2}], premiere: {j1, j2, ecart},
-   *    goulets: [{ville, j1, j2, faible}], articulations: {1: [texte], 2: [texte]}, alertes: [texte] }
+   *    goulets: [{ville, j1, j2, faible}], articulations: {1: [texte], 2: [texte]}, alertes: [texte], informations: [texte] }
    */
   function rapport(analyse) {
     var r = analyse.resultat, seuil = GR.SEUIL_ECART;
@@ -79,7 +79,8 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       premiere: { j1: texteDistance(r.premiereVille[1]), j2: texteDistance(r.premiereVille[2]), ecart: texteDistance(r.premiereVille.ecart) },
       goulets: goulets,
       articulations: { 1: articulations(g1), 2: articulations(g2) },
-      alertes: r.alertes.map(function (a) { return a.message; })
+      alertes: r.alertes.map(function (a) { return a.message; }),
+      informations: (r.informations || []).map(function (a) { return a.message; })
     };
   }
 
@@ -162,6 +163,15 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       sAlertes.appendChild(el(doc, 'p', 'pm-equilibre-ok', m.complet ? 'Aucune alerte d\'équilibre.' : 'Aucune alerte sur les données disponibles.'));
     }
     racine.appendChild(sAlertes);
+
+    // Informations (jamais des alertes)
+    if (m.informations.length) {
+      var sInfo = section(doc, 'Informations');
+      var lInfo = el(doc, 'ul', 'pm-equilibre-informations');
+      m.informations.forEach(function (t) { lInfo.appendChild(el(doc, 'li', 'pm-equilibre-note', t)); });
+      sInfo.appendChild(lInfo);
+      racine.appendChild(sInfo);
+    }
 
     // Distances triées
     var sDist = section(doc, 'Distances des villes (en pas), triées');
