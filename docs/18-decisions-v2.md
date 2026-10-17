@@ -79,3 +79,10 @@ Après les avis `28-avis-design-5x5.md` (design de jeu) et `29-avis-geometrie-5x
 - **Placement par défaut des 7 villes : « 2-3-2 »** : 2 villes sur la rangée de jonctions côté vert (j = 1), 3 sur les deux rangées du milieu (j = 2 et 3), 2 côté rouge (j = 4). Remplace le « 3 + 1 + 3 » proposé par l'advisor design de jeu ; à mesurer sur le vrai catalogue.
 - **Pions : Ø 20 au plus** (consigne maintenue ; l'advisor prépresse, `26-avis-prepresse-cases-20.md`, conseillait Ø 16 à 18).
 - Acceptés par défaut, sans objection de l'utilisateur : pas de mur (C5) en 5×5 ; aucun raccord latéral hors du raccourci sur les bords et les coins ; B7 et son miroir B7m sont deux modèles ; le générateur oriente les centrales pour nourrir les jonctions ; tempo plus lent qu'en 4×4, à confirmer à la mesure.
+
+## Retours de l'utilisateur sur le dessin des tuiles (2026-10-17)
+- **Constat** : les centrales (surtout C7 / C8 du 5×5 : une croix droite + deux cases vers les coins) donnent un plateau **artificiel et bloquant**, en quadrillage ; l'utilisateur veut un plateau **organique** : quarts de tour, virages en T, tracés variés (croquis de principe fourni).
+- **Chemin sans case (« passage »)** : un chemin peut relier deux côtés d'une tuile **sans passer par une case** (le chemin bleu du croquis, en quart de tour). Il est **gratuit** : les cases qu'il relie de part et d'autre sont traitées comme voisines directes (aucun pas de plus).
+- **Courbes** : seuls les **passages** sont tracés en courbes ; les chemins entre cases restent droits.
+- **Portée** : redessiner les centrales (et les bords si utile) des **deux** catalogues, **4×4 et 5×5**.
+- **Virage en T** : à préciser avec l'image annoncée par l'utilisateur (lecture provisoire du croquis : une case où se rejoignent trois chemins, et un raccord de côté où peuvent arriver deux chemins).
