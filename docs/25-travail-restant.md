@@ -50,3 +50,8 @@ Proposée par l'utilisateur au moment de l'arrêt, **pas encore définie** : à 
   - Le **générateur** et l'**équilibre** doivent-ils en tenir compte (répartir les régions entre les camps, éviter qu'un joueur ait toutes les montagnes) ?
 - **Incidences probables** (à évaluer par les advisors design de jeu et prépresse le moment venu) : un champ `theme` (ou `region`) sur les modèles, un choix dans l'éditeur, un affichage dans la bibliothèque et sur le plateau, un rendu d'impression, et peut-être des compteurs par thème et par camp.
 - Barre d'outils de l'éditeur sur deux lignes entre 1600 et 1920 px depuis le bouton « Outil » des passages (`docs/43`) ; à reprendre avec la carte « Commandes » flottante (`styles/aide.css`).
+
+## 3. Refonte organique (branche `passages`, 2026-10-17)
+- Fait : passages sans case (`docs/39` à `docs/41`, `docs/43`).
+- En cours : catalogues candidats non branchés (`docs/42`, `docs/44`). Prochaine révision demandée par l'utilisateur (fin de `docs/18`) : centrales plus ouvertes, moins de cases, équilibre des accès au centre, pose symétrique à essayer, rythme strict ≤ 3 ; images à montrer avant tout branchement.
+- Ensuite : branchement du catalogue, générateur orienté pour le rythme (et peut-être symétrique), mesures, testeur, relecteur, version, PR.

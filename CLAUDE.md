@@ -37,5 +37,9 @@ Toujours répondre à l'utilisateur **en français**. Code, identifiants et comm
 
 ## État (2026-10-17)
 - Le travail se fait aussi sur un autre poste : **toujours commencer par `git fetch` puis `git pull`**. Les fonctionnalités se font sur une branche, fusionnée par PR.
-- Version 3.03.0 sur `main` ; branche `generateur-5x5` : générateur 5×5, mesures (`docs/35`), seuils définitifs (`docs/36`), recette et revue (`docs/37`).
-- **Travail restant et idées à étudier : `docs/25-travail-restant.md`** (questions à soumettre sur le tempo du 5×5 et le rôle des centrales, audit de sécurité des derniers ajouts, petites dettes dont l'affichage mobile, hexagonal en attente, idée des **régions thématiques** à discuter).
+- Version 3.04.0 sur `main` (générateur 5×5 fusionné, PR #5).
+- **Branche `passages` (en cours, non fusionnée, non versionnée)** : refonte « organique » demandée par l'utilisateur (plateau jugé artificiel et bloquant).
+  - **Fait** : passages sans case (courbes vertes, T par pivot, un passage = 1 déplacement, cases reliées voisines à 1 pas) dans le modèle, le graphe, le rendu, le PDF et l'éditeur (`docs/39`, `docs/40`) ; revue (`docs/41`) corrigée ; recette (`docs/43`). `node --test` 610 OK, recettes 312 / 116 OK.
+  - **En cours** : catalogues candidats 4×4 et 5×5 **non branchés** (`outils/catalogue-organique.js`, images par `outils/planche-organique.js` dans `docs/croquis/organique/`, `docs/42`, `docs/44`) ; mesure du **rythme** (plus longue suite de cases sans ville ni raccourci, cible ≤ 3).
+  - **Prochaine étape** (dernières réponses de l'utilisateur en fin de `docs/18`) : centrales plus ouvertes (3 ou 4 coins desservis, plus de chemins, moins de cases), 5×5 sous 78 cases avec villes à 3 accès, critère d'**équilibre des accès au centre** entre camps, essai d'une pose symétrique (180°) des centrales, rythme en mesure stricte ; puis **montrer les images à l'utilisateur avant de brancher**, ensuite branchement du catalogue, générateur (orientation pour le rythme), mesures, testeur, relecteur, versionneur, PR.
+- **Travail restant et idées à étudier : `docs/25-travail-restant.md`** (tempo du 5×5, audit de sécurité des derniers ajouts, petites dettes dont l'affichage mobile et la barre d'outils de l'éditeur, hexagonal en attente, idée des **régions thématiques** à discuter).
