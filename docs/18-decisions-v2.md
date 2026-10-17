@@ -107,3 +107,11 @@ Après les avis `28-avis-design-5x5.md` (design de jeu) et `29-avis-geometrie-5x
   - les centrales doivent desservir **plus de coins** (jonctions, donc villes), 3 ou 4, par davantage de chemins, avec moins de cases de relais ;
   - l'**équilibre des accès au centre** entre les deux camps devient un critère mesuré ;
   - le plafond « 1 passage par centrale » en 4×4 reste en vigueur (non rouvert).
+
+## Réponses de l'utilisateur sur la révision « centrales ouvertes » (2026-10-17, `45`)
+1. **5×5 : plus de cases autorisées** pour retrouver la liberté de placement des villes : on ne vise plus « sous 78 » ; lecture de l'orchestrateur : 78 à 81 cases, avec plusieurs placements de villes admissibles et toujours 3 accès aux villes.
+2. **Pas de pose strictement symétrique** : « tant que ça crée de la diversité de gameplay, on peut avoir des chemins différents mais le même nombre de cases par moitié ». Lecture de l'orchestrateur : le générateur cherche **autant de cases dans la moitié verte que dans la moitié rouge** (rangée neutre à part en 5×5), avec des tuiles et des chemins libres de part et d'autre ; l'équilibre des accès au centre reste un critère.
+3. **4×4, chaînes de 4 le long du raccourci** : le **raccourci compte comme une zone d'intérêt** dans la mesure du rythme (option 2).
+4. **Q2 (Étoile à crochet) gardé.**
+5. **P3 (T sans case) n'est pas un traversant** : il porte des cases en plus ; il reste au catalogue.
+6. **Coin : K2 inchangé** (pas de coin plus léger).
