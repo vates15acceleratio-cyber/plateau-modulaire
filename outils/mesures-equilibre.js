@@ -540,6 +540,10 @@ function principal() {
   console.log(`Rapport écrit : ${sortie} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 }
 
-module.exports = { mulberry32, tirerPlateau, tirerPlateaux, PAIRES, PAIRES_DEFAUT, PAIRES_VARIEES, CLE_DEFAUT, villes9sauf, mesurer, rediger, tirerPlateaux5x5 };
+module.exports = {
+  mulberry32, tirerPlateau, tirerPlateaux, PAIRES, PAIRES_DEFAUT, PAIRES_VARIEES, CLE_DEFAUT, villes9sauf, mesurer, rediger, tirerPlateaux5x5,
+  // outils de statistique, réutilisés par outils/mesures-5x5.js
+  moy, f2, pc, ajouterHist, cles, totalHist, moyHist, partHist, texteHist
+};
 
 if (require.main === module) principal();
