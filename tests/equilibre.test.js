@@ -80,6 +80,35 @@ function oracleGraphe(doc, casesJonction) {
       if (autre) lier(r.caseId, autre);
     }
   }
+  // passages sans case (docs/18, docs/39), écrit sans PM.graphe : les passages relient des points (pivots, emplacements de raccord ;
+  // deux emplacements face à face sont un même point) en réseaux ; une case s'y RATTACHE (bout de passage, ou chemin qui aboutit face à
+  // un passage) sans jamais fondre deux réseaux ; les cases rattachées à un même réseau sont voisines deux à deux (1 pas)
+  const reseau = new Map(), rattache = [];
+  const groupe = (x) => { if (!reseau.has(x)) reseau.set(x, new Set([x])); return reseau.get(x); };
+  const fondre = (a, b) => { const ra = groupe(a), rb = groupe(b); if (ra === rb) return; for (const x of rb) { ra.add(x); reseau.set(x, ra); } };
+  const slot = (t, cote, pos) => `S${t.col},${t.lig},${cote},${pos}`;
+  const slots = [];
+  for (const { t, e } of elems) for (const p of e.passages || []) {
+    const point = (x) => x.pivot !== undefined ? 'P' + x.pivot : (x.raccord ? (slots.push({ t, cote: x.raccord.cote, pos: x.raccord.pos }), slot(t, x.raccord.cote, x.raccord.pos)) : null);
+    const pa = point(p.a), pb = point(p.b);
+    if (pa && pb) fondre(pa, pb);
+    else if (pa) { groupe(pa); rattache.push([p.b['case'], pa]); }
+    else if (pb) { groupe(pb); rattache.push([p.a['case'], pb]); }
+  }
+  for (const s0 of slots) {
+    const d = G.coteVoisin(s0.cote), f = G.raccordEnFace(s0.cote, s0.pos), face = slot({ col: s0.t.col + d.dc, lig: s0.t.lig + d.dl }, f.cote, f.pos);
+    if (reseau.has(face)) fondre(slot(s0.t, s0.cote, s0.pos), face);
+  }
+  for (const { t, e } of elems) for (const r of e.raccords) {
+    const d = G.coteVoisin(r.cote), f = G.raccordEnFace(r.cote, r.pos), face = slot({ col: t.col + d.dc, lig: t.lig + d.dl }, f.cote, f.pos);
+    if (reseau.has(face)) rattache.push([r.caseId, face]);
+  }
+  const membres = new Map();
+  for (const [c, x] of rattache) { const r = reseau.get(x); if (!membres.has(r)) membres.set(r, new Set()); membres.get(r).add(c); }
+  for (const cs0 of membres.values()) {
+    const cs = [...cs0].filter((id) => voisins.has(id));
+    for (let a = 0; a < cs.length; a++) for (let b = a + 1; b < cs.length; b++) lier(cs[a], cs[b]);
+  }
   for (let j = 1; j <= 3; j++) for (let i = 1; i <= 3; i++) {
     const id = `J${i},${j}`;
     noeud(id);

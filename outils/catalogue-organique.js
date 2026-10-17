@@ -1,7 +1,9 @@
 /*
  * catalogue-organique.js : catalogues CANDIDATS 4×4 et 5×5 pour un plateau « organique » (quarts de tour, T, passages sans case).
- * Proposition à montrer à l'utilisateur en images (outils/planche-organique.js) : NON branché dans index.html ni dans
- * PM.catalogue.nouveauDocument. Même structure que src/catalogue.js (orientation canonique, mm), chargeable sous Node
+ * Proposition montrée à l'utilisateur en images (outils/planche-organique.js). La révision « centrales ouvertes »
+ * (modelesParGrille) est BRANCHÉE depuis docs/46 : src/catalogue.js en porte une copie (mêmes modèles ; exemplaires du 5×5 revus :
+ * B1 3 -> 6, B7 12 -> 8, pour 78 à 81 cases) ; ce fichier reste la référence des candidats et de la révision 44.
+ * Même structure que src/catalogue.js (orientation canonique, mm), chargeable sous Node
  * après les fichiers de src/ :
  *   require('../src/catalogue.js'); require('./catalogue-organique.js'); -> PM.catalogueOrganique
  *

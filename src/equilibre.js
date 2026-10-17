@@ -27,12 +27,36 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     CONSEIL_4X4 +
     'La première ville doit être à la même distance pour les deux joueurs. Une ville n\'est qu\'une destination : on ne la traverse pas.';
 
-  /** Analyse complète : graphe, résultat d'équilibre et goulets des deux joueurs (villes non traversables). */
+  /**
+   * Analyse complète : graphe, résultat d'équilibre, goulets des deux joueurs (villes non traversables) et, en information
+   * (docs/18, docs/45, docs/46), rythme (PM.graphe.rythme), accès au centre (PM.graphe.accesCentre) et cases par moitié
+   * (PM.graphe.casesParMoitie).
+   */
   function analyser(doc, options) {
     options = options || {};
     var graphe = GR.construire(doc, options);
     var resultat = GR.equilibre(doc, Object.assign({}, options, { graphe: graphe }));
-    return { grille: PM.modele.formatDuDocument(doc).id, graphe: graphe, resultat: resultat, goulets: { 1: GR.goulets(graphe, 1), 2: GR.goulets(graphe, 2) } };
+    return {
+      grille: PM.modele.formatDuDocument(doc).id, graphe: graphe, resultat: resultat, goulets: { 1: GR.goulets(graphe, 1), 2: GR.goulets(graphe, 2) },
+      rythme: GR.rythme(doc, graphe), acces: GR.accesCentre(doc, graphe), moities: GR.casesParMoitie(doc, graphe)
+    };
+  }
+
+  /**
+   * Lignes d'information sur le rythme, l'accès au centre et les cases par moitié (jamais des alertes) ; [] si l'analyse ne les a pas
+   * (analyse construite à la main). Rangée neutre et jonctions du milieu à part.
+   */
+  function lignesOrganiques(analyse) {
+    var ry = analyse.rythme, ac = analyse.acces, mo = analyse.moities, res = [];
+    if (!ry || !ac || !mo) return res;
+    var est5x5 = analyse.grille === '5x5';
+    res.push('Rythme : au plus ' + ry.chaineMax + ' case(s) d’affilée sans zone d’intérêt (ville, passage sans case qui fait gagner un pas, raccourci du pourtour) ; cible ' +
+      GR.CHAINE_CIBLE + ' ou moins' + (ry.chaineMax > GR.CHAINE_CIBLE ? ' (au-dessus de la cible).' : '.') + ' Distance maximale d’une case à une zone : ' + ry.distMax + ' pas.');
+    res.push('Accès au centre (' + (est5x5 ? 'rangée neutre et jonctions qui la bordent' : 'rangée de jonctions du milieu') + ') : ' + ac.portes.vert + ' porte(s) côté vert, ' +
+      ac.portes.rouge + ' côté rouge (écart ' + ac.ecart + ') ; chemins indépendants depuis les apparitions : vert ' + ac.chemins.vert + ', rouge ' + ac.chemins.rouge + '.');
+    res.push('Cases par moitié : vert ' + mo.vert + ', rouge ' + mo.rouge + (mo.ecart ? ' (écart ' + mo.ecart + ')' : ' (égales)') + ' ; à part : ' +
+      (est5x5 ? mo.tuiles.neutre + ' sur la rangée neutre et ' : '') + mo.jonctions.milieu + ' jonction(s)-case(s) du milieu.');
+    return res;
   }
 
   function texteDistance(d) { return d === null || d === undefined ? '—' : (isFinite(d) ? String(d) : '∞'); }
@@ -42,7 +66,8 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
    * Modèle de présentation (sans DOM) :
    *  { explication, complet, blocages: [texte], lacunes: [texte], rangs: [{rang, d1, d2, ecart, fort, compte}],
    *    ecartRang (rangs 1 à 4, information), ecartMax7 (rangs 1 à 7), partage: {j1, j2, egalite}, tempo: [{pas, j1, j2}], premiere: {j1, j2, ecart},
-   *    goulets: [{ville, j1, j2, faible}], articulations: {1: [texte], 2: [texte]}, alertes: [texte], informations: [texte] }
+   *    goulets: [{ville, j1, j2, faible}], articulations: {1: [texte], 2: [texte]}, alertes: [texte], informations: [texte],
+   *    organique: [texte] (rythme, accès au centre, cases par moitié : information) }
    */
   function rapport(analyse) {
     var r = analyse.resultat, seuil = GR.SEUIL_ECART;
@@ -80,7 +105,8 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       goulets: goulets,
       articulations: { 1: articulations(g1), 2: articulations(g2) },
       alertes: r.alertes.map(function (a) { return a.message; }),
-      informations: (r.informations || []).map(function (a) { return a.message; })
+      informations: (r.informations || []).map(function (a) { return a.message; }),
+      organique: lignesOrganiques(analyse)
     };
   }
 
@@ -171,6 +197,15 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       m.informations.forEach(function (t) { lInfo.appendChild(el(doc, 'li', 'pm-equilibre-note', t)); });
       sInfo.appendChild(lInfo);
       racine.appendChild(sInfo);
+    }
+
+    // Rythme, accès au centre, cases par moitié (information, docs/46)
+    if (m.organique.length) {
+      var sOrg = section(doc, 'Rythme, accès et moitiés (information)');
+      var lOrg = el(doc, 'ul', 'pm-equilibre-organique');
+      m.organique.forEach(function (t) { lOrg.appendChild(el(doc, 'li', 'pm-equilibre-note', t)); });
+      sOrg.appendChild(lOrg);
+      racine.appendChild(sOrg);
     }
 
     // Distances triées

@@ -12,11 +12,11 @@
  *   - plateau-<format>-B.svg / .png : pose symétrique (moitié sud = moitié nord tournée de 180°).
  * PNG : PyMuPDF si présent, sinon capture par Edge sans fenêtre ; sinon SVG seulement.
  *
- * Mesures (docs/18, réponses sur la révision « rythme ») :
- *  - rythme STRICT : seules les cases d'un réseau de passages qui économise un pas sont des zones d'intérêt (réseau qui
- *    contient un passage sans case à ses deux bouts : raccord–raccord ou branche d'un T) ; un crochet raccord -> case ne
- *    compte pas (il vaut un chemin ordinaire) ;
- *  - équilibre des accès au centre : voir accesCentre ;
+ * Mesures (docs/18, réponses sur les révisions « rythme » et « centrales ouvertes ») : fonctions de src/graphe.js depuis le
+ * branchement du catalogue (docs/46) :
+ *  - rythme STRICT (PM.graphe.rythme) : villes, cases d'un réseau de passages qui économise un pas (un crochet raccord -> case ne
+ *    compte pas) et cases reliées par un raccourci (docs/18, réponse 3) ;
+ *  - équilibre des accès au centre (PM.graphe.accesCentre), cases par moitié (PM.graphe.casesParMoitie) ;
  *  - pose symétrique : voir tirerPlateau (option symetrique).
  */
 const fs = require('fs');
@@ -409,41 +409,8 @@ function placerVilles(doc, F) {
 /* Mesures d'un plateau                                                */
 /* ------------------------------------------------------------------ */
 
-/**
- * Réseaux de passages entre tuiles (même règle que relierPassages de src/graphe.js) : cases rattachées à chaque composante,
- * apparitions rattachées, et pour chaque réseau s'il ÉCONOMISE un pas (il contient un passage sans case à ses deux bouts :
- * raccord–raccord, raccord–pivot ou case–pivot, c'est-à-dire un trajet qui demanderait une case de plus avec des chemins).
- * Renvoie { tailles, apparitions, groupes: [Set], economes: [Set] }.
- */
-function reseauxPlateau(doc) {
-  const parent = new Map();
-  const racine = (x) => { if (!parent.has(x)) parent.set(x, x); while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
-  const emp = (t, c, p) => 'R ' + t.col + ',' + t.lig + ',' + c + ',' + p;
-  const enFace = (t, c, p) => { const d = G.coteVoisin(c), f = G.raccordEnFace(c, p); return emp({ col: t.col + d.dc, lig: t.lig + d.dl }, f.cote, f.pos); };
-  const elems = doc.plateau.tuiles.map((t) => ({ t, e: M.tuileEnPlateau(doc, t) })).filter((x) => x.e);
-  const attaches = [], emplacements = [], types = new Map(), econ = [];
-  elems.forEach((x) => x.e.cases.forEach((c) => types.set(c.id, c.type)));
-  elems.forEach((x) => (x.e.passages || []).forEach((p) => {
-    const ref = (e) => {
-      if (e.pivot !== undefined) return { cle: 'P ' + e.pivot, pivot: true };
-      if (e.raccord) { const k = emp(x.t, e.raccord.cote, e.raccord.pos); emplacements.push({ k, t: x.t, c: e.raccord.cote, p: e.raccord.pos }); return { cle: k }; }
-      return { caseId: e['case'] };
-    };
-    const a = ref(p.a), b = ref(p.b);
-    if (a.cle && b.cle) { parent.set(racine(a.cle), racine(b.cle)); econ.push(a.cle); }
-    else if (a.cle) { attaches.push({ caseId: b.caseId, cle: a.cle }); if (a.pivot) econ.push(a.cle); }
-    else if (b.cle) { attaches.push({ caseId: a.caseId, cle: b.cle }); if (b.pivot) econ.push(b.cle); }
-  }));
-  emplacements.forEach((s) => racine(s.k));
-  emplacements.forEach((s) => { const f = enFace(s.t, s.c, s.p); if (parent.has(f)) parent.set(racine(s.k), racine(f)); });
-  elems.forEach((x) => x.e.raccords.forEach((r) => { const f = enFace(x.t, r.cote, r.pos); if (parent.has(f)) attaches.push({ caseId: r.caseId, cle: f }); }));
-  const groupes = new Map(), econome = new Set(econ.map(racine));
-  attaches.forEach((a) => { const r = racine(a.cle); if (!groupes.has(r)) groupes.set(r, new Set()); groupes.get(r).add(a.caseId); });
-  const tailles = Array.from(groupes.values()).map((s) => s.size).sort((a, b) => b - a);
-  let apparitions = 0;
-  groupes.forEach((s) => s.forEach((id) => { if (types.get(id) === 'apparition') apparitions++; }));
-  return { tailles, apparitions, groupes: Array.from(groupes.values()), economes: Array.from(groupes.entries()).filter(([r]) => econome.has(r)).map(([, s]) => s) };
-}
+/** Réseaux de passages entre tuiles : PM.graphe.reseauxPassages (repris de cet outil, branché dans src/graphe.js, docs/46). */
+function reseauxPlateau(doc) { return GR.reseauxPassages(doc); }
 
 /** Copie légère d'un graphe déjà construit (sans villes) avec les villes `jetons` : évite de reconstruire le graphe par placement. */
 function grapheAvecVilles(base, jetons) {
@@ -455,117 +422,12 @@ function grapheAvecVilles(base, jetons) {
 }
 
 /*
- * Rythme (docs/18 ; mesure STRICTE arbitrée en docs/44). Zones d'intérêt : les villes et les cases d'un réseau de passages
- * qui relie au moins 2 cases ET économise un pas (voir reseauxPlateau). Option { large: true } : ancienne mesure (tout réseau
- * de 2 cases ou plus), pour information.
- *  (a) distance de chaque case sans action à la zone d'intérêt la plus proche ;
- *  (b) chaîne : plus court chemin entre deux zones A et B qui ne passe par aucune autre zone et qu'aucun autre itinéraire ne
- *      raccourcit ; sa longueur est le nombre de cases sans action traversées. On garde la plus longue du plateau.
+ * Rythme : PM.graphe.rythme (mesure stricte, raccourci compté comme zone d'intérêt depuis docs/18 réponse 3 ; option
+ * { sansRaccourci: true } pour la mesure de docs/45, { large: true } pour l'ancienne mesure).
+ * Équilibre des accès au centre : PM.graphe.accesCentre (définition de docs/45). Cases par moitié : PM.graphe.casesParMoitie.
  */
-function rythme(doc, g, options) {
-  const zones = new Set(g.villes), rs = reseauxPlateau(doc);
-  ((options && options.large) ? rs.groupes : rs.economes).forEach((grp) => { if (grp.size >= 2) grp.forEach((id) => { if (g.voisins.has(id)) zones.add(id); }); });
-  const d = new Map(), file = [];
-  zones.forEach((z) => { d.set(z, 0); file.push(z); });
-  for (let q = 0; q < file.length; q++) {
-    const x = file[q];
-    if (q >= zones.size && g.villes.has(x)) continue;
-    g.voisins.get(x).forEach((y) => { if (!d.has(y)) { d.set(y, d.get(x) + 1); file.push(y); } });
-  }
-  const repartition = {};
-  let distMax = 0, injoignables = 0;
-  g.noeuds.forEach((id) => {
-    if (zones.has(id)) return;
-    if (!d.has(id)) { injoignables++; return; }
-    const v = d.get(id);
-    repartition[v] = (repartition[v] || 0) + 1;
-    distMax = Math.max(distMax, v);
-  });
-  let chaine = { longueur: 0, chemin: [] };
-  zones.forEach((s) => {
-    const dr = new Map([[s, 0]]), parent = new Map(), f = [s];
-    for (let q = 0; q < f.length; q++) {
-      const x = f[q];
-      if (x !== s && zones.has(x)) continue;
-      g.voisins.get(x).forEach((y) => { if (!dr.has(y)) { dr.set(y, dr.get(x) + 1); parent.set(y, x); f.push(y); } });
-    }
-    const dg = GR.distances(g, s);
-    zones.forEach((t) => {
-      if (t === s || !dr.has(t) || dg.get(t) !== dr.get(t)) return;
-      const n = dr.get(t) - 1;
-      if (n > chaine.longueur) {
-        const chemin = [t];
-        while (chemin[0] !== s) chemin.unshift(parent.get(chemin[0]));
-        chaine = { longueur: n, chemin };
-      }
-    });
-  });
-  return { zones: zones.size, distMax, repartition, injoignables, chaineMax: chaine.longueur, chaine: chaine.chemin,
-    casesPassage: Array.from(zones).filter((z) => !g.villes.has(z)),
-    plusLoin: g.noeuds.filter((id) => !zones.has(id) && d.get(id) === distMax) };
-}
-
-/*
- * Équilibre des accès au centre entre les deux camps (définition proposée).
- *  - Partage du graphe en trois : camp vert (cases des tuiles vertes, jonctions de la moitié nord), camp rouge (symétrique),
- *    « milieu » : en 4×4 la rangée de jonctions j = 2 (frontière des camps) ; en 5×5 les cases de la rangée neutre et les
- *    jonctions j = 2 et 3 qui la bordent.
- *  - PORTES d'un camp : arêtes du graphe qui relient un nœud du camp à un nœud du milieu (port d'une case vers une jonction
- *    du milieu, raccord ou réseau de passages vers une case du milieu). Chaque porte est une entrée distincte vers le centre.
- *  - écart = portes vertes − portes rouges (0 = équilibre) ; les contacts directs vert–rouge (raccords entre les deux
- *    rangées du milieu en 4×4) servent les deux camps à la fois et sont donnés à part.
- *  - CHEMINS INDÉPENDANTS : nombre maximal de chemins sans case commune des apparitions du camp au milieu, dans le camp
- *    (villes traversables) : complète les portes quand un goulet interne les réduit.
- */
-function accesCentre(doc, g, F, options) {
-  const N = F.GRILLE.lignes, demi = Math.floor(N / 2);
-  const zone = (id) => {
-    const m = /^J(\d+),(\d+)$/.exec(id);
-    if (m) { const j = +m[2]; return j < demi ? 'vert' : j > N - demi ? 'rouge' : 'milieu'; }
-    const c = /^(\d+),(\d+):/.exec(id);
-    return F.campCellule(+c[1], +c[2]) || 'milieu';
-  };
-  const z = new Map(g.noeuds.map((id) => [id, zone(id)]));
-  const portes = { vert: 0, rouge: 0 };
-  let contacts = 0;
-  g.noeuds.forEach((a) => g.voisins.get(a).forEach((b) => {
-    if (a >= b) return;
-    const za = z.get(a), zb = z.get(b);
-    if (za === zb) return;
-    if (za === 'milieu' || zb === 'milieu') portes[za === 'milieu' ? zb : za]++;
-    else contacts++;
-  }));
-  const chemins = {};
-  if (options && options.sansFlot) return { portes, ecart: portes.vert - portes.rouge, contacts };
-  [['vert', 1], ['rouge', 2]].forEach(([camp, joueur]) => {
-    chemins[camp] = flotVersMilieu(g, g.apparitions[joueur] || [], (id) => z.get(id) === camp, (id) => z.get(id) === 'milieu');
-  });
-  return { portes, ecart: portes.vert - portes.rouge, contacts, chemins, ecartChemins: chemins.vert - chemins.rouge };
-}
-
-/** Flot maximal (sommets de capacité 1, sources illimitées) des sources vers l'ensemble `cible`, dans les nœuds `dans` ∪ cible. */
-function flotVersMilieu(g, sources, dans, cible) {
-  const ids = g.noeuds.filter((id) => dans(id) || cible(id)), index = new Map(ids.map((id, n) => [id, n]));
-  const N = ids.length, S = 2 * N, T = 2 * N + 1, tete = new Array(2 * N + 2).fill(-1), suiv = [], vers = [], cap = [];
-  const aj = (a, b, c) => { vers.push(b); cap.push(c); suiv.push(tete[a]); tete[a] = vers.length - 1; vers.push(a); cap.push(0); suiv.push(tete[b]); tete[b] = vers.length - 1; };
-  const INF = 1e6, src = new Set(sources);
-  ids.forEach((id, n) => {
-    aj(2 * n, 2 * n + 1, src.has(id) ? INF : 1);
-    if (cible(id)) { aj(2 * n + 1, T, 1); return; } // une entrée du milieu compte une fois ; on ne le traverse pas
-    g.voisins.get(id).forEach((w) => { if (index.has(w)) aj(2 * n + 1, 2 * index.get(w), 1); });
-  });
-  sources.forEach((s) => { if (index.has(s)) aj(S, 2 * index.get(s), INF); });
-  let flot = 0;
-  for (;;) {
-    const pere = new Array(2 * N + 2).fill(-1), vu = new Array(2 * N + 2).fill(false), file = [S];
-    vu[S] = true;
-    for (let q = 0; q < file.length && !vu[T]; q++) for (let e = tete[file[q]]; e !== -1; e = suiv[e]) if (cap[e] > 0 && !vu[vers[e]]) { vu[vers[e]] = true; pere[vers[e]] = e; file.push(vers[e]); }
-    if (!vu[T]) break;
-    for (let v = T; v !== S; v = vers[pere[v] ^ 1]) { cap[pere[v]]--; cap[pere[v] ^ 1]++; }
-    flot++;
-  }
-  return flot;
-}
+function rythme(doc, g, options) { return GR.rythme(doc, g, options); }
+function accesCentre(doc, g, F, options) { return GR.accesCentre(doc, g, options); }
 
 /** Mesures d'un plateau complet (villes posées). */
 function mesurerPlateau(doc, F) {
@@ -592,7 +454,7 @@ function mesurerPlateau(doc, F) {
     erreursPlateau: (M.validerPlateau(doc).erreurs || []).map((x) => x.code),
     reseauxPassages: res.tailles, reseauxEconomes: res.economes.map((s) => s.size), apparitionsDansReseaux: res.apparitions, contactVertRouge: contact,
     rythme: rythme(doc, g), rythmeLarge: (({ chaineMax, distMax }) => ({ chaineMax, distMax }))(rythme(doc, g, { large: true })),
-    acces: accesCentre(doc, g, F)
+    acces: accesCentre(doc, g, F), moities: GR.casesParMoitie(doc, g)
   };
 }
 

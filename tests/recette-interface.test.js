@@ -87,7 +87,7 @@ test('robustesse : ids inconnus et coordonnées hors plateau avec un document va
   for (const a of junk) for (const b of junk) {
     appels.push(['cellulesCompatibles', () => A.cellulesCompatibles(d, a)]);
     appels.push(['poserTuileTournee', () => A.poserTuileTournee(d, a, b, b, a)]);
-    appels.push(['poserTuileTournee2', () => A.poserTuileTournee(docVide(), 'C1', a, b, 1)]);
+    appels.push(['poserTuileTournee2', () => A.poserTuileTournee(docVide(), 'Q1', a, b, 1)]);
     appels.push(['etiquetteCellule', () => A.etiquetteCellule(a, b)]);
     appels.push(['cibleSurbrillance', () => A.cibleSurbrillance(a, d)]);
     appels.push(['cibleSurbrillance obj', () => A.cibleSurbrillance({ type: 'raccord', col: a, lig: b, cote: b, pos: a }, d)]);
@@ -240,13 +240,13 @@ test('pose : refus en une phrase (incomplet, hors grille, introuvable, occupée,
     assert.ok(!/[.!?]\s+\S/.test(r.raison), 'une seule phrase : ' + r.raison);
   }
   // rôle respecté : un coin ne va pas au centre, une centrale ne va pas dans un coin (refus d'une phrase)
-  const coinCentre = M.peutPoserTuile(d, 'K2', 1, 1), centraleCoin = M.peutPoserTuile(d, 'C1', 0, 0);
+  const coinCentre = M.peutPoserTuile(d, 'K2', 1, 1), centraleCoin = M.peutPoserTuile(d, 'Q1', 0, 0);
   assert.equal(coinCentre.ok, false); assert.equal(centraleCoin.ok, false);
   assert.equal(coinCentre.raison, 'Cette tuile est un coin : elle se pose dans un coin du plateau.');
   assert.equal(centraleCoin.raison, 'Cette tuile est une centrale : elle se pose au centre du plateau.');
   assert.equal(M.peutPoserTuile(d, 'B1', 0, 0).raison, 'Cette tuile est un bord : elle se pose sur le pourtour du plateau, hors des coins.');
   assert.equal(M.peutPoserTuile(d, 'K2', 0, 0).ok, true);
-  assert.equal(M.peutPoserTuile(d, 'C1', 1, 1).ok, true);
+  assert.equal(M.peutPoserTuile(d, 'Q1', 1, 1).ok, true);
   d = A.poserTuileTournee(d, 'K4', 0, 0, 0);
   assert.match(M.peutPoserTuile(d, 'K2', 0, 0).raison, /occupée/);
   d = A.poserTuileTournee(d, 'K4', 3, 0, 1); // K4 n'a qu'un exemplaire : 2e pose acceptée (poses illimitées)
@@ -256,8 +256,8 @@ test('pose : refus en une phrase (incomplet, hors grille, introuvable, occupée,
   assert.deepEqual(d, avant, 'document inchangé après refus');
   assert.equal(A.poserTuileTournee(docVide(), 'K2', 0, 0, 3).plateau.tuiles[0].rot, 3, 'rotation choisie respectée');
   assert.equal(A.poserTuileTournee(docVide(), 'K2', 3, 3, null).plateau.tuiles[0].rot, 2, 'rotation suggérée du coin SE');
-  assert.equal(A.poserTuileTournee(docVide(), 'C1', 1, 1, 5).plateau.tuiles[0].rot, 1, 'quarts de tour modulo 4');
-  assert.equal(A.poserTuileTournee(docVide(), 'C1', 1, 1, -1).plateau.tuiles[0].rot, 3);
+  assert.equal(A.poserTuileTournee(docVide(), 'Q1', 1, 1, 5).plateau.tuiles[0].rot, 1, 'quarts de tour modulo 4');
+  assert.equal(A.poserTuileTournee(docVide(), 'Q1', 1, 1, -1).plateau.tuiles[0].rot, 3);
 });
 
 test('éditeur : modeleDeDepart pour chaque gabarit (ids uniques, sans chemin, apparition sur le pourtour)', () => {

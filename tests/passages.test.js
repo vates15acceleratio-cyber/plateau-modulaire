@@ -319,8 +319,17 @@ test('sauvegarde : un ancien modèle (sans passage) ne reçoit aucun champ pivot
 
 /* ---------- Anciens documents strictement inchangés ---------- */
 
+/** Empreintes [plateau : équilibre] du générateur sur un ancien document, graines s0 à s2 (recalculées en docs/46). */
+const EMPREINTES_ANCIENS = {
+  '4x4': ['4e7c5295164b:22674eb713f6', 'aedb663958ba:43b2a937ac55', 'b31ff25cddc0:a50e00bd63b1'],
+  '5x5': ['55db3a27e119:d46f86ada847', '21f5f7d21dc7:6496cfc04542', '03268fea0577:274abe1fc9b8']
+};
+
+/** Ancien document : bibliothèque du catalogue précédent (version 3.04, sans passage). */
+const docPrecedent = (g) => { const d = M.nouveauDocument(g); d.modeles = clone(PM.catalogue.precedent[g]); return d; };
+
 test('anciens documents : tuileEnPlateau, rendu et validation d\'un modèle sans passage n\'ont aucun champ ni alerte en plus', () => {
-  const d = PM.catalogue.nouveauDocument('4x4');
+  const d = docPrecedent('4x4');
   const t = { modeleId: d.modeles[0].id, col: 1, lig: 1, rot: 2 };
   const e = M.tuileEnPlateau(Object.assign(d, { plateau: { tuiles: [t], jetons: [] } }), t);
   assert.deepEqual(Object.keys(e).sort(), ['aretes', 'cases', 'ports', 'raccords']);
@@ -330,15 +339,47 @@ test('anciens documents : tuileEnPlateau, rendu et validation d\'un modèle sans
   });
 });
 
-test('anciens documents : générateurs 4×4 et 5×5 à graine donnée, mêmes plateaux (empreintes de la version sans passage)', () => {
+test('anciens documents (catalogue précédent) : un plateau complet 4×4 et 5×5 se rouvre à l\'identique, sans alerte, tuiles livrées protégées', () => {
+  require('../src/sauvegarde.js'); require('../src/controles.js'); require('../src/bibliotheque.js');
+  const S = PM.sauvegarde;
+  // 5×5 : plateau de la version 3.04 posé à la main (ancien tests/catalogue-5x5.test.js : C7, C8, B1, B7, B7m, K2 ; 78 cases)
+  const P5 = [
+    ['K2', 0, 0], ['B7', 1, 0], ['B1', 2, 0], ['B1', 3, 0], ['K2', 4, 0],
+    ['B1', 0, 1], ['C7', 1, 1, 1], ['C7', 2, 1, 1], ['C8', 3, 1, 2], ['B7', 4, 1],
+    ['B7m', 0, 2], ['C7', 1, 2, 3], ['C7', 2, 2, 1], ['C8', 3, 2, 2], ['B1', 4, 2],
+    ['B7m', 0, 3], ['C7', 1, 3, 0], ['C8', 2, 3, 0], ['C7', 3, 3, 1], ['B7', 4, 3],
+    ['K2', 0, 4], ['B7', 1, 4], ['B1', 2, 4], ['B1', 3, 4], ['K2', 4, 4]
+  ];
+  const d5 = docPrecedent('5x5');
+  d5.plateau.tuiles = P5.map(([id, col, lig, rot]) => ({ modeleId: id, col, lig, rot: rot !== undefined ? rot : M.rotationDeduite(col, lig, M.modeleParId(d5, id).gabarit, '5x5') }));
+  d5.plateau.jetons = [[2, 1], [3, 1], [4, 2], [1, 3], [4, 3], [1, 4], [3, 4]].map(([i, j]) => ({ i, j, type: 'capture' }));
+  // 4×4 : plateau tiré sur l'ancien document (catalogue C1 à C6, B1, B3 à B6, K2, K4)
+  const d4 = PM.generateur.generer(docPrecedent('4x4'), { graine: 'ancien-4x4', candidats: 10 }).doc;
+  for (const doc of [d4, d5]) {
+    const r = S.depuisJSON(S.versJSON(doc));
+    assert.equal(r.ok, true, JSON.stringify(r.erreurs));
+    // seules alertes possibles : les raccords morts du « mur » C5 (étoile fermée), comme en version 3.04
+    assert.deepEqual([r.erreurs, r.migre], [[], false]);
+    assert.ok(r.alertes.every((a) => a.code === 'raccord_mort') && r.alertes.length <= doc.plateau.tuiles.filter((t) => t.modeleId === 'C5').length, JSON.stringify(r.alertes));
+    assert.deepEqual(r.doc.modeles, doc.modeles, 'le document garde ses copies de modèles');
+    assert.deepEqual(r.doc.plateau, doc.plateau);
+    assert.deepEqual(M.validerPlateau(r.doc).erreurs, []);
+    assert.deepEqual(PM.controles.calculer(r.doc).erreurs, []);
+    assert.ok(r.doc.modeles.every((m) => !PM.bibliotheque.estTuileUtilisateur(r.doc, m.id)), 'tuiles livrées (version 3.04) toujours protégées');
+    assert.ok(r.doc.modeles.every((m) => !('passages' in m)));
+  }
+  assert.equal(GR.construire(d5).cases.size + 9, 78);
+  assert.deepEqual(M.validerPlateau(d5).alertes, []);
+});
+
+test('anciens documents (catalogue précédent) : générateurs 4×4 et 5×5 à graine donnée, mêmes plateaux (empreintes du générateur de docs/46)', () => {
+  // le générateur a changé avec le branchement des catalogues « centrales ouvertes » (moitiés égales, orientation 4×4, cible de cases,
+  // affinage du rythme) : un ancien document s'ouvre à l'identique, mais un nouveau tirage y donne un autre plateau qu'en version 3.04
   const h = (o) => crypto.createHash('sha1').update(JSON.stringify(o)).digest('hex').slice(0, 12);
-  const attendu = {
-    '4x4': ['c229dc80f0a1:3483103e71f6', 'fe450d228d97:d8875b1c81f5', 'c989b780f666:bd752fea07c5'],
-    '5x5': ['c4f9948fc97d:65d12b3037bb', '8cfdf34dd189:4885e574394f', 'cf246b72830d:8c5d691eda90']
-  };
+  const attendu = EMPREINTES_ANCIENS;
   for (const g of ['4x4', '5x5']) {
     const obtenu = [0, 1, 2].map((k) => {
-      const r = PM.generateur.generer(PM.catalogue.nouveauDocument(g), { graine: 's' + k, candidats: 8 });
+      const r = PM.generateur.generer(docPrecedent(g), { graine: 's' + k, candidats: 8 });
       return h(r.doc) + ':' + h(GR.equilibre(r.doc));
     });
     assert.deepEqual(obtenu, attendu[g], g);

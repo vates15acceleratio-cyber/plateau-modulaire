@@ -321,13 +321,16 @@ function jonctionsCases(doc) {
 }
 const cle = (p) => p.map((c) => '(' + c.i + ',' + c.j + ')').join('+');
 
-test('jonctions-cases : 3 paires de la rangée centrale par défaut, 30 en mode varié (sans les paires d\'une même rangée extérieure), 5×5 : les 2016 placements 2-3-2', () => {
+test('jonctions-cases : 3 paires de la rangée centrale par défaut, 12 en mode varié (autant côté vert que côté rouge), 5×5 : les 2016 placements 2-3-2', () => {
   const F4 = PM.geometrie.format('4x4'), F5 = PM.geometrie.format('5x5');
   assert.deepStrictEqual(GEN.pairesJonctionsCases(F4, false).map(cle), ['(1,2)+(2,2)', '(1,2)+(3,2)', '(2,2)+(3,2)']);
   const variees = GEN.pairesJonctionsCases(F4, true);
-  assert.strictEqual(variees.length, 30);
+  // cases égales entre moitiés (docs/18) : une jonction-case en j = 1 et une en j = 3 (9 paires), ou les deux en j = 2 (3 paires)
+  assert.strictEqual(variees.length, 12);
+  assert.ok(variees.every((p) => p.filter((c) => c.j === 1).length === p.filter((c) => c.j === 3).length), 'paires équilibrées');
   assert.ok(!variees.some((p) => p[0].j === p[1].j && p[0].j !== 2), 'aucune paire d\'une même rangée extérieure');
   assert.ok(variees.some((p) => p[0].j === 2 && p[1].j === 2), 'la rangée centrale reste permise');
+  assert.strictEqual(variees.filter((p) => p[0].j === 1 && p[1].j === 3).length, 9);
   // 5×5 : placements de 7 villes en 2-3-2 (2 en j = 1, 3 en j = 2 ou 3, 2 en j = 4), donc 9 jonctions-cases chacun
   const p5 = GEN.pairesJonctionsCases(F5, false);
   assert.strictEqual(p5.length, 6 * 56 * 6);
@@ -354,13 +357,15 @@ test('générateur par défaut : jonctions-cases dans la rangée centrale et auc
   assert.strictEqual(vues.size, 3, 'les 3 paires sont tirées : ' + [...vues]);
 });
 
-test('jonctions variées : le test précédent n’est pas vide : des tirages bloqués apparaissent hors rangée centrale (1,7 % mesuré)', () => {
-  let bloques = 0;
-  for (let k = 0; k < 600; k++) {
-    const r = GEN.generer(PM.catalogue.nouveauDocument(), { graine: 'bloc-' + k, candidats: 1, essaisMax: 1, jonctionsVariees: true });
-    bloques += r.rejets.desequilibre;
-  }
-  assert.ok(bloques > 0, 'tirages bloqués : ' + bloques);
+test('jonctions-cases : le test précédent n’est pas vide : deux jonctions-cases d’une même rangée extérieure donnent des « 5 contre 2 »', () => {
+  // mesuré sur 1000 plateaux du générateur (tests/catalogue.test.js) : jamais pour les paires permises, jusqu'à 2 à 3 % pour (1,1)+(2,1)
+  const MS = require('../outils/mesures-equilibre.js');
+  const docs = MS.tirerPlateaux(300, 7, { orientes: true }).map((x) => x.doc);
+  const villesSauf = (sauf) => { const v = []; for (let j = 1; j <= 3; j++) for (let i = 1; i <= 3; i++) if (!sauf.some((c) => c[0] === i && c[1] === j)) v.push({ i, j, type: 'capture' }); return v; };
+  const cinq = (sauf) => docs.filter((d) => PM.graphe.equilibre(d, { jetons: villesSauf(sauf) }).cinqContreDeux).length;
+  const hors = cinq([[1, 1], [2, 1]]) + cinq([[2, 1], [3, 1]]) + cinq([[1, 3], [2, 3]]) + cinq([[2, 3], [3, 3]]);
+  assert.ok(hors > 0, '« 5 contre 2 » avec une paire d’une même rangée extérieure : ' + hors);
+  assert.strictEqual(cinq([[1, 1], [3, 3]]) + cinq([[1, 2], [3, 2]]), 0, 'paires permises');
 });
 
 test('jonctions variées : reproductible, jamais deux jonctions-cases dans une même rangée extérieure, paires hors rangée centrale tirées', () => {
@@ -375,6 +380,8 @@ test('jonctions variées : reproductible, jamais deux jonctions-cases dans une m
     if (!r.ok) continue;
     const c = jonctionsCases(r.doc);
     assert.ok(!(c[0].j === c[1].j && c[0].j !== 2), cle(c));
+    assert.strictEqual(c.filter((x) => x.j === 1).length, c.filter((x) => x.j === 3).length, cle(c));
+    assert.strictEqual(r.score.cases.ecart, 0, 'cases égales entre moitiés : ' + cle(c));
     if (c.some((x) => x.j !== 2)) horsCentre++;
   }
   assert.ok(horsCentre > 10, 'paires hors rangée centrale : ' + horsCentre);

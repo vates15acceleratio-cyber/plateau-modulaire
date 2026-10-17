@@ -28,13 +28,13 @@ docs/brouillons/    travaux inachevés, à consulter sans les appliquer
 |---|---|---|
 | `geometrie.js` | constantes (mm), côtés et coins, masques, rotation, appariement | non |
 | `modele.js` | structures Tuile / Case / Chemin / Jeton / Plateau et validation | non |
-| `catalogue.js` | catalogues 4×4 (13 modèles, 22 tuiles) et 5×5 (6 modèles, 30 tuiles), `modelesParGrille`, `nouveauDocument(grille)` | non |
+| `catalogue.js` | catalogues « organiques » (docs/45, branchés en docs/46) 4×4 (6 modèles, 21 tuiles) et 5×5 (8 modèles, 30 tuiles), `modelesParGrille`, `nouveauDocument(grille)` ; `precedent` : catalogues de la version 3.04 (13 et 6 modèles), gelés, pour la compatibilité | non |
 | `rendu.js` | tracé SVG des tuiles et des jetons | non |
 | `etat.js` | état partagé, historique annuler / rétablir | non |
 | `sauvegarde.js` | JSON, migration des documents v1, sauvegarde automatique | oui (stockage, fichiers) |
-| `graphe.js` | graphe des cases, plus courts chemins, analyse d'équilibre (`equilibre` renvoie aussi `informations` : 5×5, ville sur une jonction à moins de `PORTS_VILLE_MIN` ports, jamais une alerte) ; exporte `PORTS_VILLE_MIN` (3), `PORTS_JONCTION_MIN` (2), `REPARTITION_VILLES_5X5` (2-3-2) et `flancs` (centre = colonnes 1 à colonnes − 2) | non |
+| `graphe.js` | graphe des cases, plus courts chemins, analyse d'équilibre (`equilibre` renvoie aussi `informations` : 5×5, ville sur une jonction à moins de `PORTS_VILLE_MIN` ports, jamais une alerte) ; exporte `PORTS_VILLE_MIN` (3), `PORTS_JONCTION_MIN` (2), `REPARTITION_VILLES_5X5` (2-3-2) et `flancs` (centre = colonnes 1 à colonnes − 2) ; mesures « organiques » (docs/46) : `reseauxPassages`, `rythme` (chaîne visée `CHAINE_CIBLE` = 3, raccourci compté comme zone d'intérêt), `accesCentre` (portes et chemins vers le milieu), `casesParMoitie` | non |
 | `equilibre.js` | rapport d'équilibre | partiel (calcul pur + boîte de dialogue) |
-| `generateur.js` | plateau aléatoire reproductible ; exporte aussi `causeRejet` (chaîne de filtres unique), `sontMiroirs`, `placementsVilles5x5` (gelés), `tuilesOrientees5x5` (`tronque` si le budget de nœuds est dépassé) ; 5×5 : abandon après 25 échecs consécutifs de manque de ports, `candidats` borné à 1000 | partiel (calcul pur + boîte de dialogue) |
+| `generateur.js` | plateau aléatoire reproductible ; exporte aussi `causeRejet` (chaîne de filtres unique), `sontMiroirs`, `placementsVilles5x5` (gelés), `tuilesOrientees5x5` (`tronque` si le budget de nœuds est dépassé) ; 5×5 : abandon après 25 échecs consécutifs de manque de ports, `candidats` borné à 1000 ; docs/46 : cases égales entre moitiés (`equilibrerMoities`, rejet `cases_moities`), orientation 4×4 (`tuilesOrientees4x4`), 78 à 81 cases en 5×5 (`CASES_CIBLE_5X5`), affinage du rythme et des accès sur les meilleurs candidats (option `affinage`) | partiel (calcul pur + boîte de dialogue) |
 | `export.js` | planches PDF / SVG / PNG | oui |
 | `controles.js` | compteurs et alertes | partiel (calcul pur + boîte de dialogue) |
 | `bibliotheque.js` | colonne bibliothèque de modèles | oui |

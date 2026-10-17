@@ -465,10 +465,10 @@ test('preparerSorties : planches, jetons, aperçu ; rien de coché = aucune feui
   assert.equal(E.preparerSorties(doc, { portee: 'posees' }).feuilles.length, 0); // rien de posé
 });
 
-test('le catalogue réel (comptes globaux) : 22 tuiles, 4 planches A3, 11 planches A4, conversion PDF complète', () => {
+test('le catalogue réel (comptes globaux) : 21 tuiles, 4 planches A3, 11 planches A4, conversion PDF complète', () => {
   require('../src/catalogue.js');
   const doc = PM.catalogue.nouveauDocument();
-  assert.equal(E.listeTuiles(doc, {}).tuiles.length, 22);
+  assert.equal(E.listeTuiles(doc, {}).tuiles.length, 21);
   assert.equal(E.calepiner(doc, { format: 'A3' }).length, 4);
   assert.equal(E.calepiner(doc, { format: 'A4' }).length, 11);
   const pdf = E.pdfDepuisPlanches(E.calepiner(doc, { format: 'A3' }), doc);

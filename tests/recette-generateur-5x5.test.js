@@ -84,26 +84,26 @@ test('génération 5×5 (150 graines, 1 à 3 candidats) : 25 tuiles à leur rôl
   });
 });
 
-test('génération 5×5 : 5 ou 6 B1, dont (0,2) et (4,2), B1 seulement sur le pourtour, 4 coins K2', () => {
-  const vus = { 5: 0, 6: 0 };
+test('génération 5×5 : au plus 6 B1 (ses exemplaires), B1 seulement sur le pourtour, 4 coins K2, 78 à 81 cases, moitiés égales', () => {
+  const vus = {};
   plateaux().forEach((r, k) => {
     const d = r.doc, id = 'rec-' + k;
     const b1 = d.plateau.tuiles.filter((t) => t.modeleId === 'B1');
-    assert.ok(b1.length === 5 || b1.length === 6, id + ' : ' + b1.length + ' B1 (docs/24 § 8 : B1 = 6 exemplaires, 5 ou 6 par plateau)');
-    vus[b1.length]++;
-    assert.strictEqual(M.tuileEn(d, 0, 2).modeleId, 'B1', id + ' : (0,2)');
-    assert.strictEqual(M.tuileEn(d, 4, 2).modeleId, 'B1', id + ' : (4,2)');
+    assert.ok(b1.length <= 6, id + ' : ' + b1.length + ' B1 (6 exemplaires, docs/46)');
+    vus[b1.length] = (vus[b1.length] || 0) + 1;
     b1.forEach((t) => assert.strictEqual(M.gabaritCellule(t.col, t.lig, '5x5'), 'bord', id + ' : B1 hors bord'));
     const coins = d.plateau.tuiles.filter((t) => M.gabaritCellule(t.col, t.lig, '5x5') === 'coin');
     assert.deepStrictEqual(coins.map((t) => t.modeleId), ['K2', 'K2', 'K2', 'K2'], id);
-    // exemplaires du catalogue (docs/24 § 8) : K2 5, B1 6, B7 4, B7m 4, C7 6, C8 5 : une centrale est C7 ou C8, un autre bord est B7 ou B7m
+    // catalogue (docs/46) : K2 5 ; B1 6, B7 8 ; U1 5, P3 2, P5 2, P1 1, P2 1
     d.plateau.tuiles.forEach((t) => {
       const role = M.gabaritCellule(t.col, t.lig, '5x5');
-      if (role === 'centrale') assert.ok(['C7', 'C8'].includes(t.modeleId), id);
-      if (role === 'bord' && t.modeleId !== 'B1') assert.ok(['B7', 'B7m'].includes(t.modeleId), id + ' : ' + t.modeleId);
+      if (role === 'centrale') assert.ok(['U1', 'P1', 'P2', 'P3', 'P5'].includes(t.modeleId), id);
+      if (role === 'bord' && t.modeleId !== 'B1') assert.strictEqual(t.modeleId, 'B7', id);
     });
+    assert.ok(r.score.cases.total >= 78 && r.score.cases.total <= 81, id + ' : ' + r.score.cases.total + ' cases');
+    assert.strictEqual(r.score.cases.ecart, 0, id);
   });
-  assert.ok(vus[5] > 15 && vus[6] > 15, 'les deux compositions sortent : ' + JSON.stringify(vus));
+  assert.ok(Object.keys(vus).length >= 2, 'plusieurs compositions sortent : ' + JSON.stringify(vus));
 });
 
 test('génération 5×5 : villes en 2-3-2 sur des jonctions à 3 ports au moins ; toutes les jonctions à 2 ports au moins (M.portsJonction)', () => {
@@ -179,7 +179,7 @@ test('parcours à l’état : Nouveau 5×5 (vrai catalogue), Générer, Applique
   const nouveau = PM.nouveau.documentPourGrille('5x5');
   assert.ok(nouveau.ok, nouveau.raison);
   assert.strictEqual(nouveau.doc.grille, '5x5');
-  assert.deepStrictEqual(nouveau.doc.modeles.map((m) => m.id).sort(), ['B1', 'B7', 'B7m', 'C7', 'C8', 'K2']);
+  assert.deepStrictEqual(nouveau.doc.modeles.map((m) => m.id).sort(), ['B1', 'B7', 'K2', 'P1', 'P2', 'P3', 'P5', 'U1']);
   assert.deepStrictEqual(nouveau.doc.plateau, { tuiles: [], jetons: [] });
   const etat = PM.etat.creer(PM.nouveau.documentPourGrille('4x4').doc);
   etat.remplacer(nouveau.doc, 'nouveau plateau 5×5');

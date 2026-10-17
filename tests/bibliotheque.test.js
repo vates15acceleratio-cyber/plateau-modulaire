@@ -18,9 +18,9 @@ function copie(id, nouvelId) {
   return m;
 }
 
-/** Catalogue 4×4 + une tuile utilisateur « U1 » (copie de C1) posée sur les 4 cases centrales, avec une ville en (2,2). */
+/** Catalogue 4×4 + une tuile utilisateur « U1 » (copie de Q1) posée sur les 4 cases centrales, avec une ville en (2,2). */
 function docAvecTuileUtilisateur(avecVille) {
-  var d = M.ajouterModele(C.nouveauDocument(), copie('C1', 'U1'));
+  var d = M.ajouterModele(C.nouveauDocument(), copie('Q1', 'U1'));
   [[1, 1], [2, 1], [1, 2], [2, 2]].forEach(function (c) { d = M.poserTuile(d, 'U1', c[0], c[1]); });
   if (avecVille !== false) d = M.poserJeton(d, 2, 2, 'capture');
   return d;
@@ -35,7 +35,7 @@ test('estTuileUtilisateur : le catalogue livré n’est pas supprimable, une tui
 
 test('supprimerTuileUtilisateur : tuile du catalogue ou inconnue = Error, document inchangé', function () {
   var d = C.nouveauDocument(), avant = JSON.stringify(d);
-  assert.throws(function () { B.supprimerTuileUtilisateur(d, 'C1'); }, /catalogue/);
+  assert.throws(function () { B.supprimerTuileUtilisateur(d, 'Q1'); }, /catalogue/);
   assert.throws(function () { B.supprimerTuileUtilisateur(d, 'zzz'); }, /introuvable/);
   assert.equal(JSON.stringify(d), avant);
 });
@@ -68,10 +68,10 @@ test('supprimerTuileUtilisateur : retire le modèle, ses tuiles posées et la vi
 test('supprimerTuileUtilisateur : les tuiles des autres modèles restent posées', function () {
   var d = docAvecTuileUtilisateur(false);
   d = M.retirerTuile(d, 2, 2);
-  d = M.poserTuile(d, 'C2', 2, 2);
+  d = M.poserTuile(d, 'Q2', 2, 2);
   var apres = B.supprimerTuileUtilisateur(d, 'U1');
   assert.equal(apres.plateau.tuiles.length, 1);
-  assert.equal(M.tuileEn(apres, 2, 2).modeleId, 'C2');
+  assert.equal(M.tuileEn(apres, 2, 2).modeleId, 'Q2');
 });
 
 test('suppression par etat.appliquer : une seule entrée d’historique, annulable puis rétablissable', function () {
@@ -109,16 +109,31 @@ test('sans catalogue chargé, tout modèle est une tuile utilisateur (comporteme
   var sauve = PM.catalogue;
   try {
     PM.catalogue = undefined;
-    assert.equal(B.estTuileUtilisateur(C.nouveauDocument(), 'C1'), true);
+    assert.equal(B.estTuileUtilisateur(C.nouveauDocument(), 'Q1'), true);
   } finally { PM.catalogue = sauve; }
 });
 
 test('catalogue par grille : modelesParGrille prime sur modeles', function () {
   var sauve = PM.catalogue;
   try {
-    PM.catalogue = { modeles: sauve.modeles, modelesParGrille: { '4x4': [{ id: 'C1' }] } };
+    PM.catalogue = { modeles: sauve.modeles, modelesParGrille: { '4x4': [{ id: 'Q1' }] } };
     var d = C.nouveauDocument();
-    assert.equal(B.estTuileUtilisateur(d, 'C1'), false);
-    assert.equal(B.estTuileUtilisateur(d, 'C2'), true);
+    assert.equal(B.estTuileUtilisateur(d, 'Q1'), false);
+    assert.equal(B.estTuileUtilisateur(d, 'Q2'), true);
   } finally { PM.catalogue = sauve; }
+});
+
+test('ancien document (catalogue précédent, version 3.04) : ses tuiles livrées restent protégées, une copie reste supprimable', function () {
+  var d = M.nouveauDocument('4x4');
+  d.modeles = JSON.parse(JSON.stringify(C.precedent['4x4']));
+  ['C1', 'C5', 'B3', 'B5', 'K4'].forEach(function (id) { assert.equal(B.estTuileUtilisateur(d, id), false, id); });
+  assert.throws(function () { B.supprimerTuileUtilisateur(d, 'C3'); }, /catalogue/);
+  var copieC1 = JSON.parse(JSON.stringify(C.precedent['4x4'][0])); copieC1.id = 'modele-1';
+  assert.equal(B.estTuileUtilisateur(M.ajouterModele(d, copieC1), 'modele-1'), true);
+  var d5 = M.nouveauDocument('5x5');
+  d5.modeles = JSON.parse(JSON.stringify(C.precedent['5x5']));
+  ['C7', 'C8', 'B7m'].forEach(function (id) { assert.equal(B.estTuileUtilisateur(d5, id), false, id); });
+  // un id du catalogue précédent d'une autre grille n'est pas protégé : C1 dans un document 5×5 est une tuile utilisateur
+  var c1 = JSON.parse(JSON.stringify(C.precedent['4x4'][0])); c1.grille = undefined;
+  assert.equal(B.estTuileUtilisateur(M.ajouterModele(d5, c1), 'C1'), true);
 });

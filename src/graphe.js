@@ -561,8 +561,234 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     });
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Rythme, accès au centre, cases par moitié (docs/18, docs/44, docs/45) */
+  /* ------------------------------------------------------------------ */
+
+  /** Chaîne visée : plus longue suite de cases sans zone d'intérêt (docs/18 : « environ 3 cases entre deux zones d'intérêt »). */
+  var CHAINE_CIBLE = 3;
+
+  /**
+   * Réseaux de passages du plateau (même règle que relierPassages) : pour chaque réseau, les cases qu'il relie ; et ceux qui
+   * ÉCONOMISENT un pas (un passage sans case à ses deux bouts : raccord–raccord, raccord–pivot ou case–pivot ; un simple crochet
+   * raccord -> case vaut un chemin ordinaire). Repris de outils/planche-organique.js (docs/45).
+   * Renvoie { tailles: [nombre de cases, décroissant], apparitions: cases d'apparition rattachées, groupes: [Set], economes: [Set] }.
+   */
+  function reseauxPassages(doc) {
+    var parent = new Map();
+    function racine(x) {
+      if (!parent.has(x)) parent.set(x, x);
+      while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); }
+      return x;
+    }
+    function emp(t, c, p) { return 'R ' + t.col + ',' + t.lig + ',' + c + ',' + p; }
+    function enFace(t, c, p) { var d = G.coteVoisin(c), f = G.raccordEnFace(c, p); return emp({ col: t.col + d.dc, lig: t.lig + d.dl }, f.cote, f.pos); }
+    var plateau = (doc && doc.plateau) || {}, elems = [];
+    (Array.isArray(plateau.tuiles) ? plateau.tuiles : []).forEach(function (t) { if (!t) return; var e = M.tuileEnPlateau(doc, t); if (e) elems.push({ t: t, e: e }); });
+    var attaches = [], emplacements = [], types = new Map(), econ = [];
+    elems.forEach(function (x) { x.e.cases.forEach(function (c) { types.set(c.id, c.type); }); });
+    elems.forEach(function (x) {
+      (x.e.passages || []).forEach(function (p) {
+        function ref(e) {
+          if (e.pivot !== undefined) return { cle: 'P ' + e.pivot, pivot: true };
+          if (e.raccord) { var k = emp(x.t, e.raccord.cote, e.raccord.pos); emplacements.push({ k: k, t: x.t, c: e.raccord.cote, p: e.raccord.pos }); return { cle: k }; }
+          return { caseId: e['case'] };
+        }
+        var a = ref(p.a), b = ref(p.b);
+        if (a.cle && b.cle) { parent.set(racine(a.cle), racine(b.cle)); econ.push(a.cle); }
+        else if (a.cle) { attaches.push({ caseId: b.caseId, cle: a.cle }); if (a.pivot) econ.push(a.cle); }
+        else if (b.cle) { attaches.push({ caseId: a.caseId, cle: b.cle }); if (b.pivot) econ.push(b.cle); }
+      });
+    });
+    emplacements.forEach(function (s) { racine(s.k); });
+    emplacements.forEach(function (s) { var f = enFace(s.t, s.c, s.p); if (parent.has(f)) parent.set(racine(s.k), racine(f)); });
+    elems.forEach(function (x) { x.e.raccords.forEach(function (r) { var f = enFace(x.t, r.cote, r.pos); if (parent.has(f)) attaches.push({ caseId: r.caseId, cle: f }); }); });
+    var groupes = new Map(), econome = new Set(econ.map(racine));
+    attaches.forEach(function (a) { var r = racine(a.cle); if (!groupes.has(r)) groupes.set(r, new Set()); groupes.get(r).add(a.caseId); });
+    var apparitions = 0, economes = [];
+    groupes.forEach(function (s, r) {
+      s.forEach(function (id) { if (types.get(id) === 'apparition') apparitions++; });
+      if (econome.has(r)) economes.push(s);
+    });
+    return {
+      tailles: Array.from(groupes.values()).map(function (s) { return s.size; }).sort(function (a, b) { return b - a; }),
+      apparitions: apparitions, groupes: Array.from(groupes.values()), economes: economes
+    };
+  }
+
+  /** Tuile d'une case du graphe (« col,lig:id ») ; null pour une jonction. */
+  function tuileDuNoeud(id) { var m = /^(\d+),(\d+):/.exec(id); return m ? { col: +m[1], lig: +m[2] } : null; }
+
+  /**
+   * Cases reliées par un RACCOURCI : arête du graphe entre deux cases d'apparition de tuiles différentes (raccourci de coin et de
+   * bord, docs/20 D5). Le raccourci compte comme une zone d'intérêt pour le rythme (docs/18, réponse 3 sur la révision « centrales ouvertes »).
+   */
+  function casesRaccourci(g) {
+    var res = new Set();
+    g.cases.forEach(function (c, id) {
+      if (c.type !== 'apparition') return;
+      var t = tuileDuNoeud(id);
+      g.voisins.get(id).forEach(function (w) {
+        var cw = g.cases.get(w), tw = tuileDuNoeud(w);
+        if (cw && cw.type === 'apparition' && tw && (tw.col !== t.col || tw.lig !== t.lig)) { res.add(id); res.add(w); }
+      });
+    });
+    return res;
+  }
+
+  /**
+   * Rythme du plateau (docs/18 ; mesure STRICTE de docs/44, raccourci compté comme zone d'intérêt, docs/18 réponse 3).
+   * Zones d'intérêt : les villes, les cases d'un réseau de passages qui relie au moins 2 cases ET économise un pas (reseauxPassages),
+   * et les cases reliées par un raccourci (casesRaccourci).
+   *  - distMax : plus grande distance d'une case sans zone à la zone la plus proche ;
+   *  - chaine : plus court chemin entre deux zones A et B qui ne passe par aucune autre zone et qu'aucun autre itinéraire ne
+   *    raccourcit ; sa longueur est le nombre de cases sans zone traversées ; chaineMax = la plus longue du plateau (cible CHAINE_CIBLE).
+   * options : { large: true } tout réseau de passages de 2 cases ou plus (ancienne mesure, information) ;
+   *           { sansRaccourci: true } le raccourci ne compte pas (mesure stricte de docs/45, pour comparaison) ;
+   *           { reseaux } résultat de reseauxPassages déjà calculé.
+   * Renvoie { zones, distMax, repartition, injoignables, chaineMax, chaine: [ids], casesPassage: [ids], casesRaccourci: [ids], plusLoin: [ids] }.
+   */
+  function rythme(doc, g, options) {
+    options = options || {};
+    var zones = new Set(g.villes), rs = options.reseaux || reseauxPassages(doc), raccourcis = options.sansRaccourci ? new Set() : casesRaccourci(g);
+    var passages = new Set();
+    (options.large ? rs.groupes : rs.economes).forEach(function (grp) {
+      if (grp.size >= 2) grp.forEach(function (id) { if (g.voisins.has(id)) { zones.add(id); passages.add(id); } });
+    });
+    raccourcis.forEach(function (id) { zones.add(id); });
+    var d = new Map(), file = [];
+    zones.forEach(function (z) { d.set(z, 0); file.push(z); });
+    for (var q = 0; q < file.length; q++) {
+      var x = file[q];
+      if (q >= zones.size && g.villes.has(x)) continue;
+      g.voisins.get(x).forEach(function (y) { if (!d.has(y)) { d.set(y, d.get(x) + 1); file.push(y); } });
+    }
+    var repartition = {}, distMax = 0, injoignables = 0;
+    g.noeuds.forEach(function (id) {
+      if (zones.has(id)) return;
+      if (!d.has(id)) { injoignables++; return; }
+      var v = d.get(id);
+      repartition[v] = (repartition[v] || 0) + 1;
+      distMax = Math.max(distMax, v);
+    });
+    var chaine = { longueur: 0, chemin: [] };
+    zones.forEach(function (s) {
+      var dr = new Map([[s, 0]]), pere = new Map(), f = [s];
+      for (var k = 0; k < f.length; k++) {
+        var y = f[k];
+        if (y !== s && zones.has(y)) continue;
+        g.voisins.get(y).forEach(function (w) { if (!dr.has(w)) { dr.set(w, dr.get(y) + 1); pere.set(w, y); f.push(w); } });
+      }
+      var dg = distances(g, s);
+      zones.forEach(function (t) {
+        if (t === s || !dr.has(t) || dg.get(t) !== dr.get(t)) return;
+        var n = dr.get(t) - 1;
+        if (n > chaine.longueur) {
+          var chemin = [t];
+          while (chemin[0] !== s) chemin.unshift(pere.get(chemin[0]));
+          chaine = { longueur: n, chemin: chemin };
+        }
+      });
+    });
+    return {
+      zones: zones.size, distMax: distMax, repartition: repartition, injoignables: injoignables,
+      chaineMax: chaine.longueur, chaine: chaine.chemin,
+      casesPassage: Array.from(passages), casesRaccourci: Array.from(raccourcis),
+      plusLoin: g.noeuds.filter(function (id) { return !zones.has(id) && d.get(id) === distMax; })
+    };
+  }
+
+  /**
+   * Zone d'un nœud pour l'équilibre des accès et les cases par moitié (docs/45) : 'vert', 'rouge' ou 'milieu'.
+   *  - case d'une tuile : camp de sa cellule ; rangée neutre du 5×5 = 'milieu' ;
+   *  - jonction (i, j) : 4×4 j = 1 vert, j = 2 milieu, j = 3 rouge ; 5×5 j = 1 vert, j = 2 et 3 milieu (elles bordent la rangée
+   *    neutre), j = 4 rouge.
+   */
+  function zoneDuNoeud(id, F) {
+    var N = F.GRILLE.lignes, demi = Math.floor(N / 2);
+    var m = /^J(\d+),(\d+)$/.exec(id);
+    if (m) { var j = +m[2]; return j < demi ? 'vert' : (j > N - demi ? 'rouge' : 'milieu'); }
+    var t = tuileDuNoeud(id);
+    return (t && F.campCellule(t.col, t.lig)) || 'milieu';
+  }
+
+  /** Flot maximal (sommets de capacité 1, sources illimitées) des `sources` vers l'ensemble `cible`, dans les nœuds `dans` ∪ cible. */
+  function flotVersEnsemble(g, sources, dans, cible) {
+    var ids = g.noeuds.filter(function (id) { return dans(id) || cible(id); }), index = new Map();
+    ids.forEach(function (id, n) { index.set(id, n); });
+    var N = ids.length, S = 2 * N, T = 2 * N + 1, tete = new Array(2 * N + 2).fill(-1), suiv = [], vers = [], cap = [];
+    function aj(a, b, c) { vers.push(b); cap.push(c); suiv.push(tete[a]); tete[a] = vers.length - 1; vers.push(a); cap.push(0); suiv.push(tete[b]); tete[b] = vers.length - 1; }
+    var INF = 1e6, src = new Set(sources);
+    ids.forEach(function (id, n) {
+      aj(2 * n, 2 * n + 1, src.has(id) ? INF : 1);
+      if (cible(id)) { aj(2 * n + 1, T, 1); return; } // une entrée du milieu compte une fois ; on ne la traverse pas
+      g.voisins.get(id).forEach(function (w) { if (index.has(w)) aj(2 * n + 1, 2 * index.get(w), 1); });
+    });
+    sources.forEach(function (s) { if (index.has(s)) aj(S, 2 * index.get(s), INF); });
+    var flot = 0;
+    for (;;) {
+      var pere = new Array(2 * N + 2).fill(-1), vu = new Array(2 * N + 2).fill(false), file = [S];
+      vu[S] = true;
+      for (var q = 0; q < file.length && !vu[T]; q++) {
+        for (var e = tete[file[q]]; e !== -1; e = suiv[e]) if (cap[e] > 0 && !vu[vers[e]]) { vu[vers[e]] = true; pere[vers[e]] = e; file.push(vers[e]); }
+      }
+      if (!vu[T]) break;
+      for (var v = T; v !== S; v = vers[pere[v] ^ 1]) { cap[pere[v]]--; cap[pere[v] ^ 1]++; }
+      flot++;
+    }
+    return flot;
+  }
+
+  /**
+   * Équilibre des accès au centre entre les deux camps (définition de docs/45).
+   *  - Milieu : 4×4 la rangée de jonctions j = 2 ; 5×5 la rangée neutre et les jonctions j = 2 et 3 (zoneDuNoeud).
+   *  - Portes d'un camp : arêtes du graphe entre un nœud du camp et un nœud du milieu (port, raccord ou réseau de passages).
+   *  - ecart = portes vertes − portes rouges (0 = équilibre) ; contacts : arêtes directes vert–rouge (servent les deux camps).
+   *  - chemins (sauf options.sansFlot) : nombre maximal de chemins sans case commune des apparitions du camp vers le milieu, dans
+   *    le camp (villes traversables) ; ecartChemins = vert − rouge.
+   * Renvoie { portes: {vert, rouge}, ecart, contacts, chemins?: {vert, rouge}, ecartChemins? }.
+   */
+  function accesCentre(doc, g, options) {
+    var F = M.formatDuDocument(doc), z = new Map();
+    g.noeuds.forEach(function (id) { z.set(id, zoneDuNoeud(id, F)); });
+    var portes = { vert: 0, rouge: 0 }, contacts = 0;
+    g.noeuds.forEach(function (a) {
+      g.voisins.get(a).forEach(function (b) {
+        if (a >= b) return;
+        var za = z.get(a), zb = z.get(b);
+        if (za === zb) return;
+        if (za === 'milieu' || zb === 'milieu') portes[za === 'milieu' ? zb : za]++;
+        else contacts++;
+      });
+    });
+    var res = { portes: portes, ecart: portes.vert - portes.rouge, contacts: contacts };
+    if (options && options.sansFlot) return res;
+    var milieu = function (id) { return z.get(id) === 'milieu'; };
+    res.chemins = {
+      vert: flotVersEnsemble(g, g.apparitions[1] || [], function (id) { return z.get(id) === 'vert'; }, milieu),
+      rouge: flotVersEnsemble(g, g.apparitions[2] || [], function (id) { return z.get(id) === 'rouge'; }, milieu)
+    };
+    res.ecartChemins = res.chemins.vert - res.chemins.rouge;
+    return res;
+  }
+
+  /**
+   * Cases par moitié (docs/18, réponse 2 sur la révision « centrales ouvertes ») : cases des tuiles par camp de leur cellule
+   * (rangée neutre du 5×5 à part) et jonctions-cases (jonctions sans ville) par zone (zoneDuNoeud).
+   * Renvoie { tuiles: {vert, rouge, neutre}, jonctions: {vert, rouge, milieu}, vert, rouge, ecart } avec vert / rouge = cases de la
+   * moitié (tuiles + jonctions-cases) et ecart = vert − rouge (0 = autant de cases de part et d'autre).
+   */
+  function casesParMoitie(doc, g) {
+    var F = M.formatDuDocument(doc), tuiles = { vert: 0, rouge: 0, neutre: 0 }, jonctions = { vert: 0, rouge: 0, milieu: 0 };
+    g.cases.forEach(function (c, id) { var t = tuileDuNoeud(id), camp = t && F.campCellule(t.col, t.lig); tuiles[camp || 'neutre']++; });
+    g.jonctions.forEach(function (jn) { if (jn.type !== 'ville') jonctions[zoneDuNoeud(jn.id, F)]++; });
+    var vert = tuiles.vert + jonctions.vert, rouge = tuiles.rouge + jonctions.rouge;
+    return { tuiles: tuiles, jonctions: jonctions, vert: vert, rouge: rouge, ecart: vert - rouge };
+  }
+
   PM.graphe = {
     NB_VILLES: NB_VILLES,
+    CHAINE_CIBLE: CHAINE_CIBLE,
     PORTS_VILLE_MIN: PORTS_VILLE_MIN,
     PORTS_JONCTION_MIN: PORTS_JONCTION_MIN,
     REPARTITION_VILLES_5X5: REPARTITION_VILLES_5X5,
@@ -582,7 +808,13 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     equilibre: equilibre,
     goulets: goulets,
     profil: profil,
-    flancs: flancs
+    flancs: flancs,
+    reseauxPassages: reseauxPassages,
+    casesRaccourci: casesRaccourci,
+    rythme: rythme,
+    zoneDuNoeud: zoneDuNoeud,
+    accesCentre: accesCentre,
+    casesParMoitie: casesParMoitie
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = PM.graphe;
