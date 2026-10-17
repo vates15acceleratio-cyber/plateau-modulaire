@@ -87,3 +87,9 @@ Après les avis `28-avis-design-5x5.md` (design de jeu) et `29-avis-geometrie-5x
 - **Portée** : redessiner les centrales (et les bords si utile) des **deux** catalogues, **4×4 et 5×5**.
 - **Virage en T** (image de 4 tuiles fournie par l'utilisateur) : le passage bleu part d'une case, traverse la limite de tuile par un raccord, se **ramifie en T sans case** et mène à deux autres cases, dont une sur la tuile voisine. Les chemins verts relient des cases placées librement ; les tuiles s'assemblent par les raccords des côtés.
 - **Coût d'un passage (confirmé par l'utilisateur)** : comme pour la courbe à 90°, aller d'une case à l'autre en empruntant un passage (même long, même ramifié en T) **compte pour une seule action de déplacement** : on arrive directement sur la case au bout du chemin, **sans case intermédiaire**. Les cases reliées par un réseau de passages sont donc **voisines (1 pas)**. Les raccords restent aux **positions standard** des côtés (lecture de l'orchestrateur, nécessaire à l'assemblage).
+- **Réponses de l'utilisateur aux avis `38` et `39`** (2026-10-17) :
+  - **Apparence** : un passage s'imprime **en vert, comme un chemin**, simplement en courbe (on le reconnaît à l'absence de case) ; pas de rendu distinct.
+  - **Pas de passage vers un coin** (jonction) : les passages relient des cases et des côtés seulement.
+  - **Bords et coins** : **un passage au plus** par bord ou coin, jamais depuis la case d'apparition.
+  - **Pas de paires miroir** : les tuiles doivent fonctionner dans les deux sens par rotation (moins de cartons) ; la paire B7 / B7m du 5×5 est à revoir dans la refonte.
+  - Arbitrage de l'orchestrateur sur le reste : modèle et graphe selon `39` (pivots, passages, clique à 1 pas, aucun croisement) ; principes et familles de tuiles selon `38` ; les nouveaux catalogues sont **montrés à l'utilisateur en images avant les mesures**.
