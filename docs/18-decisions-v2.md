@@ -93,3 +93,9 @@ Après les avis `28-avis-design-5x5.md` (design de jeu) et `29-avis-geometrie-5x
   - **Bords et coins** : **un passage au plus** par bord ou coin, jamais depuis la case d'apparition.
   - **Pas de paires miroir** : les tuiles doivent fonctionner dans les deux sens par rotation (moins de cartons) ; la paire B7 / B7m du 5×5 est à revoir dans la refonte.
   - Arbitrage de l'orchestrateur sur le reste : modèle et graphe selon `39` (pivots, passages, clique à 1 pas, aucun croisement) ; principes et familles de tuiles selon `38` ; les nouveaux catalogues sont **montrés à l'utilisateur en images avant les mesures**.
+
+## Réponses de l'utilisateur sur les catalogues organiques (2026-10-17, images du `42`)
+- **Pas de passage traversant** d'un côté au côté opposé, ni droit ni courbe : O4, O5 (4×4) et P4 (5×5) sortent.
+- **4×4 : un seul passage par centrale** : O2 et O3 sortent.
+- **Apparition reliée au passage d'une centrale voisine** (rencontre entre tuiles au niveau du plateau) : **acceptable**.
+- **Rythme plutôt que densité** (à la place du choix 75–77 / 78–80 en 5×5) : « éviter les longues chaînes de cases » ; sur les exemples, il y a parfois 6 cases d'affilée sans ville ni raccourci, soit autant de tours sans action. **Rester sur un déplacement sain d'environ 3 cases entre deux zones d'intérêt** (ville, passage) ; **la rapidité est plus intéressante** que la densité. Conséquence : moins de cases par tuile si nécessaire, et une mesure « plus longue chaîne de cases sans zone d'intérêt » à ajouter.
