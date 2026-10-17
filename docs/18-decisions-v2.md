@@ -119,3 +119,9 @@ Après les avis `28-avis-design-5x5.md` (design de jeu) et `29-avis-geometrie-5x
 ## Réponses de l'utilisateur après le branchement (2026-10-18, `46`)
 - **Jeu imprimé : imprimer davantage.** Les poses restent illimitées au générateur ; on augmente les exemplaires à imprimer pour que la plupart des plateaux générés se montent avec la boîte (cible de l'orchestrateur : au moins 90 % des plateaux générés, mesurés sur 200 par format).
 - **Anciens documents : proposer le nouveau catalogue** à l'ouverture (comme pour le passage v1 → v2) ; le document reste inchangé si l'utilisateur refuse.
+
+## Réponses de l'utilisateur aux mesures définitives des catalogues organiques (2026-10-18, `48`)
+1. **Seuil d'alerte S par format** : 4×4 inchangé (alerte S ≥ 5, information S = 4) ; **5×5 : alerte S ≥ 7, information S = 5 ou 6** (revirement assumé sur la constante commune du `36`) ; le générateur continue de rejeter S ≥ 5 dans les deux formats.
+2. **Goulets 5×5** : le générateur **préfère** les plateaux sans point d'articulation (préférence, pas rejet ; objectif ≈ 0 %).
+3. **4×4 : « jonctions variées » par défaut** (12 placements de villes au lieu de 3).
+4. **Rythme et accès au centre : information seulement**, jamais d'alerte ; texte « bien au-dessus de la cible » si chaîne ≥ 7 ou distMax ≥ 6.
