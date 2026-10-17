@@ -1,0 +1,136 @@
+{
+ "4x4 maison oriente": {
+  "plateaux": 200,
+  "chaineMoyenne": 3.08,
+  "chainePire": 4,
+  "repartitionChaine": {
+   "2": 16,
+   "3": 152,
+   "4": 32
+  },
+  "distMaxMoyenne": 2.6,
+  "distMaxPire": 4,
+  "repartitionDistMax": {
+   "2": 96,
+   "3": 89,
+   "4": 15
+  },
+  "partChaine3": "84 %",
+  "casesMoyenne": 56.32,
+  "ecartVillesMin": 4,
+  "tiragesRejetes": 0
+ },
+ "4x4 maison hasard": {
+  "plateaux": 200,
+  "chaineMoyenne": 4.75,
+  "chainePire": 7,
+  "repartitionChaine": {
+   "3": 29,
+   "4": 61,
+   "5": 58,
+   "6": 35,
+   "7": 17
+  },
+  "distMaxMoyenne": 2.81,
+  "distMaxPire": 5,
+  "repartitionDistMax": {
+   "2": 66,
+   "3": 110,
+   "4": 21,
+   "5": 3
+  },
+  "partChaine3": "14 %",
+  "casesMoyenne": 56.43,
+  "ecartVillesMin": 4,
+  "tiragesRejetes": 6
+ },
+ "4x4 actuel (générateur)": {
+  "plateaux": 200,
+  "chaineMoyenne": 6.36,
+  "chainePire": 8,
+  "repartitionChaine": {
+   "5": 27,
+   "6": 82,
+   "7": 84,
+   "8": 7
+  },
+  "distMaxMoyenne": 4,
+  "distMaxPire": 4,
+  "repartitionDistMax": {
+   "4": 200
+  },
+  "partChaine3": "0 %",
+  "casesMoyenne": 63.12,
+  "ecartVillesMin": 4
+ },
+ "5x5 maison oriente": {
+  "plateaux": 200,
+  "chaineMoyenne": 3.31,
+  "chainePire": 5,
+  "repartitionChaine": {
+   "2": 10,
+   "3": 133,
+   "4": 43,
+   "5": 14
+  },
+  "distMaxMoyenne": 3.19,
+  "distMaxPire": 5,
+  "repartitionDistMax": {
+   "2": 10,
+   "3": 145,
+   "4": 43,
+   "5": 2
+  },
+  "partChaine3": "72 %",
+  "casesMoyenne": 81.07,
+  "ecartVillesMin": 4,
+  "tiragesRejetes": 2675
+ },
+ "5x5 maison hasard": {
+  "plateaux": 200,
+  "chaineMoyenne": 4.96,
+  "chainePire": 9,
+  "repartitionChaine": {
+   "2": 1,
+   "3": 22,
+   "4": 64,
+   "5": 50,
+   "6": 36,
+   "7": 18,
+   "8": 6,
+   "9": 3
+  },
+  "distMaxMoyenne": 3.55,
+  "distMaxPire": 5,
+  "repartitionDistMax": {
+   "2": 2,
+   "3": 94,
+   "4": 97,
+   "5": 7
+  },
+  "partChaine3": "12 %",
+  "casesMoyenne": 81.07,
+  "ecartVillesMin": 4,
+  "tiragesRejetes": 1108
+ },
+ "5x5 actuel (générateur)": {
+  "plateaux": 200,
+  "chaineMoyenne": 7.87,
+  "chainePire": 9,
+  "repartitionChaine": {
+   "6": 4,
+   "7": 66,
+   "8": 83,
+   "9": 47
+  },
+  "distMaxMoyenne": 5.35,
+  "distMaxPire": 6,
+  "repartitionDistMax": {
+   "5": 131,
+   "6": 69
+  },
+  "partChaine3": "0 %",
+  "casesMoyenne": 77.61,
+  "ecartVillesMin": 4
+ }
+}

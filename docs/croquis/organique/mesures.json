@@ -1,0 +1,1647 @@
+{
+ "modeles": {
+  "4x4": [
+   {
+    "id": "O9",
+    "nom": "Virage et pont",
+    "gabarit": "centrale",
+    "famille": "virage + pont (allégée)",
+    "repere": "",
+    "cases": 3,
+    "ports": 2,
+    "coins": [
+     "NO",
+     "SE"
+    ],
+    "passages": 1,
+    "pivots": 0,
+    "exemplaires": 2,
+    "blocages": [],
+    "alertes": []
+   },
+   {
+    "id": "O10",
+    "nom": "Équerre à virage",
+    "gabarit": "centrale",
+    "famille": "virage + équerre libre (allégée)",
+    "repere": "",
+    "cases": 3,
+    "ports": 2,
+    "coins": [
+     "NE",
+     "SE"
+    ],
+    "passages": 1,
+    "pivots": 0,
+    "exemplaires": 1,
+    "blocages": [],
+    "alertes": []
+   },
+   {
+    "id": "O6",
+    "nom": "Demi-tour",
+    "gabarit": "centrale",
+    "famille": "demi-tour + deux fourches",
+    "repere": "",
+    "cases": 6,
+    "ports": 4,
+    "coins": [
+     "NO",
+     "NE",
+     "SE",
+     "SO"
+    ],
+    "passages": 1,
+    "pivots": 0,
+    "exemplaires": 1,
+    "blocages": [],
+    "alertes": []
+   },
+   {
+    "id": "O11",
+    "nom": "Virage et deux ponts",
+    "gabarit": "centrale",
+    "famille": "virage + deux ponts",
+    "repere": "",
+    "cases": 5,
+    "ports": 3,
+    "coins": [
+     "NO",
+     "NE",
+     "SE"
+    ],
+    "passages": 1,
+    "pivots": 0,
+    "exemplaires": 2,
+    "blocages": [],
+    "alertes": []
+   },
+   {
+    "id": "O2",
+    "nom": "Double virage (écarté)",
+    "gabarit": "centrale",
+    "famille": "double virage, pour comparaison",
+    "repere": "écarté : 2 passages",
+    "cases": 4,
+    "ports": 2,
+    "coins": [
+     "NO",
+     "SE"
+    ],
+    "passages": 2,
+    "pivots": 0,
+    "exemplaires": 0,
+    "blocages": [],
+    "alertes": []
+   },
+   {
+    "id": "O7",
+    "nom": "Boucle",
+    "gabarit": "centrale",
+    "famille": "boucle + virage",
+    "repere": "",
+    "cases": 4,
+    "ports": 2,
+    "coins": [
+     "NE",
+     "SO"
+    ],
+    "passages": 1,
+    "pivots": 0,
+    "exemplaires": 1,
+    "blocages": [],
+    "alertes": []
+   },
+   {
+    "id": "B1",
+    "nom": "Bord en V",
+    "gabarit": "bord",
+    "famille": "bord en V (actuel)",
+    "repere": "",
+    "cases": 3,
+    "ports": 2,
+    "coins": [
+     "SE",
+     "SO"
+    ],
+    "passages": 0,
+    "pivots": 0,
+    "exemplaires": 8,
+    "blocages": [],
+    "alertes": []
+   },
+   {
+    "id": "B8",
+    "nom": "Bord à virage",
+    "gabarit": "bord",
+    "famille": "bord à virage",
+    "repere": "",
+    "cases": 4,
+    "ports": 2,
+    "coins": [
+     "SE",
+     "SO"
+    ],
+    "passages": 1,
+    "pivots": 0,
+    "exemplaires": 1,
+    "blocages": [],
+    "alertes": []
+   },
+   {
+    "id": "K2",
+    "nom": "Coin à relais",
+    "gabarit": "coin",
+    "famille": "coin à relais (actuel)",
+    "repere": "",
+    "cases": 3,
+    "ports": 1,
+    "coins": [
+     "SE"
+    ],
+    "passages": 0,
+    "pivots": 0,
+    "exemplaires": 4,
+    "blocages": [],
+    "alertes": []
+   },
+   {
+    "id": "K4",
+    "nom": "Coin en losange",
+    "gabarit": "coin",
+    "famille": "coin en losange (actuel)",
+    "repere": "",
+    "cases": 4,
+    "ports": 1,
+    "coins": [
+     "SE"
+    ],
+    "passages": 0,
+    "pivots": 0,
+    "exemplaires": 1,
+    "blocages": [],
+    "alertes": []
+   }
+  ],
+  "5x5": [
+   {
+    "id": "P1",
+    "nom": "Virage double",
+    "gabarit": "centrale",
+    "famille": "virage + pont",
+    "repere": "",
+    "cases": 3,
+    "ports": 2,
+    "coins": [
+     "NO",
+     "SE"
+    ],
+    "passages": 1,
+    "pivots": 0,
+    "exemplaires": 3,
+    "blocages": [],
+    "alertes": []
+   },
+   {
+    "id": "P2",
+    "nom": "Équerre à virage",
+    "gabarit": "centrale",
+    "famille": "équerre libre + virage",
+    "repere": "",
+    "cases": 3,
+    "ports": 2,
+    "coins": [
+     "NE",
+     "SE"
+    ],
+    "passages": 1,
+    "pivots": 0,
+    "exemplaires": 3,
+    "blocages": [],
+    "alertes": []
+   },
+   {
+    "id": "P3",
+    "nom": "T sans case",
+    "gabarit": "centrale",
+    "famille": "T sans case + fourche",
+    "repere": "T",
+    "cases": 3,
+    "ports": 2,
+    "coins": [
+     "SE",
+     "SO"
+    ],
+    "passages": 3,
+    "pivots": 1,
+    "exemplaires": 2,
+    "blocages": [],
+    "alertes": []
+   },
+   {
+    "id": "P5",
+    "nom": "Double virage",
+    "gabarit": "centrale",
+    "famille": "virage double + couloir",
+    "repere": "2 passages",
+    "cases": 3,
+    "ports": 2,
+    "coins": [
+     "NO",
+     "SE"
+    ],
+    "passages": 2,
+    "pivots": 0,
+    "exemplaires": 1,
+    "blocages": [],
+    "alertes": []
+   },
+   {
+    "id": "P6",
+    "nom": "Boucle",
+    "gabarit": "centrale",
+    "famille": "boucle + virage",
+    "repere": "",
+    "cases": 4,
+    "ports": 2,
+    "coins": [
+     "NE",
+     "SO"
+    ],
+    "passages": 1,
+    "pivots": 0,
+    "exemplaires": 2,
+    "blocages": [],
+    "alertes": []
+   },
+   {
+    "id": "P0",
+    "nom": "T pur (mur)",
+    "gabarit": "centrale",
+    "famille": "T pur (sans case)",
+    "repere": "hors règles : mur",
+    "cases": 0,
+    "ports": 0,
+    "coins": [],
+    "passages": 3,
+    "pivots": 1,
+    "exemplaires": 0,
+    "blocages": [],
+    "alertes": []
+   },
+   {
+    "id": "B1",
+    "nom": "Bord en V",
+    "gabarit": "bord",
+    "famille": "bord en V (actuel)",
+    "repere": "",
+    "cases": 3,
+    "ports": 2,
+    "coins": [
+     "SE",
+     "SO"
+    ],
+    "passages": 0,
+    "pivots": 0,
+    "exemplaires": 6,
+    "blocages": [],
+    "alertes": []
+   },
+   {
+    "id": "B7",
+    "nom": "Bord simple",
+    "gabarit": "bord",
+    "famille": "bord simple, sans miroir",
+    "repere": "",
+    "cases": 2,
+    "ports": 1,
+    "coins": [
+     "SE"
+    ],
+    "passages": 0,
+    "pivots": 0,
+    "exemplaires": 6,
+    "blocages": [],
+    "alertes": []
+   },
+   {
+    "id": "B9",
+    "nom": "Bord à virage",
+    "gabarit": "bord",
+    "famille": "bord à virage",
+    "repere": "",
+    "cases": 3,
+    "ports": 1,
+    "coins": [
+     "SO"
+    ],
+    "passages": 1,
+    "pivots": 0,
+    "exemplaires": 2,
+    "blocages": [],
+    "alertes": []
+   },
+   {
+    "id": "K2",
+    "nom": "Coin à relais",
+    "gabarit": "coin",
+    "famille": "coin à relais (actuel)",
+    "repere": "",
+    "cases": 3,
+    "ports": 1,
+    "coins": [
+     "SE"
+    ],
+    "passages": 0,
+    "pivots": 0,
+    "exemplaires": 5,
+    "blocages": [],
+    "alertes": []
+   }
+  ]
+ },
+ "plateaux": {
+  "4x4-A": {
+   "tuiles": {
+    "K2": 3,
+    "K4": 1,
+    "B1": 7,
+    "B8": 1,
+    "O9": 2,
+    "O11": 1,
+    "O6": 1
+   },
+   "cases": 57,
+   "casesTuiles": 55,
+   "jonctionsCases": 2,
+   "ports": {
+    "1,1": 3,
+    "2,1": 3,
+    "3,1": 4,
+    "1,2": 4,
+    "2,2": 3,
+    "3,2": 3,
+    "1,3": 3,
+    "2,3": 4,
+    "3,3": 4
+   },
+   "portsMin": 3,
+   "portsTotal": 31,
+   "villes": [
+    "(1,1)",
+    "(3,1)",
+    "(1,2)",
+    "(2,2)",
+    "(3,2)",
+    "(1,3)",
+    "(3,3)"
+   ],
+   "villesPorts": [
+    3,
+    4,
+    4,
+    3,
+    3,
+    3,
+    4
+   ],
+   "ecartMinVilles": 4,
+   "villesProches": 0,
+   "S": 1,
+   "ecartMax7": 1,
+   "partage": {
+    "1": 3,
+    "2": 2,
+    "egalite": 2
+   },
+   "tempo": {
+    "1": {
+     "3": 7,
+     "4": 7,
+     "5": 7
+    },
+    "2": {
+     "3": 6,
+     "4": 7,
+     "5": 7
+    }
+   },
+   "premiereVille": {
+    "1": 2,
+    "2": 2,
+    "ecart": 0
+   },
+   "D": {
+    "1": [
+     2,
+     2,
+     2,
+     2,
+     3,
+     3,
+     3
+    ],
+    "2": [
+     2,
+     2,
+     2,
+     2,
+     3,
+     3,
+     4
+    ]
+   },
+   "blocages": [],
+   "alertes": [],
+   "connexe": true,
+   "raccordsMorts": 0,
+   "erreursPlateau": [],
+   "reseauxPassages": [
+    2,
+    2,
+    2,
+    2,
+    2
+   ],
+   "apparitionsDansReseaux": 6,
+   "contactVertRouge": 1,
+   "rythme": {
+    "zones": 17,
+    "distMax": 2,
+    "repartition": {
+     "1": 36,
+     "2": 11
+    },
+    "injoignables": 0,
+    "chaineMax": 2,
+    "chaine": [
+     "J3,1",
+     "2,0:c1",
+     "2,0:a",
+     "2,0:r"
+    ],
+    "casesPassage": [
+     "2,0:r",
+     "2,1:r",
+     "2,2:r",
+     "3,2:a",
+     "1,0:a",
+     "0,1:a",
+     "3,1:a",
+     "2,2:e",
+     "0,2:a",
+     "1,3:a"
+    ],
+    "plusLoin": [
+     "0,0:r",
+     "3,0:s1",
+     "3,0:s2",
+     "0,3:r",
+     "3,3:r",
+     "2,3:c1",
+     "1,1:c1",
+     "1,2:n",
+     "1,2:c3",
+     "J2,1",
+     "J2,3"
+    ]
+   },
+   "sMedianPlacements": 2,
+   "placementsAdmissibles": 36,
+   "document": {
+    "tuiles": [
+     {
+      "modeleId": "K2",
+      "col": 0,
+      "lig": 0,
+      "rot": 0
+     },
+     {
+      "modeleId": "K4",
+      "col": 3,
+      "lig": 0,
+      "rot": 1
+     },
+     {
+      "modeleId": "K2",
+      "col": 0,
+      "lig": 3,
+      "rot": 3
+     },
+     {
+      "modeleId": "K2",
+      "col": 3,
+      "lig": 3,
+      "rot": 2
+     },
+     {
+      "modeleId": "B1",
+      "col": 1,
+      "lig": 0,
+      "rot": 0
+     },
+     {
+      "modeleId": "B8",
+      "col": 2,
+      "lig": 0,
+      "rot": 0
+     },
+     {
+      "modeleId": "B1",
+      "col": 0,
+      "lig": 1,
+      "rot": 3
+     },
+     {
+      "modeleId": "B1",
+      "col": 3,
+      "lig": 1,
+      "rot": 1
+     },
+     {
+      "modeleId": "B1",
+      "col": 0,
+      "lig": 2,
+      "rot": 3
+     },
+     {
+      "modeleId": "B1",
+      "col": 3,
+      "lig": 2,
+      "rot": 1
+     },
+     {
+      "modeleId": "B1",
+      "col": 1,
+      "lig": 3,
+      "rot": 2
+     },
+     {
+      "modeleId": "B1",
+      "col": 2,
+      "lig": 3,
+      "rot": 2
+     },
+     {
+      "modeleId": "O9",
+      "col": 1,
+      "lig": 1,
+      "rot": 1
+     },
+     {
+      "modeleId": "O9",
+      "col": 2,
+      "lig": 1,
+      "rot": 3
+     },
+     {
+      "modeleId": "O11",
+      "col": 1,
+      "lig": 2,
+      "rot": 0
+     },
+     {
+      "modeleId": "O6",
+      "col": 2,
+      "lig": 2,
+      "rot": 3
+     }
+    ],
+    "jetons": [
+     {
+      "i": 1,
+      "j": 1,
+      "type": "capture"
+     },
+     {
+      "i": 3,
+      "j": 1,
+      "type": "capture"
+     },
+     {
+      "i": 1,
+      "j": 2,
+      "type": "capture"
+     },
+     {
+      "i": 2,
+      "j": 2,
+      "type": "capture"
+     },
+     {
+      "i": 3,
+      "j": 2,
+      "type": "capture"
+     },
+     {
+      "i": 1,
+      "j": 3,
+      "type": "capture"
+     },
+     {
+      "i": 3,
+      "j": 3,
+      "type": "capture"
+     }
+    ]
+   }
+  },
+  "4x4-B": {
+   "tuiles": {
+    "K4": 1,
+    "K2": 3,
+    "B1": 7,
+    "B8": 1,
+    "O9": 1,
+    "O10": 1,
+    "O6": 1,
+    "O7": 1
+   },
+   "cases": 56,
+   "casesTuiles": 54,
+   "jonctionsCases": 2,
+   "ports": {
+    "1,1": 4,
+    "2,1": 3,
+    "3,1": 3,
+    "1,2": 3,
+    "2,2": 3,
+    "3,2": 3,
+    "1,3": 4,
+    "2,3": 4,
+    "3,3": 3
+   },
+   "portsMin": 3,
+   "portsTotal": 30,
+   "villes": [
+    "(1,1)",
+    "(2,1)",
+    "(3,1)",
+    "(3,2)",
+    "(1,3)",
+    "(2,3)",
+    "(3,3)"
+   ],
+   "villesPorts": [
+    4,
+    3,
+    3,
+    3,
+    4,
+    4,
+    3
+   ],
+   "ecartMinVilles": 4,
+   "villesProches": 0,
+   "S": 0,
+   "ecartMax7": 0,
+   "partage": {
+    "1": 3,
+    "2": 3,
+    "egalite": 1
+   },
+   "tempo": {
+    "1": {
+     "3": 6,
+     "4": 7,
+     "5": 7
+    },
+    "2": {
+     "3": 6,
+     "4": 7,
+     "5": 7
+    }
+   },
+   "premiereVille": {
+    "1": 2,
+    "2": 2,
+    "ecart": 0
+   },
+   "D": {
+    "1": [
+     2,
+     2,
+     2,
+     2,
+     3,
+     3,
+     4
+    ],
+    "2": [
+     2,
+     2,
+     2,
+     2,
+     3,
+     3,
+     4
+    ]
+   },
+   "blocages": [],
+   "alertes": [],
+   "connexe": true,
+   "raccordsMorts": 0,
+   "erreursPlateau": [],
+   "reseauxPassages": [
+    2,
+    2,
+    2,
+    2
+   ],
+   "apparitionsDansReseaux": 4,
+   "contactVertRouge": 1,
+   "rythme": {
+    "zones": 15,
+    "distMax": 2,
+    "repartition": {
+     "1": 38,
+     "2": 10
+    },
+    "injoignables": 0,
+    "chaineMax": 3,
+    "chaine": [
+     "J3,2",
+     "2,2:c2",
+     "2,2:a",
+     "2,2:c4",
+     "J2,3"
+    ],
+    "casesPassage": [
+     "2,0:r",
+     "3,1:a",
+     "1,2:r",
+     "0,2:a",
+     "2,2:b",
+     "2,3:a",
+     "1,0:a",
+     "2,1:r"
+    ],
+    "plusLoin": [
+     "0,0:s1",
+     "0,0:s2",
+     "3,0:r",
+     "0,3:r",
+     "3,3:r",
+     "0,1:c2",
+     "1,1:c1",
+     "1,2:e",
+     "J1,2",
+     "J2,2"
+    ]
+   },
+   "sMedianPlacements": 1,
+   "placementsAdmissibles": 36,
+   "document": {
+    "tuiles": [
+     {
+      "modeleId": "K4",
+      "col": 0,
+      "lig": 0,
+      "rot": 0
+     },
+     {
+      "modeleId": "K2",
+      "col": 3,
+      "lig": 0,
+      "rot": 1
+     },
+     {
+      "modeleId": "K2",
+      "col": 0,
+      "lig": 3,
+      "rot": 3
+     },
+     {
+      "modeleId": "K2",
+      "col": 3,
+      "lig": 3,
+      "rot": 2
+     },
+     {
+      "modeleId": "B1",
+      "col": 1,
+      "lig": 0,
+      "rot": 0
+     },
+     {
+      "modeleId": "B8",
+      "col": 2,
+      "lig": 0,
+      "rot": 0
+     },
+     {
+      "modeleId": "B1",
+      "col": 0,
+      "lig": 1,
+      "rot": 3
+     },
+     {
+      "modeleId": "B1",
+      "col": 3,
+      "lig": 1,
+      "rot": 1
+     },
+     {
+      "modeleId": "B1",
+      "col": 0,
+      "lig": 2,
+      "rot": 3
+     },
+     {
+      "modeleId": "B1",
+      "col": 3,
+      "lig": 2,
+      "rot": 1
+     },
+     {
+      "modeleId": "B1",
+      "col": 1,
+      "lig": 3,
+      "rot": 2
+     },
+     {
+      "modeleId": "B1",
+      "col": 2,
+      "lig": 3,
+      "rot": 2
+     },
+     {
+      "modeleId": "O9",
+      "col": 1,
+      "lig": 1,
+      "rot": 2
+     },
+     {
+      "modeleId": "O10",
+      "col": 2,
+      "lig": 1,
+      "rot": 2
+     },
+     {
+      "modeleId": "O6",
+      "col": 1,
+      "lig": 2,
+      "rot": 1
+     },
+     {
+      "modeleId": "O7",
+      "col": 2,
+      "lig": 2,
+      "rot": 0
+     }
+    ],
+    "jetons": [
+     {
+      "i": 1,
+      "j": 1,
+      "type": "capture"
+     },
+     {
+      "i": 2,
+      "j": 1,
+      "type": "capture"
+     },
+     {
+      "i": 3,
+      "j": 1,
+      "type": "capture"
+     },
+     {
+      "i": 3,
+      "j": 2,
+      "type": "capture"
+     },
+     {
+      "i": 1,
+      "j": 3,
+      "type": "capture"
+     },
+     {
+      "i": 2,
+      "j": 3,
+      "type": "capture"
+     },
+     {
+      "i": 3,
+      "j": 3,
+      "type": "capture"
+     }
+    ]
+   }
+  },
+  "5x5-A": {
+   "tuiles": {
+    "K2": 4,
+    "B7": 6,
+    "B1": 6,
+    "P1": 2,
+    "P6": 2,
+    "P3": 2,
+    "P2": 2,
+    "P5": 1
+   },
+   "cases": 80,
+   "casesTuiles": 71,
+   "jonctionsCases": 9,
+   "ports": {
+    "1,1": 3,
+    "2,1": 2,
+    "3,1": 2,
+    "4,1": 3,
+    "1,2": 2,
+    "2,2": 3,
+    "3,2": 3,
+    "4,2": 2,
+    "1,3": 2,
+    "2,3": 3,
+    "3,3": 2,
+    "4,3": 2,
+    "1,4": 3,
+    "2,4": 2,
+    "3,4": 3,
+    "4,4": 3
+   },
+   "portsMin": 2,
+   "portsTotal": 40,
+   "villes": [
+    "(1,1)",
+    "(4,1)",
+    "(2,2)",
+    "(3,2)",
+    "(2,3)",
+    "(1,4)",
+    "(4,4)"
+   ],
+   "villesPorts": [
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3
+   ],
+   "ecartMinVilles": 4,
+   "villesProches": 0,
+   "S": 1,
+   "ecartMax7": 1,
+   "partage": {
+    "1": 3,
+    "2": 3,
+    "egalite": 1
+   },
+   "tempo": {
+    "1": {
+     "3": 4,
+     "4": 6,
+     "5": 6
+    },
+    "2": {
+     "3": 4,
+     "4": 6,
+     "5": 7
+    }
+   },
+   "premiereVille": {
+    "1": 2,
+    "2": 2,
+    "ecart": 0
+   },
+   "D": {
+    "1": [
+     2,
+     2,
+     3,
+     3,
+     4,
+     4,
+     6
+    ],
+    "2": [
+     2,
+     2,
+     3,
+     3,
+     4,
+     4,
+     5
+    ]
+   },
+   "blocages": [],
+   "alertes": [],
+   "connexe": true,
+   "raccordsMorts": 0,
+   "erreursPlateau": [],
+   "reseauxPassages": [
+    3,
+    3,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2
+   ],
+   "apparitionsDansReseaux": 10,
+   "contactVertRouge": 2,
+   "rythme": {
+    "zones": 25,
+    "distMax": 2,
+    "repartition": {
+     "1": 46,
+     "2": 16
+    },
+    "injoignables": 0,
+    "chaineMax": 3,
+    "chaine": [
+     "J1,1",
+     "1,1:c1",
+     "1,1:r",
+     "1,1:c3",
+     "J2,2"
+    ],
+    "casesPassage": [
+     "2,1:b",
+     "2,0:a",
+     "1,2:b",
+     "0,2:a",
+     "3,0:a",
+     "4,1:a",
+     "2,1:a",
+     "0,1:a",
+     "1,2:a",
+     "4,2:a",
+     "3,1:s",
+     "0,3:a",
+     "4,3:a",
+     "3,2:r",
+     "1,4:a",
+     "2,4:a",
+     "3,3:r",
+     "2,3:s"
+    ],
+    "plusLoin": [
+     "0,0:r",
+     "4,0:r",
+     "0,4:r",
+     "4,4:r",
+     "1,0:c1",
+     "3,4:c1",
+     "1,3:r",
+     "J2,1",
+     "J3,1",
+     "J1,2",
+     "J4,2",
+     "J1,3",
+     "J3,3",
+     "J4,3",
+     "J2,4",
+     "J3,4"
+    ]
+   },
+   "sMedianPlacements": 1,
+   "placementsAdmissibles": 3,
+   "document": {
+    "tuiles": [
+     {
+      "modeleId": "K2",
+      "col": 0,
+      "lig": 0,
+      "rot": 0
+     },
+     {
+      "modeleId": "K2",
+      "col": 4,
+      "lig": 0,
+      "rot": 1
+     },
+     {
+      "modeleId": "K2",
+      "col": 0,
+      "lig": 4,
+      "rot": 3
+     },
+     {
+      "modeleId": "K2",
+      "col": 4,
+      "lig": 4,
+      "rot": 2
+     },
+     {
+      "modeleId": "B7",
+      "col": 1,
+      "lig": 0,
+      "rot": 0
+     },
+     {
+      "modeleId": "B1",
+      "col": 2,
+      "lig": 0,
+      "rot": 0
+     },
+     {
+      "modeleId": "B7",
+      "col": 3,
+      "lig": 0,
+      "rot": 0
+     },
+     {
+      "modeleId": "B7",
+      "col": 0,
+      "lig": 1,
+      "rot": 3
+     },
+     {
+      "modeleId": "B1",
+      "col": 4,
+      "lig": 1,
+      "rot": 1
+     },
+     {
+      "modeleId": "B1",
+      "col": 0,
+      "lig": 2,
+      "rot": 3
+     },
+     {
+      "modeleId": "B7",
+      "col": 4,
+      "lig": 2,
+      "rot": 1
+     },
+     {
+      "modeleId": "B7",
+      "col": 0,
+      "lig": 3,
+      "rot": 3
+     },
+     {
+      "modeleId": "B7",
+      "col": 4,
+      "lig": 3,
+      "rot": 1
+     },
+     {
+      "modeleId": "B1",
+      "col": 1,
+      "lig": 4,
+      "rot": 2
+     },
+     {
+      "modeleId": "B1",
+      "col": 2,
+      "lig": 4,
+      "rot": 2
+     },
+     {
+      "modeleId": "B1",
+      "col": 3,
+      "lig": 4,
+      "rot": 2
+     },
+     {
+      "modeleId": "P1",
+      "col": 1,
+      "lig": 1,
+      "rot": 0
+     },
+     {
+      "modeleId": "P6",
+      "col": 2,
+      "lig": 1,
+      "rot": 2
+     },
+     {
+      "modeleId": "P3",
+      "col": 3,
+      "lig": 1,
+      "rot": 0
+     },
+     {
+      "modeleId": "P6",
+      "col": 1,
+      "lig": 2,
+      "rot": 1
+     },
+     {
+      "modeleId": "P2",
+      "col": 2,
+      "lig": 2,
+      "rot": 3
+     },
+     {
+      "modeleId": "P1",
+      "col": 3,
+      "lig": 2,
+      "rot": 2
+     },
+     {
+      "modeleId": "P5",
+      "col": 1,
+      "lig": 3,
+      "rot": 1
+     },
+     {
+      "modeleId": "P3",
+      "col": 2,
+      "lig": 3,
+      "rot": 2
+     },
+     {
+      "modeleId": "P2",
+      "col": 3,
+      "lig": 3,
+      "rot": 2
+     }
+    ],
+    "jetons": [
+     {
+      "i": 1,
+      "j": 1,
+      "type": "capture"
+     },
+     {
+      "i": 4,
+      "j": 1,
+      "type": "capture"
+     },
+     {
+      "i": 2,
+      "j": 2,
+      "type": "capture"
+     },
+     {
+      "i": 3,
+      "j": 2,
+      "type": "capture"
+     },
+     {
+      "i": 2,
+      "j": 3,
+      "type": "capture"
+     },
+     {
+      "i": 1,
+      "j": 4,
+      "type": "capture"
+     },
+     {
+      "i": 4,
+      "j": 4,
+      "type": "capture"
+     }
+    ]
+   }
+  },
+  "5x5-B": {
+   "tuiles": {
+    "K2": 4,
+    "B9": 2,
+    "B7": 4,
+    "B1": 6,
+    "P1": 3,
+    "P5": 1,
+    "P2": 2,
+    "P6": 1,
+    "P3": 2
+   },
+   "cases": 81,
+   "casesTuiles": 72,
+   "jonctionsCases": 9,
+   "ports": {
+    "1,1": 3,
+    "2,1": 2,
+    "3,1": 2,
+    "4,1": 3,
+    "1,2": 2,
+    "2,2": 2,
+    "3,2": 3,
+    "4,2": 2,
+    "1,3": 3,
+    "2,3": 3,
+    "3,3": 2,
+    "4,3": 2,
+    "1,4": 3,
+    "2,4": 3,
+    "3,4": 2,
+    "4,4": 3
+   },
+   "portsMin": 2,
+   "portsTotal": 40,
+   "villes": [
+    "(1,1)",
+    "(4,1)",
+    "(3,2)",
+    "(1,3)",
+    "(2,3)",
+    "(1,4)",
+    "(4,4)"
+   ],
+   "villesPorts": [
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3
+   ],
+   "ecartMinVilles": 4,
+   "villesProches": 0,
+   "S": 3,
+   "ecartMax7": 1,
+   "partage": {
+    "1": 2,
+    "2": 4,
+    "egalite": 1
+   },
+   "tempo": {
+    "1": {
+     "3": 4,
+     "4": 6,
+     "5": 7
+    },
+    "2": {
+     "3": 5,
+     "4": 7,
+     "5": 7
+    }
+   },
+   "premiereVille": {
+    "1": 2,
+    "2": 2,
+    "ecart": 0
+   },
+   "D": {
+    "1": [
+     2,
+     2,
+     3,
+     3,
+     4,
+     4,
+     5
+    ],
+    "2": [
+     2,
+     2,
+     2,
+     3,
+     3,
+     4,
+     4
+    ]
+   },
+   "blocages": [],
+   "alertes": [],
+   "connexe": true,
+   "raccordsMorts": 0,
+   "erreursPlateau": [],
+   "reseauxPassages": [
+    3,
+    3,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2
+   ],
+   "apparitionsDansReseaux": 8,
+   "contactVertRouge": 2,
+   "rythme": {
+    "zones": 24,
+    "distMax": 3,
+    "repartition": {
+     "1": 44,
+     "2": 19,
+     "3": 1
+    },
+    "injoignables": 0,
+    "chaineMax": 2,
+    "chaine": [
+     "J1,1",
+     "1,0:c2",
+     "1,0:a",
+     "1,0:r"
+    ],
+    "casesPassage": [
+     "1,0:r",
+     "0,1:a",
+     "4,2:r",
+     "3,2:a",
+     "3,2:b",
+     "1,1:r",
+     "2,0:a",
+     "3,1:r",
+     "3,0:a",
+     "4,1:a",
+     "0,3:a",
+     "1,4:a",
+     "2,2:r",
+     "4,3:a",
+     "2,4:a",
+     "1,3:s",
+     "3,3:r"
+    ],
+    "plusLoin": [
+     "2,1:c1"
+    ]
+   },
+   "sMedianPlacements": 4,
+   "placementsAdmissibles": 3,
+   "document": {
+    "tuiles": [
+     {
+      "modeleId": "K2",
+      "col": 0,
+      "lig": 0,
+      "rot": 0
+     },
+     {
+      "modeleId": "K2",
+      "col": 4,
+      "lig": 0,
+      "rot": 1
+     },
+     {
+      "modeleId": "K2",
+      "col": 0,
+      "lig": 4,
+      "rot": 3
+     },
+     {
+      "modeleId": "K2",
+      "col": 4,
+      "lig": 4,
+      "rot": 2
+     },
+     {
+      "modeleId": "B9",
+      "col": 1,
+      "lig": 0,
+      "rot": 0
+     },
+     {
+      "modeleId": "B7",
+      "col": 2,
+      "lig": 0,
+      "rot": 0
+     },
+     {
+      "modeleId": "B7",
+      "col": 3,
+      "lig": 0,
+      "rot": 0
+     },
+     {
+      "modeleId": "B7",
+      "col": 0,
+      "lig": 1,
+      "rot": 3
+     },
+     {
+      "modeleId": "B1",
+      "col": 4,
+      "lig": 1,
+      "rot": 1
+     },
+     {
+      "modeleId": "B1",
+      "col": 0,
+      "lig": 2,
+      "rot": 3
+     },
+     {
+      "modeleId": "B9",
+      "col": 4,
+      "lig": 2,
+      "rot": 1
+     },
+     {
+      "modeleId": "B1",
+      "col": 0,
+      "lig": 3,
+      "rot": 3
+     },
+     {
+      "modeleId": "B1",
+      "col": 4,
+      "lig": 3,
+      "rot": 1
+     },
+     {
+      "modeleId": "B1",
+      "col": 1,
+      "lig": 4,
+      "rot": 2
+     },
+     {
+      "modeleId": "B1",
+      "col": 2,
+      "lig": 4,
+      "rot": 2
+     },
+     {
+      "modeleId": "B7",
+      "col": 3,
+      "lig": 4,
+      "rot": 2
+     },
+     {
+      "modeleId": "P1",
+      "col": 1,
+      "lig": 1,
+      "rot": 1
+     },
+     {
+      "modeleId": "P5",
+      "col": 2,
+      "lig": 1,
+      "rot": 0
+     },
+     {
+      "modeleId": "P2",
+      "col": 3,
+      "lig": 1,
+      "rot": 2
+     },
+     {
+      "modeleId": "P1",
+      "col": 1,
+      "lig": 2,
+      "rot": 3
+     },
+     {
+      "modeleId": "P2",
+      "col": 2,
+      "lig": 2,
+      "rot": 2
+     },
+     {
+      "modeleId": "P6",
+      "col": 3,
+      "lig": 2,
+      "rot": 1
+     },
+     {
+      "modeleId": "P3",
+      "col": 1,
+      "lig": 3,
+      "rot": 3
+     },
+     {
+      "modeleId": "P3",
+      "col": 2,
+      "lig": 3,
+      "rot": 2
+     },
+     {
+      "modeleId": "P1",
+      "col": 3,
+      "lig": 3,
+      "rot": 2
+     }
+    ],
+    "jetons": [
+     {
+      "i": 1,
+      "j": 1,
+      "type": "capture"
+     },
+     {
+      "i": 4,
+      "j": 1,
+      "type": "capture"
+     },
+     {
+      "i": 3,
+      "j": 2,
+      "type": "capture"
+     },
+     {
+      "i": 1,
+      "j": 3,
+      "type": "capture"
+     },
+     {
+      "i": 2,
+      "j": 3,
+      "type": "capture"
+     },
+     {
+      "i": 1,
+      "j": 4,
+      "type": "capture"
+     },
+     {
+      "i": 4,
+      "j": 4,
+      "type": "capture"
+     }
+    ]
+   }
+  }
+ }
+}
