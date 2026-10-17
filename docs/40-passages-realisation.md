@@ -8,7 +8,7 @@ Branche `passages`. Spécification : `39-avis-geometrie-passages.md` et décisio
 - Anciens documents : empreintes avant / après identiques (générateurs 4×4 et 5×5 sur 6 graines, SVG du catalogue en 4 rotations, `tuileEnPlateau`, PDF) ; un test en rejoue 3 graines par format.
 
 ## Ce qui a été fait
-1. **Modèle** (`modele.js`) : tableaux facultatifs `pivots` et `passages` ; les anciens modèles gardent exactement leurs clés. Raccords des passages dans les masques ; `case_isolee`, `poche`, `reseau_sans_sortie` en tiennent compte. Plafonds de sauvegarde : 32 pivots, 64 passages.
+1. **Modèle** (`modele.js`) : tableaux facultatifs `pivots` et `passages` ; les anciens modèles gardent exactement leurs clés. Raccords des passages dans les masques ; `case_isolee`, `poche`, `reseau_sans_sortie` en tiennent compte. Plafonds de sauvegarde : 8 pivots, 16 passages par modèle (abaissés après la revue, `41`).
    - Blocages : `passage_coin`, `passage_case_case`, `raccord_double`, `passage_boucle`, `passage_double`, `pivot_degre` (> 3), `passages_croises`, `passage_chemin_croise`, `passage_case`, `passage_zone_coin` ; ajoutés par le sous-agent : `passage_hors_tuile`, `pivot_hors_tuile`, `passage_courbe`, `passage_invalide`, `passage_inconnu`, `pivot_invalide`.
    - Alertes : `porteuse_passage`, `passage_apparition`, `passages_bord`, `pivot_degre_faible`, `reseau_passages_grand` (> 4 cases), `passages_proches`, `passage_chemin_proche`, `passage_rayon`.
 2. **Graphe** (`graphe.js`) : union-find sur les raccords de passages et les pivots ; les cases d'une composante sont voisines à 1 pas (clique), sans nœud d'arrêt ; une case à deux sorties ne rapproche pas ses voisins. `villesProches`, `equilibre`, `goulets` et le générateur suivent sans changement.

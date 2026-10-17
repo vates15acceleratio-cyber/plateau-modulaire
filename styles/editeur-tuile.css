@@ -88,11 +88,11 @@
 .pm-editeur-bouton-supprimer[hidden] { display: none; }
 
 /* Passages sans case : pivots (points de ramification en T), poignée de courbe, bouton d'outil */
-.pm-editeur-pivot { fill: #fff; stroke: #007A4D; stroke-width: 1.2; cursor: pointer; }
+.pm-editeur-pivot { fill: #fff; stroke: var(--pm-accent, #007A4D); stroke-width: 1.2; cursor: pointer; }
 .pm-editeur-pivot-choisi { stroke: #1b5fd1; stroke-width: 1.8; }
-.pm-editeur-pivot.pm-editeur-en-erreur { stroke: #c0261a; stroke-width: 1.8; }
+.pm-editeur-pivot.pm-editeur-en-erreur { stroke: var(--pm-erreur, #c0261a); stroke-width: 1.8; }
 .pm-editeur-poignee { fill: #fff; stroke: #1b5fd1; stroke-width: 1.4; cursor: grab; }
 .pm-editeur-poignee-perso { fill: #1b5fd1; }
 .pm-editeur-poignee-guide { fill: none; stroke: #1b5fd1; stroke-width: .5; stroke-dasharray: 2 2; pointer-events: none; }
 .pm-editeur-apercu-courbe { fill: none; stroke: #1b5fd1; stroke-width: 2; stroke-dasharray: 3 2; }
-.pm-editeur-bouton-outil[aria-pressed="true"] { background: #e3f1ea; border-color: #007A4D; font-weight: 600; }
+.pm-editeur-bouton-outil[aria-pressed="true"] { background: #e3f1ea; border-color: var(--pm-accent, #007A4D); font-weight: 600; }

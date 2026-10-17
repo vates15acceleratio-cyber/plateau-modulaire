@@ -1186,6 +1186,23 @@
       svg.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, clientX: pc2.x, clientY: pc2.y }));
       var ps3 = M.modeleParId(etat.doc(), id).passages.filter(function (p) { return p.id === t0.id; })[0];
       ctrl('double-clic sur la poignée : courbe par défaut (point de contrôle retiré)', ps3.courbe === undefined, J(ps3));
+      // Ctrl+Z pendant le glissement de la poignée, jusqu'à faire disparaître le passage (docs/41 C4) : ni exception ni message d'erreur
+      (function () {
+        var erreursJs = [], surErreur = function (ev) { erreursJs.push(String(ev.message || ev.error)); };
+        window.addEventListener('error', surErreur);
+        var avantGeste = docJ(), sv = document.querySelector('.pm-editeur-canevas');
+        var tg = PM.rendu.tracesPassages(M.modeleParId(etat.doc(), id), formatCourant()).filter(function (t) { return t.id === t0.id; })[0];
+        var pg = pointMm(sv, tg.controle.x, tg.controle.y);
+        ptr('pointerdown', sv, pg.x, pg.y); ptr('pointermove', sv, pg.x + 20, pg.y + 20);
+        var n = 0;
+        while (n < 12 && M.modeleParId(etat.doc(), id) && (M.modeleParId(etat.doc(), id).passages || []).some(function (p) { return p.id === t0.id; })) { etat.annuler(); n++; }
+        ptr('pointermove', sv, pg.x + 30, pg.y + 25); ptr('pointerup', sv, pg.x + 30, pg.y + 25);
+        window.removeEventListener('error', surErreur);
+        ctrl('Ctrl+Z pendant le glissement d\'une poignée (passage disparu) : aucune exception, aucun message d\'erreur',
+          n > 0 && erreursJs.length === 0 && niveau() !== 'erreur', J({ n: n, erreurs: erreursJs, msg: msg() }));
+        for (var k = 0; k < n; k++) etat.retablir();
+        ctrl('Ctrl+Y rétablit tout, sans courbe parasite', docJ() === avantGeste);
+      })();
       // pivot : Maj + clic sur le fond
       svg = document.querySelector('.pm-editeur-canevas');
       var pp = pointMm(svg, 60, 40);

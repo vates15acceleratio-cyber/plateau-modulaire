@@ -206,8 +206,11 @@ test('cas 4 : passage trop près d\'une case qu\'il ne relie pas, passage dans u
     passages: [{ id: 'q1', a: rac(3, 1), b: rac(1, 1) }]
   });
   assert.ok(codes(pres).includes('passage_case'), codes(pres).join());
+  // un pivot dans la zone de coin est refusé pour lui-même (pivot_zone_coin, docs/41 C3) ; la règle des tracés est alors sautée
   const coin = modele('t', { pivots: [{ id: 'v1', x: 10, y: 10 }], passages: [{ id: 'q1', a: rac(0, 0), b: { pivot: 'v1' } }] });
-  assert.ok(codes(coin).includes('passage_zone_coin'), codes(coin).join());
+  assert.ok(codes(coin).includes('pivot_zone_coin'), codes(coin).join());
+  const courbeCoin = modele('t', { passages: [{ id: 'q1', a: rac(0, 0), b: rac(3, 2), courbe: { x: 5, y: 5 } }] });
+  assert.ok(codes(courbeCoin).includes('passage_zone_coin'), codes(courbeCoin).join());
   const quatre = modele('t', {
     pivots: [{ id: 'v1', x: 60, y: 60 }],
     passages: [rac(0, 1), rac(1, 1), rac(2, 1), rac(3, 1)].map((r, k) => ({ id: 'q' + k, a: r, b: { pivot: 'v1' } }))
@@ -485,4 +488,135 @@ test('éditeur : la poignée du demi-cercle est au point de contrôle de la quad
   const quad = G.tracesPassages(E.definirCourbe(demi, 'q1', t.controle.x, t.controle.y, '4x4'), '4x4')[0];
   const apexQuad = quad.pts[12];
   assert.ok(Math.hypot(apexCercle.x - apexQuad.x, apexCercle.y - apexQuad.y) < 0.01);
+});
+
+/* ---------- Corrections de la revue (docs/41) et recette du testeur ---------- */
+
+test('revue B1 : fichier hostile (500 modèles, passages courbes au plafond) ouvert et validé en temps borné', () => {
+  assert.ok(S.LIMITES.passages <= 16 && S.LIMITES.pivots <= 8, 'plafonds bas');
+  const m = (k) => ({
+    id: 'm' + k, nom: 'm' + k, gabarit: 'centrale', grille: '4x4', exemplaires: 1,
+    cases: Array.from({ length: 16 }, (_, i) => caseDe('c' + i, 15 + (i % 8) * 13, 15 + Math.floor(i / 8) * 13)),
+    chemins: Array.from({ length: 60 }, (_, i) => ({ id: 'h' + i, a: { 'case': 'c' + (i % 16) }, b: { 'case': 'c' + ((i * 7 + 3) % 16) } })),
+    pivots: Array.from({ length: 8 }, (_, i) => ({ id: 'v' + i, x: 20 + (i % 8) * 11, y: 30 + Math.floor(i / 8) * 11 })),
+    // 64 passages dans le fichier : seuls les premiers, jusqu'au plafond, sont gardés
+    passages: Array.from({ length: 64 }, (_, i) => ({ id: 'p' + i, a: { 'case': 'c' + (i % 16) }, b: { pivot: 'v' + (i % 8) }, courbe: { x: 10 + (i * 37) % 100, y: 10 + (i * 53) % 100 } }))
+  });
+  const brut = JSON.stringify({ format: S.FORMAT, version: 2, grille: '4x4', modeles: Array.from({ length: 500 }, (_, k) => m(k)), plateau: { tuiles: [], jetons: [] } });
+  const t0 = Date.now();
+  const r = S.depuisJSON(brut);
+  assert.ok(r.ok, JSON.stringify(r.erreurs));
+  r.doc.modeles.forEach((x) => M.validerModele(x, '4x4'));
+  const duree = Date.now() - t0;
+  assert.equal(r.doc.modeles[0].passages.length, S.LIMITES.passages);
+  assert.ok(duree < 8000, 'ouverture + validation en ' + duree + ' ms (44 s avant la correction)');
+});
+
+test('revue B1 : la règle des tracés est sautée quand la structure des passages a des erreurs ; l’éditeur respecte les plafonds', () => {
+  // raccord pris deux fois (structure) + croisement : seul le blocage de structure est rapporté
+  const m = modele('t', { passages: [{ id: 'q1', a: rac(0, 1), b: rac(2, 1) }, { id: 'q2', a: rac(3, 1), b: rac(1, 1) }, { id: 'q3', a: rac(0, 1), b: rac(1, 0) }] });
+  const c = codes(m);
+  assert.ok(c.includes('raccord_double'), c.join());
+  assert.ok(!c.includes('passages_croises'), c.join());
+  let p = modele('t', { cases: Array.from({ length: S.LIMITES.passages + 1 }, (_, i) => caseDe('c' + i, 20 + (i % 5) * 20, 20 + Math.floor(i / 5) * 20)), pivots: [] });
+  for (let i = 0; i < S.LIMITES.pivots; i++) p = E.ajouterPivot(p, 20 + i * 10, 60);
+  assert.throws(() => E.ajouterPivot(p, 100, 100), /au plus/);
+  for (let i = 0; i < S.LIMITES.passages; i++) p = E.ajouterPassage(p, { 'case': 'c' + i }, { pivot: p.pivots[i % S.LIMITES.pivots].id });
+  assert.throws(() => E.ajouterPassage(p, { 'case': 'c' + S.LIMITES.passages }, { pivot: p.pivots[0].id }), /au plus/);
+});
+
+test('revue C1 : les réseaux de passages ne fusionnent pas à travers les cases (comme le graphe)', () => {
+  // une case de bord porte deux passages vers deux raccords : deux réseaux -> passages_bord
+  const bord = modele('t', { gabarit: 'bord', cases: [caseDe('a', 60, 60)], passages: [{ id: 'q1', a: { 'case': 'a' }, b: rac(1, 1) }, { id: 'q2', a: { 'case': 'a' }, b: rac(3, 1) }] });
+  assert.ok(codes(bord, 'alertes').includes('passages_bord'), codes(bord, 'alertes').join());
+  // deux T qui partagent une case : 3 + 3 cases, pas un réseau de 5 cases
+  const deuxT = modele('t', {
+    cases: [caseDe('a', 25, 40), caseDe('b', 25, 80), caseDe('c', 60, 60), caseDe('d', 95, 40), caseDe('e', 95, 80)],
+    pivots: [{ id: 'v1', x: 40, y: 60 }, { id: 'v2', x: 80, y: 60 }],
+    passages: [['a', 'v1'], ['b', 'v1'], ['c', 'v1'], ['c', 'v2'], ['d', 'v2'], ['e', 'v2']].map(([c, v], k) => ({ id: 'q' + k, a: { 'case': c }, b: { pivot: v } }))
+  });
+  assert.ok(!codes(deuxT, 'alertes').includes('reseau_passages_grand'), codes(deuxT, 'alertes').join());
+  // y n'a qu'un passage (vers z par un pivot) ; la sortie de z (passage vers E) ne fait pas de y une case avec sortie : poche
+  const poche = modele('t', {
+    cases: [caseDe('y', 30, 60), caseDe('z', 70, 60)], pivots: [{ id: 'v1', x: 50, y: 90 }],
+    passages: [{ id: 'q1', a: { 'case': 'y' }, b: { pivot: 'v1' } }, { id: 'q2', a: { 'case': 'z' }, b: { pivot: 'v1' } }, { id: 'q3', a: { 'case': 'z' }, b: rac(1, 1) }]
+  });
+  assert.deepEqual(codes(poche), []);
+  assert.ok(codes(poche, 'alertes').includes('poche'), codes(poche, 'alertes').join());
+  assert.ok(!codes(poche, 'alertes').includes('reseau_sans_sortie'), 'la fusion à travers les cases reste pour reseau_sans_sortie');
+});
+
+test('revue C2 : deux traits qui partent d’une même case en angle fermé sont signalés (écart mesuré hors de la case)', () => {
+  const pc = modele('t', { cases: [caseDe('c', 60, 60)], chemins: [{ id: 'h1', a: { 'case': 'c' }, b: rac(0, 0) }], passages: [{ id: 'q1', a: { 'case': 'c' }, b: rac(0, 1) }] });
+  assert.ok(codes(pc, 'alertes').includes('passage_chemin_proche'), codes(pc, 'alertes').join());
+  const pp = modele('t', { cases: [caseDe('c', 60, 80)], passages: [{ id: 'q1', a: { 'case': 'c' }, b: rac(0, 1) }, { id: 'q2', a: { 'case': 'c' }, b: rac(0, 2) }] });
+  assert.ok(codes(pp, 'alertes').includes('passages_proches'), codes(pp, 'alertes').join());
+  // angle ouvert : aucune alerte d'écart
+  assert.deepEqual(codes(QUART, 'alertes'), []);
+});
+
+test('revue C3 : pivot de degré < 2 non imprimé ; pivot dans la zone de coin ou trop près d’une case refusé', () => {
+  const un = modele('t', { cases: [caseDe('a', 40, 60)], pivots: [{ id: 'v1', x: 80, y: 60 }, { id: 'v2', x: 60, y: 100 }], passages: [{ id: 'q1', a: { 'case': 'a' }, b: { pivot: 'v1' } }] });
+  assert.ok(!/data-pivot=/.test(R.contenuTuile(un, {})), 'pivots de degré 0 et 1 absents du rendu');
+  assert.ok(/data-pivot="v1"/.test(R.contenuTuile(PIVOT_T, {})), 'pivot d’un T imprimé');
+  assert.ok(codes(modele('t', { pivots: [{ id: 'v1', x: 15, y: 15 }] })).includes('pivot_zone_coin'));
+  const v = M.validerModele(modele('t', { cases: [caseDe('a', 60, 60)], pivots: [{ id: 'v1', x: 70, y: 70 }] }));
+  assert.ok(v.erreurs.some((e) => e.code === 'pivot_case'));
+  assert.ok(E.marquages(v.erreurs).cases.includes('a'), 'la case visée est entourée');
+});
+
+test('revue R6 : la case visée par passage_case est entourée (marquages lit la référence)', () => {
+  const pres = modele('t', { cases: [caseDe('c', 60, 75)], chemins: [{ id: 'h1', a: { 'case': 'c' }, b: rac(2, 1) }], passages: [{ id: 'q1', a: rac(3, 1), b: rac(1, 1) }] });
+  const v = M.validerModele(pres);
+  assert.ok(v.erreurs.some((e) => e.code === 'passage_case'));
+  const mq = E.marquages(v.erreurs);
+  assert.ok(mq.cases.includes('c') && mq.passages.includes('q1'), JSON.stringify(mq));
+});
+
+test('revue R2 : alertes et blocages des passages, cas positifs', () => {
+  const al = (m) => codes(m, 'alertes'), er = (m) => codes(m);
+  // demi-tour serré entre deux raccords voisins du même côté (sommet en V)
+  const serre = modele('t', { passages: [{ id: 'q1', a: rac(0, 0), b: rac(0, 1), courbe: { x: 45, y: 40 } }] });
+  assert.ok(al(serre).includes('passage_rayon'), al(serre).join() + ' / ' + er(serre).join());
+  // deux passages droits parallèles à 6 mm
+  const paral = modele('t', { passages: [{ id: 'q1', a: rac(3, 1), b: rac(1, 1) }, { id: 'q2', a: rac(3, 0), b: rac(1, 2), courbe: { x: 60, y: 40 } }] });
+  assert.ok(al(paral).includes('passages_proches'), al(paral).join() + ' / ' + er(paral).join());
+  // passage et chemin qui partent d'une même case en angle fermé (voir aussi C2)
+  const pch = modele('t', { cases: [caseDe('c', 60, 60)], chemins: [{ id: 'h1', a: { 'case': 'c' }, b: rac(0, 0) }], passages: [{ id: 'q1', a: { 'case': 'c' }, b: rac(0, 1) }] });
+  assert.ok(al(pch).includes('passage_chemin_proche'), al(pch).join() + ' / ' + er(pch).join());
+  assert.ok(er(modele('t', { pivots: [{ id: 'v1', x: 2, y: 60 }] })).includes('pivot_hors_tuile'));
+  assert.ok(er(modele('t', { pivots: [{ id: 'v1', x: 'a', y: 60 }] })).includes('pivot_invalide'));
+  assert.ok(er(modele('t', { passages: [{ id: 'q1', a: rac(3, 1), b: rac(1, 1), courbe: { x: 'z' } }] })).includes('passage_courbe'));
+  assert.ok(er(modele('t', { passages: [{ id: 'q1', a: rac(3, 1), b: { raccord: { cote: 9, pos: 0 } } }] })).includes('passage_invalide'));
+  assert.ok(al(modele('t', { gabarit: 'bord', cases: [caseDe('a', 60, 60)], passages: [{ id: 'q1', a: { 'case': 'a' }, b: rac(0, 1) }] })).includes('raccord_exterieur'));
+});
+
+test('revue R3 : courbe mal formée comptée dans elements_ignores ; extrémité case + pivot lue comme une case (même ordre que le modèle)', () => {
+  const m = modele('t', { cases: [caseDe('a', 40, 60)], pivots: [{ id: 'v1', x: 80, y: 60 }],
+    passages: [{ id: 'q1', a: { 'case': 'a', pivot: 'v1' }, b: rac(1, 1), courbe: { x: 'n' } }] });
+  const r = S.depuisJSON(JSON.stringify({ format: S.FORMAT, version: 2, grille: '4x4', modeles: [m], plateau: { tuiles: [], jetons: [] } }));
+  assert.ok(r.ok);
+  assert.ok(r.alertes.some((a) => a.code === 'elements_ignores'), JSON.stringify(r.alertes));
+  const ps = r.doc.modeles[0].passages[0];
+  assert.equal(ps.courbe, undefined);
+  assert.deepEqual(ps.a, { 'case': 'a' });
+  assert.equal(G.typeExtremitePassage(m.passages[0].a), 'case');
+});
+
+test('graphe (sonde du testeur) : chemin + passage sans case + chemin, deux passages à la suite et T, à 1 pas en 4×4 et 5×5', () => {
+  ['4x4', '5x5'].forEach((grille) => {
+    const C = G.format(grille).COTE, mi = C / 2;
+    const md = (id, o) => Object.assign({ id, nom: id, gabarit: 'centrale', grille, exemplaires: 1, cases: [], chemins: [] }, o);
+    const chem = (id, cote) => md(id, { cases: [caseDe('a', mi, mi)], chemins: [{ id: 'h', a: { 'case': 'a' }, b: rac(cote, 1) }] });
+    const pont = md('pont', { passages: [{ id: 'q', a: rac(3, 1), b: rac(1, 1) }] });
+    const T = md('T', { pivots: [{ id: 'v', x: mi, y: mi }], passages: [3, 0, 2].map((cote, k) => ({ id: 'q' + k, a: { pivot: 'v' }, b: rac(cote, 1) })) });
+    const mods = [chem('cE', 1), chem('cW', 3), chem('cS', 2), chem('cN', 0), pont, T];
+    mods.forEach((m) => assert.deepEqual(M.validerModele(m, grille).erreurs.map((x) => x.code), [], grille + ' ' + m.id));
+    const dd = (tuiles) => { const d = M.nouveauDocument(grille); d.modeles = clone(mods); d.plateau.tuiles = tuiles.map(([modeleId, col, lig, rot]) => ({ modeleId, col, lig, rot: rot || 0 })); return d; };
+    const dist = (d, a, b) => GR.distances(GR.construire(d), a).get(b);
+    assert.equal(dist(dd([['cE', 0, 1], ['pont', 1, 1], ['cW', 2, 1]]), '0,1:a', '2,1:a'), 1, grille + ' chemin + pont + chemin');
+    assert.equal(dist(dd([['cE', 0, 1], ['pont', 1, 1], ['pont', 2, 1], ['cW', 3, 1]]), '0,1:a', '3,1:a'), 1, grille + ' deux ponts');
+    const dT = dd([['T', 1, 1], ['cE', 0, 1], ['cS', 1, 0], ['cN', 1, 2]]);
+    [['0,1:a', '1,0:a'], ['0,1:a', '1,2:a'], ['1,0:a', '1,2:a']].forEach(([a, b]) => assert.equal(dist(dT, a, b), 1, grille + ' T ' + a + ' ' + b));
+  });
 });

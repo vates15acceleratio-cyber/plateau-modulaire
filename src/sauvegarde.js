@@ -26,7 +26,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * Plafonds à l'ouverture d'un fichier (audit de sécurité : un fichier hostile ne doit pas bloquer le
    * navigateur). Très au-dessus de tout usage normal : 5×5 tuiles, 7 villes, une trentaine de modèles.
    */
-  var LIMITES = { octets: 5e6, modeles: 500, cases: 64, chemins: 256, pivots: 32, passages: 64, tuiles: 64, jetons: 64, texte: 200, coordonnee: 1000, exemplaires: 999 };
+  var LIMITES = { octets: 5e6, modeles: 500, cases: 64, chemins: 256, pivots: 8, passages: 16, tuiles: 64, jetons: 64, texte: 200, coordonnee: 1000, exemplaires: 999 };
   /** Intervalle minimal entre deux écritures dans localStorage (ms). */
   var DELAI_AUTOSAVE = 1000;
   /** Délai de repli après retour du focus, pour détecter une annulation sans événement `cancel` (ms). */
@@ -107,7 +107,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     }
     // Passages sans case : extrémité case, raccord, pivot ou coin (le coin est gardé pour que la validation le refuse)
     function normaliserExtremitePassage(e) {
-      if (estObjet(e) && e.pivot !== undefined) { var id = texteOuNul(e.pivot); return id === null ? null : { pivot: id }; }
+      // même ordre que PM.geometrie.typeExtremitePassage : case, raccord, puis pivot
+      if (estObjet(e) && e['case'] === undefined && e.raccord === undefined && e.pivot !== undefined) { var id = texteOuNul(e.pivot); return id === null ? null : { pivot: id }; }
       return normaliserExtremite(e);
     }
     function normaliserPassage(c) {
@@ -116,6 +117,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       if (!a || !b) return null;
       var n = { id: texteOuNul(c.id), a: a, b: b };
       if (estObjet(c.courbe) && nombre(c.courbe.x) && nombre(c.courbe.y)) n.courbe = { x: c.courbe.x, y: c.courbe.y };
+      else if (c.courbe !== undefined) ignores++; // courbe mal formée : retirée (courbe par défaut) et signalée dans elements_ignores
       return n;
     }
     function normaliserPivot(p) {

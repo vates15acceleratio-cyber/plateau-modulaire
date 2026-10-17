@@ -148,13 +148,16 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     });
     // Passages sans case : courbes vertes comme les chemins (même largeur), prolongées dans le fond perdu aux raccords ;
     // un disque de la largeur du trait rend propre la rencontre des branches d'un pivot
+    var degrePivot = Object.create(null);
     tracesPassages(m, F).forEach(function (t) {
+      t.pivots.forEach(function (id) { degrePivot[id] = (degrePivot[id] || 0) + 1; });
       var tt = tournerTracePassage(t, rot, F);
       s.push('<path d="' + cheminPassage(tt, fp) + '" fill="none" stroke="' + COULEURS.vert + '" stroke-width="' + L +
         '" stroke-linecap="butt" stroke-linejoin="round" data-passage="' + echapper(t.id) + '"/>');
     });
     (m && Array.isArray(m.pivots) ? m.pivots : []).forEach(function (pv) {
       if (!pv || typeof pv !== 'object' || typeof pv.x !== 'number' || typeof pv.y !== 'number' || !isFinite(pv.x) || !isFinite(pv.y)) return;
+      if ((degrePivot[pv.id] || 0) < 2) return; // pivot sans branche ou en bout d'une seule : rien à imprimer (docs/41 C3)
       var p = F.tournerPoint({ x: pv.x, y: pv.y }, rot);
       s.push('<circle cx="' + f(p.x) + '" cy="' + f(p.y) + '" r="' + f(L / 2) + '" fill="' + COULEURS.vert + '" data-pivot="' + echapper(pv.id) + '"/>');
     });

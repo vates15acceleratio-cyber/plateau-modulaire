@@ -296,11 +296,18 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     if (tab(m.passages).some(function (ps) { return ps && [cleExtP(ps.a), cleExtP(ps.b)].sort().join('|') === cle; })) {
       throw new Error('Ces deux points sont déjà reliés par un passage.');
     }
+    if (tab(m.passages).length >= plafond('passages', 16)) throw new Error('Une tuile porte au plus ' + plafond('passages', 16) + ' passages.');
     if (!Array.isArray(m.passages)) m.passages = [];
     var rang = { 'case': 0, pivot: 1, raccord: 2 };
     var premier = rang[ta] <= rang[tb] ? a : b, second = premier === a ? b : a;
     m.passages.push({ id: M.nouvelId(m, PREFIXE_PASSAGE), a: clone(premier), b: clone(second) });
     return m;
+  }
+
+  /** Plafond d'éléments par modèle, le même que celui de la sauvegarde (au-delà, un fichier rouvert serait tronqué). */
+  function plafond(nom, defaut) {
+    var L = PM.sauvegarde && PM.sauvegarde.LIMITES;
+    return L && typeof L[nom] === 'number' ? L[nom] : defaut;
   }
 
   /** Position aimantée (grille de 1 cm, à 1 cm au moins du bord) d'un pivot. */
@@ -314,6 +321,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   function ajouterPivot(modele, x, y, format) {
     var m = clone(modele), q = positionPivot(x, y, leFormat(format));
     if (tab(m.pivots).some(function (v) { return v && Math.abs(v.x - q.x) < 1e-9 && Math.abs(v.y - q.y) < 1e-9; })) throw new Error('Un pivot existe déjà à cet endroit.');
+    if (tab(m.pivots).length >= plafond('pivots', 8)) throw new Error('Une tuile porte au plus ' + plafond('pivots', 8) + ' pivots.');
     if (!Array.isArray(m.pivots)) m.pivots = [];
     m.pivots.push({ id: M.nouvelId(m, PREFIXE_PIVOT), x: q.x, y: q.y });
     return m;
@@ -358,7 +366,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     function retirerPassages(fn) { if (Array.isArray(m.passages)) m.passages = m.passages.filter(function (ps) { return !touche(ps, fn); }); }
     function termine() { // un pivot qui n'a plus aucune branche n'a plus de raison d'être
       if (tab(m.passages).length === avantPassages || !Array.isArray(m.pivots)) return m;
-      var avait = {}, garde = {};
+      var avait = Object.create(null), garde = Object.create(null);
       tab(modele.passages).forEach(function (ps) { [ps.a, ps.b].forEach(function (e) { if (typeExtP(e) === 'pivot') avait[e.pivot] = true; }); });
       m.passages.forEach(function (ps) { [ps.a, ps.b].forEach(function (e) { if (typeExtP(e) === 'pivot') garde[e.pivot] = true; }); });
       m.pivots = m.pivots.filter(function (v) { return !avait[v.id] || garde[v.id]; });
@@ -571,6 +579,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     tab(erreurs).forEach(function (e) {
       var r = e && e.ref;
       if (!r) return;
+      (r.type !== 'case' && Array.isArray(r.cases) ? r.cases : []).forEach(function (id) { ajouter(res.cases, id); }); // case visée par passage_case, pivot_case
       if (r.type === 'case') (r.ids || [r.id]).forEach(function (id) { if (id !== undefined) ajouter(res.cases, id); });
       else if (r.type === 'chemin' && r.id !== undefined) ajouter(res.chemins, r.id);
       else if (r.type === 'passage') {
@@ -983,6 +992,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     function dessinerApercu(m, p) {
       var F = fmt(), s = '', cible2 = cibleEn(m, p.x, p.y, F), d = geste.depart;
       if (geste.type === 'poignee') { // courbe en cours de réglage : le passage est redessiné avec le point de contrôle sous le pointeur
+        if (!passageParId(m, geste.id)) { gApercu.innerHTML = ''; return; } // passage disparu (Ctrl+Z pendant le glissement)
         var essai = definirCourbe(m, geste.id, p.x, p.y, F);
         var tr = R.tracesPassages(essai, F).filter(function (q) { return q.id === geste.id; })[0];
         if (tr) s += '<polyline class="pm-editeur-apercu-courbe" points="' + pointsSvg(tr.pts) + '"/><circle class="pm-editeur-poignee" cx="' + arrondi(tr.controle.x) + '" cy="' + arrondi(tr.controle.y) + '" r="3.5"/>';
@@ -1062,7 +1072,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       if (!m) { rafraichir(true); return; }
       rafraichissementDiffere = false;
       if (g.type === 'poignee') { // courbe du passage : un simple appui ne change rien
-        if (g.deplace) modifier(function (x) { return definirCourbe(x, g.id, p.x, p.y, fmt()); }, 'Courber un passage');
+        if (g.deplace && passageParId(m, g.id)) modifier(function (x) { return definirCourbe(x, g.id, p.x, p.y, fmt()); }, 'Courber un passage');
         rafraichir(true);
         return;
       }

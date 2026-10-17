@@ -49,3 +49,4 @@ Proposée par l'utilisateur au moment de l'arrêt, **pas encore définie** : à 
   - **Impression** : la palette actuelle est limitée à vert, rouge, noir, blanc ; un thème se représenterait par un **motif ou un symbole** en noir sur blanc, ou faut-il élargir la palette ?
   - Le **générateur** et l'**équilibre** doivent-ils en tenir compte (répartir les régions entre les camps, éviter qu'un joueur ait toutes les montagnes) ?
 - **Incidences probables** (à évaluer par les advisors design de jeu et prépresse le moment venu) : un champ `theme` (ou `region`) sur les modèles, un choix dans l'éditeur, un affichage dans la bibliothèque et sur le plateau, un rendu d'impression, et peut-être des compteurs par thème et par camp.
+- Barre d'outils de l'éditeur sur deux lignes entre 1600 et 1920 px depuis le bouton « Outil » des passages (`docs/43`) ; à reprendre avec la carte « Commandes » flottante (`styles/aide.css`).
