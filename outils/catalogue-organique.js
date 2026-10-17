@@ -51,7 +51,7 @@ if (!PM.modele && typeof require === 'function') require('../src/modele.js'); //
   function raccourciCoin(c) { return [raccord('r1', c, 1, 0), raccord('r2', c, 2, 2)]; }
 
   /* ================================ 4×4 (tuiles de 120 mm) ================================ */
-  function construire4() {
+  function construire4R44() {
     function m4(id, nom, gabarit, ex, cases, chemins, pivots, passages) { return modele('4x4', id, nom, gabarit, ex, cases, chemins, pivots, passages); }
     return [
       /* ---------- Centrales ---------- */
@@ -117,7 +117,7 @@ if (!PM.modele && typeof require === 'function') require('../src/modele.js'); //
   }
 
   /* ================================ 5×5 (tuiles de 100 mm) ================================ */
-  function construire5() {
+  function construire5R44() {
     function m5(id, nom, gabarit, ex, cases, chemins, pivots, passages) { return modele('5x5', id, nom, gabarit, ex, cases, chemins, pivots, passages); }
     return [
       /* ---------- Centrales (3 cases : un relais et deux porteuses, sauf mention) ---------- */
@@ -179,9 +179,58 @@ if (!PM.modele && typeof require === 'function') require('../src/modele.js'); //
     ];
   }
 
+  /* ===================== Révision « centrales ouvertes » (docs/18, réponses sur la révision « rythme ») =====================
+   * Centrales à 3 ou 4 coins desservis par un seul relais (chaque port à 1 pas du relais) ; 4×4 : un passage au plus par
+   * centrale ; aucun traversant, aucune paire miroir. Un virage sans case entre deux côtés voisins enferme le coin qu'il
+   * contourne : une centrale à virage dessert donc 3 coins au plus ; une centrale à 4 coins n'a qu'un passage « crochet »
+   * (raccord -> relais), qui n'économise aucun pas. */
+  function construire4() {
+    function m4(id, nom, gabarit, ex, cases, chemins, pivots, passages) { return modele('4x4', id, nom, gabarit, ex, cases, chemins, pivots, passages); }
+    var r44 = construire4R44(), garder = function (id, ex) { var m = r44.filter(function (x) { return x.id === id; })[0]; m.exemplaires = ex; return m; };
+    return [
+      /* ---------- Centrales ---------- */
+      // Trident à virage : quart de tour sans case au sud-ouest ; le relais tient N et E et les ports NO, NE et SE
+      m4('Q1', 'Trident à virage', 'centrale', 4,
+        [kase('r', 68, 54), kase('c1', 30, 30), kase('c2', 92, 28), kase('c3', 92, 92)], [
+          raccord('rn', 'r', 0, 1), raccord('re', 'r', 1, 1), lien('h1', 'r', 'c1'), lien('h2', 'r', 'c2'), lien('h3', 'r', 'c3'),
+          port('p1', 'c1', 0), port('p2', 'c2', 1), port('p3', 'c3', 2)
+        ], [], [passage('q1', R(2, 1), R(3, 1))]),
+      // Étoile à crochet : le relais tient les 4 ports, N, E et S ; le raccord O le rejoint par une courbe sans case
+      m4('Q2', 'Étoile à crochet', 'centrale', 3,
+        [kase('r', 68, 68), kase('c1', 28, 28), kase('c2', 92, 28), kase('c3', 92, 92), kase('c4', 28, 92)], [
+          raccord('rn', 'r', 0, 1), raccord('re', 'r', 1, 1), raccord('rs', 'r', 2, 1),
+          lien('h1', 'r', 'c1'), lien('h2', 'r', 'c2'), lien('h3', 'r', 'c3'), lien('h4', 'r', 'c4'),
+          port('p1', 'c1', 0), port('p2', 'c2', 1), port('p3', 'c3', 2), port('p4', 'c4', 3)
+        ], [], [passage('q1', R(3, 1), C('r'), { x: 40, y: 62 })]),
+
+      /* ---------- Bords et coins : ceux de la révision « rythme » ---------- */
+      garder('B1', 8), garder('B8', 1), garder('K2', 4), garder('K4', 1)
+    ];
+  }
+
+  function construire5() {
+    function m5(id, nom, gabarit, ex, cases, chemins, pivots, passages) { return modele('5x5', id, nom, gabarit, ex, cases, chemins, pivots, passages); }
+    var r44 = construire5R44(), garder = function (id, ex) { var m = r44.filter(function (x) { return x.id === id; })[0]; m.exemplaires = ex; return m; };
+    return [
+      /* ---------- Centrales ---------- */
+      // Trident à virage : quart de tour sans case au sud-ouest ; le relais tient N et E et les ports NO, NE et SE
+      m5('U1', 'Trident à virage', 'centrale', 5,
+        [kase('r', 58, 44), kase('c1', 26, 26), kase('c2', 74, 26), kase('c3', 74, 74)], [
+          raccord('rn', 'r', 0, 1), raccord('re', 'r', 1, 1), lien('h1', 'r', 'c1'), lien('h2', 'r', 'c2'), lien('h3', 'r', 'c3'),
+          port('p1', 'c1', 0), port('p2', 'c2', 1), port('p3', 'c3', 2)
+        ], [], [passage('q1', R(2, 1), R(3, 1))]),
+      // P3 (T sans case), P5 (double virage, symétrique par demi-tour : seule centrale possible au centre en pose symétrique)
+      garder('P3', 2), garder('P5', 2), garder('P1', 1), garder('P2', 1),
+      /* ---------- Bords et coin ---------- */
+      garder('B1', 3), garder('B7', 12), garder('K2', 5)
+    ];
+  }
+
   /** Famille (docs/38) et repère pour les questions ouvertes, par grille et par id. */
   var INFOS = {
     '4x4': {
+      Q1: { famille: 'trident + virage (3 coins)', repere: '' },
+      Q2: { famille: 'étoile + crochet (4 coins)', repere: '' },
       O9: { famille: 'virage + pont (allégée)', repere: '' },
       O10: { famille: 'virage + équerre libre (allégée)', repere: '' },
       O6: { famille: 'demi-tour + deux fourches', repere: '' },
@@ -194,10 +243,11 @@ if (!PM.modele && typeof require === 'function') require('../src/modele.js'); //
       K4: { famille: 'coin en losange (actuel)', repere: '' }
     },
     '5x5': {
+      U1: { famille: 'trident + virage (3 coins)', repere: '' },
       P1: { famille: 'virage + pont', repere: '' },
       P2: { famille: 'équerre libre + virage', repere: '' },
       P3: { famille: 'T sans case + fourche', repere: 'T' },
-      P5: { famille: 'virage double + couloir', repere: '2 passages' },
+      P5: { famille: 'virage double + couloir (symétrique)', repere: '2 passages' },
       P6: { famille: 'boucle + virage', repere: '' },
       P0: { famille: 'T pur (sans case)', repere: 'hors règles : mur' },
       B1: { famille: 'bord en V (actuel)', repere: '' },
@@ -208,7 +258,8 @@ if (!PM.modele && typeof require === 'function') require('../src/modele.js'); //
   };
 
   PM.catalogueOrganique = {
-    modelesParGrille: { '4x4': construire4(), '5x5': construire5() },
+    modelesParGrille: { '4x4': construire4(), '5x5': construire5() },   // révision « centrales ouvertes »
+    revision44: { '4x4': construire4R44(), '5x5': construire5R44() },   // révision « rythme » (docs/44), pour comparaison
     infos: INFOS
   };
 

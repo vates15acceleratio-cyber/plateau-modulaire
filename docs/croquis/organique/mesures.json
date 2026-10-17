@@ -2,6 +2,306 @@
  "modeles": {
   "4x4": [
    {
+    "id": "Q1",
+    "nom": "Trident à virage",
+    "gabarit": "centrale",
+    "famille": "trident + virage (3 coins)",
+    "repere": "",
+    "cases": 4,
+    "ports": 3,
+    "coins": [
+     "NO",
+     "NE",
+     "SE"
+    ],
+    "chemins": 8,
+    "passages": 1,
+    "pivots": 0,
+    "exemplaires": 4,
+    "symetrique": false,
+    "blocages": [],
+    "alertes": [],
+    "trace": []
+   },
+   {
+    "id": "Q2",
+    "nom": "Étoile à crochet",
+    "gabarit": "centrale",
+    "famille": "étoile + crochet (4 coins)",
+    "repere": "",
+    "cases": 5,
+    "ports": 4,
+    "coins": [
+     "NO",
+     "NE",
+     "SE",
+     "SO"
+    ],
+    "chemins": 11,
+    "passages": 1,
+    "pivots": 0,
+    "exemplaires": 3,
+    "symetrique": false,
+    "blocages": [],
+    "alertes": [],
+    "trace": []
+   },
+   {
+    "id": "B1",
+    "nom": "Bord en V",
+    "gabarit": "bord",
+    "famille": "bord en V (actuel)",
+    "repere": "",
+    "cases": 3,
+    "ports": 2,
+    "coins": [
+     "SE",
+     "SO"
+    ],
+    "chemins": 7,
+    "passages": 0,
+    "pivots": 0,
+    "exemplaires": 8,
+    "symetrique": null,
+    "blocages": [],
+    "alertes": [],
+    "trace": []
+   },
+   {
+    "id": "B8",
+    "nom": "Bord à virage",
+    "gabarit": "bord",
+    "famille": "bord à virage",
+    "repere": "",
+    "cases": 4,
+    "ports": 2,
+    "coins": [
+     "SE",
+     "SO"
+    ],
+    "chemins": 7,
+    "passages": 1,
+    "pivots": 0,
+    "exemplaires": 1,
+    "symetrique": null,
+    "blocages": [],
+    "alertes": [],
+    "trace": []
+   },
+   {
+    "id": "K2",
+    "nom": "Coin à relais",
+    "gabarit": "coin",
+    "famille": "coin à relais (actuel)",
+    "repere": "",
+    "cases": 3,
+    "ports": 1,
+    "coins": [
+     "SE"
+    ],
+    "chemins": 5,
+    "passages": 0,
+    "pivots": 0,
+    "exemplaires": 4,
+    "symetrique": null,
+    "blocages": [],
+    "alertes": [],
+    "trace": []
+   },
+   {
+    "id": "K4",
+    "nom": "Coin en losange",
+    "gabarit": "coin",
+    "famille": "coin en losange (actuel)",
+    "repere": "",
+    "cases": 4,
+    "ports": 1,
+    "coins": [
+     "SE"
+    ],
+    "chemins": 7,
+    "passages": 0,
+    "pivots": 0,
+    "exemplaires": 1,
+    "symetrique": null,
+    "blocages": [],
+    "alertes": [],
+    "trace": []
+   }
+  ],
+  "5x5": [
+   {
+    "id": "U1",
+    "nom": "Trident à virage",
+    "gabarit": "centrale",
+    "famille": "trident + virage (3 coins)",
+    "repere": "",
+    "cases": 4,
+    "ports": 3,
+    "coins": [
+     "NO",
+     "NE",
+     "SE"
+    ],
+    "chemins": 8,
+    "passages": 1,
+    "pivots": 0,
+    "exemplaires": 5,
+    "symetrique": false,
+    "blocages": [],
+    "alertes": [],
+    "trace": []
+   },
+   {
+    "id": "P3",
+    "nom": "T sans case",
+    "gabarit": "centrale",
+    "famille": "T sans case + fourche",
+    "repere": "T",
+    "cases": 3,
+    "ports": 2,
+    "coins": [
+     "SE",
+     "SO"
+    ],
+    "chemins": 5,
+    "passages": 3,
+    "pivots": 1,
+    "exemplaires": 2,
+    "symetrique": false,
+    "blocages": [],
+    "alertes": [],
+    "trace": []
+   },
+   {
+    "id": "P5",
+    "nom": "Double virage",
+    "gabarit": "centrale",
+    "famille": "virage double + couloir (symétrique)",
+    "repere": "2 passages",
+    "cases": 3,
+    "ports": 2,
+    "coins": [
+     "NO",
+     "SE"
+    ],
+    "chemins": 4,
+    "passages": 2,
+    "pivots": 0,
+    "exemplaires": 2,
+    "symetrique": true,
+    "blocages": [],
+    "alertes": [],
+    "trace": []
+   },
+   {
+    "id": "P1",
+    "nom": "Virage double",
+    "gabarit": "centrale",
+    "famille": "virage + pont",
+    "repere": "",
+    "cases": 3,
+    "ports": 2,
+    "coins": [
+     "NO",
+     "SE"
+    ],
+    "chemins": 6,
+    "passages": 1,
+    "pivots": 0,
+    "exemplaires": 1,
+    "symetrique": false,
+    "blocages": [],
+    "alertes": [],
+    "trace": []
+   },
+   {
+    "id": "P2",
+    "nom": "Équerre à virage",
+    "gabarit": "centrale",
+    "famille": "équerre libre + virage",
+    "repere": "",
+    "cases": 3,
+    "ports": 2,
+    "coins": [
+     "NE",
+     "SE"
+    ],
+    "chemins": 6,
+    "passages": 1,
+    "pivots": 0,
+    "exemplaires": 1,
+    "symetrique": false,
+    "blocages": [],
+    "alertes": [],
+    "trace": []
+   },
+   {
+    "id": "B1",
+    "nom": "Bord en V",
+    "gabarit": "bord",
+    "famille": "bord en V (actuel)",
+    "repere": "",
+    "cases": 3,
+    "ports": 2,
+    "coins": [
+     "SE",
+     "SO"
+    ],
+    "chemins": 7,
+    "passages": 0,
+    "pivots": 0,
+    "exemplaires": 3,
+    "symetrique": null,
+    "blocages": [],
+    "alertes": [],
+    "trace": []
+   },
+   {
+    "id": "B7",
+    "nom": "Bord simple",
+    "gabarit": "bord",
+    "famille": "bord simple, sans miroir",
+    "repere": "",
+    "cases": 2,
+    "ports": 1,
+    "coins": [
+     "SE"
+    ],
+    "chemins": 5,
+    "passages": 0,
+    "pivots": 0,
+    "exemplaires": 12,
+    "symetrique": null,
+    "blocages": [],
+    "alertes": [],
+    "trace": []
+   },
+   {
+    "id": "K2",
+    "nom": "Coin à relais",
+    "gabarit": "coin",
+    "famille": "coin à relais (actuel)",
+    "repere": "",
+    "cases": 3,
+    "ports": 1,
+    "coins": [
+     "SE"
+    ],
+    "chemins": 5,
+    "passages": 0,
+    "pivots": 0,
+    "exemplaires": 5,
+    "symetrique": null,
+    "blocages": [],
+    "alertes": [],
+    "trace": []
+   }
+  ]
+ },
+ "modelesRevision44": {
+  "4x4": [
+   {
     "id": "O9",
     "nom": "Virage et pont",
     "gabarit": "centrale",
@@ -13,11 +313,14 @@
      "NO",
      "SE"
     ],
+    "chemins": 6,
     "passages": 1,
     "pivots": 0,
     "exemplaires": 2,
+    "symetrique": false,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    },
    {
     "id": "O10",
@@ -31,11 +334,14 @@
      "NE",
      "SE"
     ],
+    "chemins": 6,
     "passages": 1,
     "pivots": 0,
     "exemplaires": 1,
+    "symetrique": false,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    },
    {
     "id": "O6",
@@ -51,11 +357,14 @@
      "SE",
      "SO"
     ],
+    "chemins": 11,
     "passages": 1,
     "pivots": 0,
     "exemplaires": 1,
+    "symetrique": false,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    },
    {
     "id": "O11",
@@ -70,11 +379,14 @@
      "NE",
      "SE"
     ],
+    "chemins": 8,
     "passages": 1,
     "pivots": 0,
     "exemplaires": 2,
+    "symetrique": false,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    },
    {
     "id": "O2",
@@ -88,11 +400,14 @@
      "NO",
      "SE"
     ],
+    "chemins": 5,
     "passages": 2,
     "pivots": 0,
     "exemplaires": 0,
+    "symetrique": true,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    },
    {
     "id": "O7",
@@ -106,11 +421,14 @@
      "NE",
      "SO"
     ],
+    "chemins": 9,
     "passages": 1,
     "pivots": 0,
     "exemplaires": 1,
+    "symetrique": false,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    },
    {
     "id": "B1",
@@ -124,11 +442,14 @@
      "SE",
      "SO"
     ],
+    "chemins": 7,
     "passages": 0,
     "pivots": 0,
     "exemplaires": 8,
+    "symetrique": null,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    },
    {
     "id": "B8",
@@ -142,11 +463,14 @@
      "SE",
      "SO"
     ],
+    "chemins": 7,
     "passages": 1,
     "pivots": 0,
     "exemplaires": 1,
+    "symetrique": null,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    },
    {
     "id": "K2",
@@ -159,11 +483,14 @@
     "coins": [
      "SE"
     ],
+    "chemins": 5,
     "passages": 0,
     "pivots": 0,
     "exemplaires": 4,
+    "symetrique": null,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    },
    {
     "id": "K4",
@@ -176,11 +503,14 @@
     "coins": [
      "SE"
     ],
+    "chemins": 7,
     "passages": 0,
     "pivots": 0,
     "exemplaires": 1,
+    "symetrique": null,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    }
   ],
   "5x5": [
@@ -196,11 +526,14 @@
      "NO",
      "SE"
     ],
+    "chemins": 6,
     "passages": 1,
     "pivots": 0,
     "exemplaires": 3,
+    "symetrique": false,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    },
    {
     "id": "P2",
@@ -214,11 +547,14 @@
      "NE",
      "SE"
     ],
+    "chemins": 6,
     "passages": 1,
     "pivots": 0,
     "exemplaires": 3,
+    "symetrique": false,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    },
    {
     "id": "P3",
@@ -232,17 +568,20 @@
      "SE",
      "SO"
     ],
+    "chemins": 5,
     "passages": 3,
     "pivots": 1,
     "exemplaires": 2,
+    "symetrique": false,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    },
    {
     "id": "P5",
     "nom": "Double virage",
     "gabarit": "centrale",
-    "famille": "virage double + couloir",
+    "famille": "virage double + couloir (symétrique)",
     "repere": "2 passages",
     "cases": 3,
     "ports": 2,
@@ -250,11 +589,14 @@
      "NO",
      "SE"
     ],
+    "chemins": 4,
     "passages": 2,
     "pivots": 0,
     "exemplaires": 1,
+    "symetrique": true,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    },
    {
     "id": "P6",
@@ -268,11 +610,14 @@
      "NE",
      "SO"
     ],
+    "chemins": 9,
     "passages": 1,
     "pivots": 0,
     "exemplaires": 2,
+    "symetrique": false,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    },
    {
     "id": "P0",
@@ -283,11 +628,14 @@
     "cases": 0,
     "ports": 0,
     "coins": [],
+    "chemins": 0,
     "passages": 3,
     "pivots": 1,
     "exemplaires": 0,
+    "symetrique": false,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    },
    {
     "id": "B1",
@@ -301,11 +649,14 @@
      "SE",
      "SO"
     ],
+    "chemins": 7,
     "passages": 0,
     "pivots": 0,
     "exemplaires": 6,
+    "symetrique": null,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    },
    {
     "id": "B7",
@@ -318,11 +669,14 @@
     "coins": [
      "SE"
     ],
+    "chemins": 5,
     "passages": 0,
     "pivots": 0,
     "exemplaires": 6,
+    "symetrique": null,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    },
    {
     "id": "B9",
@@ -335,11 +689,14 @@
     "coins": [
      "SO"
     ],
+    "chemins": 5,
     "passages": 1,
     "pivots": 0,
     "exemplaires": 2,
+    "symetrique": null,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    },
    {
     "id": "K2",
@@ -352,11 +709,14 @@
     "coins": [
      "SE"
     ],
+    "chemins": 5,
     "passages": 0,
     "pivots": 0,
     "exemplaires": 5,
+    "symetrique": null,
     "blocages": [],
-    "alertes": []
+    "alertes": [],
+    "trace": []
    }
   ]
  },
@@ -365,58 +725,58 @@
    "tuiles": {
     "K2": 3,
     "K4": 1,
-    "B1": 7,
-    "B8": 1,
-    "O9": 2,
-    "O11": 1,
-    "O6": 1
+    "B1": 8,
+    "Q1": 3,
+    "Q2": 1
    },
-   "cases": 57,
-   "casesTuiles": 55,
+   "cases": 56,
+   "casesTuiles": 54,
    "jonctionsCases": 2,
    "ports": {
-    "1,1": 3,
-    "2,1": 3,
-    "3,1": 4,
+    "1,1": 4,
+    "2,1": 4,
+    "3,1": 3,
     "1,2": 4,
     "2,2": 3,
-    "3,2": 3,
+    "3,2": 4,
     "1,3": 3,
     "2,3": 4,
     "3,3": 4
    },
    "portsMin": 3,
-   "portsTotal": 31,
+   "portsTotal": 33,
    "villes": [
     "(1,1)",
+    "(2,1)",
     "(3,1)",
     "(1,2)",
-    "(2,2)",
-    "(3,2)",
     "(1,3)",
+    "(2,3)",
     "(3,3)"
    ],
    "villesPorts": [
-    3,
     4,
     4,
     3,
+    4,
     3,
-    3,
+    4,
     4
    ],
+   "villesA3": 7,
    "ecartMinVilles": 4,
    "villesProches": 0,
-   "S": 1,
-   "ecartMax7": 1,
+   "S": 0,
+   "ecartMax7": 0,
    "partage": {
     "1": 3,
-    "2": 2,
-    "egalite": 2
+    "2": 3,
+    "egalite": 1
    },
+   "cinqContreDeux": false,
    "tempo": {
     "1": {
-     "3": 7,
+     "3": 6,
      "4": 7,
      "5": 7
     },
@@ -439,7 +799,7 @@
      2,
      3,
      3,
-     3
+     4
     ],
     "2": [
      2,
@@ -460,54 +820,75 @@
     2,
     2,
     2,
+    2
+   ],
+   "reseauxEconomes": [
+    2,
     2,
     2
    ],
-   "apparitionsDansReseaux": 6,
+   "apparitionsDansReseaux": 4,
    "contactVertRouge": 1,
    "rythme": {
-    "zones": 17,
+    "zones": 13,
     "distMax": 2,
     "repartition": {
-     "1": 36,
-     "2": 11
+     "1": 37,
+     "2": 13
     },
     "injoignables": 0,
-    "chaineMax": 2,
+    "chaineMax": 3,
     "chaine": [
-     "J3,1",
-     "2,0:c1",
-     "2,0:a",
-     "2,0:r"
+     "J1,1",
+     "1,0:c2",
+     "1,0:a",
+     "1,0:c1",
+     "J2,1"
     ],
     "casesPassage": [
-     "2,0:r",
-     "2,1:r",
-     "2,2:r",
-     "3,2:a",
-     "1,0:a",
-     "0,1:a",
+     "2,0:a",
      "3,1:a",
-     "2,2:e",
      "0,2:a",
-     "1,3:a"
+     "1,3:a",
+     "2,1:r",
+     "1,2:r"
     ],
     "plusLoin": [
+     "0,0:a",
      "0,0:r",
-     "3,0:s1",
-     "3,0:s2",
-     "0,3:r",
+     "3,0:r",
+     "0,3:s1",
+     "0,3:s2",
+     "3,3:a",
      "3,3:r",
-     "2,3:c1",
-     "1,1:c1",
-     "1,2:n",
-     "1,2:c3",
-     "J2,1",
-     "J2,3"
+     "3,2:c2",
+     "1,1:r",
+     "2,2:c1",
+     "2,2:c2",
+     "J2,2",
+     "J3,2"
     ]
+   },
+   "rythmeLarge": {
+    "chaineMax": 3,
+    "distMax": 2
+   },
+   "acces": {
+    "portes": {
+     "vert": 5,
+     "rouge": 6
+    },
+    "ecart": -1,
+    "contacts": 4,
+    "chemins": {
+     "vert": 3,
+     "rouge": 3
+    },
+    "ecartChemins": 0
    },
    "sMedianPlacements": 2,
    "placementsAdmissibles": 36,
+   "partCinqContreDeux": 0,
    "document": {
     "tuiles": [
      {
@@ -517,13 +898,13 @@
       "rot": 0
      },
      {
+      "modeleId": "K2",
+      "col": 3,
+      "lig": 0,
+      "rot": 1
+     },
+     {
       "modeleId": "K4",
-      "col": 3,
-      "lig": 0,
-      "rot": 1
-     },
-     {
-      "modeleId": "K2",
       "col": 0,
       "lig": 3,
       "rot": 3
@@ -541,7 +922,7 @@
       "rot": 0
      },
      {
-      "modeleId": "B8",
+      "modeleId": "B1",
       "col": 2,
       "lig": 0,
       "rot": 0
@@ -583,28 +964,28 @@
       "rot": 2
      },
      {
-      "modeleId": "O9",
+      "modeleId": "Q1",
       "col": 1,
-      "lig": 1,
-      "rot": 1
-     },
-     {
-      "modeleId": "O9",
-      "col": 2,
       "lig": 1,
       "rot": 3
      },
      {
-      "modeleId": "O11",
+      "modeleId": "Q1",
+      "col": 2,
+      "lig": 1,
+      "rot": 2
+     },
+     {
+      "modeleId": "Q1",
       "col": 1,
       "lig": 2,
       "rot": 0
      },
      {
-      "modeleId": "O6",
+      "modeleId": "Q2",
       "col": 2,
       "lig": 2,
-      "rot": 3
+      "rot": 0
      }
     ],
     "jetons": [
@@ -614,6 +995,11 @@
       "type": "capture"
      },
      {
+      "i": 2,
+      "j": 1,
+      "type": "capture"
+     },
+     {
       "i": 3,
       "j": 1,
       "type": "capture"
@@ -624,17 +1010,12 @@
       "type": "capture"
      },
      {
-      "i": 2,
-      "j": 2,
-      "type": "capture"
-     },
-     {
-      "i": 3,
-      "j": 2,
-      "type": "capture"
-     },
-     {
       "i": 1,
+      "j": 3,
+      "type": "capture"
+     },
+     {
+      "i": 2,
       "j": 3,
       "type": "capture"
      },
@@ -648,14 +1029,10 @@
   },
   "4x4-B": {
    "tuiles": {
-    "K4": 1,
-    "K2": 3,
-    "B1": 7,
-    "B8": 1,
-    "O9": 1,
-    "O10": 1,
-    "O6": 1,
-    "O7": 1
+    "K2": 2,
+    "K4": 2,
+    "B1": 8,
+    "Q1": 4
    },
    "cases": 56,
    "casesTuiles": 54,
@@ -664,20 +1041,20 @@
     "1,1": 4,
     "2,1": 3,
     "3,1": 3,
-    "1,2": 3,
-    "2,2": 3,
-    "3,2": 3,
-    "1,3": 4,
-    "2,3": 4,
-    "3,3": 3
+    "1,2": 4,
+    "2,2": 4,
+    "3,2": 4,
+    "1,3": 3,
+    "2,3": 3,
+    "3,3": 4
    },
    "portsMin": 3,
-   "portsTotal": 30,
+   "portsTotal": 32,
    "villes": [
     "(1,1)",
     "(2,1)",
     "(3,1)",
-    "(3,2)",
+    "(1,2)",
     "(1,3)",
     "(2,3)",
     "(3,3)"
@@ -686,11 +1063,12 @@
     4,
     3,
     3,
+    4,
     3,
-    4,
-    4,
-    3
+    3,
+    4
    ],
+   "villesA3": 7,
    "ecartMinVilles": 4,
    "villesProches": 0,
    "S": 0,
@@ -700,6 +1078,7 @@
     "2": 3,
     "egalite": 1
    },
+   "cinqContreDeux": false,
    "tempo": {
     "1": {
      "3": 6,
@@ -748,66 +1127,92 @@
     2,
     2
    ],
-   "apparitionsDansReseaux": 4,
+   "reseauxEconomes": [
+    2,
+    2,
+    2,
+    2
+   ],
+   "apparitionsDansReseaux": 6,
    "contactVertRouge": 1,
    "rythme": {
     "zones": 15,
     "distMax": 2,
     "repartition": {
-     "1": 38,
-     "2": 10
+     "1": 36,
+     "2": 12
     },
     "injoignables": 0,
     "chaineMax": 3,
     "chaine": [
-     "J3,2",
-     "2,2:c2",
-     "2,2:a",
-     "2,2:c4",
-     "J2,3"
+     "J1,1",
+     "0,1:c1",
+     "0,1:a",
+     "0,1:c2",
+     "J1,2"
     ],
     "casesPassage": [
-     "2,0:r",
-     "3,1:a",
-     "1,2:r",
-     "0,2:a",
-     "2,2:b",
-     "2,3:a",
      "1,0:a",
-     "2,1:r"
+     "2,1:r",
+     "2,0:a",
+     "3,1:a",
+     "0,2:a",
+     "1,3:a",
+     "2,3:a",
+     "1,2:r"
     ],
     "plusLoin": [
-     "0,0:s1",
-     "0,0:s2",
-     "3,0:r",
-     "0,3:r",
+     "0,0:r",
+     "3,0:s1",
+     "3,0:s2",
+     "0,3:s1",
+     "0,3:s2",
      "3,3:r",
-     "0,1:c2",
+     "3,2:c2",
      "1,1:c1",
-     "1,2:e",
-     "J1,2",
-     "J2,2"
+     "2,2:c1",
+     "2,2:c2",
+     "J2,2",
+     "J3,2"
     ]
+   },
+   "rythmeLarge": {
+    "chaineMax": 3,
+    "distMax": 2
+   },
+   "acces": {
+    "portes": {
+     "vert": 6,
+     "rouge": 6
+    },
+    "ecart": 0,
+    "contacts": 4,
+    "chemins": {
+     "vert": 3,
+     "rouge": 3
+    },
+    "ecartChemins": 0
    },
    "sMedianPlacements": 1,
    "placementsAdmissibles": 36,
+   "partCinqContreDeux": 0,
    "document": {
     "tuiles": [
      {
+      "modeleId": "K2",
+      "col": 0,
+      "lig": 0,
+      "rot": 0
+     },
+     {
+      "modeleId": "K4",
+      "col": 3,
+      "lig": 0,
+      "rot": 1
+     },
+     {
       "modeleId": "K4",
       "col": 0,
-      "lig": 0,
-      "rot": 0
-     },
-     {
-      "modeleId": "K2",
-      "col": 3,
-      "lig": 0,
-      "rot": 1
-     },
-     {
-      "modeleId": "K2",
-      "col": 0,
       "lig": 3,
       "rot": 3
      },
@@ -824,7 +1229,7 @@
       "rot": 0
      },
      {
-      "modeleId": "B8",
+      "modeleId": "B1",
       "col": 2,
       "lig": 0,
       "rot": 0
@@ -866,25 +1271,25 @@
       "rot": 2
      },
      {
-      "modeleId": "O9",
+      "modeleId": "Q1",
       "col": 1,
       "lig": 1,
       "rot": 2
      },
      {
-      "modeleId": "O10",
+      "modeleId": "Q1",
       "col": 2,
       "lig": 1,
       "rot": 2
      },
      {
-      "modeleId": "O6",
+      "modeleId": "Q1",
       "col": 1,
       "lig": 2,
-      "rot": 1
+      "rot": 0
      },
      {
-      "modeleId": "O7",
+      "modeleId": "Q1",
       "col": 2,
       "lig": 2,
       "rot": 0
@@ -907,7 +1312,7 @@
       "type": "capture"
      },
      {
-      "i": 3,
+      "i": 1,
       "j": 2,
       "type": "capture"
      },
@@ -932,16 +1337,16 @@
   "5x5-A": {
    "tuiles": {
     "K2": 4,
-    "B7": 6,
-    "B1": 6,
-    "P1": 2,
-    "P6": 2,
+    "B7": 11,
+    "B1": 1,
+    "P5": 1,
+    "U1": 4,
+    "P2": 1,
     "P3": 2,
-    "P2": 2,
-    "P5": 1
+    "P1": 1
    },
-   "cases": 80,
-   "casesTuiles": 71,
+   "cases": 77,
+   "casesTuiles": 68,
    "jonctionsCases": 9,
    "ports": {
     "1,1": 3,
@@ -953,24 +1358,24 @@
     "3,2": 3,
     "4,2": 2,
     "1,3": 2,
-    "2,3": 3,
+    "2,3": 2,
     "3,3": 2,
-    "4,3": 2,
+    "4,3": 3,
     "1,4": 3,
-    "2,4": 2,
-    "3,4": 3,
-    "4,4": 3
+    "2,4": 3,
+    "3,4": 2,
+    "4,4": 2
    },
    "portsMin": 2,
-   "portsTotal": 40,
+   "portsTotal": 39,
    "villes": [
     "(1,1)",
     "(4,1)",
     "(2,2)",
     "(3,2)",
-    "(2,3)",
+    "(4,3)",
     "(1,4)",
-    "(4,4)"
+    "(2,4)"
    ],
    "villesPorts": [
     3,
@@ -981,23 +1386,25 @@
     3,
     3
    ],
+   "villesA3": 7,
    "ecartMinVilles": 4,
    "villesProches": 0,
-   "S": 1,
-   "ecartMax7": 1,
+   "S": 0,
+   "ecartMax7": 0,
    "partage": {
-    "1": 3,
-    "2": 3,
-    "egalite": 1
+    "1": 2,
+    "2": 2,
+    "egalite": 3
    },
+   "cinqContreDeux": false,
    "tempo": {
     "1": {
-     "3": 4,
+     "3": 5,
      "4": 6,
-     "5": 6
+     "5": 7
     },
     "2": {
-     "3": 4,
+     "3": 5,
      "4": 6,
      "5": 7
     }
@@ -1013,16 +1420,16 @@
      2,
      3,
      3,
+     3,
      4,
-     4,
-     6
+     5
     ],
     "2": [
      2,
      2,
      3,
      3,
-     4,
+     3,
      4,
      5
     ]
@@ -1033,24 +1440,30 @@
    "raccordsMorts": 0,
    "erreursPlateau": [],
    "reseauxPassages": [
-    3,
-    3,
-    2,
-    2,
+    4,
     2,
     2,
     2,
     2,
     2
    ],
-   "apparitionsDansReseaux": 10,
+   "reseauxEconomes": [
+    2,
+    2,
+    2,
+    2,
+    2,
+    4
+   ],
+   "apparitionsDansReseaux": 8,
    "contactVertRouge": 2,
    "rythme": {
-    "zones": 25,
-    "distMax": 2,
+    "zones": 19,
+    "distMax": 3,
     "repartition": {
-     "1": 46,
-     "2": 16
+     "1": 38,
+     "2": 20,
+     "3": 7
     },
     "injoignables": 0,
     "chaineMax": 3,
@@ -1062,46 +1475,49 @@
      "J2,2"
     ],
     "casesPassage": [
-     "2,1:b",
+     "1,0:a",
+     "2,1:r",
      "2,0:a",
-     "1,2:b",
-     "0,2:a",
-     "3,0:a",
-     "4,1:a",
-     "2,1:a",
-     "0,1:a",
-     "1,2:a",
      "4,2:a",
-     "3,1:s",
-     "0,3:a",
+     "0,1:a",
+     "1,2:r",
+     "0,2:a",
+     "2,3:s",
      "4,3:a",
-     "3,2:r",
-     "1,4:a",
+     "3,4:a",
      "2,4:a",
-     "3,3:r",
-     "2,3:s"
+     "3,3:r"
     ],
     "plusLoin": [
-     "0,0:r",
-     "4,0:r",
-     "0,4:r",
-     "4,4:r",
-     "1,0:c1",
-     "3,4:c1",
-     "1,3:r",
-     "J2,1",
-     "J3,1",
-     "J1,2",
+     "4,4:c1",
+     "3,1:c3",
+     "2,2:c4",
+     "1,3:c3",
      "J4,2",
      "J1,3",
-     "J3,3",
-     "J4,3",
-     "J2,4",
-     "J3,4"
+     "J3,3"
     ]
    },
-   "sMedianPlacements": 1,
-   "placementsAdmissibles": 3,
+   "rythmeLarge": {
+    "chaineMax": 3,
+    "distMax": 3
+   },
+   "acces": {
+    "portes": {
+     "vert": 10,
+     "rouge": 10
+    },
+    "ecart": 0,
+    "contacts": 2,
+    "chemins": {
+     "vert": 6,
+     "rouge": 6
+    },
+    "ecartChemins": 0
+   },
+   "sMedianPlacements": 0,
+   "placementsAdmissibles": 1,
+   "partCinqContreDeux": 0,
    "document": {
     "tuiles": [
      {
@@ -1135,13 +1551,13 @@
       "rot": 0
      },
      {
-      "modeleId": "B1",
+      "modeleId": "B7",
       "col": 2,
       "lig": 0,
       "rot": 0
      },
      {
-      "modeleId": "B7",
+      "modeleId": "B1",
       "col": 3,
       "lig": 0,
       "rot": 0
@@ -1153,13 +1569,13 @@
       "rot": 3
      },
      {
-      "modeleId": "B1",
+      "modeleId": "B7",
       "col": 4,
       "lig": 1,
       "rot": 1
      },
      {
-      "modeleId": "B1",
+      "modeleId": "B7",
       "col": 0,
       "lig": 2,
       "rot": 3
@@ -1183,76 +1599,76 @@
       "rot": 1
      },
      {
-      "modeleId": "B1",
+      "modeleId": "B7",
       "col": 1,
       "lig": 4,
       "rot": 2
      },
      {
-      "modeleId": "B1",
+      "modeleId": "B7",
       "col": 2,
       "lig": 4,
       "rot": 2
      },
      {
-      "modeleId": "B1",
+      "modeleId": "B7",
       "col": 3,
       "lig": 4,
-      "rot": 2
-     },
-     {
-      "modeleId": "P1",
-      "col": 1,
-      "lig": 1,
-      "rot": 0
-     },
-     {
-      "modeleId": "P6",
-      "col": 2,
-      "lig": 1,
-      "rot": 2
-     },
-     {
-      "modeleId": "P3",
-      "col": 3,
-      "lig": 1,
-      "rot": 0
-     },
-     {
-      "modeleId": "P6",
-      "col": 1,
-      "lig": 2,
-      "rot": 1
-     },
-     {
-      "modeleId": "P2",
-      "col": 2,
-      "lig": 2,
-      "rot": 3
-     },
-     {
-      "modeleId": "P1",
-      "col": 3,
-      "lig": 2,
       "rot": 2
      },
      {
       "modeleId": "P5",
       "col": 1,
-      "lig": 3,
-      "rot": 1
+      "lig": 1,
+      "rot": 0
      },
      {
-      "modeleId": "P3",
+      "modeleId": "U1",
       "col": 2,
-      "lig": 3,
+      "lig": 1,
       "rot": 2
      },
      {
       "modeleId": "P2",
       "col": 3,
+      "lig": 1,
+      "rot": 0
+     },
+     {
+      "modeleId": "U1",
+      "col": 1,
+      "lig": 2,
+      "rot": 0
+     },
+     {
+      "modeleId": "P3",
+      "col": 2,
+      "lig": 2,
+      "rot": 3
+     },
+     {
+      "modeleId": "U1",
+      "col": 3,
+      "lig": 2,
+      "rot": 2
+     },
+     {
+      "modeleId": "U1",
+      "col": 1,
       "lig": 3,
       "rot": 2
+     },
+     {
+      "modeleId": "P3",
+      "col": 2,
+      "lig": 3,
+      "rot": 1
+     },
+     {
+      "modeleId": "P1",
+      "col": 3,
+      "lig": 3,
+      "rot": 3
      }
     ],
     "jetons": [
@@ -1277,7 +1693,7 @@
       "type": "capture"
      },
      {
-      "i": 2,
+      "i": 4,
       "j": 3,
       "type": "capture"
      },
@@ -1287,7 +1703,7 @@
       "type": "capture"
      },
      {
-      "i": 4,
+      "i": 2,
       "j": 4,
       "type": "capture"
      }
@@ -1297,33 +1713,31 @@
   "5x5-B": {
    "tuiles": {
     "K2": 4,
-    "B9": 2,
-    "B7": 4,
-    "B1": 6,
-    "P1": 3,
-    "P5": 1,
-    "P2": 2,
-    "P6": 1,
+    "B1": 4,
+    "B7": 8,
+    "P1": 2,
+    "U1": 2,
+    "P5": 3,
     "P3": 2
    },
-   "cases": 81,
-   "casesTuiles": 72,
+   "cases": 78,
+   "casesTuiles": 69,
    "jonctionsCases": 9,
    "ports": {
     "1,1": 3,
     "2,1": 2,
     "3,1": 2,
     "4,1": 3,
-    "1,2": 2,
+    "1,2": 3,
     "2,2": 2,
     "3,2": 3,
     "4,2": 2,
-    "1,3": 3,
+    "1,3": 2,
     "2,3": 3,
     "3,3": 2,
-    "4,3": 2,
+    "4,3": 3,
     "1,4": 3,
-    "2,4": 3,
+    "2,4": 2,
     "3,4": 2,
     "4,4": 3
    },
@@ -1332,8 +1746,8 @@
    "villes": [
     "(1,1)",
     "(4,1)",
+    "(1,2)",
     "(3,2)",
-    "(1,3)",
     "(2,3)",
     "(1,4)",
     "(4,4)"
@@ -1347,19 +1761,21 @@
     3,
     3
    ],
+   "villesA3": 7,
    "ecartMinVilles": 4,
    "villesProches": 0,
-   "S": 3,
-   "ecartMax7": 1,
+   "S": 0,
+   "ecartMax7": 0,
    "partage": {
     "1": 2,
-    "2": 4,
-    "egalite": 1
+    "2": 2,
+    "egalite": 3
    },
+   "cinqContreDeux": false,
    "tempo": {
     "1": {
-     "3": 4,
-     "4": 6,
+     "3": 5,
+     "4": 7,
      "5": 7
     },
     "2": {
@@ -1379,14 +1795,14 @@
      2,
      3,
      3,
+     3,
      4,
-     4,
-     5
+     4
     ],
     "2": [
      2,
      2,
-     2,
+     3,
      3,
      3,
      4,
@@ -1408,49 +1824,94 @@
     2,
     2
    ],
-   "apparitionsDansReseaux": 8,
+   "reseauxEconomes": [
+    2,
+    2,
+    2,
+    3,
+    3,
+    2,
+    2,
+    2
+   ],
+   "apparitionsDansReseaux": 12,
    "contactVertRouge": 2,
    "rythme": {
-    "zones": 24,
-    "distMax": 3,
+    "zones": 23,
+    "distMax": 2,
     "repartition": {
-     "1": 44,
-     "2": 19,
-     "3": 1
+     "1": 43,
+     "2": 19
     },
     "injoignables": 0,
-    "chaineMax": 2,
+    "chaineMax": 3,
     "chaine": [
-     "J1,1",
-     "1,0:c2",
-     "1,0:a",
-     "1,0:r"
+     "J4,1",
+     "3,1:c3",
+     "3,1:r",
+     "3,1:c1",
+     "J3,2"
     ],
     "casesPassage": [
-     "1,0:r",
+     "1,0:a",
      "0,1:a",
-     "4,2:r",
-     "3,2:a",
-     "3,2:b",
-     "1,1:r",
      "2,0:a",
-     "3,1:r",
+     "1,1:r",
      "3,0:a",
+     "2,1:r",
      "4,1:a",
+     "4,2:a",
+     "2,3:r",
+     "0,2:a",
      "0,3:a",
-     "1,4:a",
-     "2,2:r",
      "4,3:a",
+     "3,4:a",
+     "1,4:a",
      "2,4:a",
-     "1,3:s",
      "3,3:r"
     ],
     "plusLoin": [
-     "2,1:c1"
+     "0,0:r",
+     "4,0:r",
+     "0,4:r",
+     "4,4:r",
+     "3,1:r",
+     "1,2:c4",
+     "2,2:r",
+     "3,2:c4",
+     "3,2:c3",
+     "1,3:r",
+     "J2,1",
+     "J3,1",
+     "J2,2",
+     "J4,2",
+     "J1,3",
+     "J3,3",
+     "J4,3",
+     "J2,4",
+     "J3,4"
     ]
    },
-   "sMedianPlacements": 4,
-   "placementsAdmissibles": 3,
+   "rythmeLarge": {
+    "chaineMax": 3,
+    "distMax": 2
+   },
+   "acces": {
+    "portes": {
+     "vert": 9,
+     "rouge": 9
+    },
+    "ecart": 0,
+    "contacts": 2,
+    "chemins": {
+     "vert": 6,
+     "rouge": 6
+    },
+    "ecartChemins": 0
+   },
+   "sMedianPlacements": 0,
+   "placementsAdmissibles": 4,
+   "partCinqContreDeux": 0,
    "document": {
     "tuiles": [
      {
@@ -1478,7 +1939,7 @@
       "rot": 2
      },
      {
-      "modeleId": "B9",
+      "modeleId": "B1",
       "col": 1,
       "lig": 0,
       "rot": 0
@@ -1502,7 +1963,7 @@
       "rot": 3
      },
      {
-      "modeleId": "B1",
+      "modeleId": "B7",
       "col": 4,
       "lig": 1,
       "rot": 1
@@ -1514,37 +1975,37 @@
       "rot": 3
      },
      {
-      "modeleId": "B9",
+      "modeleId": "B1",
       "col": 4,
       "lig": 2,
       "rot": 1
      },
      {
-      "modeleId": "B1",
+      "modeleId": "B7",
       "col": 0,
       "lig": 3,
       "rot": 3
      },
      {
-      "modeleId": "B1",
+      "modeleId": "B7",
       "col": 4,
       "lig": 3,
       "rot": 1
      },
      {
-      "modeleId": "B1",
+      "modeleId": "B7",
       "col": 1,
       "lig": 4,
       "rot": 2
      },
      {
-      "modeleId": "B1",
+      "modeleId": "B7",
       "col": 2,
       "lig": 4,
       "rot": 2
      },
      {
-      "modeleId": "B7",
+      "modeleId": "B1",
       "col": 3,
       "lig": 4,
       "rot": 2
@@ -1552,56 +2013,56 @@
      {
       "modeleId": "P1",
       "col": 1,
+      "lig": 1,
+      "rot": 1
+     },
+     {
+      "modeleId": "U1",
+      "col": 2,
       "lig": 1,
       "rot": 1
      },
      {
       "modeleId": "P5",
-      "col": 2,
-      "lig": 1,
-      "rot": 0
-     },
-     {
-      "modeleId": "P2",
       "col": 3,
       "lig": 1,
-      "rot": 2
-     },
-     {
-      "modeleId": "P1",
-      "col": 1,
-      "lig": 2,
       "rot": 3
      },
      {
-      "modeleId": "P2",
-      "col": 2,
+      "modeleId": "P3",
+      "col": 1,
       "lig": 2,
       "rot": 2
      },
      {
-      "modeleId": "P6",
-      "col": 3,
+      "modeleId": "P5",
+      "col": 2,
       "lig": 2,
       "rot": 1
      },
      {
       "modeleId": "P3",
-      "col": 1,
-      "lig": 3,
-      "rot": 3
+      "col": 3,
+      "lig": 2,
+      "rot": 0
      },
      {
-      "modeleId": "P3",
+      "modeleId": "P5",
+      "col": 1,
+      "lig": 3,
+      "rot": 1
+     },
+     {
+      "modeleId": "U1",
       "col": 2,
       "lig": 3,
-      "rot": 2
+      "rot": 3
      },
      {
       "modeleId": "P1",
       "col": 3,
       "lig": 3,
-      "rot": 2
+      "rot": 3
      }
     ],
     "jetons": [
@@ -1616,13 +2077,13 @@
       "type": "capture"
      },
      {
-      "i": 3,
+      "i": 1,
       "j": 2,
       "type": "capture"
      },
      {
-      "i": 1,
-      "j": 3,
+      "i": 3,
+      "j": 2,
       "type": "capture"
      },
      {
