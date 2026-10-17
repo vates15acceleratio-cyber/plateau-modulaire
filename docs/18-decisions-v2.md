@@ -99,3 +99,11 @@ Après les avis `28-avis-design-5x5.md` (design de jeu) et `29-avis-geometrie-5x
 - **4×4 : un seul passage par centrale** : O2 et O3 sortent.
 - **Apparition reliée au passage d'une centrale voisine** (rencontre entre tuiles au niveau du plateau) : **acceptable**.
 - **Rythme plutôt que densité** (à la place du choix 75–77 / 78–80 en 5×5) : « éviter les longues chaînes de cases » ; sur les exemples, il y a parfois 6 cases d'affilée sans ville ni raccourci, soit autant de tours sans action. **Rester sur un déplacement sain d'environ 3 cases entre deux zones d'intérêt** (ville, passage) ; **la rapidité est plus intéressante** que la densité. Conséquence : moins de cases par tuile si nécessaire, et une mesure « plus longue chaîne de cases sans zone d'intérêt » à ajouter.
+
+## Réponses de l'utilisateur sur la révision « rythme » (2026-10-17, images du `44`)
+- **4×4** : « Les centrales doivent avoir plus de chemins ; cela crée trop de déséquilibre entre les deux camps ; il faut plus de routes aux coins. » Le 5×5 est un peu mieux équilibré, mais **les chemins vers le centre montrent un déséquilibre** entre les camps.
+- **5×5** : **garder 3 accès aux villes** et **réduire le nombre total de cases** ; **sur les centrales surtout, autoriser plus d'accès**.
+- Lecture de l'orchestrateur :
+  - les centrales doivent desservir **plus de coins** (jonctions, donc villes), 3 ou 4, par davantage de chemins, avec moins de cases de relais ;
+  - l'**équilibre des accès au centre** entre les deux camps devient un critère mesuré ;
+  - le plafond « 1 passage par centrale » en 4×4 reste en vigueur (non rouvert).
