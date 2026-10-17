@@ -306,10 +306,12 @@ test('export 5×5 : dimensions PNG à 300 dpi des feuilles, aperçu du plateau 5
 /* Générateur                                                          */
 /* ------------------------------------------------------------------ */
 
-test('générateur 5×5 : plateau complet valide, tirage libre des jonctions-cases, reproductible', () => {
+test('générateur 5×5 : plateau complet valide, villes en 2-3-2, jonctions-cases par défaut, reproductible', () => {
   const F5 = PM.geometrie.format('5x5');
-  assert.equal(GEN.pairesJonctionsCases(F5, false), null, 'point d\'extension : pas de règle de placement en 5×5');
-  assert.equal(GEN.pairesJonctionsCases(F5, true), null);
+  // 5×5 : 2016 placements 2-3-2 (9 jonctions-cases chacun), la même liste avec ou sans l'option « variées » (masquée en 5×5)
+  assert.equal(GEN.pairesJonctionsCases(F5, false).length, 2016);
+  assert.ok(GEN.pairesJonctionsCases(F5, false).every((p) => p.length === 9));
+  assert.deepEqual(GEN.pairesJonctionsCases(F5, true), GEN.pairesJonctionsCases(F5, false));
   assert.ok(GEN.pairesJonctionsCases(PM.geometrie.format('4x4'), false).length > 0);
   const doc = doc5();
   const r = GEN.generer(doc, { graine: 'essai-5x5', candidats: 30 });
@@ -318,6 +320,8 @@ test('générateur 5×5 : plateau complet valide, tirage libre des jonctions-cas
   assert.equal(r.doc.plateau.tuiles.length, 25);
   assert.equal(r.doc.plateau.jetons.length, 7);
   assert.ok(r.doc.plateau.jetons.every((j) => j.i >= 1 && j.i <= 4 && j.j >= 1 && j.j <= 4 && j.type === 'capture'));
+  const parRangee = [1, 2, 3, 4].map((rang) => r.doc.plateau.jetons.filter((j) => j.j === rang).length);
+  assert.deepEqual([parRangee[0], parRangee[1] + parRangee[2], parRangee[3]], [2, 3, 2], 'villes en 2-3-2');
   assert.deepEqual(M.validerPlateau(r.doc).erreurs, []);
   const c = C.calculer(r.doc);
   assert.deepEqual(c.erreurs.map((e) => e.code), []);

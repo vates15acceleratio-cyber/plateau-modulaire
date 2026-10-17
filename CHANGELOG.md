@@ -1,5 +1,33 @@
 # Journal des modifications
 
+## [3.04.0] - 2026-10-17
+
+Mineure
+
+Le plateau aléatoire 5×5, provisoire jusqu'ici, est refait : centrales orientées, 5 ou 6 B1, villes en 2-3-2 sur des jonctions bien reliées, et un plateau trop déséquilibré n'est plus proposé. Les seuils d'équilibre 5×5 deviennent définitifs (les mêmes que le 4×4), et le rapport d'équilibre donne un conseil et une information propres au 5×5. Avec les réglages par défaut, le plateau 4×4 garde son comportement. Le format des documents ne change pas (compatible avec la 3.03.0).
+
+### Ajouté
+- Conseil 5×5 dans le rapport d'équilibre : quand les 3 villes du milieu sont sur une même rangée, il propose d'en mettre 2 sur l'une et 1 sur l'autre (« 5 contre 2 » ou score S ≥ 5).
+- Rubrique « Informations » du rapport d'équilibre 5×5 : une ville posée sur une jonction à moins de 3 ports y est signalée, sans alerte.
+- Outils et documents de mesure 5×5 : `outils/mesures-5x5.js` et son rapport (`docs/35`, 1000 plateaux à graine fixe), conception du générateur (`docs/34`), avis sur les seuils (`docs/36`), revue (`docs/37`).
+- Tests du générateur 5×5, du conseil, des mesures et de la recette du générateur (`tests/generateur-5x5.test.js`, `tests/conseil-5x5.test.js`, `tests/mesures-5x5.test.js`, `tests/recette-generateur-5x5.test.js`) ; scénario S9c de la page de recette.
+
+### Modifié
+- Plateau aléatoire 5×5 : les centrales sont orientées pour que chaque jonction intérieure ait au moins 2 ports et que les villes soient sur des jonctions à au moins 3 ports ; les villes se répartissent en 2-3-2 sur les rangées ; 5 ou 6 B1 sont posés en premier sur les bords de la rangée neutre.
+- Plateau aléatoire 5×5 : les plateaux dont le score S atteint 5 sont écartés.
+- Plateau aléatoire 5×5 : si la bibliothèque ne peut pas donner de plateau, la génération s'arrête après 25 essais consécutifs rejetés pour manque de ports, et indique la cause.
+- Seuils d'équilibre 5×5 définitifs, identiques à ceux du 4×4 (aucune valeur numérique ne change).
+- Documentation : `CLAUDE.md`, `docs/4-architecture.md` et `docs/25-travail-restant.md` mis à jour (état de pause, travail restant).
+
+### Corrigé
+- Plateau aléatoire : un nombre de candidats infini faisait boucler le calcul sans fin ; il est borné à 1000, et une valeur non numérique revient à la valeur par défaut au lieu d'afficher « 0 essai ».
+- Mesure des autoroutes de flanc en 5×5 (`PM.graphe.flancs`) : la colonne centrale était oubliée ; corrigée, sans effet sur le 4×4.
+
+### Connu
+- Tempo du plateau 5×5 (4,75 villes sur 7 à 3 pas au plus, contre 5,7 en 4×4) et rôle des centrales (villes surtout sur les flancs) : à décider par l'utilisateur.
+- Affichage sur mobile (375 px) dégradé, déjà présent avant cette version.
+- Audit de sécurité des derniers ajouts à faire ; format hexagonal en attente ; régions thématiques à discuter (`docs/25-travail-restant.md`).
+
 ## [3.03.0] - 2026-10-16
 
 Mineure

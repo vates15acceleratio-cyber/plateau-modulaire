@@ -32,9 +32,9 @@ docs/brouillons/    travaux inachevés, à consulter sans les appliquer
 | `rendu.js` | tracé SVG des tuiles et des jetons | non |
 | `etat.js` | état partagé, historique annuler / rétablir | non |
 | `sauvegarde.js` | JSON, migration des documents v1, sauvegarde automatique | oui (stockage, fichiers) |
-| `graphe.js` | graphe des cases, plus courts chemins, analyse d'équilibre | non |
+| `graphe.js` | graphe des cases, plus courts chemins, analyse d'équilibre (`equilibre` renvoie aussi `informations` : 5×5, ville sur une jonction à moins de `PORTS_VILLE_MIN` ports, jamais une alerte) ; exporte `PORTS_VILLE_MIN` (3), `PORTS_JONCTION_MIN` (2), `REPARTITION_VILLES_5X5` (2-3-2) et `flancs` (centre = colonnes 1 à colonnes − 2) | non |
 | `equilibre.js` | rapport d'équilibre | partiel (calcul pur + boîte de dialogue) |
-| `generateur.js` | plateau aléatoire reproductible | partiel (calcul pur + boîte de dialogue) |
+| `generateur.js` | plateau aléatoire reproductible ; exporte aussi `causeRejet` (chaîne de filtres unique), `sontMiroirs`, `placementsVilles5x5` (gelés), `tuilesOrientees5x5` (`tronque` si le budget de nœuds est dépassé) ; 5×5 : abandon après 25 échecs consécutifs de manque de ports, `candidats` borné à 1000 | partiel (calcul pur + boîte de dialogue) |
 | `export.js` | planches PDF / SVG / PNG | oui |
 | `controles.js` | compteurs et alertes | partiel (calcul pur + boîte de dialogue) |
 | `bibliotheque.js` | colonne bibliothèque de modèles | oui |

@@ -94,6 +94,7 @@
   <script src="../src/etat.js"></script>
   <script src="../src/sauvegarde.js"></script>
   <script src="../src/graphe.js"></script>
+  <script src="../src/equilibre.js"></script>
   <script src="../src/generateur.js"></script>
   <script src="../src/controles.js"></script>
   <script src="../src/bibliotheque.js"></script>
@@ -862,6 +863,157 @@
       reset(docExemples('4x4'));
     }
 
+
+    /* ============================================================== */
+    /** S9c : parcours du générateur 5×5 dans l’interface (vrai catalogue) : Nouveau → 5×5, Plateau aléatoire, Générer, Appliquer, Ctrl+Z,
+     *  rapport d’équilibre, conseil « 3 villes du milieu » en pose manuelle, information « ville sur jonction à moins de 3 ports ». */
+    function s8c_generateur5x5_parcours() {
+      titre('S9c Générateur 5×5 : parcours dans l’interface (docs/34, docs/36)');
+      var CONSEIL = 'Les 3 villes du milieu sont sur une seule rangée : en mettre 2 sur l’une et 1 sur l’autre rétablit presque toujours l’équilibre';
+      var GR = PM.graphe, GEN = PM.generateur;
+      function bouton(zone, texte) {
+        var bs = zone.querySelectorAll('button'), r = null;
+        for (var k = 0; k < bs.length; k++) if (bs[k].textContent.indexOf(texte) === 0) r = bs[k];
+        return r;
+      }
+      function resume() { var u = document.querySelector('#dialogue-contenu .pm-generateur-resume'); return u ? u.textContent : null; }
+      function cle(v) { return v.i + ',' + v.j; }
+      function codes(e) { return e.blocages.concat(e.alertes).map(function (a) { return a.code; }); }
+      function nbSur(vs, jj) { return vs.filter(function (v) { return v.j === jj; }).length; }
+      function unePlace(vs) { return nbSur(vs, 1) === 2 && nbSur(vs, 4) === 2 && (nbSur(vs, 2) === 3 || nbSur(vs, 3) === 3); }
+      function avecVilles(vs) { var d = JSON.parse(JSON.stringify(etat.doc())); d.plateau.jetons = vs.map(function (v) { return { i: v.i, j: v.j, type: 'capture' }; }); return d; }
+      /** Met les villes du plateau en place par des clics sur les jonctions (retire d’abord celles qui ne servent pas). */
+      function poserVilles(vs) {
+        etat.doc().plateau.jetons.slice().forEach(function (j) {
+          if (!vs.some(function (v) { return v.i === j.i && v.j === j.j; })) cliquerJonction(j.i, j.j);
+        });
+        vs.forEach(function (v) { if (!etat.doc().plateau.jetons.some(function (x) { return x.i === v.i && x.j === v.j; })) cliquerJonction(v.i, v.j); });
+      }
+      function texteControles() { return $('controles').textContent; }
+      function ouvrirRapport() {
+        var b = bouton($('controles'), 'Rapport d'); if (b) b.click();
+        return $('dialogue-contenu').textContent;
+      }
+
+      return Promise.resolve().then(function () {
+        reset(PM.catalogue.nouveauDocument('4x4'));
+        $('btn-nouveau').click();
+        document.querySelector('#dialogue-contenu input[name="pm-nouveau-grille"][value="5x5"]').checked = true;
+        document.querySelector('#dialogue-contenu .pm-nouveau-creer').click();
+        ctrl('Nouveau 5×5 (vrai catalogue) : document 5×5 vide', etat.doc().grille === '5x5' && nbTuiles() === 0);
+        var bg = bouton($('controles'), 'Plateau aléatoire');
+        ctrl('panneau : le bouton « Plateau aléatoire » existe et est actif', !!bg && !bg.disabled);
+        bg.click();
+        var dlg = $('dialogue-contenu');
+        ctrl('boîte « Plateau aléatoire » ouverte, champ graine et bouton Générer présents', $('dialogue').open && !!dlg.querySelector('.pm-generateur-graine') && !!bouton(dlg, 'Générer'));
+        ctrl('5×5 : option « jonctions variées » absente de la boîte', !dlg.querySelector('.pm-generateur-variees') && !/[Jj]onctions variées/.test(dlg.textContent), dlg.textContent.slice(0, 200));
+        ctrl('5×5 : explication du 2-3-2 et des 5 ou 6 B1 dans la boîte', /2-3-2/.test(dlg.textContent) && /B1/.test(dlg.textContent));
+        var appl = bouton(dlg, 'Appliquer');
+        ctrl('Appliquer désactivé avant la première génération', !!appl && appl.disabled);
+        dlg.querySelector('.pm-generateur-graine').value = 'recette-5x5-ui';
+        bouton(dlg, 'Générer').click();
+        return attendre(60);
+      }).then(function () {
+        var dlg = $('dialogue-contenu'), r1 = resume();
+        ctrl('Générer : aperçu et résumé affichés, Appliquer actif', !!r1 && !!dlg.querySelector('.pm-generateur-apercu svg') && !bouton(dlg, 'Appliquer').disabled, r1 && r1.slice(0, 80));
+        ctrl('Générer : la graine saisie est rendue dans le résumé', !!r1 && r1.indexOf('recette-5x5-ui') >= 0);
+        ctrl('Générer : le résumé annonce 2-3-2 et les B1', !!r1 && /2-3-2/.test(r1) && /bord\(s\) B1/.test(r1));
+        ctrl('Générer ne touche pas au plateau avant Appliquer', nbTuiles() === 0);
+        dlg.querySelector('.pm-generateur-graine').value = 'recette-5x5-ui';
+        bouton(dlg, 'Générer').click();
+        return attendre(60).then(function () { return r1; });
+      }).then(function (r1) {
+        var dlg = $('dialogue-contenu'), r2 = resume();
+        ctrl('même graine, même résumé (reproductibilité)', r1 === r2, String(r2).slice(0, 120));
+        bouton(dlg, 'Appliquer').click();
+        var d = etat.doc();
+        ctrl('Appliquer : boîte fermée, 25 tuiles, 7 villes, grille 5×5', !$('dialogue').open && d.grille === '5x5' && nbTuiles() === 25 && d.plateau.jetons.length === 7, nbTuiles() + ' ' + msg());
+        ctrl('Appliquer : message avec la graine et Ctrl+Z', /Plateau aléatoire appliqué \(graine recette-5x5-ui\)/.test(msg()) && /Ctrl\+Z/.test(msg()), msg());
+        var nb1 = d.plateau.tuiles.filter(function (t) { return t.modeleId === 'B1'; }).length;
+        ctrl('plateau appliqué : 5 ou 6 B1, dont (0,2) et (4,2)', (nb1 === 5 || nb1 === 6) && M.tuileEn(d, 0, 2).modeleId === 'B1' && M.tuileEn(d, 4, 2).modeleId === 'B1', nb1 + ' B1');
+        var mini = 9, ports3 = true, vs = d.plateau.jetons;
+        for (var j = 1; j <= 4; j++) for (var i = 1; i <= 4; i++) mini = Math.min(mini, M.portsJonction(d, i, j).ports);
+        vs.forEach(function (v) { if (M.portsJonction(d, v.i, v.j).ports < 3) ports3 = false; });
+        ctrl('plateau appliqué : toutes les jonctions à 2 ports au moins, villes à 3 ports au moins', mini >= 2 && ports3, 'minimum ' + mini);
+        ctrl('plateau appliqué : villes en 2-3-2', nbSur(vs, 1) === 2 && nbSur(vs, 2) + nbSur(vs, 3) === 3 && nbSur(vs, 4) === 2, vs.map(cle).join(' '));
+        var c = compteurs();
+        ctrl('plateau appliqué : compteur « Tuiles posées » 25 / 25', c['Tuiles posées'].v === '25 / 25', J(c));
+        var e = GR.equilibre(d);
+        ctrl('plateau appliqué : moteur sans alerte ni blocage ni information', e.complet && e.alertes.length === 0 && e.blocages.length === 0 && e.informations.length === 0, J(codes(e)));
+        var t = texteControles();
+        ctrl('panneau : aucune erreur ni alerte d’équilibre sur le plateau généré', !/déséquilibré|Score S|plus proche de|écart|Première ville/.test(t), t.replace(/\s+/g, ' ').slice(0, 300));
+        ctrl('panneau : aucune erreur (barre d’état)', niveau() !== 'erreur', niveau() + ' ' + pastille());
+        var rap = ouvrirRapport();
+        ctrl('rapport d’équilibre : « Aucune alerte d’équilibre. », pas de section Informations', /Aucune alerte d.équilibre\./.test(rap) && !document.querySelector('#dialogue-contenu .pm-equilibre-informations'), rap.replace(/\s+/g, ' ').slice(0, 200));
+        ctrl('rapport d’équilibre 5×5 : sans conseil des jonctions-cases du 4×4', !/jonctions-cases/.test(rap));
+        PM.dialogue.fermer();
+        var avant = docJ();
+        ctrlZ();
+        ctrl('Ctrl+Z : plateau vidé, grille toujours 5×5', etat.doc().grille === '5x5' && nbTuiles() === 0 && etat.doc().plateau.jetons.length === 0, nbTuiles() + ' tuiles');
+        ctrlY();
+        ctrl('Ctrl+Y : le plateau généré revient à l’identique', docJ() === avant);
+        // pose manuelle : placements 2-3-2 cherchés dans la page avec le moteur (et non codés en dur)
+        var trouve = { cinq: null, deuxUn: null, rien: null };
+        var pl = GEN.placementsVilles5x5();
+        for (var k = 0; k < pl.length && !(trouve.cinq && trouve.deuxUn && trouve.rien); k++) {
+          var vv = pl[k], ee = GR.equilibre(avecVilles(vv)), un = unePlace(vv);
+          if (un && codes(ee).indexOf('cinq_contre_deux') >= 0 && !trouve.cinq) trouve.cinq = vv;
+          if (!un && codes(ee).indexOf('score_s') >= 0 && !trouve.deuxUn) trouve.deuxUn = vv;
+          if (un && !codes(ee).length && !trouve.rien) trouve.rien = vv;
+        }
+        ctrl('recherche de placements : 3 sur une rangée avec 5 contre 2, 2+1 avec S ≥ 5, 3 sur une rangée sans alerte', !!(trouve.cinq && trouve.deuxUn && trouve.rien));
+        return trouve;
+      }).then(function (trouve) {
+        // (a) 3 villes du milieu sur une rangée + « 5 contre 2 »
+        poserVilles(trouve.cinq);
+        var e = GR.equilibre(etat.doc());
+        ctrl('pose manuelle (a) : villes posées par clics, moteur : « 5 contre 2 » bloquant', etat.doc().plateau.jetons.length === 7 && codes(e).indexOf('cinq_contre_deux') >= 0 && e.blocages.length >= 1, J(codes(e)) + ' ' + etat.doc().plateau.jetons.length);
+        var t = texteControles();
+        ctrl('pose manuelle (a) : le panneau affiche l’erreur de déséquilibre avec le conseil', /Plateau très déséquilibré/.test(t) && t.indexOf(CONSEIL) >= 0, t.replace(/\s+/g, ' ').slice(0, 300));
+        var rap = ouvrirRapport();
+        ctrl('pose manuelle (a) : le rapport d’équilibre affiche le conseil une seule fois (au message « 5 contre 2 », même si S ≥ 5 s’y ajoute)', rap.indexOf(CONSEIL) >= 0 && rap.split(CONSEIL).length - 1 === 1 && /Plateau très déséquilibré/.test(rap), (rap.split(CONSEIL).length - 1) + ' conseil(s)');
+        PM.dialogue.fermer();
+        // (b) 2 + 1 et S >= 5 : pas de conseil
+        poserVilles(trouve.deuxUn);
+        e = GR.equilibre(etat.doc());
+        ctrl('pose manuelle (b) : 2 + 1 sur le milieu, moteur : S ≥ 5', codes(e).indexOf('score_s') >= 0, J(codes(e)));
+        t = texteControles();
+        ctrl('pose manuelle (b) : le panneau signale le score S, sans conseil', /Score S/.test(t) && t.indexOf('seule rangée') < 0, t.replace(/\s+/g, ' ').slice(0, 300));
+        rap = ouvrirRapport();
+        ctrl('pose manuelle (b) : le rapport signale S, sans conseil', /Score S = /.test(rap) && rap.indexOf('seule rangée') < 0);
+        PM.dialogue.fermer();
+        // (c) 3 sur une rangée, aucune alerte : pas de conseil
+        poserVilles(trouve.rien);
+        e = GR.equilibre(etat.doc());
+        t = texteControles();
+        ctrl('pose manuelle (c) : 3 sur une rangée sans alerte : ni alerte ni conseil au panneau', codes(e).length === 0 && t.indexOf('seule rangée') < 0 && !/Plateau très déséquilibré|Score S/.test(t), J(codes(e)));
+        rap = ouvrirRapport();
+        ctrl('pose manuelle (c) : rapport « Aucune alerte d’équilibre. » sans conseil', /Aucune alerte d.équilibre\./.test(rap) && rap.indexOf('seule rangée') < 0);
+        PM.dialogue.fermer();
+        // (d) information : une ville sur une jonction à moins de 3 ports
+        var peu = null, beaucoup = [];
+        for (var j = 1; j <= 4; j++) for (var i = 1; i <= 4; i++) {
+          var p = M.portsJonction(etat.doc(), i, j).ports;
+          if (p < 3 && !peu) peu = { i: i, j: j, p: p }; else if (p >= 3) beaucoup.push({ i: i, j: j });
+        }
+        ctrl('plateau : au moins une jonction à moins de 3 ports pour tester l’information', !!peu && beaucoup.length >= 7);
+        poserVilles(beaucoup.slice(0, 6).concat([peu]));
+        ctrl('information (d) : les 7 villes ont pu être posées par clics', etat.doc().plateau.jetons.length === 7, etat.doc().plateau.jetons.length + ' villes ; ' + msg());
+        if (etat.doc().plateau.jetons.length === 7) {
+          e = GR.equilibre(etat.doc());
+          ctrl('information (d) : une information « ville_peu_de_ports » du moteur, aucune alerte de ce code', e.informations.length === 1 && e.informations[0].code === 'ville_peu_de_ports' && codes(e).indexOf('ville_peu_de_ports') < 0, J(e.informations));
+          t = texteControles();
+          ctrl('information (d) : absente du panneau d’alertes', !/port\(s\)/.test(t), t.replace(/\s+/g, ' ').slice(0, 200));
+          rap = ouvrirRapport();
+          ctrl('information (d) : section « Informations » du rapport, avec la ville et ses ports', /Informations/.test(rap) && rap.indexOf('(' + peu.i + ', ' + peu.j + ') est sur une jonction à ' + peu.p + ' port(s)') >= 0 && !!document.querySelector('#dialogue-contenu .pm-equilibre-informations'), rap.replace(/\s+/g, ' ').slice(0, 300));
+          PM.dialogue.fermer();
+        }
+        // retour au 4×4 : pas d’information « ports »
+        reset(docExemples('4x4'));
+        ctrl('retour au 4×4 : plateau d’essai 4×4 sans information « ports »', GR.equilibre(AV2.plateauComplet('4x4', true)).informations.length === 0);
+      });
+    }
+
     /* ============================================================== */
     /** S9 : suppression d'une tuile utilisateur (confirmation, historique) et bloc « Commandes » qui suit l'onglet. */
     function s9_suppression_aide() {
@@ -984,7 +1136,7 @@
     function etape(f) { chaine = chaine.then(function () { try { return f(); } catch (e) { nEchec++; rapportEl.textContent += 'ÉCHEC  exception dans ' + f.name + ' : ' + (e && e.stack || e) + '\n'; } }); }
     if (!etat) { rapportEl.textContent = 'ÉCHEC  application non démarrée (PM.app.etat absent)\n'; nEchec++; }
     else {
-      [s0_chargement, s1_assemblage, s2_refus, s2b_clic_droit, s3_historique, s4_editeur, s5_controles, s7_raccourcis, robustesse, s8_nouveau5x5, s8b_catalogue5x5_reel, s9_suppression_aide, s6_sauvegarde].forEach(etape);
+      [s0_chargement, s1_assemblage, s2_refus, s2b_clic_droit, s3_historique, s4_editeur, s5_controles, s7_raccourcis, robustesse, s8_nouveau5x5, s8b_catalogue5x5_reel, s8c_generateur5x5_parcours, s9_suppression_aide, s6_sauvegarde].forEach(etape);
     }
     chaine.then(function () {
       var nErr = (document.getElementById('erreurs').textContent.match(/ERREUR JS/g) || []).length;

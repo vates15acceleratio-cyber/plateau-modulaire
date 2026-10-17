@@ -321,15 +321,19 @@ function jonctionsCases(doc) {
 }
 const cle = (p) => p.map((c) => '(' + c.i + ',' + c.j + ')').join('+');
 
-test('jonctions-cases : 3 paires de la rangée centrale par défaut, 30 en mode varié (sans les paires d\'une même rangée extérieure), aucune règle en 5×5', () => {
+test('jonctions-cases : 3 paires de la rangée centrale par défaut, 30 en mode varié (sans les paires d\'une même rangée extérieure), 5×5 : les 2016 placements 2-3-2', () => {
   const F4 = PM.geometrie.format('4x4'), F5 = PM.geometrie.format('5x5');
   assert.deepStrictEqual(GEN.pairesJonctionsCases(F4, false).map(cle), ['(1,2)+(2,2)', '(1,2)+(3,2)', '(2,2)+(3,2)']);
   const variees = GEN.pairesJonctionsCases(F4, true);
   assert.strictEqual(variees.length, 30);
   assert.ok(!variees.some((p) => p[0].j === p[1].j && p[0].j !== 2), 'aucune paire d\'une même rangée extérieure');
   assert.ok(variees.some((p) => p[0].j === 2 && p[1].j === 2), 'la rangée centrale reste permise');
-  assert.strictEqual(GEN.pairesJonctionsCases(F5, false), null);
-  assert.strictEqual(GEN.pairesJonctionsCases(F5, true), null);
+  // 5×5 : placements de 7 villes en 2-3-2 (2 en j = 1, 3 en j = 2 ou 3, 2 en j = 4), donc 9 jonctions-cases chacun
+  const p5 = GEN.pairesJonctionsCases(F5, false);
+  assert.strictEqual(p5.length, 6 * 56 * 6);
+  assert.ok(p5.every((c) => c.length === 9));
+  assert.strictEqual(new Set(p5.map(cle)).size, 2016);
+  assert.deepStrictEqual(GEN.pairesJonctionsCases(F5, true), p5, 'l\'option « variées » ne change rien en 5×5');
 });
 
 test('générateur par défaut : jonctions-cases dans la rangée centrale et aucun « 5 contre 2 » sur 200 plateaux du catalogue', () => {
