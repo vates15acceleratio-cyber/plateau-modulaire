@@ -115,3 +115,7 @@ Après les avis `28-avis-design-5x5.md` (design de jeu) et `29-avis-geometrie-5x
 4. **Q2 (Étoile à crochet) gardé.**
 5. **P3 (T sans case) n'est pas un traversant** : il porte des cases en plus ; il reste au catalogue.
 6. **Coin : K2 inchangé** (pas de coin plus léger).
+
+## Réponses de l'utilisateur après le branchement (2026-10-18, `46`)
+- **Jeu imprimé : imprimer davantage.** Les poses restent illimitées au générateur ; on augmente les exemplaires à imprimer pour que la plupart des plateaux générés se montent avec la boîte (cible de l'orchestrateur : au moins 90 % des plateaux générés, mesurés sur 200 par format).
+- **Anciens documents : proposer le nouveau catalogue** à l'ouverture (comme pour le passage v1 → v2) ; le document reste inchangé si l'utilisateur refuse.
