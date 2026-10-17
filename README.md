@@ -52,7 +52,7 @@ Les pages `outils/recette-interface.html` et `outils/recette-p2.html` jouent des
 
 ## État
 
-Version 3.03.0 : catalogue 5×5, cases à Ø 20 mm, règles de la version 2 sur la grille 4×4 (grilles pleines, apparitions sur tout le pourtour, jonctions-cases, tuiles libres, nouveau catalogue), poses illimitées, bibliothèque élargie, choix de la grille au bouton « Nouveau ». Un document de la version 1 se rouvre converti, et le nouveau catalogue est proposé. Le **catalogue 5×5 est disponible pour la pose à la main** ; le générateur 5×5 est provisoire. À venir : le générateur 5×5 (centrales orientées, 5 ou 6 B1, villes en 2-3-2), les mesures sur 1000 plateaux, puis les seuils d’équilibre 5×5. Restent à valider en conditions réelles : une impression et la mesure de la barre de 100 mm à la règle, l'usage au doigt sur tablette, et l'équilibre ressenti en parties réelles.
+Version 3.04.0 : catalogue et plateau aléatoire 5×5, cases à Ø 20 mm, règles de la version 2 sur la grille 4×4 (grilles pleines, apparitions sur tout le pourtour, jonctions-cases, tuiles libres, nouveau catalogue), poses illimitées, bibliothèque élargie, choix de la grille au bouton « Nouveau ». Un document de la version 1 se rouvre converti, et le nouveau catalogue est proposé. Le **5×5 est complet** : pose à la main, plateau aléatoire (centrales orientées, 5 ou 6 B1, villes en 2-3-2), seuils d’équilibre mesurés sur 1000 plateaux (identiques au 4×4). Restent à valider en conditions réelles : une impression et la mesure de la barre de 100 mm à la règle, l'usage au doigt sur tablette, et l'équilibre ressenti en parties réelles.
 
 ## Droits
 
