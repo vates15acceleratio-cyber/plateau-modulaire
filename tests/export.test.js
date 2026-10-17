@@ -397,7 +397,7 @@ test('PDF : la conversion couvre tout le SVG de rendu (exemples des 3 gabarits, 
 test('PDF : un élément SVG inconnu lève une erreur (rien ne disparaît en silence)', () => {
   const entete = '<svg xmlns="http://www.w3.org/2000/svg" width="10mm" height="10mm" viewBox="0 0 10 10">';
   assert.throws(() => E.svgVersFlux(entete + '<polygon points="0,0 1,1 2,0"/></svg>'), /non pris en charge/);
-  assert.throws(() => E.svgVersFlux(entete + '<path d="M0 0 C1 1 2 2 3 3"/></svg>'), /non prise en charge/);
+  assert.throws(() => E.svgVersFlux(entete + '<path d="M0 0 A1 1 0 0 1 2 2"/></svg>'), /non prise en charge/);
   assert.throws(() => E.svgVersFlux(entete + '<g transform="rotate(10)"></g></svg>'), /non prise en charge/);
   assert.throws(() => E.svgVersFlux(entete + '<rect x="0" y="0" width="1" height="1" fill="rgb(1,2,3)"/></svg>'), /Couleur/);
   assert.throws(() => E.pdfDepuisPlanches([]), /Aucune planche/);

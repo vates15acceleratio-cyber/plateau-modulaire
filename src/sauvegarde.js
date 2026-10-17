@@ -26,7 +26,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * Plafonds à l'ouverture d'un fichier (audit de sécurité : un fichier hostile ne doit pas bloquer le
    * navigateur). Très au-dessus de tout usage normal : 5×5 tuiles, 7 villes, une trentaine de modèles.
    */
-  var LIMITES = { octets: 5e6, modeles: 500, cases: 64, chemins: 256, tuiles: 64, jetons: 64, texte: 200, coordonnee: 1000, exemplaires: 999 };
+  var LIMITES = { octets: 5e6, modeles: 500, cases: 64, chemins: 256, pivots: 32, passages: 64, tuiles: 64, jetons: 64, texte: 200, coordonnee: 1000, exemplaires: 999 };
   /** Intervalle minimal entre deux écritures dans localStorage (ms). */
   var DELAI_AUTOSAVE = 1000;
   /** Délai de repli après retour du focus, pour détecter une annulation sans événement `cancel` (ms). */
@@ -105,6 +105,23 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       if (estEntier(e.coin)) return { coin: e.coin };
       return null;
     }
+    // Passages sans case : extrémité case, raccord, pivot ou coin (le coin est gardé pour que la validation le refuse)
+    function normaliserExtremitePassage(e) {
+      if (estObjet(e) && e.pivot !== undefined) { var id = texteOuNul(e.pivot); return id === null ? null : { pivot: id }; }
+      return normaliserExtremite(e);
+    }
+    function normaliserPassage(c) {
+      if (!estObjet(c)) return null;
+      var a = normaliserExtremitePassage(c.a), b = normaliserExtremitePassage(c.b);
+      if (!a || !b) return null;
+      var n = { id: texteOuNul(c.id), a: a, b: b };
+      if (estObjet(c.courbe) && nombre(c.courbe.x) && nombre(c.courbe.y)) n.courbe = { x: c.courbe.x, y: c.courbe.y };
+      return n;
+    }
+    function normaliserPivot(p) {
+      if (!estObjet(p) || !nombre(p.x) || !nombre(p.y)) return null;
+      return { id: texteOuNul(p.id), x: p.x, y: p.y };
+    }
     function normaliserChemin(c) {
       if (!estObjet(c)) return null;
       var a = normaliserExtremite(c.a), b = normaliserExtremite(c.b);
@@ -119,13 +136,20 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     }
     var cases = garder(tab(brut.cases).slice(0, LIMITES.cases), normaliserCase);
     var chemins = garder(tab(brut.chemins).slice(0, LIMITES.chemins), normaliserChemin);
-    var tronques = Math.max(0, tab(brut.cases).length - LIMITES.cases) + Math.max(0, tab(brut.chemins).length - LIMITES.chemins);
+    var pivots = garder(tab(brut.pivots).slice(0, LIMITES.pivots), normaliserPivot);
+    var passages = garder(tab(brut.passages).slice(0, LIMITES.passages), normaliserPassage);
+    var avecPassages = Array.isArray(brut.pivots) || Array.isArray(brut.passages);
+    var tronques = Math.max(0, tab(brut.cases).length - LIMITES.cases) + Math.max(0, tab(brut.chemins).length - LIMITES.chemins) +
+      Math.max(0, tab(brut.pivots).length - LIMITES.pivots) + Math.max(0, tab(brut.passages).length - LIMITES.passages);
     if (tronques) ignores += tronques;
-    if (ignores) alertes.push(erreur('elements_ignores', 'Le modèle « ' + libelle + ' » : ' + ignores + ' case(s) ou chemin(s) mal formé(s) ignoré(s).'));
+    if (ignores) alertes.push(erreur('elements_ignores', 'Le modèle « ' + libelle + ' » : ' + ignores + (avecPassages ? ' case(s), chemin(s), pivot(s) ou passage(s)' : ' case(s) ou chemin(s)') + ' mal formé(s) ignoré(s).'));
     var m = {
       id: typeof brut.id === 'string' ? brut.id.slice(0, LIMITES.texte) : brut.id, nom: nom.slice(0, LIMITES.texte), gabarit: gabaritLu(brut),
       grille: FORMATS.indexOf(brut.grille) >= 0 ? brut.grille : grille, exemplaires: exemplaires, cases: cases, chemins: chemins
     };
+    // pivots et passages : champs facultatifs, présents seulement s'ils sont dans le fichier (les anciens modèles ne changent pas)
+    if (Array.isArray(brut.pivots)) m.pivots = pivots;
+    if (Array.isArray(brut.passages)) m.passages = passages;
     if (!M.validerModele(m, grille).complet) {
       alertes.push(erreur('modele_incomplet', 'Le modèle « ' + libelle + ' » est incomplet : conservé comme brouillon, non posable.'));
     }

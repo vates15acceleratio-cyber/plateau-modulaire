@@ -232,6 +232,182 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     return res;
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Passages sans case (docs/18 fin, docs/39)                           */
+  /* ------------------------------------------------------------------ */
+
+  var K_ARC = 0.5522847498;        // constante du quart de cercle en Bézier cubique
+  var SEGMENTS_PASSAGE = 24;       // pas d'aplatissement d'une courbe (contrôles de distance)
+
+  /** Type d'une extrémité de passage : 'case' | 'raccord' | 'pivot' | 'coin' | null (hors des fonctions des chemins). */
+  function typeExtremitePassage(e) {
+    if (!e || typeof e !== 'object' || Array.isArray(e)) return null;
+    if (e['case'] !== undefined) return 'case';
+    if (e.raccord !== undefined) return 'raccord';
+    if (e.pivot !== undefined) return 'pivot';
+    if (e.coin !== undefined) return 'coin';
+    return null;
+  }
+
+  /** Clé texte d'une extrémité de passage bien formée (boucles, doublons, raccords partagés). */
+  function cleExtremitePassage(e) {
+    var t = typeExtremitePassage(e);
+    if (t === 'case') return 'case:' + e['case'];
+    if (t === 'pivot') return 'pivot:' + e.pivot;
+    if (t === 'raccord') return 'raccord:' + e.raccord.cote + ':' + e.raccord.pos;
+    return 'coin:' + e.coin;
+  }
+
+  function raccordBienForme(r) {
+    return !!r && typeof r === 'object' && Number.isInteger(r.cote) && r.cote >= 0 && r.cote <= 3 && Number.isInteger(r.pos) && r.pos >= 0 && r.pos <= 2;
+  }
+  function pointFini(p) { return !!p && typeof p === 'object' && typeof p.x === 'number' && isFinite(p.x) && typeof p.y === 'number' && isFinite(p.y); }
+
+  /** Point d'abscisse t (0..1) d'un segment ['L'|'Q'|'C', ...points] qui part de p0. */
+  function pointSegment(p0, seg, t) {
+    var u = 1 - t, c = seg[0];
+    if (c === 'L') return { x: p0.x + (seg[1].x - p0.x) * t, y: p0.y + (seg[1].y - p0.y) * t };
+    if (c === 'Q') {
+      return { x: u * u * p0.x + 2 * u * t * seg[1].x + t * t * seg[2].x, y: u * u * p0.y + 2 * u * t * seg[1].y + t * t * seg[2].y };
+    }
+    return {
+      x: u * u * u * p0.x + 3 * u * u * t * seg[1].x + 3 * u * t * t * seg[2].x + t * t * t * seg[3].x,
+      y: u * u * u * p0.y + 3 * u * u * t * seg[1].y + 3 * u * t * t * seg[2].y + t * t * t * seg[3].y
+    };
+  }
+
+  /** Dernier point d'une commande ['M'|'L'|'Q'|'C', ...points]. */
+  function finCommande(c) { return c[c.length - 1]; }
+
+  /** Polyligne aplatie d'une suite de commandes [['M', p], ['L', p], ['Q', c, p], ['C', c1, c2, p]]. */
+  function aplatirCommandes(cmds) {
+    var pts = [], cur = null;
+    cmds.forEach(function (c) {
+      if (c[0] === 'M') { cur = c[1]; pts.push({ x: cur.x, y: cur.y }); return; }
+      var n = c[0] === 'L' ? 1 : SEGMENTS_PASSAGE;
+      for (var k = 1; k <= n; k++) pts.push(pointSegment(cur, c, k / n));
+      cur = finCommande(c);
+    });
+    return pts;
+  }
+
+  /** Rayon de courbure minimal (mm) d'une suite de commandes ; Infinity pour un tracé droit. */
+  function rayonMinimal(cmds) {
+    var mini = Infinity, cur = null;
+    cmds.forEach(function (c) {
+      if (c[0] === 'M') { cur = c[1]; return; }
+      if (c[0] !== 'L') {
+        for (var k = 0; k <= 40; k++) {
+          var t = k / 40, u = 1 - t, d1, d2;
+          if (c[0] === 'Q') {
+            d1 = { x: 2 * u * (c[1].x - cur.x) + 2 * t * (c[2].x - c[1].x), y: 2 * u * (c[1].y - cur.y) + 2 * t * (c[2].y - c[1].y) };
+            d2 = { x: 2 * (c[2].x - 2 * c[1].x + cur.x), y: 2 * (c[2].y - 2 * c[1].y + cur.y) };
+          } else {
+            d1 = {
+              x: 3 * u * u * (c[1].x - cur.x) + 6 * u * t * (c[2].x - c[1].x) + 3 * t * t * (c[3].x - c[2].x),
+              y: 3 * u * u * (c[1].y - cur.y) + 6 * u * t * (c[2].y - c[1].y) + 3 * t * t * (c[3].y - c[2].y)
+            };
+            d2 = {
+              x: 6 * u * (c[2].x - 2 * c[1].x + cur.x) + 6 * t * (c[3].x - 2 * c[2].x + c[1].x),
+              y: 6 * u * (c[2].y - 2 * c[1].y + cur.y) + 6 * t * (c[3].y - 2 * c[2].y + c[1].y)
+            };
+          }
+          var v = Math.hypot(d1.x, d1.y), croix = Math.abs(d1.x * d2.y - d1.y * d2.x);
+          if (v > 1e-9 && croix > 1e-9) mini = Math.min(mini, v * v * v / croix);
+        }
+      }
+      cur = finCommande(c);
+    });
+    return mini;
+  }
+
+  /**
+   * Tracés de tous les passages d'un modèle, en coordonnées locales canoniques :
+   * [{ id, type: 'passage', cmds, pts (polyligne aplatie), cases: [case...], pivots: [id...], bouts: [{ p, n, idx }],
+   *    controle: {x, y} (point de la poignée), parDefaut: booleen, rayonMin }].
+   * `cmds` : commandes [['M', p], ...] de l'extrémité a vers l'extrémité b ; `bouts` : les extrémités sur un raccord
+   * (point du bord et normale vers l'intérieur) ; une extrémité sur une case va jusqu'au centre de la case (le disque
+   * blanc la recouvre), une extrémité sur un pivot jusqu'au pivot.
+   * Formes par défaut (arrivée perpendiculaire au côté à chaque raccord) : côtés adjacents, quadratique dont le point de
+   * contrôle est l'intersection des deux normales ; côtés opposés, segment droit ; même côté, demi-cercle en deux
+   * cubiques ; raccord vers case ou pivot, quadratique qui part perpendiculairement au côté (quart de tour franc quand le but est
+   * aussi décalé que profond, de plus en plus droit quand il est dans l'axe) ; sinon segment droit.
+   * `courbe` {x, y} remplace la forme par une quadratique de ce point de contrôle. Les passages mal formés (extrémité
+   * invalide, coin, case ou pivot inconnu, boucle) sont ignorés. Indépendant de tracesModele (les chemins ne changent pas).
+   */
+  function tracesPassages(m, fmt) {
+    var F = fmt && typeof fmt === 'object' ? fmt : format(fmt === undefined || fmt === null ? FORMAT_DEFAUT : fmt);
+    var cs = Object.create(null), pv = Object.create(null);
+    (m && Array.isArray(m.cases) ? m.cases : []).forEach(function (c) {
+      if (c && typeof c === 'object' && typeof c.id === 'string' && pointFini(c)) cs[c.id] = c;
+    });
+    (m && Array.isArray(m.pivots) ? m.pivots : []).forEach(function (p) {
+      if (p && typeof p === 'object' && typeof p.id === 'string' && pointFini(p)) pv[p.id] = p;
+    });
+    function bout(e) {
+      var t = typeExtremitePassage(e);
+      if (t === 'case') return cs[e['case']] ? { p: { x: cs[e['case']].x, y: cs[e['case']].y }, n: null, caseObj: cs[e['case']] } : null;
+      if (t === 'pivot') return pv[e.pivot] ? { p: { x: pv[e.pivot].x, y: pv[e.pivot].y }, n: null, pivot: e.pivot } : null;
+      if (t === 'raccord' && raccordBienForme(e.raccord)) {
+        var n = NORMALE[e.raccord.cote];
+        return { p: F.pointRaccord(e.raccord.cote, e.raccord.pos), n: { x: n.x, y: n.y }, cote: e.raccord.cote };
+      }
+      return null;
+    }
+    function milieu(A, B) { return { x: (A.p.x + B.p.x) / 2, y: (A.p.y + B.p.y) / 2 }; }
+    function ctrlDepuis(A, B) { // contrôle d'une quadratique qui part de A (normale n) perpendiculairement au côté
+      // profondeur du but, décalage latéral : le virage est franc (quart de tour) quand le décalage est au moins égal à la
+      // profondeur, et s'adoucit jusqu'au tracé droit quand le but est dans l'axe
+      var d = (B.p.x - A.p.x) * A.n.x + (B.p.y - A.p.y) * A.n.y;
+      var lat = Math.abs((B.p.x - A.p.x) * A.n.y - (B.p.y - A.p.y) * A.n.x);
+      var l = Math.max(Math.min(d, lat), 8);
+      return { x: A.p.x + A.n.x * l, y: A.p.y + A.n.y * l };
+    }
+    function demiCercle(A, B) {
+      var mil = milieu(A, B), r = Math.hypot(B.p.x - A.p.x, B.p.y - A.p.y) / 2;
+      var n = A.n, u = { x: (B.p.x - A.p.x) / (2 * r), y: (B.p.y - A.p.y) / (2 * r) }, k = K_ARC * r;
+      var T = { x: mil.x + n.x * r, y: mil.y + n.y * r };
+      return {
+        cmds: [['C', { x: A.p.x + n.x * k, y: A.p.y + n.y * k }, { x: T.x - u.x * k, y: T.y - u.y * k }, T],
+          ['C', { x: T.x + u.x * k, y: T.y + u.y * k }, { x: B.p.x + n.x * k, y: B.p.y + n.y * k }, { x: B.p.x, y: B.p.y }]],
+        // poignée : point de contrôle de la quadratique qui monte au même sommet (profondeur 2 r), sans saut de forme au premier glissement
+        controle: { x: mil.x + n.x * 2 * r, y: mil.y + n.y * 2 * r }
+      };
+    }
+    function forme(A, B) { // { cmds (sans le M initial), controle }
+      if (A.n && B.n) {
+        var pS = A.n.x * B.n.x + A.n.y * B.n.y;
+        if (pS > 0.5) return demiCercle(A, B);                                   // même côté
+        if (pS < -0.5) return { cmds: [['L', B.p]], controle: milieu(A, B) };    // côtés opposés
+        var dd = (B.p.x - A.p.x) * A.n.x + (B.p.y - A.p.y) * A.n.y;              // adjacents : intersection des deux normales
+        var c = { x: A.p.x + A.n.x * dd, y: A.p.y + A.n.y * dd };
+        return { cmds: [['Q', c, B.p]], controle: c };
+      }
+      if (A.n) { var cA = ctrlDepuis(A, B); return { cmds: [['Q', cA, B.p]], controle: cA }; }
+      if (B.n) { var cB = ctrlDepuis(B, A); return { cmds: [['Q', cB, B.p]], controle: cB }; }
+      return { cmds: [['L', B.p]], controle: milieu(A, B) };
+    }
+    var res = [];
+    (m && Array.isArray(m.passages) ? m.passages : []).forEach(function (ps) {
+      if (!ps || typeof ps !== 'object') return;
+      var A = bout(ps.a), B = bout(ps.b);
+      if (!A || !B || Math.hypot(A.p.x - B.p.x, A.p.y - B.p.y) < 1e-9) return;
+      var parDefaut = !pointFini(ps.courbe), f;
+      if (parDefaut) f = forme(A, B);
+      else f = { cmds: [['Q', { x: ps.courbe.x, y: ps.courbe.y }, B.p]], controle: { x: ps.courbe.x, y: ps.courbe.y } };
+      var cmds = [['M', { x: A.p.x, y: A.p.y }]].concat(f.cmds);
+      var bouts = [];
+      if (A.n) bouts.push({ p: A.p, n: A.n, idx: 0 });
+      if (B.n) bouts.push({ p: B.p, n: B.n, idx: 1 });
+      res.push({
+        id: ps.id, type: 'passage', cmds: cmds, pts: aplatirCommandes(cmds),
+        cases: [A.caseObj, B.caseObj].filter(Boolean), pivots: [A.pivot, B.pivot].filter(function (x) { return x !== undefined; }),
+        bouts: bouts, controle: f.controle, parDefaut: parDefaut, rayonMin: rayonMinimal(cmds)
+      });
+    });
+    return res;
+  }
+
   var CACHE = {};
 
   /**
@@ -252,6 +428,11 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   PM.geometrie.NORMALE = NORMALE;
   PM.geometrie.BISSECTRICE = BISSECTRICE;
   PM.geometrie.tracesModele = tracesModele;
+  PM.geometrie.tracesPassages = tracesPassages;
+  PM.geometrie.typeExtremitePassage = typeExtremitePassage;
+  PM.geometrie.cleExtremitePassage = cleExtremitePassage;
+  PM.geometrie.aplatirCommandes = aplatirCommandes;
+  PM.geometrie.rayonMinimal = rayonMinimal;
   PM.geometrie.FORMATS = Object.freeze(IDS_FORMATS.slice());
   PM.geometrie.FORMAT_DEFAUT = FORMAT_DEFAUT;
   PM.geometrie.format = format;

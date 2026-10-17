@@ -61,6 +61,68 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function idJonction(i, j) { return 'J' + i + ',' + j; }
 
   /**
+   * Passages sans case (docs/18, docs/39) : les cases qu'un réseau de passages relie, quelle que soit sa longueur ou sa
+   * ramification, sont voisines à 1 pas (un seul déplacement, aucun nœud intermédiaire).
+   * Union-find sur les emplacements de raccord des passages (« R col,lig,cote,pos ») et sur les pivots : deux raccords
+   * face à face sont réunis. Les cases ne sont jamais fusionnées, elles sont seulement attachées à une composante
+   * (sinon une case à deux sorties rapprocherait ses deux voisins) : celles d'un passage, et celles dont un chemin
+   * aboutit à un raccord qui fait face à un passage. Les cases attachées à une même composante forment une clique.
+   * Sans passage, ne fait rien : le graphe est strictement celui d'avant.
+   */
+  function relierPassages(elems, voisins, lier) {
+    var parent = new Map(), attaches = [];
+    function racine(x) {
+      if (!parent.has(x)) parent.set(x, x);
+      while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); }
+      return x;
+    }
+    function emplacement(t, cote, pos) { return 'R ' + t.col + ',' + t.lig + ',' + cote + ',' + pos; }
+    function enFace(t, cote, pos) {
+      var d = G.coteVoisin(cote), f = G.raccordEnFace(cote, pos);
+      return emplacement({ col: t.col + d.dc, lig: t.lig + d.dl }, f.cote, f.pos);
+    }
+    var emplacements = [];
+    elems.forEach(function (x) {
+      (x.e.passages || []).forEach(function (p) {
+        function ref(e) {
+          if (e.pivot !== undefined) return { cle: 'P ' + e.pivot };
+          if (e.raccord) { var k = emplacement(x.t, e.raccord.cote, e.raccord.pos); emplacements.push({ cle: k, tuile: x.t, cote: e.raccord.cote, pos: e.raccord.pos }); return { cle: k }; }
+          return { caseId: e['case'] };
+        }
+        var a = ref(p.a), b = ref(p.b);
+        if (a.cle && b.cle) parent.set(racine(a.cle), racine(b.cle));
+        else if (a.cle) attaches.push({ caseId: b.caseId, cle: a.cle });
+        else if (b.cle) attaches.push({ caseId: a.caseId, cle: b.cle });
+        else if (voisins.has(a.caseId) && voisins.has(b.caseId)) lier(a.caseId, b.caseId);
+      });
+    });
+    if (!emplacements.length && !attaches.length) return;
+    emplacements.forEach(function (s) { racine(s.cle); }); // tous les emplacements existent avant l'appariement
+    emplacements.forEach(function (s) {
+      var face = enFace(s.tuile, s.cote, s.pos);
+      if (parent.has(face)) parent.set(racine(s.cle), racine(face));
+    });
+    // Un chemin qui aboutit à un raccord faisant face à un passage : sa case est attachée à ce réseau
+    elems.forEach(function (x) {
+      (x.e.raccords || []).forEach(function (r) {
+        var face = enFace(x.t, r.cote, r.pos);
+        if (parent.has(face)) attaches.push({ caseId: r.caseId, cle: face });
+      });
+    });
+    var groupes = new Map();
+    attaches.forEach(function (a) {
+      if (!voisins.has(a.caseId)) return;
+      var r = racine(a.cle);
+      if (!groupes.has(r)) groupes.set(r, new Set());
+      groupes.get(r).add(a.caseId);
+    });
+    groupes.forEach(function (ensemble) {
+      var cs = Array.from(ensemble);
+      for (var i = 0; i < cs.length; i++) for (var j = i + 1; j < cs.length; j++) lier(cs[i], cs[j]);
+    });
+  }
+
+  /**
    * Construit le graphe d'un document.
    * options :
    *  - villesTraversables (défaut false : une ville n'est qu'une destination, règle du jeu) ;
@@ -118,6 +180,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         portsParJonction.get(id).push(p.caseId);
       });
     });
+
+    relierPassages(elems, voisins, lier);
 
     // Villes : jetons 'capture' (le premier jeton d'une jonction compte)
     var villes = new Set();

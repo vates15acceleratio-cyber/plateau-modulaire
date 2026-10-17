@@ -1132,11 +1132,101 @@
       });
     }
 
+    /** S10 : passages sans case. Tuile utilisateur à deux passages en quart de tour créée dans l'éditeur, posée deux fois côte à côte. */
+    function s10_passages() {
+      titre('S10 passages sans case (éditeur, courbe, pivot, pose côte à côte)');
+      reset();
+      boutonRole('Centrale').click();
+      var id = etat.ui().modeleSelectionne;
+      var svg = document.querySelector('.pm-editeur-canevas');
+      // la centrale neuve porte 4 cases sans chemin : on les supprime pour repartir d'une tuile vide
+      M.modeleParId(etat.doc(), id).cases.map(function (c) { return c.id; }).forEach(function (cid) {
+        var pc = pointeCase(svg, M.modeleParId(etat.doc(), id), cid);
+        ptr('pointerdown', svg, pc.x, pc.y); ptr('pointerup', svg, pc.x, pc.y);
+        touche('Delete');
+      });
+      ctrl('tuile vidée : plus aucune case', M.modeleParId(etat.doc(), id).cases.length === 0);
+      var btnOutil = document.querySelector('.pm-editeur-bouton-outil');
+      ctrl('bouton « Outil : Chemin » présent, non enfoncé', !!btnOutil && /Chemin/.test(btnOutil.textContent) && btnOutil.getAttribute('aria-pressed') === 'false');
+      touche('p', {}, svg);
+      btnOutil = document.querySelector('.pm-editeur-bouton-outil');
+      ctrl('touche P : outil Passage (bouton enfoncé)', /Passage/.test(btnOutil.textContent) && btnOutil.getAttribute('aria-pressed') === 'true');
+      // deux cases, chacune reliée par un passage en quart de tour à un raccord (W pos 1 et E pos 1)
+      [[40, 80, 3], [80, 80, 1]].forEach(function (c) {
+        var p = pointMm(svg, c[0], c[1]);
+        ptr('pointerdown', svg, p.x, p.y); ptr('pointerup', svg, p.x, p.y);
+        var m = M.modeleParId(etat.doc(), id), k = m.cases[m.cases.length - 1];
+        var r = G.pointRaccord(c[2], 1);
+        glisserEditeur(svg, pointeCase(svg, m, k.id), pointMm(svg, r.x, r.y));
+      });
+      var m1 = M.modeleParId(etat.doc(), id), v1 = M.validerModele(m1);
+      ctrl('2 passages tracés (case vers raccord), aucun chemin', m1.passages && m1.passages.length === 2 && m1.chemins.length === 0, J(m1.passages));
+      ctrl('modèle complet, sans erreur', v1.complet, J(v1.erreurs));
+      svg = document.querySelector('.pm-editeur-canevas');
+      var traces = svg.querySelectorAll('path[data-passage]');
+      ctrl('le canevas dessine les 2 passages en courbes (Q), en vert, 8 mm',
+        traces.length === 2 && /Q/.test(traces[0].getAttribute('d')) && traces[0].getAttribute('stroke-width') === '8' && traces[0].getAttribute('stroke') === PM.rendu.COULEURS.vert);
+      var rac = M.masquesDuModele(m1).raccords;
+      ctrl('les raccords des passages entrent dans le masque', rac === ((1 << G.bitRaccord(3, 1)) | (1 << G.bitRaccord(1, 1))), rac);
+      // sélection du passage par un clic sur son trait, poignée, courbe, double-clic
+      var t0 = PM.rendu.tracesPassages(m1, formatCourant())[0], pm = t0.pts[12], pe = pointMm(svg, pm.x, pm.y);
+      ptr('pointerdown', svg, pe.x, pe.y); ptr('pointerup', svg, pe.x, pe.y);
+      var poignee = svg.querySelector('[data-poignee]');
+      ctrl('clic sur un passage : sélectionné, poignée de courbe affichée', !!poignee && poignee.getAttribute('data-poignee') === t0.id, document.querySelector('.pm-editeur-aide').textContent);
+      var ph = pointMm(svg, t0.controle.x, t0.controle.y), cible = pointMm(svg, t0.controle.x + 8, t0.controle.y - 6);
+      var avantCourbe = docJ();
+      glisserEditeur(svg, ph, cible);
+      var m2 = M.modeleParId(etat.doc(), id), ps2 = m2.passages.filter(function (p) { return p.id === t0.id; })[0];
+      ctrl('glisser la poignée fixe le point de contrôle de la courbe', ps2.courbe && Math.abs(ps2.courbe.x - (t0.controle.x + 8)) < 2 && Math.abs(ps2.courbe.y - (t0.controle.y - 6)) < 2, J(ps2));
+      ctrlZ();
+      ctrl('Ctrl+Z annule la courbe', docJ() === avantCourbe);
+      ctrlY();
+      svg = document.querySelector('.pm-editeur-canevas');
+      var pc2 = pointMm(svg, ps2.courbe.x, ps2.courbe.y);
+      svg.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, clientX: pc2.x, clientY: pc2.y }));
+      var ps3 = M.modeleParId(etat.doc(), id).passages.filter(function (p) { return p.id === t0.id; })[0];
+      ctrl('double-clic sur la poignée : courbe par défaut (point de contrôle retiré)', ps3.courbe === undefined, J(ps3));
+      // pivot : Maj + clic sur le fond
+      svg = document.querySelector('.pm-editeur-canevas');
+      var pp = pointMm(svg, 60, 40);
+      svg.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: pp.x, clientY: pp.y, pointerId: 7, pointerType: 'mouse', button: 0, isPrimary: true, shiftKey: true }));
+      var m3 = M.modeleParId(etat.doc(), id);
+      ctrl('Maj + clic sur le fond : un pivot est créé (aimanté sur 1 cm)', m3.pivots && m3.pivots.length === 1 && m3.pivots[0].x === 60 && m3.pivots[0].y === 40, J(m3.pivots));
+      ctrl('le pivot de degré 0 est signalé par une alerte', /pivot/.test(document.querySelector('.pm-editeur-erreurs').textContent), document.querySelector('.pm-editeur-erreurs').textContent);
+      touche('Delete');
+      ctrl('Suppr retire le pivot sélectionné', !(M.modeleParId(etat.doc(), id).pivots || []).length);
+      // une case reliée par un passage vers un coin est refusée avec une phrase
+      var kk = M.modeleParId(etat.doc(), id).cases[0], k0 = G.pointCoin(2), n0 = docJ();
+      svg = document.querySelector('.pm-editeur-canevas');
+      glisserEditeur(svg, pointeCase(svg, M.modeleParId(etat.doc(), id), kk.id), pointMm(svg, k0.x, k0.y));
+      ctrl('outil Passage : glisser vers un coin est refusé, document intact', docJ() === n0 && /coin/.test(msg()) && niveau() === 'erreur', msg());
+      // pose deux fois côte à côte (glisser-déposer depuis la bibliothèque), distance de 1 pas entre les cases de part et d'autre
+      etat.majUi({ onglet: 'plateau' });
+      glisser(id, 1, 1, 0);
+      glisser(id, 2, 1, 0);
+      var d = etat.doc();
+      ctrl('la tuile est posée en (1, 1) et (2, 1)', M.tuileEn(d, 1, 1) && M.tuileEn(d, 2, 1) && M.tuileEn(d, 1, 1).modeleId === id && M.tuileEn(d, 2, 1).modeleId === id, J(d.plateau.tuiles));
+      var m4 = M.modeleParId(d, id), caseW = m4.passages.filter(function (p) { return p.b.raccord && p.b.raccord.cote === 3; })[0].a['case'];
+      var caseE = m4.passages.filter(function (p) { return p.b.raccord && p.b.raccord.cote === 1; })[0].a['case'];
+      var g = PM.graphe.construire(d);
+      ctrl('cases de part et d\'autre du passage : voisines directes', g.voisins.get('1,1:' + caseE).has('2,1:' + caseW));
+      ctrl('distance de 1 pas entre ces deux cases (sans case intermédiaire)', PM.graphe.distances(g, '1,1:' + caseE).get('2,1:' + caseW) === 1);
+      ctrl('aucun nœud intermédiaire dans le graphe (cases et jonctions seulement)', g.noeuds.every(function (n) { return g.cases.has(n) || /^J/.test(n); }));
+      var svgPlateau = document.querySelector('#assemblage svg');
+      ctrl('le plateau dessine les passages (data-passage) des deux tuiles', svgPlateau.querySelectorAll('path[data-passage]').length === 4, svgPlateau.querySelectorAll('path[data-passage]').length);
+      // légende « Commandes » de l'onglet Tuiles
+      etat.majUi({ onglet: 'tuiles', modeleSelectionne: id });
+      var legende = document.querySelector('.pm-aide-corps[data-onglet="tuiles"]');
+      ctrl('légende Commandes (Tuiles) : outil Passage, pivot, poignée, courbe par défaut',
+        !!legende && /Outil Passage/.test(legende.textContent) && /pivot \(T\)/.test(legende.textContent) && /Courber le passage/.test(legende.textContent) && /Courbe par défaut/.test(legende.textContent));
+      reset(docExemples('4x4'));
+    }
+
     var chaine = Promise.resolve();
     function etape(f) { chaine = chaine.then(function () { try { return f(); } catch (e) { nEchec++; rapportEl.textContent += 'ÉCHEC  exception dans ' + f.name + ' : ' + (e && e.stack || e) + '\n'; } }); }
     if (!etat) { rapportEl.textContent = 'ÉCHEC  application non démarrée (PM.app.etat absent)\n'; nEchec++; }
     else {
-      [s0_chargement, s1_assemblage, s2_refus, s2b_clic_droit, s3_historique, s4_editeur, s5_controles, s7_raccourcis, robustesse, s8_nouveau5x5, s8b_catalogue5x5_reel, s8c_generateur5x5_parcours, s9_suppression_aide, s6_sauvegarde].forEach(etape);
+      [s0_chargement, s1_assemblage, s2_refus, s2b_clic_droit, s3_historique, s4_editeur, s5_controles, s7_raccourcis, robustesse, s8_nouveau5x5, s8b_catalogue5x5_reel, s8c_generateur5x5_parcours, s9_suppression_aide, s10_passages, s6_sauvegarde].forEach(etape);
     }
     chaine.then(function () {
       var nErr = (document.getElementById('erreurs').textContent.match(/ERREUR JS/g) || []).length;

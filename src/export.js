@@ -507,7 +507,10 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       nb(cx + k) + ' ' + nb(cy - r) + ' ' + nb(cx + r) + ' ' + nb(cy - k) + ' ' + nb(cx + r) + ' ' + nb(cy) + ' c', 'h'].join('\n');
   }
 
-  /** Attribut `d` (M L H V Z absolus) -> opérateurs PDF. Toute autre commande lève une Error. */
+  /**
+   * Attribut `d` (M L H V Z Q C absolus) -> opérateurs PDF. Toute autre commande lève une Error.
+   * Une quadratique Q (point de contrôle c) devient la cubique équivalente : c1 = p0 + 2/3 (c - p0), c2 = p + 2/3 (c - p).
+   */
   function cheminPath(d) {
     var re = /([A-Za-z])|(-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)/g, jetons = [], m, ops = [];
     while ((m = re.exec(d))) jetons.push(m[1] !== undefined ? m[1] : parseFloat(m[2]));
@@ -519,7 +522,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     while (i < jetons.length) {
       if (typeof jetons[i] === 'string') {
         cmd = jetons[i++];
-        if ('MLHVZ'.indexOf(cmd) < 0) throw new Error('Commande de chemin SVG non prise en charge : ' + cmd);
+        if ('MLHVZQC'.indexOf(cmd) < 0) throw new Error('Commande de chemin SVG non prise en charge : ' + cmd);
         if (cmd === 'Z') { ops.push('h'); if (debut) { x = debut.x; y = debut.y; } continue; }
       } else if (cmd === 'M') cmd = 'L'; // paires suivantes d'un M = tracés de lignes
       else if (cmd === null || cmd === 'Z') throw new Error('Chemin SVG mal formé : ' + d);
@@ -529,6 +532,15 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         if (cmd === 'M') debut = { x: x, y: y };
       } else if (cmd === 'H') { x = lire(); ops.push(nb(x) + ' ' + nb(y) + ' l'); }
       else if (cmd === 'V') { y = lire(); ops.push(nb(x) + ' ' + nb(y) + ' l'); }
+      else if (cmd === 'Q') {
+        var qx = lire(), qy = lire(), ex = lire(), ey = lire();
+        ops.push(nb(x + 2 / 3 * (qx - x)) + ' ' + nb(y + 2 / 3 * (qy - y)) + ' ' + nb(ex + 2 / 3 * (qx - ex)) + ' ' + nb(ey + 2 / 3 * (qy - ey)) + ' ' + nb(ex) + ' ' + nb(ey) + ' c');
+        x = ex; y = ey;
+      } else if (cmd === 'C') {
+        var c1x = lire(), c1y = lire(), c2x = lire(), c2y = lire(), fx = lire(), fy = lire();
+        ops.push(nb(c1x) + ' ' + nb(c1y) + ' ' + nb(c2x) + ' ' + nb(c2y) + ' ' + nb(fx) + ' ' + nb(fy) + ' c');
+        x = fx; y = fy;
+      }
     }
     return ops.join('\n');
   }
@@ -551,7 +563,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
    * Convertit un SVG en mm (width / height / viewBox 0 0 L H) en flux de contenu PDF.
    * Renvoie { largeur, hauteur, flux } ; le flux travaille en mm, origine en haut à gauche.
    * Éléments pris en charge : svg, g (transform translate / scale, clip-path), clipPath (un rect),
-   * rect (rx), circle, line, path (M L H V Z), text (Helvetica, gras). Tout autre élément lève une Error.
+   * rect (rx), circle, line, path (M L H V Z Q C), text (Helvetica, gras). Tout autre élément lève une Error.
    */
   function svgVersFlux(svg) {
     var re = /<(\/?)([A-Za-z][A-Za-z0-9]*)((?:\s+[^>]*?)?)(\/?)>|([^<]+)/g, m;

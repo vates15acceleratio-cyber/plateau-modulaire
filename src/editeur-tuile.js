@@ -59,6 +59,11 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   var LIBELLES_GABARITS = { centrale: 'Centrale', bord: 'Bord', coin: 'Coin' };
   var PREFIXE_CASE = 'c';
   var PREFIXE_CHEMIN = 'h';
+  var PREFIXE_PIVOT = 'pv';
+  var PREFIXE_PASSAGE = 'ps';
+  /** Rayon des cibles du pivot et de la poignée de courbe (mm). */
+  var RAYON_PIVOT = 5;
+  var RAYON_POIGNEE = 5;
 
   /**
    * Cases de départ par gabarit, en fraction du côté de tuile (aimantées sur la grille du format) ; la première
@@ -109,6 +114,19 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     if (t === 'case') return 'case:' + e['case'];
     if (t === 'raccord') return 'raccord:' + e.raccord.cote + ':' + e.raccord.pos;
     return 'coin:' + e.coin;
+  }
+  /** Type et clé d'une extrémité de passage : 'case' | 'raccord' | 'pivot' | 'coin' | null (les chemins n'ont pas de pivot : typeExt reste à part). */
+  function typeExtP(e) { return G.typeExtremitePassage(e); }
+  function cleExtP(e) { return G.cleExtremitePassage(e); }
+  function passageParId(m, id) {
+    var ps = tab(m && m.passages);
+    for (var i = 0; i < ps.length; i++) if (ps[i] && ps[i].id === id) return ps[i];
+    return null;
+  }
+  function pivotParId(m, id) {
+    var ps = tab(m && m.pivots);
+    for (var i = 0; i < ps.length; i++) if (ps[i] && ps[i].id === id) return ps[i];
+    return null;
   }
   function caseParId(m, id) {
     var cs = tab(m && m.cases);
@@ -258,18 +276,109 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   }
 
   /**
+   * Ajoute un passage sans case entre deux extrémités : { 'case': id } | { raccord: {cote, pos} } | { pivot: id }.
+   * Refus : coin (pas de passage vers un coin), deux cases (c'est un chemin droit), boucle, doublon, case ou pivot inconnu.
+   * Le reste (raccord déjà pris, croisement, pivot de degré 4...) est accepté : la validation le signale en direct.
+   * Convention : case, puis pivot, puis raccord.
+   */
+  function ajouterPassage(modele, a, b) {
+    var ta = typeExtP(a), tb = typeExtP(b);
+    if (!ta || !tb) throw new Error('Extrémité de passage invalide.');
+    if (ta === 'coin' || tb === 'coin') throw new Error('Un passage ne va pas vers un coin : il relie des cases, des raccords et des pivots.');
+    if (cleExtP(a) === cleExtP(b)) throw new Error('Un passage ne peut pas relier un point à lui-même.');
+    if (ta === 'case' && tb === 'case') throw new Error('Entre deux cases, tracez un chemin (droit) : un passage va vers un raccord ou un pivot.');
+    var m = clone(modele);
+    [a, b].forEach(function (e) {
+      if (typeExtP(e) === 'case' && !caseParId(m, e['case'])) throw new Error('Cette case n\'existe pas.');
+      if (typeExtP(e) === 'pivot' && !pivotParId(m, e.pivot)) throw new Error('Ce pivot n\'existe pas.');
+    });
+    var cle = [cleExtP(a), cleExtP(b)].sort().join('|');
+    if (tab(m.passages).some(function (ps) { return ps && [cleExtP(ps.a), cleExtP(ps.b)].sort().join('|') === cle; })) {
+      throw new Error('Ces deux points sont déjà reliés par un passage.');
+    }
+    if (!Array.isArray(m.passages)) m.passages = [];
+    var rang = { 'case': 0, pivot: 1, raccord: 2 };
+    var premier = rang[ta] <= rang[tb] ? a : b, second = premier === a ? b : a;
+    m.passages.push({ id: M.nouvelId(m, PREFIXE_PASSAGE), a: clone(premier), b: clone(second) });
+    return m;
+  }
+
+  /** Position aimantée (grille de 1 cm, à 1 cm au moins du bord) d'un pivot. */
+  function positionPivot(x, y, F) {
+    var pas = F.PAS_EDITEUR;
+    function borne(v) { return Math.min(F.COTE - pas, Math.max(pas, Math.round(v / pas) * pas)); }
+    return { x: borne(x), y: borne(y) };
+  }
+
+  /** Ajoute un pivot (point de ramification d'un T, sans case) au point de grille le plus proche de (x, y). */
+  function ajouterPivot(modele, x, y, format) {
+    var m = clone(modele), q = positionPivot(x, y, leFormat(format));
+    if (tab(m.pivots).some(function (v) { return v && Math.abs(v.x - q.x) < 1e-9 && Math.abs(v.y - q.y) < 1e-9; })) throw new Error('Un pivot existe déjà à cet endroit.');
+    if (!Array.isArray(m.pivots)) m.pivots = [];
+    m.pivots.push({ id: M.nouvelId(m, PREFIXE_PIVOT), x: q.x, y: q.y });
+    return m;
+  }
+
+  /** Déplace un pivot (position aimantée sur la grille de 1 cm, à 1 cm au moins du bord). */
+  function deplacerPivot(modele, id, x, y, format) {
+    var m = clone(modele), v = pivotParId(m, id);
+    if (!v) throw new Error('Pivot introuvable.');
+    var q = positionPivot(x, y, leFormat(format));
+    v.x = q.x; v.y = q.y;
+    return m;
+  }
+
+  /** Fixe le point de contrôle de la courbe d'un passage (au dixième de mm, dans la tuile). */
+  function definirCourbe(modele, id, x, y, format) {
+    var C = leFormat(format).COTE, m = clone(modele), p = passageParId(m, id);
+    if (!p) throw new Error('Passage introuvable.');
+    p.courbe = { x: Math.round(Math.min(C, Math.max(0, x)) * 10) / 10, y: Math.round(Math.min(C, Math.max(0, y)) * 10) / 10 };
+    return m;
+  }
+
+  /** Rend à un passage sa courbe par défaut (retire le point de contrôle personnalisé). */
+  function reinitialiserCourbe(modele, id) {
+    var m = clone(modele), p = passageParId(m, id);
+    if (!p) throw new Error('Passage introuvable.');
+    delete p.courbe;
+    return m;
+  }
+
+  /**
    * Supprime un élément désigné par une référence :
-   * { type: 'case', id } (retire aussi ses chemins), { type: 'chemin', id },
-   * { type: 'coin', id: k } ou { type: 'raccord', cote, pos } (retirent les chemins qui y aboutissent).
+   * { type: 'case', id } (retire aussi ses chemins et ses passages), { type: 'chemin', id }, { type: 'passage', id },
+   * { type: 'pivot', id } (retire aussi ses passages),
+   * { type: 'coin', id: k } (retire les chemins qui y aboutissent) ou { type: 'raccord', cote, pos } (chemins et passages).
+   * Un pivot resté sans aucun passage est retiré avec eux.
    */
   function supprimer(modele, ref) {
-    var m = clone(modele), avant = tab(m.chemins).length, nbCases = tab(m.cases).length;
+    var m = clone(modele), avant = tab(m.chemins).length, nbCases = tab(m.cases).length, avantPassages = tab(m.passages).length;
     if (!ref || typeof ref !== 'object') throw new Error('Rien à supprimer.');
     function touche(ch, fn) { return fn(ch.a) || fn(ch.b); }
+    function retirerPassages(fn) { if (Array.isArray(m.passages)) m.passages = m.passages.filter(function (ps) { return !touche(ps, fn); }); }
+    function termine() { // un pivot qui n'a plus aucune branche n'a plus de raison d'être
+      if (tab(m.passages).length === avantPassages || !Array.isArray(m.pivots)) return m;
+      var avait = {}, garde = {};
+      tab(modele.passages).forEach(function (ps) { [ps.a, ps.b].forEach(function (e) { if (typeExtP(e) === 'pivot') avait[e.pivot] = true; }); });
+      m.passages.forEach(function (ps) { [ps.a, ps.b].forEach(function (e) { if (typeExtP(e) === 'pivot') garde[e.pivot] = true; }); });
+      m.pivots = m.pivots.filter(function (v) { return !avait[v.id] || garde[v.id]; });
+      return m;
+    }
     if (ref.type === 'case') {
       m.cases = tab(m.cases).filter(function (c) { return c.id !== ref.id; });
       if (m.cases.length === nbCases) throw new Error('Case introuvable.');
       m.chemins = tab(m.chemins).filter(function (ch) { return !touche(ch, function (e) { return typeExt(e) === 'case' && e['case'] === ref.id; }); });
+      retirerPassages(function (e) { return typeExtP(e) === 'case' && e['case'] === ref.id; });
+      return termine();
+    } else if (ref.type === 'passage') {
+      if (!passageParId(m, ref.id)) throw new Error('Passage introuvable.');
+      m.passages = m.passages.filter(function (ps) { return ps.id !== ref.id; });
+      return termine();
+    } else if (ref.type === 'pivot') {
+      if (!pivotParId(m, ref.id)) throw new Error('Pivot introuvable.');
+      retirerPassages(function (e) { return typeExtP(e) === 'pivot' && e.pivot === ref.id; });
+      m.pivots = m.pivots.filter(function (v) { return v.id !== ref.id; });
+      return termine();
     } else if (ref.type === 'chemin') {
       m.chemins = tab(m.chemins).filter(function (ch) { return ch.id !== ref.id; });
       if (m.chemins.length === avant) throw new Error('Chemin introuvable.');
@@ -280,7 +389,9 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       m.chemins = tab(m.chemins).filter(function (ch) {
         return !touche(ch, function (e) { return typeExt(e) === 'raccord' && e.raccord.cote === ref.cote && e.raccord.pos === ref.pos; });
       });
-      if (m.chemins.length === avant) throw new Error('Aucun chemin n\'aboutit à ce raccord.');
+      retirerPassages(function (e) { return typeExtP(e) === 'raccord' && e.raccord.cote === ref.cote && e.raccord.pos === ref.pos; });
+      if (m.chemins.length === avant && tab(m.passages).length === avantPassages) throw new Error('Aucun chemin n\'aboutit à ce raccord.');
+      return termine();
     } else {
       throw new Error('Élément non supprimable.');
     }
@@ -333,6 +444,10 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       var q = F.pointCoin(k);
       if (dist(x, y, q.x, q.y) <= RAYON_COIN) return { type: 'coin', coin: k, exterieur: coinExterieur(gabarit, k) };
     }
+    var pvs = tab(modele && modele.pivots);
+    for (var v = pvs.length - 1; v >= 0; v--) {
+      if (pvs[v] && dist(x, y, pvs[v].x, pvs[v].y) <= RAYON_PIVOT) return { type: 'pivot', id: pvs[v].id };
+    }
     var cs = tab(modele && modele.cases);
     for (var i = cs.length - 1; i >= 0; i--) {
       var c = cs[i];
@@ -344,7 +459,24 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         if (distanceSegment(x, y, ts[t].pts[s], ts[t].pts[s + 1]) <= TOLERANCE_CHEMIN) return { type: 'chemin', id: ts[t].id };
       }
     }
+    var tp = R.tracesPassages(modele, F);
+    for (var u = 0; u < tp.length; u++) {
+      for (var w = 0; w + 1 < tp[u].pts.length; w++) {
+        if (distanceSegment(x, y, tp[u].pts[w], tp[u].pts[w + 1]) <= TOLERANCE_CHEMIN) return { type: 'passage', id: tp[u].id };
+      }
+    }
     return null;
+  }
+
+  /**
+   * Poignée de courbe du passage sélectionné sous le point (x, y) en mm : { id, x, y } (position de la poignée), ou null.
+   * `selection` : référence { type: 'passage', id } ; toute autre sélection n'a pas de poignée.
+   */
+  function poigneeEn(modele, selection, x, y, format) {
+    if (!selection || selection.type !== 'passage') return null;
+    var t = R.tracesPassages(modele, format).filter(function (q) { return q.id === selection.id; })[0];
+    if (!t || dist(x, y, t.controle.x, t.controle.y) > RAYON_POIGNEE) return null;
+    return { id: t.id, x: t.controle.x, y: t.controle.y };
   }
 
   /** Extrémité de chemin correspondant à une cible (ou null si la cible ne peut pas être une extrémité). */
@@ -353,13 +485,14 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     if (c.type === 'case') return { 'case': c.id };
     if (c.type === 'raccord') return { raccord: { cote: c.cote, pos: c.pos } };
     if (c.type === 'coin') return { coin: c.coin };
+    if (c.type === 'pivot') return { pivot: c.id };
     return null;
   }
 
   /** Référence (au sens de validerModele) d'une cible : sert de sélection. */
   function refDeCible(c) {
     if (!c) return null;
-    if (c.type === 'case' || c.type === 'chemin') return { type: c.type, id: c.id };
+    if (c.type === 'case' || c.type === 'chemin' || c.type === 'passage' || c.type === 'pivot') return { type: c.type, id: c.id };
     if (c.type === 'coin') return { type: 'coin', id: c.coin };
     if (c.type === 'raccord') return { type: 'raccord', id: c.cote + ':' + c.pos, cote: c.cote, pos: c.pos };
     return null;
@@ -381,6 +514,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       return k ? 'Case ' + k.id + ' (' + (k.type === 'apparition' ? 'apparition' : 'déplacement') + '), centre à ' + cm(k.x) + ' ; ' + cm(k.y) + ' cm, diamètre ' + cm(k.diametre) + ' cm.' : '';
     }
     if (c.type === 'chemin') return 'Chemin ' + c.id + '.';
+    if (c.type === 'pivot') return 'Pivot ' + c.id + ' : point de ramification sans case (un T). Glissez-le pour le déplacer, ou vers une case, un raccord ou un autre pivot pour tracer un passage.';
+    if (c.type === 'passage') return 'Passage ' + c.id + ' (sans case, en courbe) : cliquez pour le sélectionner, puis glissez sa poignée pour courber ; double-clic sur la poignée = courbe par défaut.';
     return '';
   }
 
@@ -412,6 +547,11 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       });
     } else if (ref.type === 'chemin') {
       R.tracesModele(modele, F).forEach(function (t) { if (t.id === ref.id) res.lignes.push(t.pts); });
+    } else if (ref.type === 'passage') {
+      R.tracesPassages(modele, F).forEach(function (t) { if (t.id === ref.id) res.lignes.push(t.pts); });
+    } else if (ref.type === 'pivot') {
+      var pv = pivotParId(modele, ref.id);
+      if (pv) res.cercles.push({ x: pv.x, y: pv.y, r: 8 });
     } else if (ref.type === 'coin') {
       var k = F.pointCoin(ref.id);
       if (k) res.cercles.push({ x: k.x, y: k.y, r: F.DIAMETRE_CASE_JONCTION / 2 + 3 });
@@ -426,13 +566,17 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
   /** Éléments à marquer en rouge sur le canevas d'après les erreurs de validation. */
   function marquages(erreurs) {
-    var res = { cases: [], coinsErreur: [], raccords: [], chemins: [] };
+    var res = { cases: [], coinsErreur: [], raccords: [], chemins: [], passages: [], pivots: [] };
     function ajouter(liste, v) { if (liste.indexOf(v) < 0) liste.push(v); }
     tab(erreurs).forEach(function (e) {
       var r = e && e.ref;
       if (!r) return;
       if (r.type === 'case') (r.ids || [r.id]).forEach(function (id) { if (id !== undefined) ajouter(res.cases, id); });
       else if (r.type === 'chemin' && r.id !== undefined) ajouter(res.chemins, r.id);
+      else if (r.type === 'passage') {
+        if (r.id !== undefined) ajouter(res.passages, r.id);
+        (r.ids || []).forEach(function (id) { ajouter(res.passages, id); });
+      } else if (r.type === 'pivot' && r.id !== undefined) ajouter(res.pivots, r.id);
       else if (r.type === 'coin') ajouter(res.coinsErreur, r.id);
       else if (r.type === 'raccord') ajouter(res.raccords, r.cote + ':' + r.pos);
     });
@@ -446,6 +590,11 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       [ch && ch.a, ch && ch.b].forEach(function (e) {
         if (typeExt(e) === 'raccord') res.raccords.push(e.raccord.cote + ':' + e.raccord.pos);
         else if (typeExt(e) === 'coin') res.coins.push(e.coin);
+      });
+    });
+    tab(modele && modele.passages).forEach(function (ps) {
+      [ps && ps.a, ps && ps.b].forEach(function (e) {
+        if (typeExtP(e) === 'raccord') res.raccords.push(e.raccord.cote + ':' + e.raccord.pos);
       });
     });
     return res;
@@ -509,11 +658,40 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     return s;
   }
 
+  /** Pivots (points de ramification) : petits ronds visibles seulement dans l'éditeur (rien ne s'imprime à leur place sauf le trait). */
+  function svgPivots(modele, selection, marques) {
+    var s = '';
+    tab(modele && modele.pivots).forEach(function (v) {
+      if (!v || typeof v.x !== 'number' || typeof v.y !== 'number') return;
+      var cls = 'pm-editeur-pivot';
+      if (selection && selection.type === 'pivot' && selection.id === v.id) cls += ' pm-editeur-pivot-choisi';
+      if (marques && marques.pivots.indexOf(v.id) >= 0) cls += ' pm-editeur-en-erreur';
+      s += '<circle class="' + cls + '" data-pivot="' + echapper(v.id) + '" cx="' + arrondi(v.x) + '" cy="' + arrondi(v.y) + '" r="3.2"/>';
+    });
+    return s;
+  }
+
+  /** Poignée de courbe du passage sélectionné : rond au point de contrôle et tirets vers les extrémités du tracé. */
+  function svgPoignee(modele, selection, format) {
+    if (!selection || selection.type !== 'passage') return '';
+    var t = R.tracesPassages(modele, format).filter(function (q) { return q.id === selection.id; })[0];
+    if (!t) return '';
+    var d = t.pts[0], f = t.pts[t.pts.length - 1], c = t.controle;
+    return '<polyline class="pm-editeur-poignee-guide" points="' + pointsSvg([d, c, f]) + '"/>' +
+      '<circle class="pm-editeur-poignee' + (t.parDefaut ? '' : ' pm-editeur-poignee-perso') + '" data-poignee="' + echapper(t.id) + '" cx="' + arrondi(c.x) + '" cy="' + arrondi(c.y) + '" r="3.5"/>';
+  }
+
   /** Cases et chemins en erreur (contours rouges), par-dessus le dessin de la tuile. */
   function svgMarquesErreur(modele, marques, format) {
     var s = '';
     R.tracesModele(modele, format).forEach(function (t) {
       if (marques.chemins.indexOf(t.id) >= 0) s += '<polyline class="pm-editeur-chemin-erreur" points="' + pointsSvg(t.pts) + '"/>';
+    });
+    R.tracesPassages(modele, format).forEach(function (t) {
+      if (marques.passages.indexOf(t.id) >= 0) s += '<polyline class="pm-editeur-chemin-erreur" points="' + pointsSvg(t.pts) + '"/>';
+    });
+    tab(modele.pivots).forEach(function (v) {
+      if (v && marques.pivots.indexOf(v.id) >= 0) s += '<circle class="pm-editeur-case-erreur" cx="' + arrondi(v.x) + '" cy="' + arrondi(v.y) + '" r="6"/>';
     });
     tab(modele.cases).forEach(function (c) {
       if (c && marques.cases.indexOf(c.id) >= 0) {
@@ -622,6 +800,10 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     btnSupprimerTuile.classList.add('pm-editeur-bouton-supprimer');
     btnSupprimerTuile.hidden = true;
     barre.appendChild(btnSupprimerTuile);
+    // Outil de tracé : Chemin (droit, entre cases) ou Passage (courbe, sans case). Un pivot relie toujours par un passage.
+    var btnOutil = bouton('', 'Basculer entre le tracé d\'un chemin et celui d\'un passage sans case (P)', function () { basculerOutil(); });
+    btnOutil.classList.add('pm-editeur-bouton-outil');
+    barre.appendChild(btnOutil);
     var inNom = el('input', 'pm-editeur-saisie'); inNom.type = 'text'; inNom.maxLength = 60;
     barre.appendChild(champ('Nom', inNom));
     var selGabarit = el('select', 'pm-editeur-saisie');
@@ -647,7 +829,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     var svg = svgEl('svg', {
       'class': 'pm-editeur-canevas', viewBox: vueAffichee.x + ' ' + vueAffichee.y + ' ' + vueAffichee.l + ' ' + vueAffichee.h,
       tabindex: '0', role: 'application',
-      'aria-label': 'Canevas de la tuile : cliquer pour ajouter une case, glisser pour déplacer ou tracer un chemin'
+      'aria-label': 'Canevas de la tuile : cliquer pour ajouter une case, glisser pour déplacer ou tracer un chemin ou un passage, Maj et clic pour un pivot'
     });
     var gFond = svgEl('g', { 'class': 'pm-editeur-g-fond' });
     var gGrille = svgEl('g', { 'class': 'pm-editeur-grille' });
@@ -656,9 +838,10 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     var gSelection = svgEl('g', { 'class': 'pm-editeur-g-selection' });
     var gRaccords = svgEl('g', { 'class': 'pm-editeur-g-raccords' });
     var gCoins = svgEl('g', { 'class': 'pm-editeur-g-coins' });
+    var gPivots = svgEl('g', { 'class': 'pm-editeur-g-pivots' });
     var gApercu = svgEl('g', { 'class': 'pm-editeur-g-apercu' });
     var gCote = svgEl('g', { 'class': 'pm-editeur-g-cote' });
-    [gFond, gGrille, gZones, gMarques, gSelection, gRaccords, gCoins, gApercu, gCote].forEach(function (g) { svg.appendChild(g); });
+    [gFond, gGrille, gZones, gMarques, gSelection, gRaccords, gCoins, gPivots, gApercu, gCote].forEach(function (g) { svg.appendChild(g); });
     gGrille.innerHTML = svgGrille(formatAffiche);
     gZones.innerHTML = svgZonesCoin(formatAffiche);
     colCanevas.appendChild(svg);
@@ -680,7 +863,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     var vignettes = el('div', 'pm-editeur-vignettes');
     colCote.appendChild(vignettes);
     colCote.appendChild(el('p', 'pm-editeur-note',
-      'Raccourcis : clic sur le fond = case ; glisser = déplacer ; glisser vers une case, un raccord ou un coin = chemin ; ' +
+      'Raccourcis : clic sur le fond = case ; Maj + clic sur le fond = pivot (T) ; glisser = déplacer ; glisser vers une case, un raccord ou un coin = chemin ; ' +
+      'outil Passage (P) : glisser vers un raccord, une case ou un pivot = passage en courbe, glisser sa poignée = courber ; ' +
       'A ou clic droit = type de case ; Suppr = supprimer ; Échap = annuler ; flèches = déplacer la case sélectionnée.'));
 
     /* ----- état local de l'éditeur ----- */
@@ -689,6 +873,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     var haloLocal = null;     // ref entourée après un clic sur une erreur de la liste
     var geste = null;         // glissement en cours
     var survol = null;        // dernière cible survolée
+    var outil = 'chemin';     // 'chemin' (droit, entre cases) | 'passage' (courbe, sans case) ; un pivot relie toujours par un passage
     var modeleAffiche = null; // id du modèle affiché
     var derniereCle = null;
     var rafraichissementDiffere = false;
@@ -752,15 +937,37 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       modifier(function (x) { return basculerType(x, id); }, 'Changer le type d\'une case');
     }
 
+    /** Trace un chemin, ou un passage si l'outil Passage est actif ou si une extrémité est un pivot. */
     function tracer(a, b) {
-      var r = modifier(function (x) { return ajouterChemin(x, a, b); }, 'Ajouter un chemin');
+      var passage = outil === 'passage' || typeExtP(a) === 'pivot' || typeExtP(b) === 'pivot';
+      var r = passage
+        ? modifier(function (x) { return ajouterPassage(x, a, b); }, 'Ajouter un passage')
+        : modifier(function (x) { return ajouterChemin(x, a, b); }, 'Ajouter un chemin');
       if (r.ok) {
         var m = modeleCourant();
-        var dernier = m && tab(m.chemins)[m.chemins.length - 1];
-        selection = dernier ? { type: 'chemin', id: dernier.id } : null;
+        var liste = m && tab(passage ? m.passages : m.chemins), dernier = liste && liste[liste.length - 1];
+        selection = dernier ? { type: passage ? 'passage' : 'chemin', id: dernier.id } : null;
       }
       arme = null;
       return r;
+    }
+
+    function basculerOutil() {
+      outil = outil === 'passage' ? 'chemin' : 'passage';
+      arme = null;
+      etat.signaler(outil === 'passage'
+        ? 'Outil Passage : glissez d\'une case ou d\'un raccord vers un raccord, une case ou un pivot pour tracer une courbe sans case.'
+        : 'Outil Chemin : glissez d\'une case vers une case, un raccord ou un coin pour tracer un chemin droit.', 'info');
+      rafraichir(true);
+    }
+
+    /** Maj + clic sur le fond : un pivot (point de ramification en T, sans case). */
+    function creerPivot(p) {
+      var avant = M.nouvelId(modeleCourant(), PREFIXE_PIVOT);
+      var r = modifier(function (x) { return ajouterPivot(x, p.x, p.y, fmt()); }, 'Ajouter un pivot');
+      selection = r.ok ? { type: 'pivot', id: avant } : null;
+      arme = null;
+      rafraichir(true);
     }
 
     /* ----- gestes ----- */
@@ -775,22 +982,36 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
     function dessinerApercu(m, p) {
       var F = fmt(), s = '', cible2 = cibleEn(m, p.x, p.y, F), d = geste.depart;
+      if (geste.type === 'poignee') { // courbe en cours de réglage : le passage est redessiné avec le point de contrôle sous le pointeur
+        var essai = definirCourbe(m, geste.id, p.x, p.y, F);
+        var tr = R.tracesPassages(essai, F).filter(function (q) { return q.id === geste.id; })[0];
+        if (tr) s += '<polyline class="pm-editeur-apercu-courbe" points="' + pointsSvg(tr.pts) + '"/><circle class="pm-editeur-poignee" cx="' + arrondi(tr.controle.x) + '" cy="' + arrondi(tr.controle.y) + '" r="3.5"/>';
+        gApercu.innerHTML = s;
+        return;
+      }
       var depart = null;
       if (d && d.type === 'case') {
         var c = caseParId(m, d.id);
         if (c) depart = { x: c.x, y: c.y };
       } else if (d && (d.type === 'raccord' || d.type === 'coin')) {
         depart = d.type === 'raccord' ? F.pointRaccord(d.cote, d.pos) : F.pointCoin(d.coin);
+      } else if (d && d.type === 'pivot') {
+        var pv = pivotParId(m, d.id);
+        if (pv) depart = { x: pv.x, y: pv.y };
       }
-      var versChemin = depart && cible2 && extremiteDeCible(cible2) && !(cible2.type === 'case' && d.type === 'case' && cible2.id === d.id);
+      var versChemin = depart && cible2 && extremiteDeCible(cible2) && !(cible2.type === d.type && (cible2.id === d.id) && (d.type === 'case' || d.type === 'pivot'));
       if (versChemin) {
-        var fin = cible2.type === 'case' ? caseParId(m, cible2.id) : (cible2.type === 'raccord' ? F.pointRaccord(cible2.cote, cible2.pos) : F.pointCoin(cible2.coin));
+        var fin = cible2.type === 'case' ? caseParId(m, cible2.id) : cible2.type === 'pivot' ? pivotParId(m, cible2.id)
+          : (cible2.type === 'raccord' ? F.pointRaccord(cible2.cote, cible2.pos) : F.pointCoin(cible2.coin));
         s += '<line class="pm-editeur-apercu-chemin" x1="' + depart.x + '" y1="' + depart.y + '" x2="' + fin.x + '" y2="' + fin.y + '"/>';
         s += '<circle class="pm-editeur-apercu-cible" cx="' + fin.x + '" cy="' + fin.y + '" r="9"/>';
       } else if (d && d.type === 'case') {
         var cc = caseParId(m, d.id), dec = geste.decalage || { dx: 0, dy: 0 };
         var q = aimanter(p.x + dec.dx, p.y + dec.dy, cc ? cc.diametre : DIAMETRE_DEFAUT, F);
         s += '<circle class="pm-editeur-apercu-case" cx="' + arrondi(q.x) + '" cy="' + arrondi(q.y) + '" r="' + arrondi((cc ? cc.diametre : DIAMETRE_DEFAUT) / 2) + '"/>';
+      } else if (d && d.type === 'pivot') {
+        var qp = positionPivot(p.x, p.y, F);
+        s += '<circle class="pm-editeur-apercu-case" cx="' + arrondi(qp.x) + '" cy="' + arrondi(qp.y) + '" r="3.2"/>';
       } else if (depart) {
         s += '<line class="pm-editeur-apercu-chemin pm-editeur-apercu-libre" x1="' + arrondi(depart.x) + '" y1="' + arrondi(depart.y) + '" x2="' + arrondi(p.x) + '" y2="' + arrondi(p.y) + '"/>';
       }
@@ -811,10 +1032,10 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     function clic(m, cible, p) {
       if (arme) {
         var ext = extremiteDeCible(cible);
-        var meme = ext && cleExt(ext) === cleExt(arme);
+        var meme = ext && cleExtP(ext) === cleExtP(arme);
         if (ext && !meme) { tracer(arme, ext); return; }
         arme = null;
-        if (!meme) etat.signaler('Chemin annulé : cliquez d\'abord sur une case, un raccord ou un coin, puis sur l\'autre extrémité.', 'info');
+        if (!meme) etat.signaler('Tracé annulé : cliquez d\'abord sur une case, un raccord, un coin ou un pivot, puis sur l\'autre extrémité.', 'info');
         rafraichir(true);
         return;
       }
@@ -840,9 +1061,23 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       effacerApercu();
       if (!m) { rafraichir(true); return; }
       rafraichissementDiffere = false;
+      if (g.type === 'poignee') { // courbe du passage : un simple appui ne change rien
+        if (g.deplace) modifier(function (x) { return definirCourbe(x, g.id, p.x, p.y, fmt()); }, 'Courber un passage');
+        rafraichir(true);
+        return;
+      }
       if (!g.deplace) { clic(m, g.depart, g.p0); return; }
       var d = g.depart, cible2 = cibleEn(m, p.x, p.y, fmt());
-      if (d && d.type === 'case') {
+      if (d && d.type === 'pivot') {
+        var extP = extremiteDeCible(cible2);
+        if (extP && !(cible2.type === 'pivot' && cible2.id === d.id)) {
+          tracer({ pivot: d.id }, extP);
+        } else {
+          modifier(function (x) { return deplacerPivot(x, d.id, p.x, p.y, fmt()); }, 'Déplacer un pivot');
+          selection = { type: 'pivot', id: d.id };
+          arme = null;
+        }
+      } else if (d && d.type === 'case') {
         var ext = extremiteDeCible(cible2);
         if (ext && !(cible2.type === 'case' && cible2.id === d.id)) {
           tracer({ 'case': d.id }, ext);
@@ -853,8 +1088,9 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
           arme = null;
         }
       } else if (d && (d.type === 'raccord' || d.type === 'coin')) {
-        if (cible2 && cible2.type === 'case') tracer({ 'case': cible2.id }, extremiteDeCible(d));
-        else etat.signaler('Relâchez sur une case pour tracer le chemin.', 'info');
+        if (cible2 && (cible2.type === 'case' || cible2.type === 'pivot')) tracer(extremiteDeCible(cible2), extremiteDeCible(d));
+        else if (cible2 && cible2.type === 'raccord' && outil === 'passage') tracer(extremiteDeCible(d), extremiteDeCible(cible2));
+        else etat.signaler(outil === 'passage' ? 'Relâchez sur une case, un raccord ou un pivot pour tracer le passage.' : 'Relâchez sur une case pour tracer le chemin.', 'info');
       }
       rafraichir(true);
     }
@@ -867,7 +1103,14 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       if (!p) return;
       if (ev.preventDefault) ev.preventDefault();
       if (svg.focus) { try { svg.focus({ preventScroll: true }); } catch (e) { /* ignoré */ } }
+      var poignee = poigneeEn(m, selection, p.x, p.y, fmt());
+      if (poignee) { // glisser la poignée de courbe du passage sélectionné
+        geste = { type: 'poignee', id: poignee.id, px0: ev.clientX, py0: ev.clientY, p0: p, courantMm: p, depart: null, deplace: false, pointerId: ev.pointerId, decalage: null };
+        try { svg.setPointerCapture(ev.pointerId); } catch (e) { /* pointeur synthétique ou déjà relâché */ }
+        return;
+      }
       var cible = cibleEn(m, p.x, p.y, fmt());
+      if (ev.shiftKey && !cible) { creerPivot(p); return; }
       geste = { px0: ev.clientX, py0: ev.clientY, p0: p, courantMm: p, depart: cible, deplace: false, pointerId: ev.pointerId, decalage: null };
       if (cible && cible.type === 'case') {
         var c = caseParId(m, cible.id);
@@ -885,7 +1128,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         geste.courantMm = p;
         if (!geste.deplace && Math.hypot(ev.clientX - geste.px0, ev.clientY - geste.py0) >= SEUIL_GLISSEMENT_PX) {
           var d = geste.depart;
-          var glissable = d && (d.type === 'case' || d.type === 'raccord' || d.type === 'coin');
+          var glissable = geste.type === 'poignee' || (d && (d.type === 'case' || d.type === 'raccord' || d.type === 'coin' || d.type === 'pivot'));
           if (glissable) { geste.deplace = true; arme = null; haloLocal = null; }
         }
         if (geste.deplace) dessinerApercu(m, p);
@@ -901,6 +1144,17 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     svg.addEventListener('pointerup', finGeste);
     svg.addEventListener('pointercancel', function () { annulerGeste(); });
     svg.addEventListener('pointerleave', function () { if (!geste) { survol = null; majSurvol(modeleCourant()); } });
+
+    // Double-clic sur la poignée du passage sélectionné : courbe par défaut
+    svg.addEventListener('dblclick', function (ev) {
+      var m = modeleCourant();
+      if (!m || geste || !selection || selection.type !== 'passage') return;
+      var p = pointMm(ev);
+      if (!p || !poigneeEn(m, selection, p.x, p.y, fmt())) return;
+      var id = selection.id;
+      modifier(function (x) { return reinitialiserCourbe(x, id); }, 'Courbe par défaut');
+      rafraichir(true);
+    });
 
     // Clic droit : bascule déplacement / apparition de la case visée
     svg.addEventListener('contextmenu', function (ev) {
@@ -928,9 +1182,10 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
       if (k === 'Delete') { ev.preventDefault(); supprimerSelection(); }
       else if (k === 'a' || k === 'A') { ev.preventDefault(); basculerSelection(); }
+      else if (k === 'p' || k === 'P') { ev.preventDefault(); basculerOutil(); }
       else if (k === 'Escape') {
         if (geste) annulerGeste();
-        else if (arme) { arme = null; etat.signaler('Chemin annulé.', 'info'); }
+        else if (arme) { arme = null; etat.signaler('Tracé annulé.', 'info'); }
         else { selection = null; haloLocal = null; }
         rafraichir(true);
       } else if (k.indexOf('Arrow') === 0 && selection && selection.type === 'case' && !(t && t.tagName === 'BUTTON')) {
@@ -966,10 +1221,12 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     /* ----- dessin ----- */
 
     function majAide() {
-      if (geste && geste.deplace) aide.textContent = 'Relâchez sur une case, un raccord ou un coin pour tracer un chemin, ailleurs pour déplacer. Échap annule.';
-      else if (arme) aide.textContent = 'Chemin : cliquez sur l\'autre extrémité (case, raccord ou coin). Échap annule.';
+      if (geste && geste.deplace && geste.type === 'poignee') aide.textContent = 'Relâchez pour fixer la courbe. Échap annule.';
+      else if (geste && geste.deplace) aide.textContent = 'Relâchez sur une case, un raccord, un coin ou un pivot pour tracer, ailleurs pour déplacer. Échap annule.';
+      else if (arme) aide.textContent = (outil === 'passage' ? 'Passage' : 'Chemin') + ' : cliquez sur l\'autre extrémité (case, raccord, coin ou pivot). Échap annule.';
       else if (selection) aide.textContent = 'Sélection : ' + selection.type + (selection.id !== undefined ? ' ' + selection.id : '') + '. Suppr supprime' +
-        (selection.type === 'case' ? ', A change le type, les flèches déplacent.' : '.');
+        (selection.type === 'case' ? ', A change le type, les flèches déplacent.'
+          : selection.type === 'passage' ? ' ; glissez la poignée pour courber, double-clic sur la poignée = courbe par défaut.' : '.');
       else aide.textContent = 'Cliquez sur le fond pour ajouter une case ; glissez une case pour la déplacer ou la relier.';
     }
 
@@ -1042,7 +1299,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         gGrille.innerHTML = svgGrille(F);
         gZones.innerHTML = svgZonesCoin(F);
       }
-      var cle = JSON.stringify([m, util, selection, arme, haloLocal, ext, F.id]);
+      var cle = JSON.stringify([m, util, selection, arme, haloLocal, ext, F.id, outil]);
       if (!force && cle === derniereCle) return;
       derniereCle = cle;
 
@@ -1063,6 +1320,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         avertissement.textContent = '';
       }
 
+      btnOutil.textContent = 'Outil : ' + (outil === 'passage' ? 'Passage' : 'Chemin');
+      btnOutil.setAttribute('aria-pressed', outil === 'passage' ? 'true' : 'false');
       gFond.innerHTML = R.contenuTuile(m, { contour: true, format: F });
       gMarques.innerHTML = svgMarquesErreur(m, marques, F);
       var haloRef = haloLocal || ext;
@@ -1070,10 +1329,13 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       if (haloRef) s += svgHalo(haloDe(m, haloRef, F), undefined, F);
       if (selection) s += svgHalo(haloDe(m, selection, F), 'pm-editeur-selection', F);
       if (arme) {
-        var pt = typeExt(arme) === 'case' ? caseParId(m, arme['case']) : typeExt(arme) === 'raccord' ? F.pointRaccord(arme.raccord.cote, arme.raccord.pos) : F.pointCoin(arme.coin);
-        if (pt) s += '<circle class="pm-editeur-arme" cx="' + arrondi(pt.x) + '" cy="' + arrondi(pt.y) + '" r="' + arrondi(typeExt(arme) === 'case' ? ((caseParId(m, arme['case']).diametre || DIAMETRE_DEFAUT) / 2 + 5) : 10) + '"/>';
+        var ta = typeExtP(arme);
+        var pt = ta === 'case' ? caseParId(m, arme['case']) : ta === 'raccord' ? F.pointRaccord(arme.raccord.cote, arme.raccord.pos) : ta === 'pivot' ? pivotParId(m, arme.pivot) : F.pointCoin(arme.coin);
+        if (pt) s += '<circle class="pm-editeur-arme" cx="' + arrondi(pt.x) + '" cy="' + arrondi(pt.y) + '" r="' + arrondi(ta === 'case' ? ((caseParId(m, arme['case']).diametre || DIAMETRE_DEFAUT) / 2 + 5) : 10) + '"/>';
       }
+      s += svgPoignee(m, selection, F);
       gSelection.innerHTML = s;
+      gPivots.innerHTML = svgPivots(m, selection, marques);
       gRaccords.innerHTML = svgRaccords(m, marques, F);
       gCoins.innerHTML = svgCoins(m, marques, F);
 
@@ -1099,9 +1361,14 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     function elementExiste(m, ref) {
       if (ref.type === 'case') return !!caseParId(m, ref.id);
       if (ref.type === 'chemin') return tab(m.chemins).some(function (ch) { return ch.id === ref.id; });
+      if (ref.type === 'passage') return !!passageParId(m, ref.id);
+      if (ref.type === 'pivot') return !!pivotParId(m, ref.id);
       return true;
     }
-    function extremiteExiste(m, e) { return typeExt(e) !== 'case' || !!caseParId(m, e['case']); }
+    function extremiteExiste(m, e) {
+      var t = typeExtP(e);
+      return t === 'case' ? !!caseParId(m, e['case']) : t === 'pivot' ? !!pivotParId(m, e.pivot) : true;
+    }
 
     etat.abonner(function () { rafraichir(false); });
     rafraichir(true);
@@ -1127,6 +1394,11 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     deplacerCase: deplacerCase,
     basculerType: basculerType,
     ajouterChemin: ajouterChemin,
+    ajouterPassage: ajouterPassage,
+    ajouterPivot: ajouterPivot,
+    deplacerPivot: deplacerPivot,
+    definirCourbe: definirCourbe,
+    reinitialiserCourbe: reinitialiserCourbe,
     supprimer: supprimer,
     changerGabarit: changerGabarit,
     renommer: renommer,
@@ -1135,6 +1407,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     raccordExterieur: raccordExterieur,
     coinExterieur: coinExterieur,
     cibleEn: cibleEn,
+    poigneeEn: poigneeEn,
     extremiteDeCible: extremiteDeCible,
     refDeCible: refDeCible,
     libelleCible: libelleCible,
@@ -1148,6 +1421,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     svgRaccords: svgRaccords,
     svgCoins: svgCoins,
     svgHalo: svgHalo,
+    svgPivots: svgPivots,
+    svgPoignee: svgPoignee,
     svgVignette: svgVignette
   };
 

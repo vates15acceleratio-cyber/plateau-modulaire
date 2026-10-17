@@ -320,7 +320,7 @@ test('marquages : chemins, raccords, coins en erreur', () => {
     { code: 'coin_double', message: '', ref: { type: 'coin', id: 2 } },
     { code: 'x', message: '' }
   ]);
-  assert.deepEqual(mq, { cases: [], coinsErreur: [2], raccords: ['1:1'], chemins: ['h9'] });
+  assert.deepEqual(mq, { cases: [], coinsErreur: [2], raccords: ['1:1'], chemins: ['h9'], passages: [], pivots: [] });
 });
 
 test('extremitesUtilisees', () => {
