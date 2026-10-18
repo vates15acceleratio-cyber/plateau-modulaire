@@ -143,3 +143,9 @@ Après les avis `28-avis-design-5x5.md` (design de jeu) et `29-avis-geometrie-5x
 - **« Deux ponts » (LC4) gardé avec ses murs** (2 raccords morts par pose acceptés).
 - **« Pont et fourche » (LC3) gardé sur quelques tuiles** (environ 3 centrales sur 9), pour le côté organique.
 - **Écart d'au moins 3 cases entre villes maintenu**, garanti par le placement des villes (générateur ; aide au placement et alerte dans l'éditeur), plus par les tuiles.
+
+## Réponses de l'utilisateur sur le 5×5 très connecté réalisé (2026-10-18, `56`)
+1. **Rythme** : « chaque intersection sera un point d'intérêt désormais, les règles ont été un peu révisées » : toute **jonction** (ville ou jonction-case) compte comme zone d'intérêt dans la mesure du rythme. Lecture de l'orchestrateur : dans les deux formats (c'est une règle de jeu), la cible de chaîne reste 3.
+2. **Composition 5×5** : bords et coins gardent leur composition ; **plus de choix dans les tuiles centrales** qu'aujourd'hui (nouveaux modèles de centrales, dans les règles du 5×5 très connecté ; tirage plus varié des centrales, stock à recalculer).
+3. **Murs voulus** (« Deux ponts ») : les raccords morts face à un mur voulu passent **en information**, plus en alerte ; les autres raccords morts restent des alertes.
+4. **« Placer les villes »** : gardé dans les deux formats.
