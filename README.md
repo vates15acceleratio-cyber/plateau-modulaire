@@ -56,7 +56,7 @@ Les pages `outils/recette-interface.html` et `outils/recette-p2.html` jouent des
 
 ## État
 
-Version 3.04.0 : catalogue et plateau aléatoire 5×5, cases à Ø 20 mm, règles de la version 2 sur la grille 4×4 (grilles pleines, apparitions sur tout le pourtour, jonctions-cases, tuiles libres, nouveau catalogue), poses illimitées, bibliothèque élargie, choix de la grille au bouton « Nouveau ». Un document de la version 1 se rouvre converti, et le nouveau catalogue est proposé. Le **5×5 est complet** : pose à la main, plateau aléatoire (centrales orientées, 5 ou 6 B1, villes en 2-3-2), seuils d’équilibre mesurés sur 1000 plateaux (identiques au 4×4). Restent à valider en conditions réelles : une impression et la mesure de la barre de 100 mm à la règle, l'usage au doigt sur tablette, et l'équilibre ressenti en parties réelles.
+Version 4.00.0 : catalogues organiques 4×4 (24 tuiles) et 5×5 (37 tuiles) avec passages sans case (un passage compte pour un déplacement), générateur 4×4 et 5×5, seuils d'équilibre par format (score S : alerte à 5 en 4×4, à 7 en 5×5). Les documents 3.04 s'ouvrent avec la proposition du nouveau catalogue ; les documents à passages s'enregistrent en version 3, que la 3.04 refuse. Restent à valider en conditions réelles : une impression et la mesure de la barre de 100 mm à la règle, l'usage au doigt sur tablette, et l'équilibre ressenti en parties réelles.
 
 ## Droits
 

@@ -35,12 +35,7 @@ Toujours répondre à l'utilisateur **en français**. Code, identifiants et comm
 - Dans une chaîne JS entre apostrophes droites, une apostrophe française casse la syntaxe : utiliser `’` ; lancer `node --check` après chaque modification.
 - Ne jamais modifier le fichier d'un sous-agent en cours avec une expression régulière large.
 
-## État (2026-10-17)
-- Le travail se fait aussi sur un autre poste : **toujours commencer par `git fetch` puis `git pull`**. Les fonctionnalités se font sur une branche, fusionnée par PR.
-- Version 3.04.0 sur `main` (générateur 5×5 fusionné, PR #5).
-- **Branche `passages` (en cours, non fusionnée, non versionnée)** : refonte « organique » demandée par l'utilisateur (plateau jugé artificiel et bloquant).
-  - **Fait** : passages sans case (courbes vertes, T par pivot, un passage = 1 déplacement, cases reliées voisines à 1 pas) dans le modèle, le graphe, le rendu, le PDF et l'éditeur (`docs/39`, `docs/40`) ; revue (`docs/41`) corrigée ; recette (`docs/43`). `node --test` 610 OK, recettes 312 / 116 OK.
-  - **En cours** : catalogues candidats 4×4 et 5×5 **non branchés** (`outils/catalogue-organique.js`, images par `outils/planche-organique.js` dans `docs/croquis/organique/`, `docs/42`, `docs/44`) ; mesure du **rythme** (plus longue suite de cases sans ville ni raccourci, cible ≤ 3).
-  - **Fait le 2026-10-17 au soir** : révision « centrales ouvertes » (`docs/45`, images dans `docs/croquis/organique/`) : 4×4 Q1 / Q2, 5×5 U1 + P1 / P2 / P3 / P5, mesures d’équilibre des accès, rythme strict, pose symétrique.
-  - **Prochaine étape** : réponses de l’utilisateur aux 6 questions de `docs/45` (5×5 à 77 ou 78 cases, pose symétrique, chaînes de 4 en 4×4, Q2, P3 traversant ?, coin plus léger), puis branchement du catalogue, générateur (orientation pour le rythme et l’équilibre des accès), mesures, testeur, relecteur, versionneur, PR.
-- **Travail restant et idées à étudier : `docs/25-travail-restant.md`** (tempo du 5×5, audit de sécurité des derniers ajouts, petites dettes dont l'affichage mobile et la barre d'outils de l'éditeur, hexagonal en attente, idée des **régions thématiques** à discuter).
+## État (2026-10-18)
+- Le travail se fait aussi sur un autre poste : **toujours commencer par `git fetch` puis `git pull`**. Les fonctionnalités se font sur une branche, fusionnée par PR. Le `main` local peut être en retard : comparer avec `origin/main`.
+- Version 3.04.0 sur `main`. **Branche `passages` : version 4.00.0 prête, en PR** (non fusionnée) : passages sans case, catalogues organiques 4×4 (24 tuiles) et 5×5 (37 tuiles) branchés, générateur (moitiés égales, orientation, rythme, goulets 5×5, jonctions variées par défaut en 4×4), seuils S par format, stock imprimé dissocié du poids, proposition du nouveau catalogue aux documents 3.04 et v1, format version 3 pour les documents à passages. Rapports `docs/38` à `docs/52`. `node --test` 682 tests (675 OK, 7 PDF ignorés, ~75 s), recettes 337 / 116 OK.
+- **Prochaine étape** : relecture de la PR par l’utilisateur, fusion sur son accord, étiquette `4.00.0` sur `main`. Ensuite : ce qui reste dans `docs/25-travail-restant.md` (mesures 5 et 8 du `28`, conseil 5×5 à remesurer, articulations en 4×4, affichage mobile, régions thématiques, hexagonal en attente).
