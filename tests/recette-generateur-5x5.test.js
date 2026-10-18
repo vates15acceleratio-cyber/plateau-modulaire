@@ -84,7 +84,7 @@ test('génération 5×5 (150 graines, 1 à 3 candidats) : 25 tuiles à leur rôl
   });
 });
 
-test('génération 5×5 : 4 coins LK2, 12 bords LB2, 9 centrales du catalogue (stock exact), 59 cases, moitiés égales, moins de 5 % de cases à 2 connexions', () => {
+test('génération 5×5 : 4 coins LK2, 12 bords LB2, 9 centrales du catalogue (dans le stock), 57 ou 58 cases, moitiés égales, moins de 5 % de cases à 2 connexions', () => {
   plateaux().forEach((r, k) => {
     const d = r.doc, id = 'rec-' + k, n = {};
     d.plateau.tuiles.forEach((t) => {
@@ -92,18 +92,19 @@ test('génération 5×5 : 4 coins LK2, 12 bords LB2, 9 centrales du catalogue (s
       const role = M.gabaritCellule(t.col, t.lig, '5x5');
       if (role === 'coin') assert.strictEqual(t.modeleId, 'LK2', id);
       if (role === 'bord') assert.strictEqual(t.modeleId, 'LB2', id);
-      if (role === 'centrale') assert.ok(['LC1', 'LC2', 'LC3', 'LC4'].includes(t.modeleId), id);
+      if (role === 'centrale') assert.ok(['LC1', 'LC2', 'LC3', 'LC4', 'LC5', 'LC6', 'LC7'].includes(t.modeleId), id);
     });
-    // catalogue (docs/55) : la composition est celle du stock à imprimer, donc tout plateau généré se monte avec la boîte
+    // catalogue (docs/55, docs/58) : la composition reste dans le stock à imprimer, donc tout plateau généré se monte avec la boîte
     d.modeles.forEach((m) => assert.ok((n[m.id] || 0) <= m.exemplaires, id + ' : ' + m.id));
-    assert.strictEqual(r.score.cases.total, 59, id);
+    const attendu = 59 - (n.LC5 || 0); // LC5 n'a qu'une case
+    assert.strictEqual(r.score.cases.total, attendu, id);
     assert.strictEqual(r.score.cases.ecart, 0, id);
     // connexions par case (docs/53 § 1), mesurées indépendamment : degré de chaque case de tuile et ports de chaque jonction-case
     const g = GR.construire(d, { villesTraversables: false });
     let faibles = 0, cases = 0;
     g.cases.forEach((c, cid) => { cases++; if (g.voisins.get(cid).size <= 2) faibles++; });
     g.jonctions.forEach((jn) => { if (jn.type === 'case') { cases++; if (M.portsJonction(d, jn.i, jn.j).ports <= 2) faibles++; } });
-    assert.strictEqual(cases, 59, id);
+    assert.strictEqual(cases, attendu, id);
     assert.ok(faibles / cases < 0.05, id + ' : ' + faibles + ' cases à 2 connexions ou moins');
   });
 });
@@ -181,7 +182,7 @@ test('parcours à l’état : Nouveau 5×5 (vrai catalogue), Générer, Applique
   const nouveau = PM.nouveau.documentPourGrille('5x5');
   assert.ok(nouveau.ok, nouveau.raison);
   assert.strictEqual(nouveau.doc.grille, '5x5');
-  assert.deepStrictEqual(nouveau.doc.modeles.map((m) => m.id).sort(), ['LB2', 'LC1', 'LC2', 'LC3', 'LC4', 'LK2']);
+  assert.deepStrictEqual(nouveau.doc.modeles.map((m) => m.id).sort(), ['LB2', 'LC1', 'LC2', 'LC3', 'LC4', 'LC5', 'LC6', 'LC7', 'LK2']);
   assert.deepStrictEqual(nouveau.doc.plateau, { tuiles: [], jetons: [] });
   const etat = PM.etat.creer(PM.nouveau.documentPourGrille('4x4').doc);
   etat.remplacer(nouveau.doc, 'nouveau plateau 5×5');

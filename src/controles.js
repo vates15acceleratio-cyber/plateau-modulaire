@@ -20,9 +20,9 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   var M = PM.modele;
 
-  /** Composition visée : 7 villes ; cases (cases des tuiles + cases de jonction) ≈ 58 en 4×4 (docs/46), 59 en 5×5 (2 cases par tuile, docs/55). */
+  /** Composition visée : 7 villes ; cases (cases des tuiles + cases de jonction) ≈ 58 en 4×4 (docs/46), ≈ 57 en 5×5 (2 cases par tuile, 1 pour LC5, docs/58). */
   var NB_VILLES = 7;
-  var CIBLE_CASES = { '4x4': 58, '5x5': 59 }; // cases par plateau du catalogue livré : 4×4 mesuré à 58,4 ; 5×5 : 50 cases de tuiles + 9 jonctions-cases (docs/55)
+  var CIBLE_CASES = { '4x4': 58, '5x5': 57 }; // cases par plateau du catalogue livré : 4×4 mesuré à 58,4 ; 5×5 : 48 ou 49 cases de tuiles + 9 jonctions-cases = 57 ou 58 (docs/58, B3)
 
   /** Dimensions du plateau (en cm) pour le format F. */
   function dimensions(F) { return (F.GRILLE.colonnes * F.COTE / 10) + ' × ' + (F.GRILLE.lignes * F.COTE / 10) + ' cm'; }
@@ -178,12 +178,13 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function compteursDuPlateau(doc) {
     var plateau = doc.plateau, F = M.formatDuDocument(doc);
     var villes = 0, cases = 0, petitesTuiles = 0, apparitions = { vert: 0, rouge: 0 };
+    var seuilPetite = F.id === '5x5' ? 1 : 2; // 5×5 : « Pont et carrefour » (LC5, docs/58) n'a qu'une case par choix de l'utilisateur ; seule une tuile sans case compte
     plateau.jetons.forEach(function (j) { if (j && j.type === 'capture') villes++; });
     plateau.tuiles.forEach(function (t) {
       var m = M.modeleParId(doc, t.modeleId);
       if (!m) return; // modèle absent : signalé par validerPlateau
       var cs = Array.isArray(m.cases) ? m.cases : [];
-      if (cs.length < 2) petitesTuiles++;
+      if (cs.length < seuilPetite) petitesTuiles++;
       cs.forEach(function (c) {
         if (!c) return;
         cases++;
@@ -206,7 +207,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       compteur('apparitions_vert', 'Apparitions vert', apparitions.vert, apparitionsAttendues(F, 'vert')),
       compteur('apparitions_rouge', 'Apparitions rouge', apparitions.rouge, apparitionsAttendues(F, 'rouge')),
       { cle: 'dimensions', libelle: 'Dimensions', valeur: dimensions(F), cible: dimensions(F), etat: 'ok' },
-      compteur('tuiles_petites', 'Tuiles à moins de 2 cases', petitesTuiles, 0)
+      compteur('tuiles_petites', seuilPetite === 1 ? 'Tuiles sans case' : 'Tuiles à moins de 2 cases', petitesTuiles, 0)
     ];
   }
 

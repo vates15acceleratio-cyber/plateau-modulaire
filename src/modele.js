@@ -1021,21 +1021,17 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   function aUneApparition(m) { return tab(m && m.cases).some(function (c) { return estObjet(c) && c.type === 'apparition'; }); }
 
   /**
-   * Murs voulus d'un modèle (docs/18, réponse 3 sur le 5×5 très connecté réalisé) : masque de 4 bits (bit c = côté c dans le repère du
-   * modèle, N E S O) des côtés VOLONTAIREMENT fermés, sans aucun raccord. Un raccord de la voisine qui leur fait face est une
-   * information (« mur voulu »), non une alerte.
-   *  - champ facultatif `murs` : liste de côtés (0 à 3) ; seuls ceux qui n'ont aucun raccord comptent ; `murs: []` = aucun mur ;
-   *  - sans ce champ : pour une centrale qui porte des raccords, tout côté sans raccord est un mur (« Deux ponts », « Étoile fermée ») ;
-   *    bords et coins n'en ont jamais sans le champ (leurs côtés sans raccord sont ceux du pourtour).
+   * Murs voulus d'un modèle (docs/18, réponse 3 sur le 5×5 très connecté réalisé ; docs/57, arbitrage) : masque de 4 bits (bit c = côté c
+   * dans le repère du modèle, N E S O) des côtés VOLONTAIREMENT fermés, sans aucun raccord. Un raccord de la voisine qui leur fait face
+   * est une information (« mur voulu »), non une alerte.
+   *  - SEULS les côtés listés par le champ facultatif `murs` (côtés 0 à 3) comptent, et seulement s'ils n'ont aucun raccord ;
+   *  - sans le champ, ou avec `murs: []` : aucun mur (plus de détection par défaut : un côté sans raccord d'une centrale de l'utilisateur
+   *    reste une alerte, comme celui de « Étoile fermée » de la 3.04) ; le catalogue 5×5 déclare `murs: [1, 3]` sur « Deux ponts ».
    */
   function mursDuModele(m) {
     if (!m || typeof m !== 'object') return 0;
     var racc = masquesDuModele(m).raccords, murs = 0, k;
-    if (Array.isArray(m.murs)) {
-      m.murs.forEach(function (c) { if (c === 0 || c === 1 || c === 2 || c === 3) murs |= 1 << c; });
-    } else if (m.gabarit === 'centrale' && racc !== 0) {
-      murs = 15;
-    }
+    if (Array.isArray(m.murs)) m.murs.forEach(function (c) { if (c === 0 || c === 1 || c === 2 || c === 3) murs |= 1 << c; });
     for (k = 0; k < 4; k++) if (G.triplet(racc, k) !== 0) murs &= ~(1 << k);
     return murs;
   }

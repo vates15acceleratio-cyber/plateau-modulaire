@@ -31,7 +31,7 @@ const C5 = CAT.modelesParGrille['5x5'];
 const modele = (id) => C5.find((m) => m.id === id);
 const parGabarit = (g) => C5.filter((m) => m.gabarit === g);
 const copie = (o) => JSON.parse(JSON.stringify(o));
-const IDS5 = ['LC1', 'LC2', 'LC3', 'LC4', 'LB2', 'LK2'];
+const IDS5 = ['LC1', 'LC2', 'LC3', 'LC4', 'LC5', 'LC6', 'LC7', 'LB2', 'LK2'];
 
 const { problemesTrace: tracesPb, reglesPassages, signature } = require('./aides-trace.js');
 const problemesTrace = (m) => tracesPb(m, '5x5');
@@ -46,15 +46,15 @@ const bits = (...l) => l.reduce((s, x) => { const [c, p] = x.split(':').map(Numb
 
 /* ================================ contenu ================================ */
 
-test('catalogue 5×5 : 6 modèles (LK2 ; LB2 ; LC1 à LC4), grille 5×5, cases Ø 20, ids et noms distincts, aucun id d’un catalogue précédent', () => {
+test('catalogue 5×5 : 9 modèles (LK2 ; LB2 ; LC1 à LC7), grille 5×5, cases Ø 20, ids et noms distincts, aucun id d’un catalogue précédent', () => {
   assert.deepEqual(parGabarit('coin').map((m) => m.id), ['LK2']);
   assert.deepEqual(parGabarit('bord').map((m) => m.id), ['LB2']);
-  assert.deepEqual(parGabarit('centrale').map((m) => m.id), ['LC1', 'LC2', 'LC3', 'LC4']);
+  assert.deepEqual(parGabarit('centrale').map((m) => m.id), ['LC1', 'LC2', 'LC3', 'LC4', 'LC5', 'LC6', 'LC7']);
   assert.deepEqual(C5.map((m) => m.id), IDS5);
   assert.ok(C5.every((m) => m.grille === '5x5' && !('role' in m)));
   assert.ok(C5.every((m) => m.cases.every((c) => c.diametre === F5.DIAMETRE_CASE && c.diametre === 20)));
-  assert.equal(new Set(C5.map((m) => m.nom)).size, 6);
-  assert.deepEqual(C5.map((m) => m.nom), ['Pont et relais', 'Pont et relais décalé', 'Pont et fourche', 'Deux ponts', 'Bord à pont', 'Coin à porteuse']);
+  assert.equal(new Set(C5.map((m) => m.nom)).size, 9);
+  assert.deepEqual(C5.map((m) => m.nom), ['Pont et relais', 'Pont et relais décalé', 'Pont et fourche', 'Deux ponts', 'Pont et carrefour', 'Pont et fourche libres', 'Pont et relais libres', 'Bord à pont', 'Coin à porteuse']);
   for (const m of C5) {
     assert.ok(typeof m.nom === 'string' && m.nom.length > 0 && m.nom.length <= 22, m.id);
     for (const el of m.cases.concat(m.chemins, m.passages || [], m.pivots || [])) assert.equal(typeof el.id, 'string', m.id);
@@ -62,31 +62,39 @@ test('catalogue 5×5 : 6 modèles (LK2 ; LB2 ; LC1 à LC4), grille 5×5, cases �
   // aucun id commun avec les catalogues précédents (3.04 et 4.00.0, des deux grilles) ni avec les variantes écartées de docs/55
   const anciens = new Set([].concat(...Object.values(CAT.precedents).map((l) => [].concat(...l.map((x) => x.modeles.map((m) => m.id))))).concat(CAT.modelesParGrille['4x4'].map((m) => m.id)));
   for (const id of IDS5) assert.ok(!anciens.has(id), id);
-  for (const id of ['LB1', 'LK1', 'U1', 'P3', 'B1', 'B7', 'K2']) assert.equal(modele(id), undefined, id);
+  for (const id of ['LB1', 'LK1', 'U1', 'P3', 'B1', 'B7', 'K2', 'LC8', 'LC9', 'LC10']) assert.equal(modele(id), undefined, id);
 });
 
-test('catalogue 5×5 : 25 exemplaires (4 coins, 12 bords, 9 centrales : 3 LC1, 2 LC2, 3 LC3, 1 LC4), poids égaux au stock, coordonnées de docs/55', () => {
+test('catalogue 5×5 « B3 » : 28 exemplaires (4 coins, 12 bords, 12 centrales : 2 LC1, 1 LC2, 3 LC3, 1 LC4, 2 LC5, 1 LC6, 2 LC7), poids égaux au stock, coordonnées de docs/55 et docs/58', () => {
   const total = (g) => parGabarit(g).reduce((s, m) => s + m.exemplaires, 0);
-  assert.deepEqual([total('coin'), total('bord'), total('centrale')], [4, 12, 9]);
-  assert.deepEqual(Object.fromEntries(C5.map((m) => [m.id, m.exemplaires])), { LC1: 3, LC2: 2, LC3: 3, LC4: 1, LB2: 12, LK2: 4 });
-  assert.deepEqual(Object.fromEntries(C5.map((m) => [m.id, m.poids])), { LC1: 3, LC2: 2, LC3: 3, LC4: 1, LB2: 12, LK2: 4 });
+  assert.deepEqual([total('coin'), total('bord'), total('centrale')], [4, 12, 12]);
+  assert.deepEqual(Object.fromEntries(C5.map((m) => [m.id, m.exemplaires])), { LC1: 2, LC2: 1, LC3: 3, LC4: 1, LC5: 2, LC6: 1, LC7: 2, LB2: 12, LK2: 4 });
+  assert.deepEqual(Object.fromEntries(C5.map((m) => [m.id, m.poids])), { LC1: 2, LC2: 1, LC3: 3, LC4: 1, LC5: 2, LC6: 1, LC7: 2, LB2: 12, LK2: 4 });
   const pos = (m) => Object.fromEntries(m.cases.map((c) => [c.id, [c.x, c.y]]));
   assert.deepEqual(pos(modele('LC1')), { p: [50, 25], r: [50, 58] });
   assert.deepEqual(pos(modele('LC2')), { p: [44, 27], r: [62, 62] });
   assert.deepEqual(pos(modele('LC3')), { p: [50, 25], r: [62, 60] });
   assert.deepEqual(modele('LC3').pivots, [{ id: 'v', x: 31, y: 76 }]);
   assert.deepEqual(pos(modele('LC4')), { p: [50, 25], q: [50, 75] });
+  assert.deepEqual(pos(modele('LC5')), { p: [50, 25] });
+  assert.deepEqual(modele('LC5').pivots, [{ id: 'v', x: 50, y: 66 }]);
+  assert.deepEqual(pos(modele('LC6')), { p: [50, 25], r: [66, 62] });
+  assert.deepEqual(modele('LC6').pivots, [{ id: 'v', x: 31, y: 76 }]);
+  assert.deepEqual(pos(modele('LC7')), { p: [50, 25], r: [50, 64] });
   assert.deepEqual(pos(modele('LB2')), { a: [50, 48], c: [50, 81] });
   assert.deepEqual(pos(modele('LK2')), { a: [39, 42], c: [75, 75] });
 });
 
-test('catalogue 5×5 : 2 cases par tuile (59 cases par plateau, 9 jonctions-cases comprises) ; ports : LC1 à LC3 : 2, LC4 : 4, LB2 : 2, LK2 : 1 (48 par plateau)', () => {
-  assert.ok(C5.every((m) => m.cases.length === 2), 'deux cases par tuile, apparition comprise');
+test('catalogue 5×5 : 2 cases par tuile au plus (LC5 : une seule) ; ports : LC1 à LC3, LC5 à LC7 : 2, LC4 : 4, LB2 : 2, LK2 : 1 ; un plateau de 9 centrales en porte 46 ou 48', () => {
+  assert.ok(C5.every((m) => m.cases.length === (m.id === 'LC5' ? 1 : 2)), 'deux cases par tuile, apparition comprise (LC5 : une)');
   const ports = (m) => porteuses(m).length;
-  assert.deepEqual(Object.fromEntries(C5.map((m) => [m.id, ports(m)])), { LC1: 2, LC2: 2, LC3: 2, LC4: 4, LB2: 2, LK2: 1 });
-  // composition du stock : 4 LK2, 12 LB2, 3 LC1, 2 LC2, 3 LC3, 1 LC4 -> 50 cases de tuiles, 4 + 24 + 16 + 4 = 48 ports = 16 jonctions × 3
-  const cases = C5.reduce((s, m) => s + m.exemplaires * m.cases.length, 0), p = C5.reduce((s, m) => s + m.exemplaires * ports(m), 0);
-  assert.deepEqual([cases + 9, p], [59, 48]);
+  assert.deepEqual(Object.fromEntries(C5.map((m) => [m.id, ports(m)])), { LC1: 2, LC2: 2, LC3: 2, LC4: 4, LC5: 2, LC6: 2, LC7: 2, LB2: 2, LK2: 1 });
+  // 4 LK2 + 12 LB2 = 4 + 24 = 28 ports, plus 9 centrales à 2 ports (18) ou avec « Deux ponts » (4 + 8 × 2 = 20) : 46 ou 48 ports (16 jonctions × 3 = 48)
+  const centrales = C5.filter((m) => m.gabarit === 'centrale');
+  assert.equal(centrales.reduce((s, m) => s + m.exemplaires * ports(m), 0), 12 * 2 + 2, '12 centrales du stock : 26 ports (LC4 = 4)');
+  // cases : coins et bords en portent 32 (4 × 2 + 12 × 2) ; chaque centrale 2, sauf LC5 (1) ; 9 jonctions-cases : 57 ou 58 cases avec 2 ou 1 LC5 (docs/58, ≈ 57)
+  assert.equal(C5.filter((m) => m.gabarit !== 'centrale').reduce((s, m) => s + m.exemplaires * m.cases.length, 0), 32);
+  assert.deepEqual(centrales.map((m) => m.cases.length), [2, 2, 2, 2, 1, 2, 2]);
 });
 
 test('catalogue 5×5 : aucune erreur ni alerte de validerModele(m, 5x5) ; aucune poche, par la règle et par un calcul indépendant', () => {
@@ -112,12 +120,14 @@ test('règles propres au 5×5 : les mêmes modèles, validés en 4×4, gardent l
   }
 });
 
-test('passages (docs/18) : seule la fourche (LC3) en porte, un T, ni vers un coin ni traversant, jamais sur une porteuse ; murs seulement sur « Deux ponts »', () => {
+test('passages (docs/18) : seules LC3, LC5 et LC6 en portent, un T, ni vers un coin ni traversant, jamais sur une porteuse ; murs seulement sur « Deux ponts » (champ `murs: [1, 3]`)', () => {
   for (const m of C5) assert.deepEqual(reglesPassages(m, '5x5'), [], m.id);
-  assert.deepEqual(Object.fromEntries(C5.map((m) => [m.id, (m.passages || []).length])), { LC1: 0, LC2: 0, LC3: 3, LC4: 0, LB2: 0, LK2: 0 });
+  assert.deepEqual(Object.fromEntries(C5.map((m) => [m.id, (m.passages || []).length])), { LC1: 0, LC2: 0, LC3: 3, LC4: 0, LC5: 3, LC6: 3, LC7: 0, LB2: 0, LK2: 0 });
   const lc3 = modele('LC3');
   assert.ok(lc3.passages.every((p) => p.b.pivot === 'v'));
   assert.deepEqual(lc3.passages.map((p) => p.a.raccord ? p.a.raccord.cote + ':' + p.a.raccord.pos : p.a['case']).sort(), ['2:1', '3:1', 'r']);
+  assert.deepEqual(modele('LC4').murs, [1, 3]);
+  assert.deepEqual(C5.filter((m) => m.murs).map((m) => m.id), ['LC4']);
   // le contrôle des murs refuse un mur ailleurs (témoin : LC1 sans son raccord O)
   const mur = copie(modele('LC1')); mur.chemins = mur.chemins.filter((ch) => ch.id !== 'ro');
   assert.ok(reglesPassages(mur, '5x5').some((t) => t.includes('mur')));
@@ -197,7 +207,8 @@ test('écart entre villes en 5×5 : deux villes desservies par une même porteus
 
 test('catalogue 5×5 : raccords (centrales au milieu, « Deux ponts » N et S seulement ; bord : raccourci, paire basse et S ; coin : raccourci et paire basse)', () => {
   const r = (id) => M.masquesDuModele(modele(id)).raccords;
-  for (const id of ['LC1', 'LC2', 'LC3']) assert.equal(r(id), 0x492, id);
+  for (const id of ['LC1', 'LC2', 'LC3', 'LC6', 'LC7']) assert.equal(r(id), 0x492, id);
+  assert.equal(r('LC5'), 0x492, 'LC5 : N par le chemin, E, S et O par le T');
   assert.equal(r('LC4'), bits('0:1', '2:1'));
   assert.equal(r('LB2'), bits('1:0', '3:2', '1:2', '3:0', '2:1'));
   assert.equal(r('LK2'), bits('1:0', '2:2', '1:2', '2:0'));
@@ -210,7 +221,7 @@ test('catalogue 5×5 : raccords (centrales au milieu, « Deux ponts » N et S se
 
 test('catalogue 5×5 : ports (coins intérieurs seulement), apparition unique sur bords et coins, aucune sur les centrales', () => {
   const p = (id) => M.masquesDuModele(modele(id)).portsCoin;
-  for (const id of ['LC1', 'LC2', 'LC3']) assert.equal(p(id), 0b0011, id); // NO + NE
+  for (const id of ['LC1', 'LC2', 'LC3', 'LC5', 'LC6', 'LC7']) assert.equal(p(id), 0b0011, id); // NO + NE
   assert.equal(p('LC4'), 0b1111);
   assert.equal(p('LB2'), 0b1100);   // SE + SO
   assert.equal(p('LK2'), 0b0100);   // SE
@@ -326,7 +337,7 @@ test('API : modeles reste le 4×4 ; modelesParGrille gelé { 4x4, 5x5 } ; preced
   assert.ok(Object.isFrozen(CAT.precedent) && Object.isFrozen(CAT.precedents) && Object.isFrozen(CAT.precedents['5x5'][1]));
 });
 
-test('nouveauDocument(\'5x5\') : document 5×5 vide avec une copie modifiable des 6 modèles ; défaut 4×4 ; grille inconnue refusée', () => {
+test('nouveauDocument(\'5x5\') : document 5×5 vide avec une copie modifiable des 9 modèles ; défaut 4×4 ; grille inconnue refusée', () => {
   const doc = CAT.nouveauDocument('5x5');
   assert.equal(doc.version, 2);
   assert.equal(doc.grille, '5x5');
@@ -338,7 +349,7 @@ test('nouveauDocument(\'5x5\') : document 5×5 vide avec une copie modifiable de
   doc.modeles.pop();
   assert.equal(modele('LC1').cases[0].x, 50);
   assert.equal(modele('LC3').pivots[0].x, 31);
-  assert.equal(C5.length, 6);
+  assert.equal(C5.length, 9);
   assert.notEqual(CAT.nouveauDocument('5x5').modeles, CAT.nouveauDocument('5x5').modeles);
   assert.equal(CAT.nouveauDocument().grille, '4x4');
   assert.equal(CAT.nouveauDocument('4x4').modeles.length, 6);
@@ -364,19 +375,20 @@ test('interface : documentPourGrille(\'5x5\') accepte le document du catalogue ;
 /* ================================ plateau 5×5 complet ================================ */
 
 /**
- * Plateau plein fixé ici (tiré par le générateur, graine « plateau-2 », 30 candidats, puis figé) : LK2 aux 4 coins, LB2 sur les
- * 12 cases de bord (rotation imposée par la place), 9 centrales (3 LC1, 2 LC2, 3 LC3, 1 LC4 : le stock exact) dont la rotation
- * (quatrième valeur) a été choisie pour les 7 villes en 2-3-2 ci-dessous. 59 cases (moitiés de 22 cases), 48 ports, une seule
- * jonction-case à 2 ports, 8 placements admissibles des villes, S = 0 ; les 2 murs de LC4 laissent 2 raccords morts (alertes).
+ * Plateau plein fixé ici (tiré par le générateur, graine « plateau-b3-3 », 30 candidats, puis figé) : LK2 aux 4 coins, LB2 sur les
+ * 12 cases de bord (rotation imposée par la place), 9 centrales (2 LC1, 1 LC2, 2 LC3, 1 LC4, 2 LC5, 1 LC7 : dans le stock) dont la
+ * rotation (quatrième valeur) a été choisie pour les 7 villes en 2-3-2 ci-dessous. 57 cases, 48 ports, S = 0, aucune case à 2
+ * connexions ; les 2 murs de LC4 laissent 2 raccords morts, en information.
  */
 const PLATEAU = [
   ['LK2', 0, 0], ['LB2', 1, 0], ['LB2', 2, 0], ['LB2', 3, 0], ['LK2', 4, 0],
-  ['LB2', 0, 1], ['LC1', 1, 1, 1], ['LC3', 2, 1, 2], ['LC2', 3, 1, 3], ['LB2', 4, 1],
-  ['LB2', 0, 2], ['LC3', 1, 2, 0], ['LC1', 2, 2, 2], ['LC2', 3, 2, 3], ['LB2', 4, 2],
-  ['LB2', 0, 3], ['LC1', 1, 3, 0], ['LC4', 2, 3, 0], ['LC3', 3, 3, 1], ['LB2', 4, 3],
+  ['LB2', 0, 1], ['LC7', 1, 1, 2], ['LC4', 2, 1, 1], ['LC3', 3, 1, 2], ['LB2', 4, 1],
+  ['LB2', 0, 2], ['LC5', 1, 2, 2], ['LC5', 2, 2, 3], ['LC1', 3, 2, 3], ['LB2', 4, 2],
+  ['LB2', 0, 3], ['LC1', 1, 3, 1], ['LC2', 2, 3, 1], ['LC3', 3, 3, 0], ['LB2', 4, 3],
   ['LK2', 0, 4], ['LB2', 1, 4], ['LB2', 2, 4], ['LB2', 3, 4], ['LK2', 4, 4]
 ];
-const VILLES = [[2, 1], [4, 1], [1, 2], [3, 3], [4, 3], [1, 4], [3, 4]]; // 2-3-2, chacune à 3 ports
+const MOITIE = 22; // cases de chaque moitié (rangée neutre à part) du plateau figé
+const VILLES = [[2, 1], [4, 1], [1, 2], [3, 2], [4, 3], [1, 4], [3, 4]]; // 2-3-2, chacune à 3 ports
 function plateauComplet() {
   const doc = CAT.nouveauDocument('5x5');
   doc.plateau.tuiles = PLATEAU.map(([id, col, lig, rot]) => ({
@@ -385,44 +397,44 @@ function plateauComplet() {
   return doc;
 }
 
-test('plateau 5×5 complet : 25 tuiles du stock exact, aucune erreur, aucune alerte (les 2 murs de LC4 sont des informations), aucune jonction mal reliée', () => {
+test('plateau 5×5 complet : 25 tuiles dans le stock, aucune erreur, aucune alerte (les 2 murs de LC4 sont des informations), aucune jonction mal reliée', () => {
   const doc = plateauComplet();
   assert.equal(doc.plateau.tuiles.length, 25);
   const utilises = {};
   doc.plateau.tuiles.forEach((t) => { utilises[t.modeleId] = (utilises[t.modeleId] || 0) + 1; });
-  assert.deepEqual(utilises, { LK2: 4, LB2: 12, LC1: 3, LC3: 3, LC2: 2, LC4: 1 });
-  for (const m of C5) assert.equal(utilises[m.id], m.exemplaires, m.id);
+  assert.deepEqual(utilises, { LK2: 4, LB2: 12, LC7: 1, LC4: 1, LC3: 2, LC5: 2, LC1: 2, LC2: 1 });
+  for (const m of C5) assert.ok((utilises[m.id] || 0) <= m.exemplaires, m.id + ' : plus de tuiles posées que d’exemplaires');
   const v = M.validerPlateau(doc);
   assert.deepEqual(v.erreurs, []);
   assert.deepEqual(v.alertes, []);
   assert.deepEqual(v.informations.map((a) => a.code), ['raccord_mur', 'raccord_mur']);
-  assert.deepEqual(M.raccordsMorts(doc).map((r) => [r.col, r.lig, r.cote, r.mur]), [[1, 3, 1, true], [3, 3, 3, true]]); // les voisins des murs E et O de LC4 (2, 3)
+  assert.deepEqual(M.raccordsMorts(doc).map((r) => [r.col, r.lig, r.cote, r.mur]), [[2, 0, 2, true], [2, 2, 0, true]]); // les voisines des murs de LC4 (2, 1), tourné d’un quart de tour : murs N et S
   assert.deepEqual(M.jonctionsMalReliees(doc), []);
   for (const t of doc.plateau.tuiles) assert.equal(M.gabaritCellule(t.col, t.lig, '5x5'), M.modeleParId(doc, t.modeleId).gabarit);
 });
 
-test('plateau 5×5 complet : 59 cases (50 des tuiles + 9 jonctions-cases), 48 ports, une jonction à 2 ports, villes à 3, moitiés égales, connexions', () => {
+test('plateau 5×5 complet : 57 cases (48 des tuiles + 9 jonctions-cases), 48 ports, jonctions à 3 ports, villes à 3, moitiés égales, connexions', () => {
   const doc = plateauComplet();
   const g = GR.construire(doc, { jetons: VILLES.map(([i, j]) => ({ i, j, type: 'capture' })) });
   assert.equal(g.jonctions.length, 16);
   assert.equal(g.villes.size, 7);
-  assert.equal(g.cases.size, 50);
+  assert.equal(g.cases.size, 48);
   assert.equal(g.jonctions.filter((j) => j.type === 'case').length, 9);
   const ports = g.jonctions.map((j) => j.ports);
   assert.equal(ports.reduce((a, b) => a + b, 0), 48);
-  assert.deepEqual(ports.join(''), '3333333233333334');
+  assert.deepEqual(ports.join(''), '3333333333333333');
   for (const j of g.jonctions.filter((x) => x.type === 'ville')) assert.ok(j.ports >= 3, `ville (${j.i},${j.j})`);
   for (const j of g.jonctions) assert.equal(M.portsJonction(doc, j.i, j.j).ports, j.ports, `(${j.i},${j.j})`);
   assert.ok(GR.connexe(g));
   const mo = GR.casesParMoitie(doc, g);
-  assert.deepEqual([mo.vert, mo.rouge, mo.ecart], [22, 22, 0]);
-  // connexions par case (docs/53 § 1) : une seule case à 2 connexions (la jonction-case (4, 2) à 2 ports), 1,7 % < 5 %
+  assert.deepEqual([mo.vert, mo.rouge, mo.ecart], [MOITIE, MOITIE, 0]);
+  // connexions par case (docs/53 § 1) : aucune case à 2 connexions ou moins, 0 % < 5 %
   const docV = Object.assign(copie(doc), { plateau: { tuiles: doc.plateau.tuiles, jetons: VILLES.map(([i, j]) => ({ i, j, type: 'capture' })) } });
   const cx = GR.connexions(docV, g);
-  assert.deepEqual([cx.cases, cx.faibles, cx.conforme], [59, 1, true]);
-  assert.deepEqual(cx.jonctionsFaibles, [{ i: 4, j: 2 }]);
+  assert.deepEqual([cx.cases, cx.faibles, cx.conforme], [57, 0, true]);
+  assert.deepEqual(cx.jonctionsFaibles, []);
   assert.ok(cx.degreMoyen > 3.6 && cx.degreMoyen < 3.8, String(cx.degreMoyen));
-  assert.equal(PM.generateur.placementsAdmissibles5x5(doc), 8);
+  assert.equal(PM.generateur.placementsAdmissibles5x5(doc), 4);
 });
 
 test('plateau 5×5 complet : une porteuse dessert au plus deux jonctions voisines ; villes à 4 pas au moins ; apparitions des deux camps', () => {
@@ -494,7 +506,7 @@ test('chaîne : enregistrement / réouverture JSON d\'un plateau 5×5 complet, s
   const vide = PM.sauvegarde.depuisJSON(PM.sauvegarde.versJSON(CAT.nouveauDocument('5x5')));
   assert.equal(vide.ok, true);
   assert.equal(vide.doc.grille, '5x5');
-  assert.equal(vide.doc.modeles.length, 6);
+  assert.equal(vide.doc.modeles.length, 9);
   // le catalogue livré n'est jamais pris pour un catalogue précédent
   assert.equal(PM.sauvegarde.bibliothequeCataloguePrecedent(r.doc), false);
 });
@@ -545,14 +557,20 @@ test('chaîne : PM.controles.calculer sur le plateau 5×5 complet (7 villes) : a
   assert.deepEqual(c.regroupees.map((g) => [g.code, g.niveau, g.nombre]), [['raccord_mur', 'information', 2]]);
   const v = (cle) => c.compteurs.find((x) => x.cle === cle);
   assert.equal(v('villes').valeur, 7);
-  assert.equal(v('cases').valeur, 59);
-  assert.equal(v('cases').cible, '≈ 59');
+  assert.equal(v('cases').valeur, 57);
+  assert.equal(v('cases').cible, '≈ 57');
   assert.equal(v('tuiles').valeur, 25);
   assert.equal(v('tuiles').cible, 25);
   assert.deepEqual([v('apparitions_vert').valeur, v('apparitions_rouge').valeur], [7, 7]);
   assert.equal(v('dimensions').valeur, '50 × 50 cm');
+  // LC5 « Pont et carrefour » n'a qu'une case (docs/58) : le compteur 5×5 ne retient que les tuiles sans case ; le 4×4 garde « moins de 2 cases »
+  assert.equal(plateauAvecVilles().plateau.tuiles.filter((t) => t.modeleId === 'LC5').length, 2);
   assert.equal(v('tuiles_petites').valeur, 0);
-  assert.deepEqual([v('connexions').valeur, v('connexions').cible, v('connexions').etat], ['1 (1,7 %)', '< 5 %', 'ok']);
+  assert.equal(v('tuiles_petites').libelle, 'Tuiles sans case');
+  assert.equal(PM.controles.calculer(CAT.nouveauDocument('4x4')).compteurs.find((x) => x.cle === 'tuiles_petites').libelle, 'Tuiles à moins de 2 cases');
+  const sansCase = plateauAvecVilles(); M.modeleParId(sansCase, 'LC5').cases = []; M.modeleParId(sansCase, 'LC5').chemins = []; M.modeleParId(sansCase, 'LC5').passages = [];
+  assert.equal(PM.controles.calculer(sansCase).compteurs.find((x) => x.cle === 'tuiles_petites').valeur, 2, 'une tuile sans case est comptée');
+  assert.deepEqual([v('connexions').valeur, v('connexions').cible, v('connexions').etat], ['0 (0 %)', '< 5 %', 'ok']);
   assert.ok(c.compteurs.every((x) => x.etat === 'ok'), JSON.stringify(c.compteurs.filter((x) => x.etat !== 'ok')));
 });
 
@@ -587,25 +605,25 @@ test('chaîne : rapport d\'équilibre du plateau 5×5 complet (grille 5x5, 7 vil
   assert.equal(a.resultat.tresDesequilibre, false);
   assert.equal(r.rangs[0].d1, r.rangs[0].d2);
   const ligne = r.organique.find((t) => t.startsWith('Connexions par case'));
-  assert.ok(ligne && ligne.includes('1 case(s) à 2 connexions ou moins sur 59') && ligne.includes('1,7 %') && ligne.includes('tenu'), ligne);
+  assert.ok(ligne && ligne.includes('0 case(s) à 2 connexions ou moins sur 57') && ligne.includes('0 %') && ligne.includes('tenu'), ligne);
   const sans = PM.equilibre.rapport(PM.equilibre.analyser(plateauComplet()));
   assert.equal(sans.complet, false);
 });
 
-test('chaîne : export du jeu complet 5×5 : 25 tuiles, planches A3 (2×3) et A4 (1×2), pas de 112 mm, tuile de 106 mm', () => {
+test('chaîne : export du jeu complet 5×5 : 28 tuiles, planches A3 (2×3) et A4 (1×2), pas de 112 mm, tuile de 106 mm', () => {
   const E = PM.exportation;
   const doc = CAT.nouveauDocument('5x5');
   const liste = E.listeTuiles(doc, { portee: 'stock' });
-  assert.equal(liste.tuiles.length, 25);
+  assert.equal(liste.tuiles.length, 28);
   assert.deepEqual(liste.exclus, []);
   const a3 = E.calepiner(doc, { format: 'A3' });
-  assert.equal(a3.length, 5);                    // 25 / 6 : 4 planches pleines et une d'une tuile
-  assert.ok(a3.every((p) => p.pas === 112) && a3.slice(0, 4).every((p) => p.tuiles.length === 6) && a3[4].tuiles.length === 1);
+  assert.equal(a3.length, 5);                    // 28 / 6 : 4 planches pleines et une de quatre tuiles
+  assert.ok(a3.every((p) => p.pas === 112) && a3.slice(0, 4).every((p) => p.tuiles.length === 6) && a3[4].tuiles.length === 4);
   assert.equal(a3[0].tuiles[1].x - a3[0].tuiles[0].x, 112);
   assert.equal(a3[0].tuiles[2].y - a3[0].tuiles[0].y, 112);
   const a4 = E.calepiner(doc, { format: 'A4' });
-  assert.equal(a4.length, 13);                   // 25 / 2 : 12 planches de 2 et une d'une tuile
-  assert.ok(a4.every((p) => p.colonnes === 1) && a4.slice(0, 12).every((p) => p.tuiles.length === 2) && a4[12].tuiles.length === 1);
+  assert.equal(a4.length, 14);                   // 28 / 2 : 14 planches de 2 tuiles
+  assert.ok(a4.every((p) => p.colonnes === 1) && a4.every((p) => p.tuiles.length === 2));
   for (const p of a3.concat(a4)) {
     assert.ok(p.margeX >= E.MARGE_MIN - 1e-9 && p.margeY >= E.MARGE_MIN - 1e-9, `${p.nom} marges ${p.margeX} / ${p.margeY}`);
     const droite = p.margeX + (p.colonnes - 1) * p.pas + 106, bas = p.margeY + (p.lignes - 1) * p.pas + 106;
@@ -653,11 +671,11 @@ test('chaîne : aperçu du plateau 5×5 (SVG) : 50 × 50 cm, tuiles tous les 100
 test('chaîne : exemplaires modifiés d\'un document 5×5 : export du stock et réouverture', () => {
   const doc = CAT.nouveauDocument('5x5');
   doc.modeles.find((m) => m.id === 'LK2').exemplaires = 0;
-  doc.modeles.find((m) => m.id === 'LC1').exemplaires = 2;
-  assert.equal(PM.exportation.listeTuiles(doc, { portee: 'stock' }).tuiles.length, 25 - 4 - 1);
+  doc.modeles.find((m) => m.id === 'LC1').exemplaires = 1;
+  assert.equal(PM.exportation.listeTuiles(doc, { portee: 'stock' }).tuiles.length, 28 - 4 - 1);
   const r = PM.sauvegarde.depuisJSON(PM.sauvegarde.versJSON(doc));
   assert.equal(r.doc.modeles.find((m) => m.id === 'LK2').exemplaires, 0);
-  assert.equal(r.doc.modeles.find((m) => m.id === 'LC1').exemplaires, 2);
+  assert.equal(r.doc.modeles.find((m) => m.id === 'LC1').exemplaires, 1);
 });
 
 /* ---------------------------- copies indépendantes ---------------------------- */
@@ -682,6 +700,7 @@ test('nouveauDocument : copies indépendantes entre elles, du catalogue gelé et
   assert.equal(M.modeleParId(b, 'LC3').passages.length, 3);
   assert.equal(M.modeleParId(b, 'LC4').exemplaires, 1);
   assert.equal(M.modeleParId(b, 'LC4').poids, 1);
+  assert.deepEqual(M.modeleParId(b, 'LC4').murs, [1, 3]);
   assert.deepEqual(b.plateau, { tuiles: [], jetons: [] });
   assert.deepEqual(CAT.nouveauDocument('5x5').plateau, { tuiles: [], jetons: [] });
   assert.equal(JSON.stringify(C5), instantane);
@@ -755,7 +774,7 @@ test('grilles : une tuile 4×4 posée à la main sur un plateau 5×5 est signal�
 
 /* ---------------------------- bibliothèque ---------------------------- */
 
-test('bibliothèque : les 6 modèles livrés sont du catalogue en 5×5 ; ceux des catalogues précédents (3.04, 4.00.0) restent protégés ; un id de l\'autre grille est une tuile utilisateur', () => {
+test('bibliothèque : les 9 modèles livrés sont du catalogue en 5×5 ; ceux des catalogues précédents (3.04, 4.00.0) restent protégés ; un id de l\'autre grille est une tuile utilisateur', () => {
   const B = PM.bibliotheque, d5 = CAT.nouveauDocument('5x5'), d4 = CAT.nouveauDocument('4x4');
   for (const id of IDS5) assert.equal(B.estTuileUtilisateur(d5, id), false, '5×5 ' + id);
   for (const m of CAT.modelesParGrille['4x4']) assert.equal(B.estTuileUtilisateur(d4, m.id), false, '4×4 ' + m.id);
@@ -768,14 +787,14 @@ test('bibliothèque : les 6 modèles livrés sont du catalogue en 5×5 ; ceux de
   // Q1 (catalogue 4×4) ajouté par l'utilisateur dans un document 5×5 : pas une tuile livrée du 5×5
   const d5q1 = M.ajouterModele(d5, Object.assign(copie(modele('LC1')), { id: 'Q1' }));
   assert.equal(B.estTuileUtilisateur(d5q1, 'Q1'), true);
-  assert.equal(B.supprimerTuileUtilisateur(d5q1, 'Q1').modeles.length, 6);
+  assert.equal(B.supprimerTuileUtilisateur(d5q1, 'Q1').modeles.length, 9);
   // LC1 (catalogue 5×5) ajouté par l'utilisateur dans un document 4×4 : tuile utilisateur du 4×4
   const d4l = M.ajouterModele(d4, Object.assign(copie(CAT.modelesParGrille['4x4'][0]), { id: 'LC1' }));
   assert.equal(B.estTuileUtilisateur(d4l, 'LC1'), true);
   assert.equal(B.supprimerTuileUtilisateur(d4l, 'LC1').modeles.length, 6);
 });
 
-test('bibliothèque : suppression interdite des 6 modèles livrés 5×5, même posés ou modifiés', () => {
+test('bibliothèque : suppression interdite des 9 modèles livrés 5×5, même posés ou modifiés', () => {
   const B = PM.bibliotheque, doc = plateauAvecVilles();
   for (const id of IDS5) {
     assert.throws(() => B.supprimerTuileUtilisateur(CAT.nouveauDocument('5x5'), id), /catalogue livré/, id);
@@ -787,7 +806,7 @@ test('bibliothèque : suppression interdite des 6 modèles livrés 5×5, même p
   assert.equal(B.estTuileUtilisateur(modif, 'LK2'), false);
   const groupes = B.vignettesBibliotheque(CAT.nouveauDocument('5x5'), 'tous');
   const tous = [].concat(...groupes.map((g) => g.modeles));
-  assert.equal(tous.length, 6);
+  assert.equal(tous.length, 9);
   assert.ok(tous.every((m) => m.utilisateur === false && m.complet && m.posable && m.autreGrille === false), JSON.stringify(tous));
 });
 
@@ -803,7 +822,7 @@ test('bibliothèque : suppression d\'une tuile utilisateur 5×5 posée (tuile re
   assert.equal(apres.plateau.tuiles.length, 24);
   assert.equal(apres.grille, '5x5');
   assert.equal(M.modeleParId(apres, 'Z1'), null);
-  assert.equal(apres.modeles.length, 6);
+  assert.equal(apres.modeles.length, 9);
   const etat = PM.etat.creer(doc);
   etat.appliquer((d) => B.supprimerTuileUtilisateur(d, 'Z1'));
   assert.equal(etat.doc().plateau.tuiles.length, 24);

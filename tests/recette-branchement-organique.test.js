@@ -6,7 +6,7 @@
  *  C. proposition : accepter, Ctrl+Z, Ctrl+Y, refus répété (au niveau de l'état ; la boîte de dialogue est dans outils/recette-interface.html) ;
  *  D. rythme / accès au centre / cases par moitié : plateau partiel, vide, non connexe, villes non traversables, plateaux abîmés ;
  *  E. générateur : moitiés égales sur plusieurs graines, 78 à 81 cases en 5×5, bibliothèque modifiée par l'utilisateur ;
- *  F. export du jeu complet avec le nouveau stock (24 tuiles en 4×4, 37 en 5×5).
+ *  F. export du jeu complet avec le nouveau stock (24 tuiles en 4×4, 28 en 5×5).
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -545,11 +545,13 @@ test('égalité des moitiés : écart de cases nul sur 40 graines en 4×4 et 25 
 /** Cases du plateau : cases des tuiles plus jonctions qui ne portent pas de ville (la jonction-case compte une case). */
 const casesTotales = (doc) => { const g = GR.construire(doc); return g.cases.size + g.jonctions.filter((j) => j.type === 'case').length; };
 
-test('5×5 : 59 cases sur 25 graines (2 cases par tuile, 9 jonctions-cases, docs/55) ; 4×4 : de 56 à 62 cases sur 15 graines', () => {
+test('5×5 : 57 ou 58 cases sur 25 graines (2 cases par tuile, 1 pour LC5, 9 jonctions-cases, docs/58) ; 4×4 : de 56 à 62 cases sur 15 graines', () => {
   for (let k = 0; k < 25; k++) {
     const r = GEN.generer(nouveau('5x5'), { graine: 'cases-' + k, candidats: 2 });
     assert.ok(r.ok, r.raison);
-    assert.equal(casesTotales(r.doc), 59, 'graine ' + k);
+    const lc5 = r.doc.plateau.tuiles.filter((t) => t.modeleId === 'LC5').length;
+    assert.equal(casesTotales(r.doc), 59 - lc5, 'graine ' + k);
+    assert.ok(lc5 >= 1 && lc5 <= 2, 'graine ' + k + ' : LC5 ' + lc5);
   }
   for (let k = 0; k < 15; k++) {
     const r = GEN.generer(nouveau('4x4'), { graine: 'cases-' + k, candidats: 2 });
@@ -644,8 +646,8 @@ test('document 3.04 ou 4.00.0 conservé tel quel par l\'utilisateur (« Garder m
 
 /* ======================= F. export du jeu complet avec le nouveau stock ======================= */
 
-test('export du jeu complet : 24 tuiles en 4×4 (4 planches A3, 12 A4) et 25 en 5×5 (5 planches A3, 13 A4), exemplaires par modèle respectés', () => {
-  for (const [g, total, a3, a4] of [['4x4', 24, 4, 12], ['5x5', 25, 5, 13]]) {
+test('export du jeu complet : 24 tuiles en 4×4 (4 planches A3, 12 A4) et 28 en 5×5 (5 planches A3, 14 A4), exemplaires par modèle respectés', () => {
+  for (const [g, total, a3, a4] of [['4x4', 24, 4, 12], ['5x5', 28, 5, 14]]) {
     const doc = nouveau(g);
     assert.equal(doc.modeles.reduce((s, m) => s + m.exemplaires, 0), total);
     const liste = E.listeTuiles(doc, { portee: 'stock' });
@@ -666,10 +668,10 @@ test('export du jeu complet : 24 tuiles en 4×4 (4 planches A3, 12 A4) et 25 en 
   }
 });
 
-test('export du jeu complet : dernière planche A3 du 5×5 ne porte qu\'une tuile ; le SVG de chaque planche est produit ; le document n\'est pas modifié', () => {
+test('export du jeu complet : dernière planche A3 du 5×5 ne porte que quatre tuiles (28 = 4 × 6 + 4) ; le SVG de chaque planche est produit ; le document n\'est pas modifié', () => {
   const doc = nouveau('5x5'), avant = JSON.stringify(doc);
   const planches = E.calepiner(doc, { format: 'A3', portee: 'stock' });
-  assert.equal(planches[planches.length - 1].tuiles.length, 1);
+  assert.equal(planches[planches.length - 1].tuiles.length, 4);
   assert.equal(planches[0].tuiles.length, 6);
   planches.forEach((p) => { const svg = p.svg; assert.match(svg, /^<svg|^<\?xml/); assert.ok(svg.length > 1000); });
   assert.equal(JSON.stringify(doc), avant);
@@ -704,7 +706,7 @@ test('export du jeu complet : stock modifié (0 exemplaire, modèle supprimé, t
 });
 
 test('export du jeu complet : après acceptation du nouveau catalogue, le jeu exporté est celui du nouveau stock (et non de l\'ancien)', () => {
-  for (const [g, total] of [['4x4', 24], ['5x5', 25]]) {
+  for (const [g, total] of [['4x4', 24], ['5x5', 28]]) {
     const etat = PM.etat.creer(precedent(g));
     const avant = E.listeTuiles(etat.doc(), { portee: 'stock' }).tuiles.length;
     accepter(etat);

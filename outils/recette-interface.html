@@ -619,7 +619,12 @@
       dz.modeles[0].exemplaires = 3;
       reset(dz);
       ctrl('villes à moins de 3 cases : alerte « Villes trop proches », pas d\'erreur', Array.prototype.some.call(document.querySelectorAll('.pm-controles-sommaire-libelle'), function (e) { return /Villes trop proches/.test(e.textContent); }) && PM.controles.calculer(etat.doc()).erreurs.length === 0);
-      // murs voulus (docs/18) : la centrale 'z' (4×4, sans raccord au nord, centrale qui porte des raccords) est un mur ; le raccord du bord qui lui fait face est une information, pas une alerte
+      // murs DÉCLARÉS seulement (docs/57) : sans champ `murs`, la centrale 'z' (4×4, sans raccord au nord) n'a aucun mur ; le raccord du bord qui lui fait face reste une alerte
+      var sansMur = PM.controles.calculer(etat.doc());
+      ctrl('centrale sans raccord et sans champ `murs` : alerte « raccord mort », aucune information, aucun mur dessiné', sansMur.alertes.some(function (x) { return x.code === 'raccord_mort'; }) && sansMur.informations.length === 0 && document.querySelectorAll('.pm-assemblage-mur').length === 0 && document.querySelectorAll('.pm-controles-groupe--information').length === 0, J(sansMur.informations));
+      // murs voulus (docs/18) : le côté nord de 'z' est déclaré dans `murs` ; le raccord du bord qui lui fait face est une information, pas une alerte
+      dz.modeles[dz.modeles.length - 1].murs = [0];
+      reset(dz);
       var mursInfo = PM.controles.calculer(etat.doc());
       ctrl('mur voulu : informations raccord_mur dans le panneau (groupe d’information)', mursInfo.informations.length > 0 && mursInfo.informations.every(function (x) { return x.code === 'raccord_mur' && x.niveau === 'information'; }) && document.querySelectorAll('.pm-controles-groupe--information').length === 1, mursInfo.informations.length);
       ctrl('mur voulu : dessiné en trait gris sans triangle d’alerte (.pm-assemblage-mur)', document.querySelectorAll('.pm-assemblage-mur').length === mursInfo.informations.length);
@@ -634,7 +639,7 @@
       var bp5 = Array.prototype.filter.call($('controles').querySelectorAll('button'), function (x) { return x.textContent === 'Placer les villes'; })[0];
       ctrl('5×5 : bouton « Placer les villes » présent et actif', !!bp5 && !bp5.disabled);
       ctrl('5×5 : 25 cellules et 16 jonctions', document.querySelectorAll('[data-cellule]').length === 25 && document.querySelectorAll('[data-jonction]').length === 16);
-      ctrl('5×5 : compteurs tuiles 0 / 25, apparitions 0 / 7, cases (≈ 59)', cp['Tuiles posées'].v === '0 / 25' && cp['Apparitions vert'].v === '0 / 7' && /≈ 59/.test(cp['Cases (tuiles et jonctions)'].v), J(cp));
+      ctrl('5×5 : compteurs tuiles 0 / 25, apparitions 0 / 7, cases (≈ 57)', cp['Tuiles posées'].v === '0 / 25' && cp['Apparitions vert'].v === '0 / 7' && /≈ 57/.test(cp['Cases (tuiles et jonctions)'].v), J(cp));
       ctrl('5×5 : rangée centrale neutre', /Bord, neutre/.test(document.querySelector('[data-cellule="0,2"]').textContent));
     }
 
@@ -896,7 +901,7 @@
       radio.checked = true;
       document.querySelector('#dialogue-contenu .pm-nouveau-creer').click();
       ctrl('vrai catalogue : Créer 5×5 ferme la boîte et crée un document 5×5 sans tuile', !$('dialogue').open && etat.doc().grille === '5x5' && nbTuiles() === 0);
-      ctrl('vrai catalogue : 6 vignettes en bibliothèque (LK2, LB2, LC1 à LC4)', document.querySelectorAll('.pm-biblio-vignette').length === 6 && ['LK2', 'LB2', 'LC1', 'LC2', 'LC3', 'LC4'].every(function (id) { return !!document.querySelector('[data-vignette="' + id + '"]'); }));
+      ctrl('vrai catalogue : 9 vignettes en bibliothèque (LK2, LB2, LC1 à LC7)', document.querySelectorAll('.pm-biblio-vignette').length === 9 && ['LK2', 'LB2', 'LC1', 'LC2', 'LC3', 'LC4', 'LC5', 'LC6', 'LC7'].every(function (id) { return !!document.querySelector('[data-vignette="' + id + '"]'); }));
       // une pose valide : coin LK2 en (0,0), bord LB2 en (1,0), centrale LC1 en (1,1)
       var g1 = glisser('LK2', 0, 0, 0), g2 = glisser('LB2', 1, 0, 0), g3 = glisser('LC1', 1, 1, 0);
       ctrl('vrai catalogue : pose d’un coin, d’un bord et d’une centrale', g1.demarre && g2.demarre && g3.demarre && nbTuiles() === 3, nbTuiles() + ' ' + msg());
@@ -954,7 +959,7 @@
         var dlg = $('dialogue-contenu');
         ctrl('boîte « Plateau aléatoire » ouverte, champ graine et bouton Générer présents', $('dialogue').open && !!dlg.querySelector('.pm-generateur-graine') && !!bouton(dlg, 'Générer'));
         ctrl('5×5 : option « jonctions variées » absente de la boîte', !dlg.querySelector('.pm-generateur-variees') && !/[Jj]onctions variées/.test(dlg.textContent), dlg.textContent.slice(0, 200));
-        ctrl('5×5 : explication du 2-3-2, des villes placées d’abord, des 59 cases à moins de 5 % de cases à 2 connexions et des moitiés dans la boîte', /2-3-2/.test(dlg.textContent) && /villes placées d’abord/.test(dlg.textContent) && /59 cases, dont moins de 5 % à 2 connexions/.test(dlg.textContent) && /moitié verte/.test(dlg.textContent));
+        ctrl('5×5 : explication du 2-3-2, des villes placées d’abord, des 57 cases à moins de 5 % de cases à 2 connexions et des moitiés dans la boîte', /2-3-2/.test(dlg.textContent) && /villes placées d’abord/.test(dlg.textContent) && /57 cases, dont moins de 5 % à 2 connexions/.test(dlg.textContent) && /moitié verte/.test(dlg.textContent));
         var appl = bouton(dlg, 'Appliquer');
         ctrl('Appliquer désactivé avant la première génération', !!appl && appl.disabled);
         dlg.querySelector('.pm-generateur-graine').value = 'recette-5x5-ui-a';
@@ -964,7 +969,7 @@
         var dlg = $('dialogue-contenu'), r1 = resume();
         ctrl('Générer : aperçu et résumé affichés, Appliquer actif', !!r1 && !!dlg.querySelector('.pm-generateur-apercu svg') && !bouton(dlg, 'Appliquer').disabled, r1 && r1.slice(0, 80));
         ctrl('Générer : la graine saisie est rendue dans le résumé', !!r1 && r1.indexOf('recette-5x5-ui-a') >= 0);
-        ctrl('Générer : le résumé annonce 2-3-2, le placement avant l’orientation et les connexions par case', !!r1 && /2-3-2/.test(r1) && /avant l’orientation des centrales/.test(r1) && /Connexions par case : \d+ case\(s\) à 2 connexions ou moins sur 59/.test(r1));
+        ctrl('Générer : le résumé annonce 2-3-2, le placement avant l’orientation et les connexions par case', !!r1 && /2-3-2/.test(r1) && /avant l’orientation des centrales/.test(r1) && /Connexions par case : \d+ case\(s\) à 2 connexions ou moins sur 5[78]/.test(r1));
         ctrl('Générer ne touche pas au plateau avant Appliquer', nbTuiles() === 0);
         dlg.querySelector('.pm-generateur-graine').value = 'recette-5x5-ui-a';
         bouton(dlg, 'Générer').click();
@@ -978,7 +983,8 @@
         ctrl('Appliquer : message avec la graine et Ctrl+Z', /Plateau aléatoire appliqué \(graine recette-5x5-ui-a\)/.test(msg()) && /Ctrl\+Z/.test(msg()), msg());
         var nbCases = d.plateau.tuiles.reduce(function (s, t) { return s + M.modeleParId(d, t.modeleId).cases.length; }, 0) + 9;
         var moit = PM.graphe.casesParMoitie(d, PM.graphe.construire(d)), cx = PM.graphe.connexions(d);
-        ctrl('plateau appliqué : 59 cases, autant de cases dans chaque moitié, moins de 5 % de cases à 2 connexions', nbCases === 59 && moit.ecart === 0 && cx.conforme && cx.cases === 59, nbCases + ' cases, ' + J(moit) + ' ' + cx.faibles);
+        var nLc5 = d.plateau.tuiles.filter(function (t) { return t.modeleId === 'LC5'; }).length;
+        ctrl('plateau appliqué : 57 ou 58 cases (59 moins les LC5), autant de cases dans chaque moitié, moins de 5 % de cases à 2 connexions', nbCases === 59 - nLc5 && nLc5 >= 1 && moit.ecart === 0 && cx.conforme && cx.cases === nbCases, nbCases + ' cases, ' + J(moit) + ' ' + cx.faibles);
         var mini = 9, ports3 = true, vs = d.plateau.jetons;
         for (var j = 1; j <= 4; j++) for (var i = 1; i <= 4; i++) mini = Math.min(mini, M.portsJonction(d, i, j).ports);
         vs.forEach(function (v) { if (M.portsJonction(d, v.i, v.j).ports < 3) ports3 = false; });
@@ -994,7 +1000,7 @@
         ctrl('panneau : aucune erreur (barre d’état)', niveau() !== 'erreur', niveau() + ' ' + pastille());
         var rap = ouvrirRapport();
         ctrl('rapport d’équilibre : « Aucune alerte d’équilibre. », pas de section Informations', /Aucune alerte d.équilibre\./.test(rap) && !document.querySelector('#dialogue-contenu .pm-equilibre-informations'), rap.replace(/\s+/g, ' ').slice(0, 200));
-        ctrl('rapport d’équilibre : rythme, accès au centre, cases par moitié et connexions par case en information (docs/46, docs/53)', document.querySelectorAll('#dialogue-contenu .pm-equilibre-organique li').length === 4 && /Rythme : au plus/.test(rap) && /Accès au centre/.test(rap) && /Cases par moitié : vert \d+, rouge \d+ \(égales\)/.test(rap) && /Connexions par case : \d+ case\(s\) à 2 connexions ou moins sur 59/.test(rap), rap.replace(/\s+/g, ' ').slice(0, 200));
+        ctrl('rapport d’équilibre : rythme, accès au centre, cases par moitié et connexions par case en information (docs/46, docs/53)', document.querySelectorAll('#dialogue-contenu .pm-equilibre-organique li').length === 4 && /Rythme : au plus/.test(rap) && /Accès au centre/.test(rap) && /Cases par moitié : vert \d+, rouge \d+ \(égales\)/.test(rap) && /Connexions par case : \d+ case\(s\) à 2 connexions ou moins sur 5[78]/.test(rap), rap.replace(/\s+/g, ' ').slice(0, 200));
         ctrl('rapport d’équilibre 5×5 : sans conseil des jonctions-cases du 4×4', !/jonctions-cases/.test(rap));
         PM.dialogue.fermer();
         var avant = docJ();

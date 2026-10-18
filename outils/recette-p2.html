@@ -450,7 +450,7 @@
         reset(PM.catalogue.nouveauDocument('5x5'));
         cliquer(boutonParTexte($('controles'), 'Plateau aléatoire'));
         ctrl('5×5 : pas d\'option « jonctions variées » (cases à cocher absentes)', contenu().querySelectorAll('input[type=checkbox]').length === 0);
-        ctrl('5×5 : explication des villes en 2-3-2, des 59 cases et des moitiés', /2-3-2/.test(texteDialogue()) && /59 cases/.test(texteDialogue()) && /moitié verte/.test(texteDialogue()) && !/rangée centrale/.test(texteDialogue()));
+        ctrl('5×5 : explication des villes en 2-3-2, des 57 cases et des moitiés', /2-3-2/.test(texteDialogue()) && /57 cases/.test(texteDialogue()) && /moitié verte/.test(texteDialogue()) && !/rangée centrale/.test(texteDialogue()));
         contenu().querySelector('.pm-generateur-graine').value = 'recette-5x5';
         cliquer(boutonParTexte(contenu(), 'Générer'));
         return attendre(2500);
@@ -463,8 +463,8 @@
         var nB1 = d5.plateau.tuiles.filter(function (t) { return t.modeleId === 'B1'; }).length;
         ctrl('5×5 appliqué : 25 tuiles, 7 villes en 2-3-2', d5.grille === '5x5' && d5.plateau.tuiles.length === 25 && ligne(1) === 2 && ligne(2) + ligne(3) === 3 && ligne(4) === 2);
         var nCases = d5.plateau.tuiles.reduce(function (s, t) { return s + M.modeleParId(d5, t.modeleId).cases.length; }, 0) + 9;
-        ctrl('5×5 appliqué : catalogue à 2 cases par tuile (aucun B1), 59 cases, toutes les villes à 3 ports au moins, aucune jonction à moins de 2 ports',
-          nB1 === 0 && nCases === 59 && d5.plateau.jetons.every(function (x) { return M.portsJonction(d5, x.i, x.j).ports >= 3; }) && M.jonctionsMalReliees(d5).length === 0, nB1 + ' B1, ' + nCases + ' cases');
+        ctrl('5×5 appliqué : catalogue à 2 cases par tuile (aucun B1), 57 ou 58 cases, toutes les villes à 3 ports au moins, aucune jonction à moins de 2 ports',
+          nB1 === 0 && (nCases === 57 || nCases === 58) && d5.plateau.jetons.every(function (x) { return M.portsJonction(d5, x.i, x.j).ports >= 3; }) && M.jonctionsMalReliees(d5).length === 0, nB1 + ' B1, ' + nCases + ' cases');
         ctrl('5×5 appliqué : plateau affiché (25 tuiles, 7 villes), contrôles sans alerte d\'équilibre', $('assemblage').querySelectorAll('.pm-assemblage-occupee').length === 25 && $('assemblage').querySelectorAll('.pm-assemblage-jeton').length === 7 &&
           !/très déséquilibré|Score S à surveiller|Première ville inégale|Écart de distance|Villes trop proches|Jonctions mal reliées/.test($('controles').textContent));
         PM.dialogue.fermer();

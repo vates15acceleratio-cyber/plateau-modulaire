@@ -157,7 +157,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     if (Array.isArray(brut.passages)) m.passages = passages;
     // poids de tirage du générateur : facultatif (absent : les exemplaires font le poids) ; une valeur invalide est ignorée
     if (estEntier(brut.poids) && brut.poids >= 1 && brut.poids <= LIMITES.exemplaires) m.poids = brut.poids;
-    // murs voulus : facultatif (liste de côtés 0 à 3, sans doublon) ; absent = détection par défaut (PM.modele.mursDuModele)
+    // murs voulus : facultatif (liste de côtés 0 à 3, sans doublon) ; absent = aucun mur (PM.modele.mursDuModele)
     if (Array.isArray(brut.murs)) m.murs = brut.murs.filter(function (c, k, a) { return (c === 0 || c === 1 || c === 2 || c === 3) && a.indexOf(c) === k; });
     if (!M.validerModele(m, grille).complet) {
       alertes.push(erreur('modele_incomplet', 'Le modèle « ' + libelle + ' » est incomplet : conservé comme brouillon, non posable.'));

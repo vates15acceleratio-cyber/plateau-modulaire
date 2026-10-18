@@ -16,7 +16,7 @@
  *  - ORIENTATION DES CENTRALES SELON LES PORTS (4×4, orienter4x4) : plus petit nombre de ports d'une jonction maximal, puis jonctions
  *    à 3 ports ;
  *  - 5×5 (catalogue « très connecté » de docs/55 ; docs/53 § 3) : composition PAR QUOTAS selon les poids (4 coins, 12 bords, 9 centrales :
- *    3 LC1, 2 LC2, 3 LC3, 1 LC4 avec le catalogue livré), puis PLACEMENT DES VILLES AVANT L'ORIENTATION : un placement 2-3-2 compatible
+ *    parmi les 12 centrales du stock : 2 LC1, 1 LC2, 3 LC3, 1 LC4, 2 LC5, 1 LC6, 2 LC7), puis PLACEMENT DES VILLES AVANT L'ORIENTATION : un placement 2-3-2 compatible
  *    (aucune case porteuse ne dessert deux villes, chaque ville peut recevoir 3 ports et chaque jonction 2) est tiré, et les centrales
  *    sont orientées pour lui (orienterPourVilles : le moins possible de jonctions-cases à 2 ports) ; jusqu'à ESSAIS_PLACEMENT
  *    placements par candidat ;
@@ -1344,7 +1344,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     var F = M.formatDuDocument(etat.doc());
     racine.appendChild(el(d, 'p', 'pm-generateur-explication',
       'Tire un plateau ' + F.GRILLE.colonnes + '×' + F.GRILLE.lignes + ' complet dans la bibliothèque (un modèle peut servir plusieurs fois, la variété est favorisée ; le poids du modèle, à défaut ses exemplaires, pèse dans le tirage) : 7 villes à 3 cases d\'écart au moins, ' +
-      'les autres jonctions restent des cases chemin' + (F.id === '4x4' ? ' (les deux jonctions-cases sont placées au mieux parmi 12 paires équilibrées, ou dans la rangée centrale si l’option « jonctions variées » est décochée)' : ' (villes placées d’abord, en 2-3-2 sur des jonctions à 3 ports au moins, sans case qui desserve deux villes ; 59 cases, dont moins de 5 % à 2 connexions ; centrales orientées pour ce placement)') + ' ; ' +
+      'les autres jonctions restent des cases chemin' + (F.id === '4x4' ? ' (les deux jonctions-cases sont placées au mieux parmi 12 paires équilibrées, ou dans la rangée centrale si l’option « jonctions variées » est décochée)' : ' (villes placées d’abord, en 2-3-2 sur des jonctions à 3 ports au moins, sans case qui desserve deux villes ; environ 57 cases, dont moins de 5 % à 2 connexions ; centrales orientées pour ce placement)') + ' ; ' +
       'autant de cases dans la moitié verte que dans la moitié rouge ; centrales orientées selon les ports puis pour le rythme (au plus 3 cases d’affilée sans jonction, passage ni raccourci, visé) et l’équilibre des accès au centre ; ' +
       'plateau équilibré tiré au hasard parmi les meilleurs candidats. ' +
       'La même graine redonne le même plateau.'));

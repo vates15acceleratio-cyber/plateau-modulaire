@@ -1,7 +1,7 @@
 'use strict';
 /*
- * Garde-fou léger des mesures de contrôle du 5×5 très connecté (outils/mesures-5x5-connecte.js, rapport docs/56 ; catalogue de
- * docs/55) : 12 plateaux du vrai générateur, mesurés par l'outil et recalculés ici indépendamment. Invariants seulement ; aucun
+ * Garde-fou léger des mesures de contrôle du 5×5 très connecté (outils/mesures-5x5-connecte.js, rapports docs/56 et docs/59 ; catalogue de
+ * docs/55 complété par docs/58, LC1 à LC7) : 12 plateaux du vrai générateur, mesurés par l'outil et recalculés ici indépendamment. Invariants seulement ; aucun
  * pourcentage figé (les mesures sur 200 plateaux sont dans docs/56). L'ancien outil outils/mesures-5x5.js (docs/35) mesurait le
  * catalogue de la 4.00.0 et n'est plus testé.
  */
@@ -18,17 +18,18 @@ function series() {
   return CACHE;
 }
 
-test('mesures 5×5 : chaque plateau est réussi, 59 cases, 48 ports, moins de 5 % de cases à 2 connexions, montable avec la boîte', () => {
+test('mesures 5×5 : chaque plateau est réussi, 57 ou 58 cases, 46 ou 48 ports, moins de 5 % de cases à 2 connexions, montable avec la boîte', () => {
   series().forEach((x) => {
     assert.ok(x.ok, 'mt' + x.k + ' : ' + x.raison);
-    assert.strictEqual(x.cases, 59);
-    assert.strictEqual(x.casesConnexions, 59);
-    assert.strictEqual(x.portsTotal, 48);
+    const lc4 = x.composition.LC4 || 0, cases = 59 - (x.composition.LC5 || 0);
+    assert.strictEqual(x.cases, cases);
+    assert.strictEqual(x.casesConnexions, cases);
+    assert.strictEqual(x.portsTotal, lc4 ? 48 : 46);
     assert.strictEqual(x.ports.length, 16);
     assert.ok(x.ports.every((p) => p >= 2));
     assert.ok(x.part < 0.05 && x.faibles <= 2, 'mt' + x.k);
     assert.strictEqual(x.montable, true);
-    assert.strictEqual(x.raccordsMorts, 2);
+    assert.strictEqual(x.raccordsMorts, 2 * lc4); // les murs de LC4 : 2 raccords morts par pose (informations)
     assert.strictEqual(x.villesProches, 0);
     assert.strictEqual(x.cinq, false);
     assert.ok(x.S < GR.SEUIL_S && x.admissibles >= 1);
@@ -61,5 +62,8 @@ test('mesures 5×5 : stock minimal pour une part donnée (recherche exhaustive),
   const texte = MS.resume(series());
   assert.match(texte, /^Plateaux : 12 ; réussis : 12 \(100 %\)/);
   assert.match(texte, /Montable avec la boîte : 100 %/);
+  assert.match(texte, /Composition LC7 : /);
+  assert.match(texte, /Compositions de centrales différentes : \d+ ; plateaux différents : 12/);
+  assert.deepStrictEqual(MS.IDS_CENTRALES, ['LC1', 'LC2', 'LC3', 'LC4', 'LC5', 'LC6', 'LC7']);
   assert.match(texte, /Cases à 2 connexions ou moins : moyenne/);
 });

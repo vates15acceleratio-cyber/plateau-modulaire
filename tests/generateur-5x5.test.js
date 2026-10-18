@@ -1,7 +1,7 @@
 'use strict';
 /*
  * Tests du générateur 5×5 (src/generateur.js) pour le catalogue à 2 cases par tuile (docs/53 § 3, docs/55 ; décisions de docs/18
- * « 5×5 très connecté ») : composition par quotas (4 coins, 12 bords, 9 centrales : 3 LC1, 2 LC2, 3 LC3, 1 LC4), placement des villes
+ * « 5×5 très connecté ») : composition par quotas (4 coins, 12 bords, 9 des 12 centrales du stock « B3 » : 2 LC1, 1 LC2, 3 LC3, 1 LC4, 2 LC5, 1 LC6, 2 LC7), placement des villes
  * AVANT l'orientation des centrales (aucune porteuse ne dessert deux villes, 2-3-2, écart de 3 cases contrôlé par villesProches),
  * orientation pour ce placement, rejets (plus de 5 % de cases à 2 connexions, jonction à moins de 2 ports, ville à moins de 3 ports,
  * écart, S >= 5, « 5 contre 2 »), préférences (chaîne, raccords morts, points d'articulation, S), mesures gardées (rythme, accès,
@@ -23,6 +23,10 @@ const NB_GRAINES = 200;
 const doc5 = () => CAT.nouveauDocument('5x5');
 const cle = (j) => j.i + ',' + j.j;
 const copie = (x) => JSON.parse(JSON.stringify(x));
+/** Nombre de tuiles posées par modèle. */
+const composition = (doc) => { const n = {}; doc.plateau.tuiles.forEach((t) => { n[t.modeleId] = (n[t.modeleId] || 0) + 1; }); return n; };
+/** Nombre de murs voulus rencontrés : 2 raccords en face des murs de « Deux ponts » (LC4) s'il est posé, aucun sinon. */
+const mursAttendus = (doc) => (composition(doc).LC4 || 0) * 2;
 
 /** Plateaux 5×5 générés une fois (200 graines, quelques candidats chacune : le test vérifie les règles, pas la qualité moyenne). */
 const PLATEAUX = [];
@@ -50,7 +54,7 @@ function porteuseDeDeuxVilles(doc) {
   return [...g.cases.keys()].some((id) => [...g.voisins.get(id)].filter((v) => g.villes.has(v)).length >= 2);
 }
 
-test('200 graines : plateau valide, 25 tuiles, 7 villes, compteurs à ok, aucune erreur ; aucune alerte ; les 2 murs de « Deux ponts » en information', () => {
+test('200 graines : plateau valide, 25 tuiles, 7 villes, compteurs à ok, aucune erreur ; aucune alerte ; les 2 murs de « Deux ponts » (s’il est posé) en information', () => {
   plateaux().forEach((r, k) => {
     const doc = r.doc, v = M.validerPlateau(doc);
     assert.strictEqual(doc.grille, '5x5');
@@ -58,29 +62,38 @@ test('200 graines : plateau valide, 25 tuiles, 7 villes, compteurs à ok, aucune
     assert.strictEqual(doc.plateau.jetons.length, 7, 'g5-' + k);
     assert.deepStrictEqual(v.erreurs, [], 'g5-' + k);
     assert.deepStrictEqual(v.alertes, [], 'g5-' + k);
-    assert.deepStrictEqual(v.informations.map((a) => a.code), ['raccord_mur', 'raccord_mur'], 'g5-' + k); // les murs voulus de « Deux ponts » (docs/18)
+    assert.deepStrictEqual(v.informations.map((a) => a.code), Array(mursAttendus(doc)).fill('raccord_mur'), 'g5-' + k); // les murs voulus de « Deux ponts » (docs/18)
     const c = PM.controles.calculer(doc);
     assert.deepStrictEqual(c.erreurs.map((e) => e.code), [], 'g5-' + k);
     assert.deepStrictEqual(c.alertes, [], 'g5-' + k);
-    assert.deepStrictEqual(c.informations.map((e) => e.code), ['raccord_mur', 'raccord_mur'], 'g5-' + k);
+    assert.deepStrictEqual(c.informations.map((e) => e.code), Array(mursAttendus(doc)).fill('raccord_mur'), 'g5-' + k);
     assert.deepStrictEqual(c.compteurs.filter((x) => x.etat !== 'ok').map((x) => x.cle), [], 'g5-' + k);
     assert.strictEqual(r.rejets.plateau_invalide, 0);
   });
 });
 
-test('200 graines : composition par quotas (4 LK2, 12 LB2, 3 LC1, 2 LC2, 3 LC3, 1 LC4 : le stock exact), 59 cases, 48 ports, moitiés égales', () => {
+test('200 graines : composition par quotas (4 LK2, 12 LB2, 9 centrales dans le stock, composition variée), 57 ou 58 cases, 46 ou 48 ports, moitiés égales', () => {
+  const stock = Object.fromEntries(doc5().modeles.map((m) => [m.id, m.exemplaires]));
+  const compositions = new Set();
   plateaux().forEach((r, k) => {
-    const doc = r.doc, n = {};
-    doc.plateau.tuiles.forEach((t) => { n[t.modeleId] = (n[t.modeleId] || 0) + 1; });
-    assert.deepStrictEqual(n, { LK2: 4, LB2: 12, LC1: 3, LC2: 2, LC3: 3, LC4: 1 }, 'g5-' + k);
+    const doc = r.doc, n = composition(doc);
+    assert.strictEqual(n.LK2, 4, 'g5-' + k);
+    assert.strictEqual(n.LB2, 12, 'g5-' + k);
+    for (const id of Object.keys(n)) assert.ok(n[id] <= stock[id], 'g5-' + k + ' : ' + id + ' ' + n[id] + ' > ' + stock[id]); // montable avec la boîte
+    const centrales = Object.keys(n).filter((id) => id.startsWith('LC')).reduce((s2, id) => s2 + n[id], 0);
+    assert.strictEqual(centrales, 9, 'g5-' + k);
+    compositions.add(Object.keys(n).sort().map((id) => id + n[id]).join(' '));
     doc.plateau.tuiles.forEach((t) => assert.ok(t.modeleId === (M.gabaritCellule(t.col, t.lig, '5x5') === 'coin' ? 'LK2' : M.gabaritCellule(t.col, t.lig, '5x5') === 'bord' ? 'LB2' : t.modeleId)));
-    assert.strictEqual(r.score.cases.total, 59, 'g5-' + k);
-    assert.strictEqual(PM.controles.calculer(doc).compteurs.find((x) => x.cle === 'cases').valeur, 59);
-    assert.strictEqual(GEN.portsParJonction(doc).reduce((a, b) => a + b, 0), 48, 'g5-' + k);
+    const cases = 59 - (n.LC5 || 0); // 2 cases par tuile, 1 pour LC5, 9 jonctions-cases
+    assert.strictEqual(r.score.cases.total, cases, 'g5-' + k);
+    assert.ok(cases >= 57 && cases <= 58, 'g5-' + k);
+    assert.strictEqual(PM.controles.calculer(doc).compteurs.find((x) => x.cle === 'cases').valeur, cases);
+    assert.strictEqual(GEN.portsParJonction(doc).reduce((a, b) => a + b, 0), n.LC4 ? 48 : 46, 'g5-' + k);
     const mo = GR.casesParMoitie(doc, GR.construire(doc));
     assert.strictEqual(mo.ecart, 0, 'g5-' + k + ' : ' + JSON.stringify(mo));
     assert.strictEqual(r.score.cases.ecart, 0);
   });
+  assert.ok(compositions.size >= 10, 'compositions de centrales différentes : ' + compositions.size);
 });
 
 test('200 graines : moins de 5 % de cases à 2 connexions (rejet), au moins 3 connexions en moyenne ; score.connexions = PM.graphe.connexions', () => {
@@ -88,12 +101,12 @@ test('200 graines : moins de 5 % de cases à 2 connexions (rejet), au moins 3 co
   plateaux().forEach((r, k) => {
     const cx = GR.connexions(r.doc);
     assert.ok(cx.conforme && cx.part < GR.PART_CONNEXIONS_MAX && cx.faibles <= 2, 'g5-' + k + ' : ' + cx.faibles + ' case(s) faibles');
-    assert.strictEqual(cx.cases, 59);
+    assert.strictEqual(cx.cases, 59 - (composition(r.doc).LC5 || 0));
     assert.ok(cx.degreMoyen >= 3.5, 'g5-' + k + ' : degré moyen ' + cx.degreMoyen);
     assert.deepStrictEqual(r.score.connexions, { cases: cx.cases, faibles: cx.faibles, part: cx.part, degreMoyen: cx.degreMoyen, parDegre: cx.parDegre });
-    // les cases faibles sont des jonctions-cases à 2 ports (aucune case de tuile n'a moins de 3 connexions)
-    assert.strictEqual(cx.jonctionsFaibles.length, cx.faibles, 'g5-' + k);
-    assert.strictEqual(faibles(r.doc), cx.faibles, 'g5-' + k);
+    // les jonctions-cases à 2 ports sont des cases faibles ; une case de tuile peut l'être aussi (le plus souvent le relais de LC6 ou LC7 dont un raccord fait face à un mur de « Deux ponts », mesuré sur 100 plateaux : 21 cases de tuile faibles contre 99 jonctions-cases)
+    assert.strictEqual(cx.jonctionsFaibles.length, faibles(r.doc), 'g5-' + k);
+    assert.ok(cx.jonctionsFaibles.length <= cx.faibles, 'g5-' + k);
     total += cx.faibles;
   });
   assert.ok(total / NB_GRAINES < 1.5, 'moyenne de cases faibles : ' + total / NB_GRAINES);
@@ -141,7 +154,7 @@ test('200 graines : préférences et mesures gardées (chaîne, distance maximal
     assert.strictEqual(r.score.distMax, ry.distMax);
     assert.deepStrictEqual(r.score.acces, { vert: ac.portes.vert, rouge: ac.portes.rouge, ecart: ac.ecart });
     assert.strictEqual(r.score.raccordsMorts, 0, 'g5-' + k + ' : les deux murs de LC4 sont voulus, donc ne comptent pas');
-    assert.strictEqual(M.raccordsMorts(r.doc).filter((x) => x.mur).length, 2, 'g5-' + k);
+    assert.strictEqual(M.raccordsMorts(r.doc).filter((x) => x.mur).length, mursAttendus(r.doc), 'g5-' + k);
     assert.strictEqual(r.score.articulations, GR.goulets(GR.construire(r.doc, { villesTraversables: false }), 1).articulations.length + GR.goulets(GR.construire(r.doc, { villesTraversables: false }), 2).articulations.length);
     assert.ok(r.score.placementsAdmissibles >= 1, 'g5-' + k);
     assert.strictEqual(r.score.placementsAdmissibles, GEN.placementsAdmissibles5x5(r.doc));
@@ -224,7 +237,7 @@ test('outils de mesure : tirages orientés (villes d\'abord) sans ville posée, 
   assert.strictEqual(r.entrees.length + r.sansOrientation, 20);
   assert.ok(r.entrees.every((e) => e.doc.plateau.tuiles.length === 25 && e.doc.plateau.jetons.length === 0 && e.villes.length === 7));
   assert.strictEqual(r.generateur.essais, 20);
-  assert.ok(r.generateur.acceptes >= 15, JSON.stringify(r.generateur));
+  assert.ok(r.generateur.acceptes >= 10, JSON.stringify(r.generateur));
 });
 
 test('reproductibilité : même graine, même plateau et mêmes compteurs', () => {
@@ -240,14 +253,25 @@ test('reproductibilité : même graine, même plateau et mêmes compteurs', () =
 test('tirage par quotas : les poids fixent la composition ; d\'autres poids donnent d\'autres compositions, au plus près des proportions', () => {
   const ctx = GEN.contexteDocument5x5(doc5()), rng = GEN.mulberry32(3);
   const compte = (ids) => { const n = {}; ids.forEach((id, k) => { if (ctx.cellules[k].gabarit === 'centrale') n[id] = (n[id] || 0) + 1; }); return n; };
-  for (let k = 0; k < 10; k++) assert.deepStrictEqual(compte(GEN.composer5x5(ctx, rng).ids), { LC1: 3, LC2: 2, LC3: 3, LC4: 1 });
-  // poids 1 / 1 / 1 / 1 : 9 centrales = 2 de chacune + 1 tirée au hasard
+  // poids = exemplaires du stock « B3 » (12 centrales pour 9 places) : chaque modèle au plus près de 9 × poids / 12 (arrondi par défaut ou par excès)
+  const poids = { LC1: 2, LC2: 1, LC3: 3, LC4: 1, LC5: 2, LC6: 1, LC7: 2 }, vues = new Set();
+  for (let k = 0; k < 40; k++) {
+    const n = compte(GEN.composer5x5(ctx, rng).ids);
+    assert.strictEqual(Object.values(n).reduce((a, b) => a + b, 0), 9);
+    for (const id of Object.keys(poids)) {
+      const v = 9 * poids[id] / 12, nb = n[id] || 0;
+      assert.ok(nb >= Math.floor(v) && nb <= Math.ceil(v) && nb <= poids[id], id + ' : ' + nb + ' pour ' + v + ' ' + JSON.stringify(n));
+    }
+    vues.add(JSON.stringify(n));
+  }
+  assert.ok(vues.size >= 10, 'compositions de centrales différentes : ' + vues.size);
+  // poids 1 pour les 7 modèles : 9 centrales = 1 de chaque + 2 tirées au hasard
   const d = doc5(); d.modeles.forEach((m) => { if (m.gabarit === 'centrale') m.poids = 1; });
   const ctx2 = GEN.contexteDocument5x5(d), vus = new Set();
   for (let k = 0; k < 20; k++) {
     const n = compte.call(null, GEN.composer5x5(ctx2, rng).ids.map((x) => x));
     const v = Object.values(n).sort();
-    assert.deepStrictEqual(v, [2, 2, 2, 3], JSON.stringify(n));
+    assert.deepStrictEqual(v, [1, 1, 1, 1, 1, 2, 2], JSON.stringify(n));
     vus.add(JSON.stringify(n));
   }
   assert.ok(vus.size >= 3, 'le reste est tiré au hasard');
@@ -308,7 +332,7 @@ test('taux de rejet par cause et temps (200 candidats) sur le catalogue 5×5', (
     Object.keys(x.rejets).forEach((c) => { rej[c] = (rej[c] || 0) + x.rejets[c]; });
   }
   console.log(`# 5×5 : 200 candidats en ${ms} ms (${r.essais} essais) ; ${acceptes}/${essais} candidats acceptés ; rejets : ${JSON.stringify(rej)}`);
-  assert.ok(acceptes >= essais * 0.8, 'taux d\'acceptation : ' + acceptes + ' / ' + essais);
+  assert.ok(acceptes >= essais * 0.5, 'taux d\'acceptation : ' + acceptes + ' / ' + essais); // ≈ 63 % avec le stock « B3 » (rejets « villes_ports » surtout) ; 100 % des plateaux sont réussis
   assert.strictEqual(rej.plateau_invalide, 0);
   assert.strictEqual(rej.connexite, 0);
   assert.strictEqual(rej.connexions, 0, 'le catalogue livré ne laisse jamais plus de 5 % de cases faibles après orientation');

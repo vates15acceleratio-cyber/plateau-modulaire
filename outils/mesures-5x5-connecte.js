@@ -1,7 +1,7 @@
 'use strict';
 /*
- * mesures-5x5-connecte.js : mesures de contrôle du 5×5 très connecté (catalogue à 2 cases par tuile, docs/53, docs/55, décisions de
- * docs/18 « 5×5 très connecté ») avec le VRAI générateur (PM.generateur.generer, options par défaut) ; rapport du sous-agent dans docs/56.
+ * mesures-5x5-connecte.js : mesures de contrôle du 5×5 très connecté (catalogue à 2 cases par tuile au plus, docs/53, docs/55, jeu « B3 » de docs/58 : LC1 à LC7,
+ * décisions de docs/18 « 5×5 très connecté ») avec le VRAI générateur (PM.generateur.generer, options par défaut) ; rapports docs/56 et docs/59.
  *
  *   node outils/mesures-5x5-connecte.js [nombre de plateaux, 200] [préfixe des graines, « c »] [fichier JSON de sortie]
  *
@@ -20,6 +20,8 @@ const racine = path.join(__dirname, '..', 'src');
 ['geometrie.js', 'modele.js', 'catalogue.js', 'graphe.js', 'generateur.js'].forEach((f) => require(path.join(racine, f)));
 const PM = globalThis.PM;
 const M = PM.modele, GR = PM.graphe, GEN = PM.generateur, CAT = PM.catalogue;
+/** Ids des centrales du catalogue livré (LC1 à LC7). */
+const IDS_CENTRALES = CAT.modelesParGrille['5x5'].filter((m) => m.gabarit === 'centrale').map((m) => m.id);
 
 /** Mesures d'un résultat de PM.generateur.generer (plateau 5×5 réussi). */
 function mesurerPlateau(r) {
@@ -36,6 +38,8 @@ function mesurerPlateau(r) {
     articulations: GR.goulets(g, 1).articulations.length + GR.goulets(g, 2).articulations.length,
     raccordsMorts: M.raccordsMorts(d).filter((x) => x.raison !== 'absent').length, villesProches: GR.villesProches(g).length,
     acces: r.score.acces.ecart, moities: r.score.cases.ecart, composition,
+    plateau: d.plateau.tuiles.map((t) => t.modeleId + '@' + t.col + t.lig + 'r' + (t.rot || 0)).sort().join(','),
+    chaineSans: GR.rythme(d, g, { sansJonctions: true }).chaineMax,
     villes: d.plateau.jetons.map((j) => j.i + ',' + j.j).sort().join(' '),
     montable: Object.keys(composition).every((id) => composition[id] <= stock[id])
   };
@@ -43,7 +47,7 @@ function mesurerPlateau(r) {
 
 /** Plus petit stock de centrales (somme minimale, puis ordre lexicographique) qui monte au moins `part` des compositions. */
 function stockMinimal(compositions, part, ids) {
-  ids = ids || ['LC1', 'LC2', 'LC3', 'LC4'];
+  ids = ids || IDS_CENTRALES;
   const besoin = Math.ceil(part * compositions.length), max = ids.map((id) => Math.max(0, ...compositions.map((c) => c[id] || 0)));
   let meilleur = null;
   const s = new Array(ids.length).fill(0);
@@ -91,11 +95,14 @@ function resume(res) {
   L.push('Chaîne : moyenne ' + dec(moy(ok.map((x) => x.chaine)), 2) + ' (' + rep((x) => x.chaine) + ') ; distMax : moyenne ' + dec(moy(ok.map((x) => x.distMax)), 2) + ' (' + rep((x) => x.distMax) + ')');
   L.push('Points d\'articulation : ' + rep((x) => x.articulations) + ' ; raccords morts : ' + rep((x) => x.raccordsMorts));
   L.push('Écart d\'accès : ' + rep((x) => Math.abs(x.acces)) + ' ; écart de cases entre moitiés : ' + rep((x) => x.moities));
-  ['LC1', 'LC2', 'LC3', 'LC4'].forEach((id) => L.push('Composition ' + id + ' : ' + rep((x) => x.composition[id] || 0)));
+  IDS_CENTRALES.forEach((id) => L.push('Composition ' + id + ' : ' + rep((x) => x.composition[id] || 0)));
   L.push('Montable avec la boîte : ' + pct(ok.filter((x) => x.montable).length / ok.length));
   const sm = stockMinimal(ok.map((x) => x.composition), 0.9);
   if (sm) L.push('Stock minimal des centrales pour 90 % : ' + JSON.stringify(sm.stock) + ' (' + sm.total + ' centrales, ' + pct(sm.part) + ')');
   if (diff) L.push('Placements de villes différents : ' + diff);
+  const compo = (x) => IDS_CENTRALES.map((id) => id + 'x' + (x.composition[id] || 0)).join(' ');
+  L.push('Compositions de centrales différentes : ' + new Set(ok.map(compo)).size + ' ; plateaux différents : ' + new Set(ok.map((x) => x.plateau)).size);
+  L.push('Chaîne sans les jonctions (ancienne mesure) : moyenne ' + dec(moy(ok.map((x) => x.chaineSans)), 2));
   return L.join('\n');
 }
 
@@ -117,4 +124,4 @@ if (!isMainThread) {
   });
 }
 
-module.exports = { mesurerPlateau, stockMinimal, resume, travailler };
+module.exports = { IDS_CENTRALES, mesurerPlateau, stockMinimal, resume, travailler };

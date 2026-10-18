@@ -351,7 +351,7 @@ test('rapport d\'équilibre : rythme, accès au centre et cases par moitié en i
   for (const g0 of ['4x4', '5x5']) {
     const doc = plateaux(g0)[0], a = PM.equilibre.analyser(doc), r = PM.equilibre.rapport(a);
     assert.equal(r.organique.length, g0 === '5x5' ? 4 : 3);
-    if (g0 === '5x5') assert.match(r.organique[3], /^Connexions par case : \d+ case\(s\) à 2 connexions ou moins sur 59 \(.* %.*\) ; .* connexions par case en moyenne/);
+    if (g0 === '5x5') assert.match(r.organique[3], /^Connexions par case : \d+ case\(s\) à 2 connexions ou moins sur 5[78] \(.* %.*\) ; .* connexions par case en moyenne/);
     assert.match(r.organique[0], /^Rythme : au plus \d+ case/);
     assert.match(r.organique[1], /^Accès au centre/);
     assert.match(r.organique[2], /^Cases par moitié : vert \d+, rouge \d+ \(égales\)/);
