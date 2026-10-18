@@ -153,3 +153,9 @@ Après les avis `28-avis-design-5x5.md` (design de jeu) et `29-avis-geometrie-5x
 ## Choix de l'utilisateur sur les nouvelles centrales 5×5 (2026-10-18, `58`)
 - **Jeu « B3 »** : centrales LC1 ×2, LC2 ×1, LC3 ×3, LC4 ×1, **LC5 Pont et carrefour ×2, LC6 Pont et fourche libres ×1, LC7 Pont et relais libres ×2** (12 centrales, 28 tuiles au total, 5 planches A3). LC8 à LC10 non retenues.
 - **Environ 57 cases par plateau** acceptées (LC5 n'a qu'une case).
+
+## Réponses de l'utilisateur aux mesures définitives du 5×5 très connecté (2026-10-18, `60`)
+1. **Seuil S en 5×5 : alerte à 5, information à S = 4** (comme en 4×4 et comme le rejet du générateur ; revient sur la décision 1 du `48`, qui tenait au catalogue 4.00.0). Le conseil « 3 villes du milieu » (périmé) est remplacé par un renvoi à « Outils > Placer les villes ».
+2. **Cases à ≤ 2 connexions : information** (pas d'alerte).
+3. **« 4 contre 3 » : 8 villes en 5×5, toujours 8**, « pour garder un jeu symétrique » (4 villes par camp). Le 4×4 garde 7 villes. À étudier par l'advisor design de jeu (placements, écart de 3 cases, critères d'équilibre à adapter) avant production ; il faut 8 jetons ville à imprimer en 5×5.
+4. **Goulets en 4×4 : la préférence anti-goulets s'étend au 4×4.**
