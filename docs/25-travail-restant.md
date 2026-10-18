@@ -55,3 +55,13 @@ Proposée par l'utilisateur au moment de l'arrêt, **pas encore définie** : à 
 - Fait : passages sans case (`docs/39` à `docs/41`, `docs/43`).
 - En cours : catalogues candidats non branchés (`docs/42`, `docs/44`). Prochaine révision demandée par l'utilisateur (fin de `docs/18`) : centrales plus ouvertes, moins de cases, équilibre des accès au centre, pose symétrique à essayer, rythme strict ≤ 3 ; images à montrer avant tout branchement.
 - Ensuite : branchement du catalogue, générateur orienté pour le rythme (et peut-être symétrique), mesures, testeur, relecteur, version, PR.
+
+## 4. Après les mesures définitives du catalogue organique (branche `passages`, 2026-10-18)
+- **Fait** (décisions de `docs/18`, fin de fichier ; mesures `docs/48`) : seuils de S par format (4×4 alerte dès 5 ; 5×5 alerte dès 7, information 5 ou 6 ; rejet du générateur à 5 dans les deux), préférence anti-point d'articulation en 5×5 (8,5 % de plateaux concernés sur 200 avant, 0 % après), « jonctions variées » cochée par défaut en 4×4, texte « bien au-dessus de la cible » (chaîne ≥ 7 ou distance maximale ≥ 6), correction de `casesParMoitie` (`docs/49`), mesures régénérées (`docs/croquis/organique/mesures.json`, `centrales-ouvertes-200.json`, commandes `node outils/planche-organique.js` puis `node outils/planche-organique.js series 200 > docs/croquis/organique/centrales-ouvertes-200.json`).
+- **Reste à mesurer ou à vérifier** :
+  - point 5 du `docs/28` § 6 : S selon la jonction de la 7e ville (seule la répartition des villes est mesurée) ;
+  - point 8 du `docs/28` § 6 : distance entre apparitions verte et rouge par la rangée neutre ;
+  - conseil 5×5 « 3 villes du milieu sur une rangée » (`docs/36` point 5) : **à remesurer** sur le catalogue organique avant de le garder tel quel (l'alerte S n'apparaît plus qu'à partir de 7, donc le conseil est moins souvent affiché) ;
+  - 4×4 en « jonctions variées » : 1,5 % des plateaux générés (3 sur 200) ont un point d'articulation, la préférence n'est appliquée qu'en 5×5 ; à étendre au 4×4 si l'utilisateur le souhaite ;
+  - villes au centre en 5×5 : 13,5 %, sous la cible de 20 % du `docs/38` (à reprendre avec les « régions thématiques »).
+- **Suite prévue** : relecteur, versionneur (numéro, étiquette, `CHANGELOG.md`), PR.

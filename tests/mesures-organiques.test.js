@@ -268,7 +268,8 @@ test('orientation 4×4 : le plus petit nombre de ports d\'une jonction est maxim
 test('affinage du rythme : une préférence (jamais un rejet) qui raccourcit la chaîne et rapproche les accès, sans sortir des seuils', () => {
   for (const g0 of ['4x4', '5x5']) {
     let avec = 0, sans = 0, accAvec = 0, accSans = 0;
-    for (let k = 0; k < 12; k++) {
+    // 4×4 en « jonctions variées » (défaut depuis docs/48) : l'écart des accès est bruité sur 12 graines (7 contre 6), net sur 40 (18 contre 32)
+    for (let k = 0, nb = g0 === '4x4' ? 40 : 12; k < nb; k++) {
       const a = GEN.generer(CAT.nouveauDocument(g0), { graine: 'aff-' + k, candidats: 20 });
       const b = GEN.generer(CAT.nouveauDocument(g0), { graine: 'aff-' + k, candidats: 20, affinage: false });
       assert.ok(a.ok && b.ok);
@@ -287,6 +288,28 @@ test('affinage du rythme : une préférence (jamais un rejet) qui raccourcit la 
     // mesuré (40 graines, 40 candidats) : chaîne moyenne 4×4 2,98 contre 4,13 ; 5×5 2,65 contre 3,75
     assert.ok(avec < sans, g0 + ' : chaîne ' + avec + ' contre ' + sans);
     assert.ok(accAvec <= accSans, g0 + ' : accès ' + accAvec + ' contre ' + accSans);
+  }
+});
+
+test('rapport d\'équilibre : « bien au-dessus de la cible » (information) quand la chaîne vaut 7 ou plus, ou la distance maximale 6 ou plus', () => {
+  for (const g0 of ['4x4', '5x5']) {
+    const a = PM.equilibre.analyser(plateaux(g0)[0]);
+    const ligne = (ry) => PM.equilibre.rapport(Object.assign({}, a, { rythme: Object.assign({}, a.rythme, ry) })).organique[0];
+    assert.ok(!/au-dessus/.test(ligne({ chaineMax: 3, distMax: 3 })), g0 + ' : à la cible');
+    assert.ok(/\(au-dessus de la cible\)/.test(ligne({ chaineMax: 4, distMax: 3 })) && !/bien au-dessus/.test(ligne({ chaineMax: 6, distMax: 5 })), g0 + ' : au-dessus, pas « bien »');
+    assert.ok(/bien au-dessus de la cible/.test(ligne({ chaineMax: 7, distMax: 3 })), g0 + ' : chaîne 7');
+    assert.ok(/bien au-dessus de la cible/.test(ligne({ chaineMax: 3, distMax: 6 })), g0 + ' : distMax 6');
+    const r = PM.equilibre.rapport(a);
+    assert.ok(!r.alertes.some((t) => /au-dessus/.test(t)) && !r.blocages.length, 'jamais une alerte');
+  }
+});
+
+test('goulets 5×5 : le générateur préfère les plateaux sans point d\'articulation (12 graines : aucun)', () => {
+  for (let k = 0; k < 12; k++) {
+    const r = GEN.generer(CAT.nouveauDocument('5x5'), { graine: 'gou-' + k, candidats: 20 });
+    assert.ok(r.ok, r.raison);
+    const g = GR.construire(r.doc, { villesTraversables: false });
+    assert.equal(GR.goulets(g, 1).articulations.length + GR.goulets(g, 2).articulations.length, 0, 'gou-' + k);
   }
 });
 

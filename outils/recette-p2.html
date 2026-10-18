@@ -400,7 +400,7 @@
       ctrl('graine pré-remplie (6 chiffres), Appliquer inactif', /^\d{6}$/.test(champ.value) && bAppliquer.disabled, champ.value);
       ctrl('avertissement « le plateau actuel sera remplacé »', !!contenu().querySelector('.pm-generateur-avertissement'));
       var casesACocher = contenu().querySelectorAll('input[type=checkbox]');
-      ctrl('une seule option : « jonctions variées », décochée (plus de carrefours ni de villes traversables)', !contenu().querySelector('input[type=radio]') && casesACocher.length === 1 && !casesACocher[0].checked && /Jonctions variées/.test(contenu().querySelector('label[for="' + casesACocher[0].id + '"]').textContent));
+      ctrl('une seule option : « jonctions variées », cochée par défaut (plus de carrefours ni de villes traversables)', !contenu().querySelector('input[type=radio]') && casesACocher.length === 1 && casesACocher[0].checked && /Jonctions variées/.test(contenu().querySelector('label[for="' + casesACocher[0].id + '"]').textContent));
       ctrl('explication : jonctions-cases dans la rangée centrale', /rangée centrale/.test(texteDialogue()));
       ctrl('explication : 7 villes à 3 cases d\'écart, cases chemin', /7 villes à 3 cases d'écart/.test(texteDialogue()) && /cases chemin/.test(texteDialogue()));
       champ.value = 'recette';

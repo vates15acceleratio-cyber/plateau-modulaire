@@ -379,7 +379,7 @@ test('anciens documents (catalogue précédent) : générateurs 4×4 et 5×5 à 
   const attendu = EMPREINTES_ANCIENS;
   for (const g of ['4x4', '5x5']) {
     const obtenu = [0, 1, 2].map((k) => {
-      const r = PM.generateur.generer(docPrecedent(g), { graine: 's' + k, candidats: 8 });
+      const r = PM.generateur.generer(docPrecedent(g), { graine: 's' + k, candidats: 8, jonctionsVariees: false }); // 4×4 : option décochée (le défaut est « variées » depuis docs/48)
       return h(r.doc) + ':' + h(GR.equilibre(r.doc));
     });
     assert.deepEqual(obtenu, attendu[g], g);

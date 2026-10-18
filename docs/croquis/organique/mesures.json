@@ -725,31 +725,32 @@
    "tuiles": {
     "K2": 3,
     "K4": 1,
-    "B1": 8,
+    "B1": 7,
+    "B8": 1,
     "Q1": 3,
     "Q2": 1
    },
-   "cases": 56,
-   "casesTuiles": 54,
+   "cases": 57,
+   "casesTuiles": 55,
    "jonctionsCases": 2,
    "ports": {
     "1,1": 4,
     "2,1": 4,
-    "3,1": 3,
+    "3,1": 4,
     "1,2": 4,
     "2,2": 3,
-    "3,2": 4,
-    "1,3": 3,
-    "2,3": 4,
+    "3,2": 3,
+    "1,3": 4,
+    "2,3": 3,
     "3,3": 4
    },
    "portsMin": 3,
    "portsTotal": 33,
    "villes": [
-    "(1,1)",
     "(2,1)",
     "(3,1)",
-    "(1,2)",
+    "(2,2)",
+    "(3,2)",
     "(1,3)",
     "(2,3)",
     "(3,3)"
@@ -758,16 +759,16 @@
     4,
     4,
     3,
-    4,
     3,
     4,
+    3,
     4
    ],
    "villesA3": 7,
    "ecartMinVilles": 4,
    "villesProches": 0,
-   "S": 0,
-   "ecartMax7": 0,
+   "S": 1,
+   "ecartMax7": 1,
    "partage": {
     "1": 3,
     "2": 3,
@@ -777,7 +778,7 @@
    "tempo": {
     "1": {
      "3": 6,
-     "4": 7,
+     "4": 6,
      "5": 7
     },
     "2": {
@@ -796,16 +797,16 @@
      2,
      2,
      2,
-     2,
      3,
      3,
-     4
+     3,
+     5
     ],
     "2": [
      2,
      2,
      2,
-     2,
+     3,
      3,
      3,
      4
@@ -819,7 +820,6 @@
    "reseauxPassages": [
     2,
     2,
-    2,
     2
    ],
    "reseauxEconomes": [
@@ -827,64 +827,83 @@
     2,
     2
    ],
-   "apparitionsDansReseaux": 4,
+   "apparitionsDansReseaux": 1,
    "contactVertRouge": 1,
    "rythme": {
-    "zones": 13,
+    "zones": 23,
     "distMax": 2,
     "repartition": {
-     "1": 37,
-     "2": 13
+     "1": 36,
+     "2": 5
     },
     "injoignables": 0,
-    "chaineMax": 3,
+    "chaineMax": 2,
     "chaine": [
-     "J1,1",
-     "1,0:c2",
-     "1,0:a",
-     "1,0:c1",
-     "J2,1"
+     "J2,1",
+     "1,1:c3",
+     "1,1:r",
+     "0,1:a"
     ],
     "casesPassage": [
-     "2,0:a",
-     "3,1:a",
-     "0,2:a",
-     "1,3:a",
+     "3,2:r",
      "2,1:r",
+     "1,3:a",
+     "2,2:r",
      "1,2:r"
     ],
-    "plusLoin": [
+    "casesRaccourci": [
      "0,0:a",
-     "0,0:r",
-     "3,0:r",
-     "0,3:s1",
-     "0,3:s2",
+     "1,0:a",
+     "0,1:a",
+     "3,0:a",
+     "3,1:a",
+     "2,0:a",
+     "0,3:a",
+     "0,2:a",
+     "1,3:a",
      "3,3:a",
-     "3,3:r",
-     "3,2:c2",
-     "1,1:r",
-     "2,2:c1",
-     "2,2:c2",
-     "J2,2",
-     "J3,2"
+     "2,3:a",
+     "3,2:a"
+    ],
+    "plusLoin": [
+     "0,0:c1",
+     "1,1:c1",
+     "1,1:c2",
+     "J1,1",
+     "J1,2"
     ]
    },
    "rythmeLarge": {
-    "chaineMax": 3,
+    "chaineMax": 2,
     "distMax": 2
    },
    "acces": {
     "portes": {
      "vert": 5,
-     "rouge": 6
+     "rouge": 5
     },
-    "ecart": -1,
+    "ecart": 0,
     "contacts": 4,
     "chemins": {
      "vert": 3,
      "rouge": 3
     },
     "ecartChemins": 0
+   },
+   "moities": {
+    "tuiles": {
+     "vert": 28,
+     "rouge": 27,
+     "neutre": 0
+    },
+    "jonctions": {
+     "vert": 1,
+     "rouge": 0,
+     "milieu": 1
+    },
+    "vert": 29,
+    "rouge": 27,
+    "ecart": 2
    },
    "sMedianPlacements": 2,
    "placementsAdmissibles": 36,
@@ -898,13 +917,13 @@
       "rot": 0
      },
      {
-      "modeleId": "K2",
-      "col": 3,
-      "lig": 0,
-      "rot": 1
-     },
-     {
       "modeleId": "K4",
+      "col": 3,
+      "lig": 0,
+      "rot": 1
+     },
+     {
+      "modeleId": "K2",
       "col": 0,
       "lig": 3,
       "rot": 3
@@ -946,7 +965,7 @@
       "rot": 3
      },
      {
-      "modeleId": "B1",
+      "modeleId": "B8",
       "col": 3,
       "lig": 2,
       "rot": 1
@@ -968,32 +987,27 @@
       "col": 1,
       "lig": 1,
       "rot": 3
-     },
-     {
-      "modeleId": "Q1",
-      "col": 2,
-      "lig": 1,
-      "rot": 2
-     },
-     {
-      "modeleId": "Q1",
-      "col": 1,
-      "lig": 2,
-      "rot": 0
      },
      {
       "modeleId": "Q2",
       "col": 2,
+      "lig": 1,
+      "rot": 3
+     },
+     {
+      "modeleId": "Q1",
+      "col": 1,
       "lig": 2,
-      "rot": 0
+      "rot": 3
+     },
+     {
+      "modeleId": "Q1",
+      "col": 2,
+      "lig": 2,
+      "rot": 2
      }
     ],
     "jetons": [
-     {
-      "i": 1,
-      "j": 1,
-      "type": "capture"
-     },
      {
       "i": 2,
       "j": 1,
@@ -1005,7 +1019,12 @@
       "type": "capture"
      },
      {
-      "i": 1,
+      "i": 2,
+      "j": 2,
+      "type": "capture"
+     },
+     {
+      "i": 3,
       "j": 2,
       "type": "capture"
      },
@@ -1040,11 +1059,11 @@
    "ports": {
     "1,1": 4,
     "2,1": 3,
-    "3,1": 3,
-    "1,2": 4,
+    "3,1": 4,
+    "1,2": 3,
     "2,2": 4,
-    "3,2": 4,
-    "1,3": 3,
+    "3,2": 3,
+    "1,3": 4,
     "2,3": 3,
     "3,3": 4
    },
@@ -1054,7 +1073,7 @@
     "(1,1)",
     "(2,1)",
     "(3,1)",
-    "(1,2)",
+    "(2,2)",
     "(1,3)",
     "(2,3)",
     "(3,3)"
@@ -1062,9 +1081,9 @@
    "villesPorts": [
     4,
     3,
-    3,
     4,
-    3,
+    4,
+    4,
     3,
     4
    ],
@@ -1082,12 +1101,12 @@
    "tempo": {
     "1": {
      "3": 6,
-     "4": 7,
+     "4": 6,
      "5": 7
     },
     "2": {
      "3": 6,
-     "4": 7,
+     "4": 6,
      "5": 7
     }
    },
@@ -1101,19 +1120,19 @@
      2,
      2,
      2,
-     2,
      3,
      3,
-     4
+     3,
+     5
     ],
     "2": [
      2,
      2,
      2,
-     2,
      3,
      3,
-     4
+     3,
+     5
     ]
    },
    "blocages": [],
@@ -1133,57 +1152,60 @@
     2,
     2
    ],
-   "apparitionsDansReseaux": 6,
+   "apparitionsDansReseaux": 4,
    "contactVertRouge": 1,
    "rythme": {
-    "zones": 15,
+    "zones": 23,
     "distMax": 2,
     "repartition": {
-     "1": 36,
-     "2": 12
+     "1": 38,
+     "2": 2
     },
     "injoignables": 0,
-    "chaineMax": 3,
+    "chaineMax": 2,
     "chaine": [
      "J1,1",
-     "0,1:c1",
-     "0,1:a",
-     "0,1:c2",
-     "J1,2"
+     "0,0:c1",
+     "0,0:r",
+     "0,0:a"
     ],
     "casesPassage": [
      "1,0:a",
      "2,1:r",
-     "2,0:a",
      "3,1:a",
+     "2,2:r",
      "0,2:a",
-     "1,3:a",
+     "1,1:r",
      "2,3:a",
      "1,2:r"
     ],
+    "casesRaccourci": [
+     "0,0:a",
+     "1,0:a",
+     "0,1:a",
+     "3,0:a",
+     "3,1:a",
+     "2,0:a",
+     "0,3:a",
+     "0,2:a",
+     "1,3:a",
+     "3,3:a",
+     "2,3:a",
+     "3,2:a"
+    ],
     "plusLoin": [
-     "0,0:r",
-     "3,0:s1",
-     "3,0:s2",
-     "0,3:s1",
-     "0,3:s2",
-     "3,3:r",
-     "3,2:c2",
-     "1,1:c1",
-     "2,2:c1",
-     "2,2:c2",
-     "J2,2",
+     "J1,2",
      "J3,2"
     ]
    },
    "rythmeLarge": {
-    "chaineMax": 3,
+    "chaineMax": 2,
     "distMax": 2
    },
    "acces": {
     "portes": {
-     "vert": 6,
-     "rouge": 6
+     "vert": 5,
+     "rouge": 5
     },
     "ecart": 0,
     "contacts": 4,
@@ -1192,6 +1214,21 @@
      "rouge": 3
     },
     "ecartChemins": 0
+   },
+   "moities": {
+    "tuiles": {
+     "vert": 27,
+     "rouge": 27,
+     "neutre": 0
+    },
+    "jonctions": {
+     "vert": 0,
+     "rouge": 0,
+     "milieu": 2
+    },
+    "vert": 27,
+    "rouge": 27,
+    "ecart": 0
    },
    "sMedianPlacements": 1,
    "placementsAdmissibles": 36,
@@ -1280,13 +1317,13 @@
       "modeleId": "Q1",
       "col": 2,
       "lig": 1,
-      "rot": 2
+      "rot": 3
      },
      {
       "modeleId": "Q1",
       "col": 1,
       "lig": 2,
-      "rot": 0
+      "rot": 1
      },
      {
       "modeleId": "Q1",
@@ -1312,7 +1349,7 @@
       "type": "capture"
      },
      {
-      "i": 1,
+      "i": 2,
       "j": 2,
       "type": "capture"
      },
@@ -1337,12 +1374,10 @@
   "5x5-A": {
    "tuiles": {
     "K2": 4,
-    "B7": 11,
-    "B1": 1,
-    "P5": 1,
-    "U1": 4,
-    "P2": 1,
-    "P3": 2,
+    "B7": 12,
+    "P5": 2,
+    "U1": 5,
+    "P3": 1,
     "P1": 1
    },
    "cases": 77,
@@ -1354,16 +1389,16 @@
     "3,1": 2,
     "4,1": 3,
     "1,2": 2,
-    "2,2": 3,
+    "2,2": 2,
     "3,2": 3,
     "4,2": 2,
     "1,3": 2,
     "2,3": 2,
-    "3,3": 2,
+    "3,3": 3,
     "4,3": 3,
     "1,4": 3,
-    "2,4": 3,
-    "3,4": 2,
+    "2,4": 2,
+    "3,4": 3,
     "4,4": 2
    },
    "portsMin": 2,
@@ -1371,11 +1406,11 @@
    "villes": [
     "(1,1)",
     "(4,1)",
-    "(2,2)",
     "(3,2)",
+    "(3,3)",
     "(4,3)",
     "(1,4)",
-    "(2,4)"
+    "(3,4)"
    ],
    "villesPorts": [
     3,
@@ -1389,12 +1424,12 @@
    "villesA3": 7,
    "ecartMinVilles": 4,
    "villesProches": 0,
-   "S": 0,
-   "ecartMax7": 0,
+   "S": 1,
+   "ecartMax7": 1,
    "partage": {
-    "1": 2,
+    "1": 3,
     "2": 2,
-    "egalite": 3
+    "egalite": 2
    },
    "cinqContreDeux": false,
    "tempo": {
@@ -1405,7 +1440,7 @@
     },
     "2": {
      "3": 5,
-     "4": 6,
+     "4": 7,
      "5": 7
     }
    },
@@ -1431,7 +1466,7 @@
      3,
      3,
      4,
-     5
+     4
     ]
    },
    "blocages": [],
@@ -1440,7 +1475,8 @@
    "raccordsMorts": 0,
    "erreursPlateau": [],
    "reseauxPassages": [
-    4,
+    3,
+    2,
     2,
     2,
     2,
@@ -1450,56 +1486,71 @@
    "reseauxEconomes": [
     2,
     2,
+    3,
     2,
     2,
     2,
-    4
+    2
    ],
    "apparitionsDansReseaux": 8,
-   "contactVertRouge": 2,
+   "contactVertRouge": 1,
    "rythme": {
-    "zones": 19,
+    "zones": 29,
     "distMax": 3,
     "repartition": {
-     "1": 38,
-     "2": 20,
-     "3": 7
+     "1": 39,
+     "2": 14,
+     "3": 2
     },
     "injoignables": 0,
-    "chaineMax": 3,
+    "chaineMax": 2,
     "chaine": [
      "J1,1",
-     "1,1:c1",
-     "1,1:r",
-     "1,1:c3",
-     "J2,2"
+     "0,0:c1",
+     "0,0:r",
+     "0,0:a"
     ],
     "casesPassage": [
      "1,0:a",
+     "3,2:r",
+     "3,0:a",
      "2,1:r",
-     "2,0:a",
-     "4,2:a",
      "0,1:a",
-     "1,2:r",
-     "0,2:a",
-     "2,3:s",
+     "0,3:a",
+     "2,2:r",
+     "4,2:a",
+     "3,1:r",
      "4,3:a",
      "3,4:a",
-     "2,4:a",
+     "1,4:a",
+     "2,3:r",
      "3,3:r"
     ],
+    "casesRaccourci": [
+     "0,0:a",
+     "1,0:a",
+     "0,1:a",
+     "4,0:a",
+     "4,1:a",
+     "3,0:a",
+     "0,4:a",
+     "0,3:a",
+     "1,4:a",
+     "4,4:a",
+     "3,4:a",
+     "4,3:a",
+     "2,0:a",
+     "0,2:a",
+     "4,2:a",
+     "2,4:a"
+    ],
     "plusLoin": [
-     "4,4:c1",
-     "3,1:c3",
-     "2,2:c4",
-     "1,3:c3",
-     "J4,2",
-     "J1,3",
-     "J3,3"
+     "1,1:c1",
+     "1,3:c3"
     ]
    },
    "rythmeLarge": {
-    "chaineMax": 3,
+    "chaineMax": 2,
     "distMax": 3
    },
    "acces": {
@@ -1508,14 +1559,29 @@
      "rouge": 10
     },
     "ecart": 0,
-    "contacts": 2,
+    "contacts": 1,
     "chemins": {
-     "vert": 6,
+     "vert": 7,
      "rouge": 6
     },
-    "ecartChemins": 0
+    "ecartChemins": 1
    },
-   "sMedianPlacements": 0,
+   "moities": {
+    "tuiles": {
+     "vert": 27,
+     "rouge": 27,
+     "neutre": 14
+    },
+    "jonctions": {
+     "vert": 2,
+     "rouge": 2,
+     "milieu": 5
+    },
+    "vert": 29,
+    "rouge": 29,
+    "ecart": 0
+   },
+   "sMedianPlacements": 1,
    "placementsAdmissibles": 1,
    "partCinqContreDeux": 0,
    "document": {
@@ -1557,7 +1623,7 @@
       "rot": 0
      },
      {
-      "modeleId": "B1",
+      "modeleId": "B7",
       "col": 3,
       "lig": 0,
       "rot": 0
@@ -1620,52 +1686,52 @@
       "modeleId": "P5",
       "col": 1,
       "lig": 1,
-      "rot": 0
+      "rot": 2
      },
      {
       "modeleId": "U1",
       "col": 2,
       "lig": 1,
-      "rot": 2
-     },
-     {
-      "modeleId": "P2",
-      "col": 3,
-      "lig": 1,
       "rot": 0
-     },
-     {
-      "modeleId": "U1",
-      "col": 1,
-      "lig": 2,
-      "rot": 0
-     },
-     {
-      "modeleId": "P3",
-      "col": 2,
-      "lig": 2,
-      "rot": 3
      },
      {
       "modeleId": "U1",
       "col": 3,
-      "lig": 2,
-      "rot": 2
-     },
-     {
-      "modeleId": "U1",
-      "col": 1,
-      "lig": 3,
-      "rot": 2
+      "lig": 1,
+      "rot": 1
      },
      {
       "modeleId": "P3",
-      "col": 2,
-      "lig": 3,
+      "col": 1,
+      "lig": 2,
       "rot": 1
      },
      {
       "modeleId": "P1",
+      "col": 2,
+      "lig": 2,
+      "rot": 2
+     },
+     {
+      "modeleId": "U1",
+      "col": 3,
+      "lig": 2,
+      "rot": 2
+     },
+     {
+      "modeleId": "P5",
+      "col": 1,
+      "lig": 3,
+      "rot": 3
+     },
+     {
+      "modeleId": "U1",
+      "col": 2,
+      "lig": 3,
+      "rot": 2
+     },
+     {
+      "modeleId": "U1",
       "col": 3,
       "lig": 3,
       "rot": 3
@@ -1683,13 +1749,13 @@
       "type": "capture"
      },
      {
-      "i": 2,
+      "i": 3,
       "j": 2,
       "type": "capture"
      },
      {
       "i": 3,
-      "j": 2,
+      "j": 3,
       "type": "capture"
      },
      {
@@ -1703,7 +1769,7 @@
       "type": "capture"
      },
      {
-      "i": 2,
+      "i": 3,
       "j": 4,
       "type": "capture"
      }
@@ -1713,44 +1779,44 @@
   "5x5-B": {
    "tuiles": {
     "K2": 4,
-    "B1": 4,
     "B7": 8,
-    "P1": 2,
-    "U1": 2,
+    "B1": 4,
     "P5": 3,
-    "P3": 2
+    "P2": 2,
+    "P1": 2,
+    "U1": 2
    },
    "cases": 78,
    "casesTuiles": 69,
    "jonctionsCases": 9,
    "ports": {
-    "1,1": 3,
+    "1,1": 2,
     "2,1": 2,
-    "3,1": 2,
+    "3,1": 3,
     "4,1": 3,
     "1,2": 3,
     "2,2": 2,
-    "3,2": 3,
-    "4,2": 2,
-    "1,3": 2,
-    "2,3": 3,
+    "3,2": 2,
+    "4,2": 3,
+    "1,3": 3,
+    "2,3": 2,
     "3,3": 2,
     "4,3": 3,
     "1,4": 3,
-    "2,4": 2,
+    "2,4": 3,
     "3,4": 2,
-    "4,4": 3
+    "4,4": 2
    },
    "portsMin": 2,
    "portsTotal": 40,
    "villes": [
-    "(1,1)",
+    "(3,1)",
     "(4,1)",
     "(1,2)",
-    "(3,2)",
-    "(2,3)",
+    "(4,2)",
+    "(1,3)",
     "(1,4)",
-    "(4,4)"
+    "(2,4)"
    ],
    "villesPorts": [
     3,
@@ -1767,21 +1833,21 @@
    "S": 0,
    "ecartMax7": 0,
    "partage": {
-    "1": 2,
-    "2": 2,
-    "egalite": 3
+    "1": 3,
+    "2": 3,
+    "egalite": 1
    },
    "cinqContreDeux": false,
    "tempo": {
     "1": {
      "3": 5,
-     "4": 7,
-     "5": 7
+     "4": 5,
+     "5": 5
     },
     "2": {
      "3": 5,
-     "4": 7,
-     "5": 7
+     "4": 5,
+     "5": 5
     }
    },
    "premiereVille": {
@@ -1793,20 +1859,20 @@
     "1": [
      2,
      2,
+     2,
      3,
      3,
-     3,
-     4,
-     4
+     6,
+     6
     ],
     "2": [
      2,
      2,
+     2,
      3,
      3,
-     3,
-     4,
-     4
+     6,
+     6
     ]
    },
    "blocages": [],
@@ -1815,10 +1881,6 @@
    "raccordsMorts": 0,
    "erreursPlateau": [],
    "reseauxPassages": [
-    3,
-    3,
-    2,
-    2,
     2,
     2,
     2,
@@ -1828,88 +1890,93 @@
     2,
     2,
     2,
-    3,
-    3,
-    2,
-    2,
     2
    ],
-   "apparitionsDansReseaux": 12,
+   "apparitionsDansReseaux": 6,
    "contactVertRouge": 2,
    "rythme": {
-    "zones": 23,
-    "distMax": 2,
+    "zones": 25,
+    "distMax": 4,
     "repartition": {
-     "1": 43,
-     "2": 19
+     "1": 37,
+     "2": 14,
+     "3": 7,
+     "4": 2
     },
     "injoignables": 0,
-    "chaineMax": 3,
+    "chaineMax": 2,
     "chaine": [
      "J4,1",
-     "3,1:c3",
-     "3,1:r",
-     "3,1:c1",
-     "J3,2"
+     "4,0:c1",
+     "4,0:r",
+     "4,0:a"
     ],
     "casesPassage": [
      "1,0:a",
      "0,1:a",
-     "2,0:a",
-     "1,1:r",
-     "3,0:a",
-     "2,1:r",
      "4,1:a",
-     "4,2:a",
-     "2,3:r",
-     "0,2:a",
+     "1,2:r",
      "0,3:a",
+     "3,2:r",
      "4,3:a",
-     "3,4:a",
+     "3,4:a"
+    ],
+    "casesRaccourci": [
+     "0,0:a",
+     "1,0:a",
+     "0,1:a",
+     "4,0:a",
+     "4,1:a",
+     "3,0:a",
+     "0,4:a",
+     "0,3:a",
      "1,4:a",
-     "2,4:a",
-     "3,3:r"
+     "4,4:a",
+     "3,4:a",
+     "4,3:a",
+     "2,0:a",
+     "0,2:a",
+     "4,2:a",
+     "2,4:a"
     ],
     "plusLoin": [
-     "0,0:r",
-     "4,0:r",
-     "0,4:r",
-     "4,4:r",
-     "3,1:r",
-     "1,2:c4",
      "2,2:r",
-     "3,2:c4",
-     "3,2:c3",
-     "1,3:r",
-     "J2,1",
-     "J3,1",
-     "J2,2",
-     "J4,2",
-     "J1,3",
-     "J3,3",
-     "J4,3",
-     "J2,4",
-     "J3,4"
+     "3,3:r"
     ]
    },
    "rythmeLarge": {
-    "chaineMax": 3,
-    "distMax": 2
+    "chaineMax": 2,
+    "distMax": 4
    },
    "acces": {
     "portes": {
-     "vert": 9,
-     "rouge": 9
+     "vert": 7,
+     "rouge": 7
     },
     "ecart": 0,
-    "contacts": 2,
+    "contacts": 0,
     "chemins": {
      "vert": 6,
      "rouge": 6
     },
     "ecartChemins": 0
    },
-   "sMedianPlacements": 0,
+   "moities": {
+    "tuiles": {
+     "vert": 26,
+     "rouge": 26,
+     "neutre": 17
+    },
+    "jonctions": {
+     "vert": 2,
+     "rouge": 2,
+     "milieu": 5
+    },
+    "vert": 28,
+    "rouge": 28,
+    "ecart": 0
+   },
+   "sMedianPlacements": 1,
    "placementsAdmissibles": 4,
    "partCinqContreDeux": 0,
    "document": {
@@ -1939,7 +2006,7 @@
       "rot": 2
      },
      {
-      "modeleId": "B1",
+      "modeleId": "B7",
       "col": 1,
       "lig": 0,
       "rot": 0
@@ -1951,7 +2018,7 @@
       "rot": 0
      },
      {
-      "modeleId": "B7",
+      "modeleId": "B1",
       "col": 3,
       "lig": 0,
       "rot": 0
@@ -1993,81 +2060,81 @@
       "rot": 1
      },
      {
-      "modeleId": "B7",
-      "col": 1,
-      "lig": 4,
-      "rot": 2
-     },
-     {
-      "modeleId": "B7",
-      "col": 2,
-      "lig": 4,
-      "rot": 2
-     },
-     {
       "modeleId": "B1",
+      "col": 1,
+      "lig": 4,
+      "rot": 2
+     },
+     {
+      "modeleId": "B7",
+      "col": 2,
+      "lig": 4,
+      "rot": 2
+     },
+     {
+      "modeleId": "B7",
       "col": 3,
       "lig": 4,
       "rot": 2
      },
      {
-      "modeleId": "P1",
-      "col": 1,
-      "lig": 1,
-      "rot": 1
-     },
-     {
-      "modeleId": "U1",
-      "col": 2,
-      "lig": 1,
-      "rot": 1
-     },
-     {
       "modeleId": "P5",
-      "col": 3,
+      "col": 1,
       "lig": 1,
       "rot": 3
      },
      {
-      "modeleId": "P3",
-      "col": 1,
-      "lig": 2,
-      "rot": 2
-     },
-     {
-      "modeleId": "P5",
+      "modeleId": "P2",
       "col": 2,
-      "lig": 2,
-      "rot": 1
-     },
-     {
-      "modeleId": "P3",
-      "col": 3,
-      "lig": 2,
+      "lig": 1,
       "rot": 0
-     },
-     {
-      "modeleId": "P5",
-      "col": 1,
-      "lig": 3,
-      "rot": 1
-     },
-     {
-      "modeleId": "U1",
-      "col": 2,
-      "lig": 3,
-      "rot": 3
      },
      {
       "modeleId": "P1",
       "col": 3,
-      "lig": 3,
+      "lig": 1,
       "rot": 3
+     },
+     {
+      "modeleId": "U1",
+      "col": 1,
+      "lig": 2,
+      "rot": 3
+     },
+     {
+      "modeleId": "P5",
+      "col": 2,
+      "lig": 2,
+      "rot": 2
+     },
+     {
+      "modeleId": "U1",
+      "col": 3,
+      "lig": 2,
+      "rot": 1
+     },
+     {
+      "modeleId": "P1",
+      "col": 1,
+      "lig": 3,
+      "rot": 1
+     },
+     {
+      "modeleId": "P2",
+      "col": 2,
+      "lig": 3,
+      "rot": 2
+     },
+     {
+      "modeleId": "P5",
+      "col": 3,
+      "lig": 3,
+      "rot": 1
      }
     ],
     "jetons": [
      {
-      "i": 1,
+      "i": 3,
       "j": 1,
       "type": "capture"
      },
@@ -2082,12 +2149,12 @@
       "type": "capture"
      },
      {
-      "i": 3,
+      "i": 4,
       "j": 2,
       "type": "capture"
      },
      {
-      "i": 2,
+      "i": 1,
       "j": 3,
       "type": "capture"
      },
@@ -2097,7 +2164,7 @@
       "type": "capture"
      },
      {
-      "i": 4,
+      "i": 2,
       "j": 4,
       "type": "capture"
      }

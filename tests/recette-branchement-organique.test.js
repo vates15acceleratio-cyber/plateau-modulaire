@@ -707,11 +707,9 @@ test('export du jeu complet : après acceptation du nouveau catalogue, le jeu ex
   }
 });
 
-/* ======================================== défauts constatés (tests sautés) ======================================== */
+/* ======================================== défaut corrigé (docs/49) ======================================== */
 
-test('cases par moitié : une jonction sans tuile autour n\'est pas une case (même compte que le compteur « Cases » sur un plateau partiel)', {
-  skip: 'défaut : src/graphe.js:784 casesParMoitie compte toute jonction sans ville, même sans tuile autour (9 en 4×4 sur un plateau vide) ; src/controles.js:195-198 compteursDuPlateau ne compte que les jonctions entourées de 4 tuiles ; le rapport d\'équilibre affiche « vert 3, rouge 3 (égales) » sur un plateau vide'
-}, () => {
+test('cases par moitié : une jonction sans tuile autour n\'est pas une case (même compte que le compteur « Cases » sur un plateau partiel)', () => {
   require('../src/controles.js');
   for (const g of ['4x4', '5x5']) {
     const doc = plateauGenere(g, 0);

@@ -454,7 +454,7 @@ test('4×4 : mêmes plateaux, mêmes rejets, mêmes scores à graine donnée (20
       assert.ok(!('jonction_ports' in r.rejets) && !('b1' in r.score), 'aucune clé propre au 5×5 en 4×4');
     }
   }
-  const d = GEN.generer(CAT.nouveauDocument('4x4'), { graine: 'defaut' });
+  const d = GEN.generer(CAT.nouveauDocument('4x4'), { graine: 'defaut', jonctionsVariees: false }); // rangée centrale : le défaut est « variées » depuis docs/48
   obtenues.push(sha([d.doc.plateau, d.essais, d.rejets, d.rapport]));
   assert.deepStrictEqual(obtenues, EMPREINTES_4X4);
 });

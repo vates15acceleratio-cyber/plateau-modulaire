@@ -185,7 +185,10 @@ test('tolérance : S du plateau rendu ≤ Smin + tolérance (1 par défaut, 0 = 
   }
 });
 
-test('temps : 200 candidats en moins de 5 s sous Node (4×4 et 5×5)', () => {
+// Limite portée de 5 s à 12 s (docs/49) : garde contre un gel ou une régression d'un facteur 3, pas une mesure de performance. L'affinage du
+// rythme et l'orientation des centrales ont triplé le coût annoncé dans docs/34 (le 5×5 prend 4 à 4,5 s seul), et la suite lance ses fichiers
+// de test en parallèle sur tous les cœurs (le 5×5 monte alors à 6 à 7 s, plus encore avec le calcul de stock réparti sur des fils).
+test('temps : 200 candidats en moins de 12 s sous Node (4×4 et 5×5)', () => {
   for (const grille of ['4x4', '5x5']) {
     const t0 = Date.now();
     const r = GEN.generer(docExemples(grille), { graine: 'chrono' });
@@ -193,7 +196,7 @@ test('temps : 200 candidats en moins de 5 s sous Node (4×4 et 5×5)', () => {
     assert.ok(r.ok, r.raison);
     assert.strictEqual(r.candidats, 200);
     console.log(`# 200 candidats (${grille}) : ${ms} ms, ${r.essais} essais`);
-    assert.ok(ms < 5000, ms + ' ms');
+    assert.ok(ms < 12000, ms + ' ms');
   }
 });
 
@@ -339,13 +342,13 @@ test('jonctions-cases : 3 paires de la rangée centrale par défaut, 12 en mode 
   assert.deepStrictEqual(GEN.pairesJonctionsCases(F5, true), p5, 'l\'option « variées » ne change rien en 5×5');
 });
 
-test('générateur par défaut : jonctions-cases dans la rangée centrale et aucun « 5 contre 2 » sur 200 plateaux du catalogue', () => {
+test('option « jonctions variées » décochée : jonctions-cases dans la rangée centrale et aucun « 5 contre 2 » sur 200 plateaux du catalogue', () => {
   const CAT = PM.catalogue;
   let essais = 0, cinq = 0, ok = 0;
   const vues = new Set();
   for (let k = 0; k < 200; k++) {
     // un seul candidat par graine : les rejets comptent les tirages avant tout filtrage par le critère
-    const r = GEN.generer(CAT.nouveauDocument(), { graine: 'defaut-' + k, candidats: 1, essaisMax: 1 });
+    const r = GEN.generer(CAT.nouveauDocument(), { graine: 'defaut-' + k, candidats: 1, essaisMax: 1, jonctionsVariees: false });
     essais += r.essais;
     // « 5 contre 2 » est un blocage : l'évaluation le range sous « desequilibre » (cinq_contre_deux n'est pas atteint)
     cinq += r.rejets.desequilibre + r.rejets.cinq_contre_deux;
@@ -355,6 +358,31 @@ test('générateur par défaut : jonctions-cases dans la rangée centrale et auc
   assert.strictEqual(cinq, 0, '« 5 contre 2 » sur ' + essais + ' tirages');
   assert.ok(ok >= 150, 'plateaux acceptés : ' + ok);
   assert.strictEqual(vues.size, 3, 'les 3 paires sont tirées : ' + [...vues]);
+});
+
+test('générateur par défaut (docs/18, 2026-10-18) : « jonctions variées » (12 paires équilibrées), identique à l’option true ; seul false revient à la rangée centrale', () => {
+  const CAT = PM.catalogue;
+  const vues = new Set();
+  let cinq = 0, ok = 0;
+  for (let k = 0; k < 200; k++) {
+    const r = GEN.generer(CAT.nouveauDocument(), { graine: 'defaut-' + k, candidats: 1, essaisMax: 1 });
+    cinq += r.rejets.desequilibre + r.rejets.cinq_contre_deux;
+    if (r.ok) {
+      ok++;
+      const c = jonctionsCases(r.doc);
+      assert.strictEqual(c.filter((x) => x.j === 1).length, c.filter((x) => x.j === 3).length, cle(c) + ' : autant de jonctions-cases de chaque côté');
+      vues.add(cle(c));
+    }
+  }
+  assert.ok(ok >= 150, 'plateaux acceptés : ' + ok);
+  assert.strictEqual(cinq, 0);
+  assert.ok(vues.size > 3 && vues.size <= 12, 'placements tirés : ' + vues.size);
+  for (const graine of ['d0', 'd1', 'd2']) {
+    const defaut = GEN.generer(CAT.nouveauDocument(), { graine, candidats: 20 });
+    assert.deepStrictEqual(defaut.doc.plateau, GEN.generer(CAT.nouveauDocument(), { graine, candidats: 20, jonctionsVariees: true }).doc.plateau, graine);
+    assert.ok(defaut.rapport.some((t) => t.includes('jonctions variées')), graine);
+    for (const non of [false]) assert.ok(jonctionsCases(GEN.generer(CAT.nouveauDocument(), { graine, candidats: 20, jonctionsVariees: non }).doc).every((x) => x.j === 2), graine);
+  }
 });
 
 test('jonctions-cases : le test précédent n’est pas vide : deux jonctions-cases d’une même rangée extérieure donnent des « 5 contre 2 »', () => {

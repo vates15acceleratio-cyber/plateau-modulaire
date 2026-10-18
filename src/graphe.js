@@ -26,14 +26,22 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var G = PM.geometrie;
   var M = PM.modele;
 
+  /** Seuil d'alerte de S du format (« 4x4 » ou « 5x5 ») ; le rejet du générateur reste SEUIL_S. */
+  function seuilS(formatId) { return SEUIL_S_PAR_FORMAT[formatId] || SEUIL_S; }
+  /** Seuil à partir duquel S est une simple information (jusqu'au seuil d'alerte exclu). */
+  function seuilSInformation(formatId) { return SEUIL_S_INFORMATION_PAR_FORMAT[formatId] || SEUIL_S_INFORMATION_PAR_FORMAT['4x4']; }
+
   /** Nombre de villes et seuils (constantes uniques, lues aussi par controles.js et generateur.js). */
   var NB_VILLES = 7;
   var RANGS_COMPARES = 4;       // ancien D6 : écart aux rangs 1 à 4 (champ ecartRang, information seulement)
   var SEUIL_ECART = 2;          // alerte si l'écart dépasse 2 à un rang de 1 à 7 (docs/archives/16 b)
   var SEUIL_CINQ_CONTRE_DEUX = 5;
   var SEUIL_APPARITION_LOINTAINE = 7;
-  var SEUIL_S = 5;                 // constante unique pour les deux formats, lue par le générateur et l'interface (docs/36 : S >= 5 définitif)
-  var SEUIL_S_INFORMATION = 4;     // S = 4 : simple information, sans alerte (docs/22)
+  var SEUIL_S = 5;                 // seuil de REJET du générateur, le même dans les deux formats (docs/48 : un plateau généré reste à S <= 1)
+  /** Seuils d'alerte et d'information de S, propres à chaque format (docs/18, réponse de 2026-10-18 ; docs/48 § 4) : 4×4 alerte dès 5, information à 4 ;
+   *  5×5 alerte dès 7, information à 5 ou 6 (le 95e centile de la pose libre y est à 7). */
+  var SEUIL_S_PAR_FORMAT = Object.freeze({ '4x4': 5, '5x5': 7 });
+  var SEUIL_S_INFORMATION_PAR_FORMAT = Object.freeze({ '4x4': 4, '5x5': 5 });
   var PORTS_VILLE_MIN = 3;         // 5×5 : ports minimum d'une jonction qui porte une ville ; en dessous, information seulement (docs/36) ; lu par le générateur et les outils
   var PORTS_JONCTION_MIN = G.MIN_PORTS_JONCTION; // ports minimum de toute jonction intérieure (condition ferme du générateur 5×5)
   /** Villes du 5×5 en « 2-3-2 » (docs/18) : groupes de rangées de jonctions et nombre de villes dans chaque groupe. */
@@ -305,7 +313,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    *  - inaccessibles : {1: [{i, j}], 2: [{i, j}]} ; apparitions : {1, 2} (nombre de cases d'apparition) ;
    *  - blocages : [{code, message}] (plateau très déséquilibré : « 5 contre 2 », écart > SEUIL_BLOCAGE_ECART) ;
    *    tresDesequilibre : blocages non vide ;
-   *  - aSurveiller : S >= SEUIL_S (5) ; sInformation : S = 4, information sans alerte (docs/22) ;
+   *  - aSurveiller : S >= seuilS(format) (4×4 : 5 ; 5×5 : 7) ; sInformation : S de seuilSInformation(format) à l'alerte exclue (4×4 : 4 ; 5×5 : 5 ou 6), sans alerte ;
    *  - informations : [{code, message}] (5×5 : ville sur une jonction à moins de 3 ports, jamais une alerte) ;
    *  - alertes : [{code, message}] ; lacunes : [texte] ; complet : booléen (7 villes, au moins une case
    *    d'apparition par camp, toutes les tuiles posées avec un modèle présent dans la bibliothèque) ; partiel : !complet.
@@ -383,7 +391,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var premiereVille = { 1: D[1].length ? D[1][0] : null, 2: D[2].length ? D[2][0] : null, ecart: null };
     if (premiereVille[1] !== null && premiereVille[2] !== null) premiereVille.ecart = Math.abs(premiereVille[1] - premiereVille[2]);
     var premiereEgale = premiereVille.ecart === 0;
-    var cinqContreDeux = villes.length === nbVilles && Math.max(partage[1], partage[2]) >= SEUIL_CINQ_CONTRE_DEUX;
+    var cinqContreDeux = villes.length === nbVilles && avecAppar && Math.max(partage[1], partage[2]) >= SEUIL_CINQ_CONTRE_DEUX;
 
     var villesA4 = { 1: D[1].filter(function (x) { return x <= 4; }).length, 2: D[2].filter(function (x) { return x <= 4; }).length, ecart: null };
     villesA4.ecart = Math.abs(villesA4[1] - villesA4[2]);
@@ -392,6 +400,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var blocages = [], alertes = [], informations = [];
     var est5x5 = M.formatDuDocument(doc).id === '5x5';
     var conseil5x5 = est5x5 && conseil5x5Applicable(villes) ? CONSEIL_5X5 : '';
+    var sAlerte = seuilS(M.formatDuDocument(doc).id), sInfo = seuilSInformation(M.formatDuDocument(doc).id);
     if (est5x5) {
       villes.forEach(function (v) {
         if (v.ports < PORTS_VILLE_MIN) {
@@ -411,8 +420,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     } else if (ecartMax7 !== null && ecartMax7 > SEUIL_ECART) {
       alertes.push({ code: 'ecart_rang_etendu', message: 'Un rang de villes (de 1 à 7) est à ' + ecartMax7 + ' pas d\'écart entre les deux joueurs (plus de ' + SEUIL_ECART + ').' });
     }
-    if (S !== null && S >= SEUIL_S) {
-      alertes.push({ code: 'score_s', message: 'Score S = ' + S + ' (somme des écarts sur les 7 rangs) : plateau à surveiller (à partir de ' + SEUIL_S + ').' + (cinqContreDeux ? '' : conseil5x5) });
+    if (S !== null && S >= sAlerte) {
+      alertes.push({ code: 'score_s', message: 'Score S = ' + S + ' (somme des écarts sur les 7 rangs) : plateau à surveiller (à partir de ' + sAlerte + ').' + (cinqContreDeux ? '' : conseil5x5) });
     }
     if (premiereVille.ecart !== null && premiereVille.ecart !== 0) {
       alertes.push({ code: 'premiere_ville_inegale', message: 'La première ville est à ' + premiereVille[1] + ' pas du joueur vert et à ' + premiereVille[2] + ' pas du joueur rouge (elle devrait être à la même distance).' });
@@ -436,7 +445,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
     return {
       villes: villes.map(function (v) { return { id: v.id, i: v.i, j: v.j }; }),
-      D: D, parRang: parRang, ecartRang: ecartRang, S: S, ecartMax7: ecartMax7, aSurveiller: S !== null && S >= SEUIL_S, sInformation: S !== null && S >= SEUIL_S_INFORMATION && S < SEUIL_S, villesA4: villesA4, partage: partage, alertes: alertes, informations: informations, tempo: tempo,
+      D: D, parRang: parRang, ecartRang: ecartRang, S: S, ecartMax7: ecartMax7, aSurveiller: S !== null && S >= sAlerte, sInformation: S !== null && S >= sInfo && S < sAlerte, villesA4: villesA4, partage: partage, alertes: alertes, informations: informations, tempo: tempo,
       cinqContreDeux: cinqContreDeux, premiereEgale: premiereEgale, blocages: blocages, tresDesequilibre: blocages.length > 0,
       apparitions: { 1: g.apparitions[1].length, 2: g.apparitions[2].length },
       premiereVille: premiereVille, inaccessibles: inaccessibles, lacunes: lacunes,
@@ -781,7 +790,12 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function casesParMoitie(doc, g) {
     var F = M.formatDuDocument(doc), tuiles = { vert: 0, rouge: 0, neutre: 0 }, jonctions = { vert: 0, rouge: 0, milieu: 0 };
     g.cases.forEach(function (c, id) { var t = tuileDuNoeud(id), camp = t && F.campCellule(t.col, t.lig); tuiles[camp || 'neutre']++; });
-    g.jonctions.forEach(function (jn) { if (jn.type !== 'ville') jonctions[zoneDuNoeud(jn.id, F)]++; });
+    // comme compteursDuPlateau (controles.js) : une jonction-case ne compte que si ses 4 tuiles sont posées (docs/49)
+    var posees = doc && doc.plateau && Array.isArray(doc.plateau.tuiles) ? doc.plateau.tuiles : [];
+    function tuilePosee(col, lig) { return posees.some(function (t) { return t && t.col === col && t.lig === lig; }); }
+    g.jonctions.forEach(function (jn) {
+      if (jn.type !== 'ville' && tuilePosee(jn.i - 1, jn.j - 1) && tuilePosee(jn.i, jn.j - 1) && tuilePosee(jn.i - 1, jn.j) && tuilePosee(jn.i, jn.j)) jonctions[zoneDuNoeud(jn.id, F)]++;
+    });
     var vert = tuiles.vert + jonctions.vert, rouge = tuiles.rouge + jonctions.rouge;
     return { tuiles: tuiles, jonctions: jonctions, vert: vert, rouge: rouge, ecart: vert - rouge };
   }
@@ -796,7 +810,10 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     SEUIL_ECART: SEUIL_ECART,
     SEUIL_CINQ_CONTRE_DEUX: SEUIL_CINQ_CONTRE_DEUX,
     SEUIL_S: SEUIL_S,
-    SEUIL_S_INFORMATION: SEUIL_S_INFORMATION,
+    SEUIL_S_PAR_FORMAT: SEUIL_S_PAR_FORMAT,
+    SEUIL_S_INFORMATION_PAR_FORMAT: SEUIL_S_INFORMATION_PAR_FORMAT,
+    seuilS: seuilS,
+    seuilSInformation: seuilSInformation,
     SEUIL_BLOCAGE_ECART: SEUIL_BLOCAGE_ECART,
     CINQ_CONTRE_DEUX_BLOQUANT: CINQ_CONTRE_DEUX_BLOQUANT,
     NOM_JOUEUR: NOM_JOUEUR,

@@ -19,8 +19,9 @@
  *  - 5×5 : 78 à 81 cases (CASES_CIBLE_5X5, docs/18 réponse 1) : le nombre de B1 est choisi pour tenir la cible, sans dépasser ses
  *    exemplaires, de préférence de façon que les autres bords tiennent dans les leurs ; B1 d'abord sur les bords de la rangée neutre ;
  *    villes en 2-3-2 (2 en j = 1, 3 en j = 2 ou 3, 2 en j = 4) sur des jonctions à 3 ports au moins ;
- *  - 4×4 : 7 villes, les 2 jonctions-cases dans la rangée centrale (aucun « 5 contre 2 », docs/22) ou, avec « jonctions variées »,
- *    une en j = 1 et une en j = 3 (cases égales entre moitiés) ;
+ *  - 4×4 : 7 villes ; par défaut (« jonctions variées », docs/18 réponse 3 de 2026-10-18) les 2 jonctions-cases forment l'une des 12 paires
+ *    équilibrées (une en j = 1 et une en j = 3, ou les deux en j = 2 : cases égales entre moitiés) ; option décochée : rangée centrale
+ *    seulement (3 paires, aucun « 5 contre 2 », docs/22) ;
  *  - villes non traversables (règle du jeu) ;
  *  - REJETS : validerPlateau avec erreur, graphe non connexe, camp sans case d'apparition, deux villes à moins de 3 cases (jamais
  *    produit, docs/18), ville inaccessible, plateau très déséquilibré (« 5 contre 2 », écart > SEUIL_BLOCAGE_ECART), écart > 2 à un
@@ -215,7 +216,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     };
   }
 
-  /** Seuils propres à chaque format (docs/28 § 6) : en 5×5, S >= PM.graphe.SEUIL_S rejette le candidat ; en 4×4, S n'est qu'un classement. */
+  /** Rejet par S propre à chaque format (docs/28 § 6) : en 5×5, S >= PM.graphe.SEUIL_S (5, seuil de rejet, distinct du seuil d'alerte par format de PM.graphe.seuilS) rejette le candidat ; en 4×4, S n'est qu'un classement. */
   var REJET_S = { '4x4': false, '5x5': true };
 
   /**
@@ -477,6 +478,11 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   function clePlusPetite(a, b) {
     for (var k = 0; k < a.length; k++) if (a[k] !== b[k]) return a[k] < b[k];
     return false;
+  }
+
+  /** Nombre de points d'articulation (case, ville ou jonction dont le retrait coupe une ville) pour les deux joueurs, sur le graphe où les villes ne se traversent pas. */
+  function pointsArticulation(g) {
+    return GR.goulets(g, 1).articulations.length + GR.goulets(g, 2).articulations.length;
   }
 
   /** Pénalité secondaire d'un candidat (raccords morts au-delà de 2, jonctions mal reliées, apparition à moins de 2 sorties, 5×5 sans ville équidistante). */
@@ -988,7 +994,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
    *  - candidats (défaut 200, borné à 1000) : candidats valides à départager ; essaisMax (défaut candidats × 5, borné) ;
    *    une valeur qui n'est pas un nombre fini d'au moins 1 (texte, NaN, Infinity, négatif, 0) donne la valeur par défaut ;
    *  - tolerance (défaut 1) : bons candidats = S ≤ Smin + tolérance ;
-   *  - jonctionsVariees (défaut false) : 4×4, voir pairesJonctionsCases (par défaut, rangée centrale) ;
+    *  - jonctionsVariees (défaut true ; seul `false` choisit la rangée centrale) : 4×4, voir pairesJonctionsCases (12 paires équilibrées ; false : les 3 paires de la rangée centrale) ;
    *  - affinage (défaut true) : false = un bon candidat tiré au hasard, sans affinage du rythme ni des accès (mesures de l'effet).
    * Renvoie { ok, doc, graine, essais, candidats, score, rapport: [texte], raison, rejets }.
    */
@@ -1027,13 +1033,14 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
 
     // Candidats
     var jonctions = jonctionsInterieures(F), modeles = doc.modeles;
-    var est5x5 = F.id === '5x5', ctx5 = null, paires = null;
+    var est5x5 = F.id === '5x5', ctx5 = null, paires = null, variees = false;
     if (est5x5) {
       Object.keys(LIBELLES_CAUSE_5X5).forEach(function (k) { rejets[k] = 0; });
       libelles = Object.assign({}, LIBELLES_CAUSE, LIBELLES_CAUSE_5X5);
       ctx5 = contexte5x5(doc, F, modelesDispo, cellules);
     } else {
-      paires = pairesJonctionsCases(F, options.jonctionsVariees === true);
+      variees = options.jonctionsVariees !== false;
+      paires = pairesJonctionsCases(F, variees);
     }
     var bons = [], essais = 0, tronques = 0, echecsStructurels = 0, dernierStructurel = null, abandon = null;
     var ctx4 = est5x5 ? null : contexte4x4(doc, F, modelesDispo, cellules);
@@ -1089,8 +1096,11 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     var finalistes = (affinage ? melanger(parmi, rng).slice(0, AFFINAGE_MAX) : [parmi[entier(rng, parmi.length)]]).map(function (x) {
       var a = affinage ? affiner(x, doc, F, Smin + tolerance, rng)
         : { tuiles: x.tuiles, ev: x.ev, penalite: x.pen, note: noteRythme({ version: doc.version, grille: F.id, modeles: doc.modeles, plateau: { tuiles: x.tuiles, jetons: x.jetons } }) };
-      return { tuiles: a.tuiles, jetons: x.jetons, ev: a.ev, raccords: a.penalite.raccords, malReliees: a.penalite.malReliees, S: a.ev.crit.S, note: a.note,
-        cle: [a.note.cle[0], Math.max(0, a.note.cle[1] - 1), a.note.cle[2]] };
+      // 5×5 (docs/18, réponse 2 de 2026-10-18) : préférence pour un plateau sans point d'articulation, calculée sur les finalistes seulement
+      // (coût de GR.goulets) ; clé = [chaîne au-delà de la cible, articulations, écart des portes au-delà de 1, chaîne]
+      var arts = est5x5 ? pointsArticulation(a.note.graphe) : 0;
+      return { tuiles: a.tuiles, jetons: x.jetons, ev: a.ev, raccords: a.penalite.raccords, malReliees: a.penalite.malReliees, S: a.ev.crit.S, note: a.note, articulations: arts,
+        cle: est5x5 ? [a.note.cle[0], arts, Math.max(0, a.note.cle[1] - 1), a.note.cle[2]] : [a.note.cle[0], Math.max(0, a.note.cle[1] - 1), a.note.cle[2]] };
     });
     var choisi = null, nbEgaux = 0;
     finalistes.forEach(function (x) {
@@ -1134,7 +1144,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
         ' ports au moins, aucune à moins de ' + MIN_PORTS_JONCTION_5X5 + ' ; ' + score.b1 + ' bord(s) B1.');
     } else {
       rapport.push('Villes ' + nomsVilles + ' ; les autres jonctions sont des cases chemin' +
-        (paires ? (options.jonctionsVariees === true ? ' (jonctions variées).' : ' (rangée centrale).') : '.'));
+        (paires ? (variees ? ' (jonctions variées).' : ' (rangée centrale).') : '.'));
     }
     rapport.push('Score S (somme des écarts sur les 7 rangs) : ' + crit.S + ' ; écart maximal : ' + crit.ecartMax + ' pas.');
     rapport.push('Villes plus proches du joueur vert : ' + crit.partage[1] + ', du joueur rouge : ' + crit.partage[2] + ', à égalité : ' + crit.partage.egalite + '.');
@@ -1193,7 +1203,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     var F = M.formatDuDocument(etat.doc());
     racine.appendChild(el(d, 'p', 'pm-generateur-explication',
       'Tire un plateau ' + F.GRILLE.colonnes + '×' + F.GRILLE.lignes + ' complet dans la bibliothèque (un modèle peut servir plusieurs fois, la variété est favorisée ; le poids du modèle, à défaut ses exemplaires, pèse dans le tirage) : 7 villes à 3 cases d\'écart au moins, ' +
-      'les autres jonctions restent des cases chemin' + (F.id === '4x4' ? ' (les deux jonctions-cases sont placées dans la rangée centrale, sauf option « jonctions variées »)' : ' (villes en 2-3-2 sur des jonctions à 3 ports au moins, 78 à 81 cases, centrales orientées pour couvrir les jonctions)') + ' ; ' +
+      'les autres jonctions restent des cases chemin' + (F.id === '4x4' ? ' (les deux jonctions-cases sont placées au mieux parmi 12 paires équilibrées, ou dans la rangée centrale si l’option « jonctions variées » est décochée)' : ' (villes en 2-3-2 sur des jonctions à 3 ports au moins, 78 à 81 cases, centrales orientées pour couvrir les jonctions)') + ' ; ' +
       'autant de cases dans la moitié verte que dans la moitié rouge ; centrales orientées selon les ports puis pour le rythme (au plus 3 cases d’affilée sans ville, passage ni raccourci, visé) et l’équilibre des accès au centre ; ' +
       'plateau équilibré tiré au hasard parmi les meilleurs candidats. ' +
       'La même graine redonne le même plateau.'));
@@ -1216,14 +1226,15 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     ligneGraine.appendChild(btnGraine);
     racine.appendChild(ligneGraine);
 
-    // Option « jonctions variées » (4×4 seulement : le 5×5 place ses villes en 2-3-2) : décochée, les jonctions-cases restent dans la rangée centrale
+    // Option « jonctions variées » (4×4 seulement : le 5×5 place ses villes en 2-3-2) : cochée par défaut (12 paires de jonctions-cases) ; décochée, elles restent dans la rangée centrale
     var caseVariees = null;
     if (F.id === '4x4') {
       var ligneVariees = el(d, 'p', 'pm-generateur-ligne');
       caseVariees = el(d, 'input', 'pm-generateur-variees');
       caseVariees.type = 'checkbox';
+      caseVariees.checked = true;
       caseVariees.id = 'pm-generateur-variees-' + n;
-      var labVariees = el(d, 'label', 'pm-generateur-libelle', 'Jonctions variées (les deux jonctions-cases peuvent sortir de la rangée centrale : une côté vert, une côté rouge, pour garder autant de cases de chaque côté)');
+      var labVariees = el(d, 'label', 'pm-generateur-libelle', 'Jonctions variées (les deux jonctions-cases peuvent sortir de la rangée centrale : une côté vert, une côté rouge, pour garder autant de cases de chaque côté ; décochée, elles restent dans la rangée centrale)');
       labVariees.setAttribute('for', caseVariees.id);
       ligneVariees.appendChild(caseVariees);
       ligneVariees.appendChild(labVariees);

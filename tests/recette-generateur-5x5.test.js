@@ -204,11 +204,11 @@ test('parcours à l’état : Nouveau 5×5 (vrai catalogue), Générer, Applique
   assert.deepStrictEqual(etat.doc().plateau, r.doc.plateau);
 });
 
-/* ---------- seuils identiques en 4×4 et en 5×5 (docs/36 § 1 et § 7) ---------- */
+/* ---------- seuils communs aux deux formats (docs/36 § 1 et § 7), sauf S d’alerte et d’information (docs/48 § 4) ---------- */
 
-test('seuils : mêmes constantes pour les deux formats (S 5, information S 4, écart 2, blocage 3, 5 contre 2)', () => {
+test('seuils : mêmes constantes pour les deux formats (rejet S 5, écart 2, blocage 3, 5 contre 2) ; seuils de S d’alerte et d’information propres à chaque format', () => {
   assert.strictEqual(GR.SEUIL_S, 5);
-  assert.strictEqual(GR.SEUIL_S_INFORMATION, 4);
+  assert.deepStrictEqual([GR.seuilS('4x4'), GR.seuilSInformation('4x4'), GR.seuilS('5x5'), GR.seuilSInformation('5x5')], [5, 4, 7, 5]);
   assert.strictEqual(GR.SEUIL_ECART, 2);
   assert.strictEqual(GR.SEUIL_BLOCAGE_ECART, 3);
   assert.strictEqual(GR.SEUIL_CINQ_CONTRE_DEUX, 5);
@@ -218,6 +218,7 @@ for (const [format, creer] of [['4x4', (k) => GEN.generer(doc4(), { graine: 'seu
   test('seuils ' + format + ' : chaque code d’équilibre apparaît si et seulement si son critère est franchi (1500 placements)', () => {
     const bases = []; for (let b = 0; b < 25; b++) bases.push(creer(b));
     const r = alea(format === '4x4' ? 4 : 5), n = format === '4x4' ? 4 : 5;
+    const sAlerte = format === '4x4' ? 5 : 7, sInfo = format === '4x4' ? 4 : 5; // seuils de S propres à chaque format (docs/18, docs/48)
     const vu = { score_s: 0, ecart_rang_etendu: 0, ecart_bloquant: 0, cinq_contre_deux: 0, sInfo: 0, quatreContreTrois: 0, aucun: 0 };
     for (let k = 0; k < 1500; k++) {
       const d = avecVilles(bases[k % bases.length], tirer(r, jonctions(n), 7)), e = GR.equilibre(d);
@@ -225,16 +226,16 @@ for (const [format, creer] of [['4x4', (k) => GEN.generer(doc4(), { graine: 'seu
       const codes = e.blocages.concat(e.alertes).map((a) => a.code);
       const has = (c) => codes.includes(c);
       const max = Math.max(e.partage[1], e.partage[2]);
-      assert.strictEqual(has('score_s'), e.S >= 5, format + ' S = ' + e.S);
-      assert.strictEqual(e.aSurveiller, e.S >= 5);
-      assert.strictEqual(e.sInformation, e.S === 4, format + ' S = ' + e.S);
+      assert.strictEqual(has('score_s'), e.S >= sAlerte, format + ' S = ' + e.S);
+      assert.strictEqual(e.aSurveiller, e.S >= sAlerte);
+      assert.strictEqual(e.sInformation, e.S >= sInfo && e.S < sAlerte, format + ' S = ' + e.S);
       assert.strictEqual(has('ecart_bloquant'), e.ecartMax7 > 3, format + ' écart ' + e.ecartMax7);
       assert.strictEqual(has('ecart_rang_etendu'), e.ecartMax7 > 2 && e.ecartMax7 <= 3, format + ' écart ' + e.ecartMax7);
       assert.strictEqual(has('cinq_contre_deux'), max >= 5, format + ' partage ' + e.partage[1] + '/' + e.partage[2]);
       assert.strictEqual(e.tresDesequilibre, has('cinq_contre_deux') || has('ecart_bloquant'));
       // « 5 contre 2 » et écart > 3 sont des blocages (erreur au panneau), pas des alertes
       e.blocages.forEach((b) => assert.ok(['cinq_contre_deux', 'ecart_bloquant'].includes(b.code)));
-      if (e.S >= 5) vu.score_s++; if (e.S === 4) vu.sInfo++;
+      if (e.S >= sAlerte) vu.score_s++; if (e.S >= sInfo && e.S < sAlerte) vu.sInfo++;
       if (e.ecartMax7 > 3) vu.ecart_bloquant++; else if (e.ecartMax7 > 2) vu.ecart_rang_etendu++;
       if (max >= 5) vu.cinq_contre_deux++;
       if (max === 4) { vu.quatreContreTrois++; if (!has('cinq_contre_deux')) assert.ok(true); }
@@ -254,7 +255,9 @@ function conseilAttendu(vs) {
   return vs.length === 7 && n(1) === 2 && n(4) === 2 && (n(2) === 3 || n(3) === 3);
 }
 
-const PLATEAU_CONSEIL = GEN.generer(doc5(), { graine: 'rec-conseil', candidats: 8 }).doc;
+// graine choisie pour que les genres de pose portent des alertes malgré le seuil S >= 7 du 5×5 (docs/48) : « rec-conseil-4 » donne des poses
+// 3 sur une rangée avec « 5 contre 2 » seul, avec S seul et sans alerte, et des poses 2 + 1 avec S seul
+const PLATEAU_CONSEIL = GEN.generer(doc5(), { graine: 'rec-conseil-4', candidats: 8 }).doc;
 
 /** Les 2016 placements 2-3-2 posés sur PLATEAU_CONSEIL, classés par genre d’alerte. */
 function classes() {
@@ -269,7 +272,7 @@ function classes() {
   return cl;
 }
 
-test('conseil 5×5 : présent aux messages « 5 contre 2 » et S ≥ 5 si et seulement si squelette 2-3-2 avec les 3 villes du milieu sur une rangée (2016 placements, panneau et rapport)', () => {
+test('conseil 5×5 : présent aux messages « 5 contre 2 » et S ≥ 7 si et seulement si squelette 2-3-2 avec les 3 villes du milieu sur une rangée (2016 placements, panneau et rapport)', () => {
   const cl = classes();
   const total = Object.values(cl).reduce((s, l) => s + l.length, 0);
   assert.strictEqual(total, 2016);
@@ -282,7 +285,7 @@ test('conseil 5×5 : présent aux messages « 5 contre 2 » et S ≥ 5 si et seu
   Object.keys(cl).forEach((k) => cl[k].forEach(({ vs, d, e }) => {
     const un = conseilAttendu(vs), txt = vs.map(cle).join(' ');
     // 1) moteur
-    // « 5 contre 2 » et S >= 5 ensemble : le conseil n’est écrit qu’une fois (au message « 5 contre 2 »)
+    // « 5 contre 2 » et S >= 7 ensemble : le conseil n’est écrit qu’une fois (au message « 5 contre 2 »)
     const aCinq = e.blocages.concat(e.alertes).some((a) => a.code === 'cinq_contre_deux');
     e.blocages.concat(e.alertes).forEach((a) => {
       const porteur = a.code === 'cinq_contre_deux' || a.code === 'score_s';
@@ -341,10 +344,10 @@ test('conseil 5×5 : variante 3 villes sur la rangée j = 3 aussi ; message à l
   if (alerte3) assert.ok(messagesInterface(alerte3.d).panneau.some((t) => t.includes(CONSEIL)));
 });
 
-test('conseil 5×5 : S ≥ 5 seul (sans 5 contre 2) le porte au panneau comme alerte, pas comme erreur', () => {
+test('conseil 5×5 : S ≥ 7 seul (sans 5 contre 2) le porte au panneau comme alerte, pas comme erreur', () => {
   const cl = classes();
   const c = (cl['une-rangee|S'] || []).concat(cl['une-rangee|cinqS'] || []).find(({ codes }) => codes.includes('score_s') && !codes.includes('cinq_contre_deux'));
-  assert.ok(c, 'aucune pose 3 sur une rangée avec S ≥ 5 seul sur ce plateau : ' + Object.keys(cl));
+  assert.ok(c, 'aucune pose 3 sur une rangée avec S ≥ 7 seul sur ce plateau : ' + Object.keys(cl));
   const p = CT.calculer(c.d);
   const al = p.alertes.find((x) => x.code === 'score_s');
   assert.ok(al && al.message.includes(CONSEIL), al && al.message);

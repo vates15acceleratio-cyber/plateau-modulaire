@@ -2,76 +2,65 @@
  "4x4 actuel (générateur)": {
   "plateaux": 200,
   "cases": {
-   "moyenne": 63.12,
-   "min": 58,
-   "max": 69,
+   "moyenne": 58.25,
+   "min": 56,
+   "max": 62,
    "repartition": {
-    "58": 1,
-    "59": 6,
-    "60": 14,
-    "61": 17,
-    "62": 31,
-    "63": 53,
-    "64": 31,
-    "65": 23,
-    "66": 18,
-    "67": 4,
-    "69": 2
+    "56": 30,
+    "58": 117,
+    "60": 51,
+    "62": 2
    }
   },
-  "portsParJonction": 3.82,
-  "portsTotalMoyen": 34.38,
-  "portsMinPire": 2,
+  "portsParJonction": 3.76,
+  "portsTotalMoyen": 33.8,
+  "portsMinPire": 3,
   "villesA3": {
    "moyenne": 7,
    "toutes7": "100 %"
   },
   "chaine": {
-   "moyenne": 5.24,
-   "pire": 7,
+   "moyenne": 2.83,
+   "pire": 3,
    "repartition": {
-    "4": 15,
-    "5": 127,
-    "6": 54,
-    "7": 4
+    "2": 34,
+    "3": 166
    },
-   "partAuPlus3": "0 %"
+   "partAuPlus3": "100 %"
   },
   "distMax": {
-   "moyenne": 4.76,
-   "pire": 5,
+   "moyenne": 2.01,
+   "pire": 3,
    "repartition": {
-    "4": 47,
-    "5": 153
+    "2": 199,
+    "3": 1
    }
   },
   "ecartVillesMin": 4,
   "S": {
-   "moyenne": 0.85,
-   "medianePlacements": 1.84
+   "moyenne": 0.41,
+   "medianePlacements": 1.61
   },
   "placementsAdmissibles": {
-   "moyenne": 32.78,
+   "moyenne": 36,
    "un": "0 %"
   },
-  "cinqContreDeuxPlacements": "3 %",
+  "cinqContreDeuxPlacements": "0 %",
   "accesPortes": {
-   "ecartAbsMoyen": 0.62,
-   "pire": 2,
-   "partAuPlus1": "95 %",
+   "ecartAbsMoyen": 0.49,
+   "pire": 1,
+   "partAuPlus1": "100 %",
    "repartitionEcart": {
-    "0": 87,
-    "1": 52,
-    "2": 4,
-    "-1": 51,
-    "-2": 6
+    "0": 103,
+    "1": 51,
+    "-1": 46
    },
-   "vertMoyen": 5.58,
-   "rougeMoyen": 5.59
+   "vertMoyen": 5.39,
+   "rougeMoyen": 5.36
   },
   "accesChemins": {
-   "ecartAbsMoyen": 0.03,
-   "pire": 1,
+   "ecartAbsMoyen": 0,
+   "pire": 0,
    "partAuPlus1": "100 %"
   },
   "tiragesRejetes": 0
@@ -101,52 +90,48 @@
    "toutes7": "100 %"
   },
   "chaine": {
-   "moyenne": 3.85,
-   "pire": 6,
+   "moyenne": 2.65,
+   "pire": 4,
    "repartition": {
-    "2": 1,
-    "3": 70,
-    "4": 90,
-    "5": 36,
-    "6": 3
+    "2": 73,
+    "3": 125,
+    "4": 2
    },
-   "partAuPlus3": "36 %"
+   "partAuPlus3": "99 %"
   },
   "distMax": {
-   "moyenne": 3.05,
-   "pire": 5,
+   "moyenne": 2.12,
+   "pire": 4,
    "repartition": {
-    "2": 48,
-    "3": 99,
-    "4": 49,
-    "5": 4
+    "2": 177,
+    "3": 22,
+    "4": 1
    }
   },
   "ecartVillesMin": 4,
   "S": {
-   "moyenne": 0.97,
-   "medianePlacements": 2.24
+   "moyenne": 0.67,
+   "medianePlacements": 2.19
   },
   "placementsAdmissibles": {
-   "moyenne": 35.41,
-   "un": "1 %"
+   "moyenne": 35.44,
+   "un": "0 %"
   },
   "cinqContreDeuxPlacements": "1 %",
   "accesPortes": {
-   "ecartAbsMoyen": 0.95,
+   "ecartAbsMoyen": 1.06,
    "pire": 3,
    "partAuPlus1": "81 %",
    "repartitionEcart": {
-    "0": 52,
-    "1": 49,
-    "2": 17,
-    "3": 1,
-    "-1": 60,
-    "-2": 20,
-    "-3": 1
+    "0": 30,
+    "1": 66,
+    "2": 15,
+    "-1": 65,
+    "-2": 22,
+    "-3": 2
    },
-   "vertMoyen": 4.8,
-   "rougeMoyen": 4.88
+   "vertMoyen": 4.67,
+   "rougeMoyen": 4.76
   },
   "accesChemins": {
    "ecartAbsMoyen": 0.31,
@@ -177,28 +162,25 @@
    "toutes7": "100 %"
   },
   "chaine": {
-   "moyenne": 3.57,
-   "pire": 4,
+   "moyenne": 2.7,
+   "pire": 3,
    "repartition": {
-    "3": 86,
-    "4": 114
+    "2": 61,
+    "3": 139
    },
-   "partAuPlus3": "43 %"
+   "partAuPlus3": "100 %"
   },
   "distMax": {
-   "moyenne": 2.64,
-   "pire": 5,
+   "moyenne": 2,
+   "pire": 2,
    "repartition": {
-    "2": 78,
-    "3": 118,
-    "4": 2,
-    "5": 2
+    "2": 200
    }
   },
   "ecartVillesMin": 4,
   "S": {
-   "moyenne": 0.74,
-   "medianePlacements": 1.72
+   "moyenne": 0.4,
+   "medianePlacements": 1.49
   },
   "placementsAdmissibles": {
    "moyenne": 36,
@@ -206,18 +188,17 @@
   },
   "cinqContreDeuxPlacements": "0 %",
   "accesPortes": {
-   "ecartAbsMoyen": 0.51,
+   "ecartAbsMoyen": 0.95,
    "pire": 2,
-   "partAuPlus1": "91 %",
+   "partAuPlus1": "87 %",
    "repartitionEcart": {
-    "0": 117,
-    "1": 21,
-    "2": 4,
-    "-2": 14,
-    "-1": 44
+    "0": 36,
+    "1": 42,
+    "-2": 26,
+    "-1": 96
    },
-   "vertMoyen": 5.54,
-   "rougeMoyen": 5.75
+   "vertMoyen": 5.23,
+   "rougeMoyen": 5.76
   },
   "accesChemins": {
    "ecartAbsMoyen": 0,
@@ -248,27 +229,25 @@
    "toutes7": "100 %"
   },
   "chaine": {
-   "moyenne": 3.55,
-   "pire": 4,
+   "moyenne": 2.85,
+   "pire": 3,
    "repartition": {
-    "3": 91,
-    "4": 109
+    "2": 31,
+    "3": 169
    },
-   "partAuPlus3": "46 %"
+   "partAuPlus3": "100 %"
   },
   "distMax": {
-   "moyenne": 2.76,
-   "pire": 5,
+   "moyenne": 2,
+   "pire": 2,
    "repartition": {
-    "2": 57,
-    "3": 139,
-    "5": 4
+    "2": 200
    }
   },
   "ecartVillesMin": 4,
   "S": {
-   "moyenne": 0.55,
-   "medianePlacements": 1.59
+   "moyenne": 0.37,
+   "medianePlacements": 1.69
   },
   "placementsAdmissibles": {
    "moyenne": 36,
@@ -276,16 +255,16 @@
   },
   "cinqContreDeuxPlacements": "0 %",
   "accesPortes": {
-   "ecartAbsMoyen": 0.22,
+   "ecartAbsMoyen": 0.44,
    "pire": 1,
    "partAuPlus1": "100 %",
    "repartitionEcart": {
-    "0": 156,
-    "1": 20,
-    "-1": 24
+    "0": 112,
+    "1": 38,
+    "-1": 50
    },
-   "vertMoyen": 5.72,
-   "rougeMoyen": 5.74
+   "vertMoyen": 5.38,
+   "rougeMoyen": 5.44
   },
   "accesChemins": {
    "ecartAbsMoyen": 0,
@@ -317,28 +296,26 @@
    "toutes7": "100 %"
   },
   "chaine": {
-   "moyenne": 3.28,
-   "pire": 5,
+   "moyenne": 3.02,
+   "pire": 4,
    "repartition": {
-    "3": 146,
-    "4": 53,
-    "5": 1
+    "2": 42,
+    "3": 112,
+    "4": 46
    },
-   "partAuPlus3": "73 %"
+   "partAuPlus3": "77 %"
   },
   "distMax": {
-   "moyenne": 3.22,
-   "pire": 5,
+   "moyenne": 2,
+   "pire": 2,
    "repartition": {
-    "2": 49,
-    "3": 105,
-    "5": 46
+    "2": 200
    }
   },
   "ecartVillesMin": 4,
   "S": {
    "moyenne": 0.02,
-   "medianePlacements": 1.02
+   "medianePlacements": 1.05
   },
   "placementsAdmissibles": {
    "moyenne": 36,
@@ -352,8 +329,8 @@
    "repartitionEcart": {
     "0": 200
    },
-   "vertMoyen": 5.52,
-   "rougeMoyen": 5.52
+   "vertMoyen": 5.46,
+   "rougeMoyen": 5.46
   },
   "accesChemins": {
    "ecartAbsMoyen": 0,
@@ -365,152 +342,147 @@
  "5x5 actuel (générateur)": {
   "plateaux": 200,
   "cases": {
-   "moyenne": 77.61,
-   "min": 77,
-   "max": 78,
+   "moyenne": 80.33,
+   "min": 78,
+   "max": 81,
    "repartition": {
-    "77": 77,
-    "78": 123
+    "78": 5,
+    "79": 28,
+    "80": 64,
+    "81": 103
    }
   },
-  "portsParJonction": 2.48,
-  "portsTotalMoyen": 39.62,
+  "portsParJonction": 2.65,
+  "portsTotalMoyen": 42.33,
   "portsMinPire": 2,
   "villesA3": {
    "moyenne": 7,
    "toutes7": "100 %"
   },
   "chaine": {
-   "moyenne": 7.71,
-   "pire": 9,
+   "moyenne": 2.49,
+   "pire": 3,
    "repartition": {
-    "6": 5,
-    "7": 84,
-    "8": 76,
-    "9": 35
+    "2": 103,
+    "3": 97
    },
-   "partAuPlus3": "0 %"
+   "partAuPlus3": "100 %"
   },
   "distMax": {
-   "moyenne": 5.29,
-   "pire": 6,
+   "moyenne": 3.12,
+   "pire": 5,
    "repartition": {
-    "5": 142,
-    "6": 58
+    "2": 32,
+    "3": 116,
+    "4": 48,
+    "5": 4
    }
   },
   "ecartVillesMin": 4,
   "S": {
-   "moyenne": 1.01,
-   "medianePlacements": 1.41
+   "moyenne": 0.73,
+   "medianePlacements": 2.36
   },
   "placementsAdmissibles": {
-   "moyenne": 2.55,
-   "un": "40 %"
+   "moyenne": 50.71,
+   "un": "0 %"
   },
-  "cinqContreDeuxPlacements": "0 %",
+  "cinqContreDeuxPlacements": "1 %",
   "accesPortes": {
-   "ecartAbsMoyen": 1.14,
-   "pire": 3,
-   "partAuPlus1": "76 %",
+   "ecartAbsMoyen": 0.41,
+   "pire": 1,
+   "partAuPlus1": "100 %",
    "repartitionEcart": {
-    "0": 35,
-    "1": 64,
-    "2": 21,
-    "3": 9,
-    "-2": 12,
-    "-1": 53,
-    "-3": 6
+    "0": 118,
+    "1": 36,
+    "-1": 46
    },
-   "vertMoyen": 9.77,
-   "rougeMoyen": 9.57
+   "vertMoyen": 9.64,
+   "rougeMoyen": 9.69
   },
   "accesChemins": {
-   "ecartAbsMoyen": 0.78,
-   "pire": 2,
-   "partAuPlus1": "89 %"
+   "ecartAbsMoyen": 0.98,
+   "pire": 4,
+   "partAuPlus1": "76 %"
   },
   "tiragesRejetes": 0
  },
  "5x5 révision 44, orientée": {
   "plateaux": 200,
   "cases": {
-   "moyenne": 80.93,
+   "moyenne": 80.9,
    "min": 79,
    "max": 82,
    "repartition": {
     "79": 13,
-    "80": 48,
+    "80": 51,
     "81": 79,
-    "82": 60
+    "82": 57
    }
   },
   "portsParJonction": 2.49,
-  "portsTotalMoyen": 39.86,
+  "portsTotalMoyen": 39.85,
   "portsMinPire": 2,
   "villesA3": {
    "moyenne": 7,
    "toutes7": "100 %"
   },
   "chaine": {
-   "moyenne": 3.76,
-   "pire": 6,
-   "repartition": {
-    "1": 1,
-    "2": 5,
-    "3": 84,
-    "4": 71,
-    "5": 30,
-    "6": 9
-   },
-   "partAuPlus3": "45 %"
-  },
-  "distMax": {
-   "moyenne": 3.32,
+   "moyenne": 2.86,
    "pire": 5,
    "repartition": {
-    "2": 5,
-    "3": 131,
-    "4": 60,
+    "2": 58,
+    "3": 117,
+    "4": 21,
     "5": 4
+   },
+   "partAuPlus3": "88 %"
+  },
+  "distMax": {
+   "moyenne": 2.69,
+   "pire": 4,
+   "repartition": {
+    "2": 74,
+    "3": 114,
+    "4": 12
    }
   },
   "ecartVillesMin": 4,
   "S": {
-   "moyenne": 2.58,
-   "medianePlacements": 3.08
+   "moyenne": 2.7,
+   "medianePlacements": 3.22
   },
   "placementsAdmissibles": {
-   "moyenne": 2.84,
-   "un": "20 %"
+   "moyenne": 2.92,
+   "un": "18 %"
   },
-  "cinqContreDeuxPlacements": "1 %",
+  "cinqContreDeuxPlacements": "2 %",
   "accesPortes": {
-   "ecartAbsMoyen": 1.4,
+   "ecartAbsMoyen": 1.33,
    "pire": 6,
    "partAuPlus1": "63 %",
    "repartitionEcart": {
-    "0": 35,
-    "1": 46,
+    "0": 48,
+    "1": 41,
     "2": 26,
-    "3": 13,
+    "3": 10,
     "4": 5,
-    "-2": 19,
-    "-1": 45,
-    "-4": 2,
+    "5": 1,
+    "-2": 21,
+    "-1": 37,
+    "-4": 3,
     "-3": 7,
-    "-5": 1,
     "-6": 1
    },
-   "vertMoyen": 10.24,
-   "rougeMoyen": 10.07
+   "vertMoyen": 10.2,
+   "rougeMoyen": 10.05
   },
   "accesChemins": {
-   "ecartAbsMoyen": 1.33,
+   "ecartAbsMoyen": 1.17,
    "pire": 5,
-   "partAuPlus1": "65 %"
+   "partAuPlus1": "69 %"
   },
-  "tiragesRejetes": 163
+  "tiragesRejetes": 178
  },
  "5x5 centrales ouvertes, libre orientée sans critère d’accès": {
   "plateaux": 200,
@@ -530,29 +502,27 @@
    "toutes7": "100 %"
   },
   "chaine": {
-   "moyenne": 3.1,
-   "pire": 5,
+   "moyenne": 2.79,
+   "pire": 3,
    "repartition": {
-    "2": 5,
-    "3": 174,
-    "4": 18,
-    "5": 3
+    "2": 43,
+    "3": 157
    },
-   "partAuPlus3": "90 %"
+   "partAuPlus3": "100 %"
   },
   "distMax": {
-   "moyenne": 3.08,
+   "moyenne": 2.69,
    "pire": 4,
    "repartition": {
-    "2": 5,
-    "3": 175,
-    "4": 20
+    "2": 71,
+    "3": 120,
+    "4": 9
    }
   },
   "ecartVillesMin": 4,
   "S": {
-   "moyenne": 2.99,
-   "medianePlacements": 2.99
+   "moyenne": 2.95,
+   "medianePlacements": 2.95
   },
   "placementsAdmissibles": {
    "moyenne": 1,
@@ -560,29 +530,30 @@
   },
   "cinqContreDeuxPlacements": "0 %",
   "accesPortes": {
-   "ecartAbsMoyen": 1.34,
+   "ecartAbsMoyen": 1.39,
    "pire": 5,
-   "partAuPlus1": "64 %",
+   "partAuPlus1": "62 %",
    "repartitionEcart": {
-    "0": 43,
-    "1": 48,
-    "2": 24,
+    "0": 44,
+    "1": 39,
+    "2": 25,
     "3": 17,
-    "4": 3,
-    "5": 2,
-    "-1": 36,
-    "-3": 9,
-    "-2": 18
+    "4": 4,
+    "5": 3,
+    "-1": 40,
+    "-3": 8,
+    "-2": 19,
+    "-4": 1
    },
    "vertMoyen": 9.57,
-   "rougeMoyen": 9.22
+   "rougeMoyen": 9.24
   },
   "accesChemins": {
-   "ecartAbsMoyen": 0.96,
+   "ecartAbsMoyen": 0.99,
    "pire": 4,
-   "partAuPlus1": "78 %"
+   "partAuPlus1": "76 %"
   },
-  "tiragesRejetes": 54
+  "tiragesRejetes": 55
  },
  "5x5 centrales ouvertes, libre orientée": {
   "plateaux": 200,
@@ -602,29 +573,28 @@
    "toutes7": "100 %"
   },
   "chaine": {
-   "moyenne": 3.07,
-   "pire": 5,
+   "moyenne": 2.73,
+   "pire": 3,
    "repartition": {
-    "2": 8,
-    "3": 173,
-    "4": 17,
-    "5": 2
+    "1": 2,
+    "2": 51,
+    "3": 147
    },
-   "partAuPlus3": "91 %"
+   "partAuPlus3": "100 %"
   },
   "distMax": {
-   "moyenne": 3.17,
+   "moyenne": 2.87,
    "pire": 4,
    "repartition": {
-    "2": 5,
-    "3": 156,
-    "4": 39
+    "2": 52,
+    "3": 122,
+    "4": 26
    }
   },
   "ecartVillesMin": 4,
   "S": {
-   "moyenne": 3.07,
-   "medianePlacements": 3.07
+   "moyenne": 2.85,
+   "medianePlacements": 2.85
   },
   "placementsAdmissibles": {
    "moyenne": 1,
@@ -632,23 +602,24 @@
   },
   "cinqContreDeuxPlacements": "0 %",
   "accesPortes": {
-   "ecartAbsMoyen": 0.5,
+   "ecartAbsMoyen": 0.58,
    "pire": 4,
-   "partAuPlus1": "91 %",
+   "partAuPlus1": "88 %",
    "repartitionEcart": {
-    "0": 125,
-    "1": 35,
-    "2": 9,
-    "3": 2,
+    "0": 117,
+    "1": 32,
+    "2": 14,
+    "3": 3,
     "4": 2,
-    "-1": 21,
-    "-2": 6
+    "-1": 26,
+    "-2": 5,
+    "-3": 1
    },
-   "vertMoyen": 9.4,
-   "rougeMoyen": 9.24
+   "vertMoyen": 9.36,
+   "rougeMoyen": 9.16
   },
   "accesChemins": {
-   "ecartAbsMoyen": 0.96,
+   "ecartAbsMoyen": 0.94,
    "pire": 3,
    "partAuPlus1": "76 %"
   },
@@ -672,32 +643,32 @@
    "toutes7": "100 %"
   },
   "chaine": {
-   "moyenne": 2.9,
+   "moyenne": 2.76,
    "pire": 5,
    "repartition": {
-    "1": 15,
-    "2": 8,
-    "3": 165,
-    "4": 7,
-    "5": 5
+    "1": 9,
+    "2": 47,
+    "3": 136,
+    "5": 8
    },
-   "partAuPlus3": "94 %"
+   "partAuPlus3": "96 %"
   },
   "distMax": {
-   "moyenne": 3.28,
-   "pire": 6,
+   "moyenne": 3.33,
+   "pire": 8,
    "repartition": {
-    "2": 33,
-    "3": 92,
-    "4": 66,
-    "5": 4,
-    "6": 5
+    "2": 54,
+    "3": 60,
+    "4": 70,
+    "5": 1,
+    "6": 14,
+    "8": 1
    }
   },
   "ecartVillesMin": 4,
   "S": {
-   "moyenne": 0.84,
-   "medianePlacements": 1.38
+   "moyenne": 0.77,
+   "medianePlacements": 1.33
   },
   "placementsAdmissibles": {
    "moyenne": 4,
@@ -711,8 +682,8 @@
    "repartitionEcart": {
     "0": 200
    },
-   "vertMoyen": 9.74,
-   "rougeMoyen": 9.74
+   "vertMoyen": 9.6,
+   "rougeMoyen": 9.6
   },
   "accesChemins": {
    "ecartAbsMoyen": 0,

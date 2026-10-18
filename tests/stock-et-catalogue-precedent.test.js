@@ -20,28 +20,39 @@ const M = PM.modele, CAT = PM.catalogue, GEN = PM.generateur, S = PM.sauvegarde;
 
 const copie = (x) => JSON.parse(JSON.stringify(x));
 
-/** Part des plateaux générés (graines « e0 »…) qui se montent avec les exemplaires du document. */
-function partMontable(grille, nb) {
-  const doc = CAT.nouveauDocument(grille);
-  const stock = Object.fromEntries(doc.modeles.map((m) => [m.id, m.exemplaires]));
-  let ok = 0;
-  for (let k = 0; k < nb; k++) {
-    const r = GEN.generer(doc, { graine: 'e' + k });
-    assert.ok(r.ok, grille + ' graine e' + k);
-    const u = {};
-    r.doc.plateau.tuiles.forEach((t) => { u[t.modeleId] = (u[t.modeleId] || 0) + 1; });
-    if (Object.keys(u).every((id) => u[id] <= stock[id])) ok++;
+/**
+ * Part des plateaux générés (graines « e0 »…) qui se montent avec les exemplaires du document. Le calcul est réparti sur FILS fils
+ * (tests/aides-stock-worker.js) : mêmes graines, même vérification, même seuil de 90 % : sans cela ces deux tests prenaient 145 s de la suite (107 s en 5×5).
+ * Les deux formats démarrent dès le chargement du fichier et se calculent en même temps.
+ */
+const { Worker } = require('node:worker_threads');
+const path = require('node:path');
+const FILS = 4;
+function partMontableAsync(grille, nb) {
+  const taille = Math.ceil(nb / FILS);
+  const travaux = [];
+  for (let d = 0; d < nb; d += taille) {
+    travaux.push(new Promise((resolve, reject) => {
+      const w = new Worker(path.join(__dirname, 'aides-stock-worker.js'), { workerData: { grille, debut: d, fin: Math.min(nb, d + taille) } });
+      w.once('message', resolve); w.once('error', reject);
+      w.once('exit', (code) => { if (code !== 0) reject(new Error('fil de calcul du stock ' + grille + ' arrêté (code ' + code + ')')); });
+    }));
   }
-  return ok / nb;
+  return Promise.all(travaux).then((rs) => {
+    rs.forEach((r) => assert.deepStrictEqual(r.echecs, [], grille));
+    return rs.reduce((s, r) => s + r.montables, 0) / nb;
+  });
 }
+const PART_4x4 = partMontableAsync('4x4', 100), PART_5x5 = partMontableAsync('5x5', 100);
+PART_4x4.catch(() => {}); PART_5x5.catch(() => {}); // le rejet est rapporté par le test qui attend la promesse, pas comme rejet non géré
 
-test('stock : au moins 90 % des plateaux 4×4 générés (100 graines) se montent avec les tuiles imprimées', () => {
-  const p = partMontable('4x4', 100);
+test('stock : au moins 90 % des plateaux 4×4 générés (100 graines) se montent avec les tuiles imprimées', async () => {
+  const p = await PART_4x4;
   assert.ok(p >= 0.9, 'part montable 4×4 : ' + p);
 });
 
-test('stock : au moins 90 % des plateaux 5×5 générés (100 graines) se montent avec les tuiles imprimées', () => {
-  const p = partMontable('5x5', 100);
+test('stock : au moins 90 % des plateaux 5×5 générés (100 graines) se montent avec les tuiles imprimées', async () => {
+  const p = await PART_5x5;
   assert.ok(p >= 0.9, 'part montable 5×5 : ' + p);
 });
 
