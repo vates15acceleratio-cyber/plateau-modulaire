@@ -114,7 +114,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     if (!g) return res;
     PM.graphe.villesProches(g).forEach(function (p) {
       res.push({ code: 'villes_proches', niveau: 'alerte', cible: cibleJonction(p.b),
-        message: 'Villes (' + p.a.i + ', ' + p.a.j + ') et (' + p.b.i + ', ' + p.b.j + ') à ' + (p.pas - 1) + ' case(s) d\'écart : la règle en demande au moins ' + PM.geometrie.ECART_MIN_VILLES + '.' });
+        message: 'Villes (' + p.a.i + ', ' + p.a.j + ') et (' + p.b.i + ', ' + p.b.j + ') à ' + (p.pas - 1) + ' case(s) d\'écart : la règle en demande au moins ' + PM.geometrie.ECART_MIN_VILLES + '.' +
+          (M.formatDuDocument(doc).id === '5x5' ? ' Outils > Placer les villes pose les 7 villes au meilleur placement admissible.' : '') });
     });
     if (plateauRempli(doc, M.formatDuDocument(doc)) && !PM.graphe.connexe(g)) {
       res.push({ code: 'plateau_non_connexe', niveau: 'alerte', cible: null,

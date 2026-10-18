@@ -219,9 +219,9 @@ test('seuils exportés (paramètres, docs/19 et arbitrages de docs/20)', () => {
   assert.strictEqual(GR.SEUIL_ECART, 2);
   assert.strictEqual(GR.SEUIL_S, 5); // seuil de rejet du générateur, commun aux deux formats
   // alerte et information de S propres à chaque format (docs/18 réponse du 2026-10-18, docs/48 § 4)
-  assert.deepStrictEqual(GR.SEUIL_S_PAR_FORMAT, { '4x4': 5, '5x5': 7 });
-  assert.deepStrictEqual(GR.SEUIL_S_INFORMATION_PAR_FORMAT, { '4x4': 4, '5x5': 5 });
-  assert.deepStrictEqual([GR.seuilS('4x4'), GR.seuilS('5x5'), GR.seuilSInformation('4x4'), GR.seuilSInformation('5x5')], [5, 7, 4, 5]);
+  assert.deepStrictEqual(GR.SEUIL_S_PAR_FORMAT, { '4x4': 5, '5x5': 5 });
+  assert.deepStrictEqual(GR.SEUIL_S_INFORMATION_PAR_FORMAT, { '4x4': 4, '5x5': 4 });
+  assert.deepStrictEqual([GR.seuilS('4x4'), GR.seuilS('5x5'), GR.seuilSInformation('4x4'), GR.seuilSInformation('5x5')], [5, 5, 4, 4]);
   assert.strictEqual(GR.NB_VILLES, 7);
   assert.deepStrictEqual(GR.NOM_JOUEUR, { 1: 'vert', 2: 'rouge' });
 });

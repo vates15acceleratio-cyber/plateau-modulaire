@@ -73,6 +73,16 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return GABARITS.indexOf(brut.role) >= 0 ? brut.role : brut.role.slice(0, LIMITES.texte);
   }
 
+  /** Côtés de murs voulus : valeurs 0 à 3 sans doublon, dans l'ordre d'apparition, lues en un passage (masque de 4 bits ; docs/61 D1). */
+  function mursLus(liste) {
+    var masque = 0, res = [];
+    for (var k = 0; k < liste.length; k++) {
+      var c = liste[k];
+      if ((c === 0 || c === 1 || c === 2 || c === 3) && !(masque & (1 << c))) { masque |= 1 << c; res.push(c); if (res.length === 4) break; }
+    }
+    return res;
+  }
+
   /**
    * Modèle nettoyé (champs connus) pour la grille `grille` du document. Un modèle invalide est conservé comme
    * brouillon et signalé.
@@ -157,8 +167,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     if (Array.isArray(brut.passages)) m.passages = passages;
     // poids de tirage du générateur : facultatif (absent : les exemplaires font le poids) ; une valeur invalide est ignorée
     if (estEntier(brut.poids) && brut.poids >= 1 && brut.poids <= LIMITES.exemplaires) m.poids = brut.poids;
-    // murs voulus : facultatif (liste de côtés 0 à 3, sans doublon) ; absent = aucun mur (PM.modele.mursDuModele)
-    if (Array.isArray(brut.murs)) m.murs = brut.murs.filter(function (c, k, a) { return (c === 0 || c === 1 || c === 2 || c === 3) && a.indexOf(c) === k; });
+    // murs voulus : facultatif (liste de côtés 0 à 3, sans doublon ; lecture en un passage avec masque de 4 bits : temps linéaire, docs/61 D1) ; absent = aucun mur (PM.modele.mursDuModele)
+    if (Array.isArray(brut.murs)) m.murs = mursLus(brut.murs);
     if (!M.validerModele(m, grille).complet) {
       alertes.push(erreur('modele_incomplet', 'Le modèle « ' + libelle + ' » est incomplet : conservé comme brouillon, non posable.'));
     }

@@ -24,8 +24,8 @@
  *    équilibrées (une en j = 1 et une en j = 3, ou les deux en j = 2 : cases égales entre moitiés) ; option décochée : rangée centrale
  *    seulement (3 paires, aucun « 5 contre 2 », docs/22) ;
  *  - villes non traversables (règle du jeu) ;
- *  - REJETS : validerPlateau avec erreur, graphe non connexe, camp sans case d'apparition, deux villes à moins de 3 cases (jamais
- *    produit, docs/18), ville inaccessible, plateau très déséquilibré (« 5 contre 2 », écart > SEUIL_BLOCAGE_ECART), écart > 2 à un
+ *  - REJETS : validerPlateau avec erreur, graphe non connexe, camp sans case d'apparition, deux villes à moins de 3 cases (rejet ; jamais
+ *    produit en 4×4, docs/18), ville inaccessible, plateau très déséquilibré (« 5 contre 2 », écart > SEUIL_BLOCAGE_ECART), écart > 2 à un
  *    rang de 1 à 7, première ville à des distances différentes, cases inégales entre moitiés ; 5×5 en plus : jonction à moins de
  *    2 ports, ville à moins de 3 ports (ou aucun placement 2-3-2 compatible), plus de 5 % de cases à 2 connexions ou moins
  *    (PM.graphe.connexions), S >= 5 (docs/36, docs/53) ;
@@ -1236,8 +1236,9 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       finalistes = (affinage ? melanger(parmi, rng).slice(0, AFFINAGE_MAX) : [parmi[entier(rng, parmi.length)]]).map(function (x) {
         var a = affinage ? affiner(x, doc, F, Smin + tolerance, rng)
           : { tuiles: x.tuiles, ev: x.ev, penalite: x.pen, note: noteRythme({ version: doc.version, grille: F.id, modeles: doc.modeles, plateau: { tuiles: x.tuiles, jetons: x.jetons } }) };
-        return { tuiles: a.tuiles, jetons: x.jetons, ev: a.ev, raccords: a.penalite.raccords, malReliees: a.penalite.malReliees, S: a.ev.crit.S, note: a.note, articulations: 0,
-          cle: [a.note.cle[0], Math.max(0, a.note.cle[1] - 1), a.note.cle[2]] };
+        var arts4 = pointsArticulation(a.note.graphe); // docs/18 (décision 4, 2026-10-18) : la préférence anti-goulets s'étend au 4×4
+        return { tuiles: a.tuiles, jetons: x.jetons, ev: a.ev, raccords: a.penalite.raccords, malReliees: a.penalite.malReliees, S: a.ev.crit.S, note: a.note, articulations: arts4,
+          cle: [a.note.cle[0], Math.max(0, a.note.cle[1] - 1), a.note.cle[2], arts4] };
       });
     }
     var choisi = null, nbEgaux = 0;

@@ -97,7 +97,7 @@ test('200 graines : composition par quotas (4 LK2, 12 LB2, 9 centrales dans le s
 });
 
 test('200 graines : moins de 5 % de cases à 2 connexions (rejet), au moins 3 connexions en moyenne ; score.connexions = PM.graphe.connexions', () => {
-  let total = 0;
+  let total = 0, faiblesTuile = 0;
   plateaux().forEach((r, k) => {
     const cx = GR.connexions(r.doc);
     assert.ok(cx.conforme && cx.part < GR.PART_CONNEXIONS_MAX && cx.faibles <= 2, 'g5-' + k + ' : ' + cx.faibles + ' case(s) faibles');
@@ -106,10 +106,10 @@ test('200 graines : moins de 5 % de cases à 2 connexions (rejet), au moins 3 co
     assert.deepStrictEqual(r.score.connexions, { cases: cx.cases, faibles: cx.faibles, part: cx.part, degreMoyen: cx.degreMoyen, parDegre: cx.parDegre });
     // les jonctions-cases à 2 ports sont des cases faibles ; une case de tuile peut l'être aussi (le plus souvent le relais de LC6 ou LC7 dont un raccord fait face à un mur de « Deux ponts », mesuré sur 100 plateaux : 21 cases de tuile faibles contre 99 jonctions-cases)
     assert.strictEqual(cx.jonctionsFaibles.length, faibles(r.doc), 'g5-' + k);
-    assert.ok(cx.jonctionsFaibles.length <= cx.faibles, 'g5-' + k);
-    total += cx.faibles;
+    total += cx.faibles; faiblesTuile += cx.faibles - cx.jonctionsFaibles.length;
   });
-  assert.ok(total / NB_GRAINES < 1.5, 'moyenne de cases faibles : ' + total / NB_GRAINES);
+  assert.ok(total / NB_GRAINES < 1.3, 'moyenne de cases faibles : ' + total / NB_GRAINES);
+  assert.ok(faiblesTuile / NB_GRAINES < 0.4, 'moyenne de cases de tuile faibles : ' + faiblesTuile / NB_GRAINES);
 });
 
 test('200 graines : villes en 2-3-2 sur des jonctions à 3 ports, jonctions à 2 ports au moins, aucune porteuse ne dessert deux villes, villes à 4 pas au moins', () => {
@@ -237,7 +237,7 @@ test('outils de mesure : tirages orientés (villes d\'abord) sans ville posée, 
   assert.strictEqual(r.entrees.length + r.sansOrientation, 20);
   assert.ok(r.entrees.every((e) => e.doc.plateau.tuiles.length === 25 && e.doc.plateau.jetons.length === 0 && e.villes.length === 7));
   assert.strictEqual(r.generateur.essais, 20);
-  assert.ok(r.generateur.acceptes >= 10, JSON.stringify(r.generateur));
+  assert.ok(r.generateur.acceptes >= 11, JSON.stringify(r.generateur));
 });
 
 test('reproductibilité : même graine, même plateau et mêmes compteurs', () => {
@@ -332,7 +332,7 @@ test('taux de rejet par cause et temps (200 candidats) sur le catalogue 5×5', (
     Object.keys(x.rejets).forEach((c) => { rej[c] = (rej[c] || 0) + x.rejets[c]; });
   }
   console.log(`# 5×5 : 200 candidats en ${ms} ms (${r.essais} essais) ; ${acceptes}/${essais} candidats acceptés ; rejets : ${JSON.stringify(rej)}`);
-  assert.ok(acceptes >= essais * 0.5, 'taux d\'acceptation : ' + acceptes + ' / ' + essais); // ≈ 63 % avec le stock « B3 » (rejets « villes_ports » surtout) ; 100 % des plateaux sont réussis
+  assert.ok(acceptes >= essais * 0.58, 'taux d\'acceptation : ' + acceptes + ' / ' + essais); // ≈ 63 % avec le stock « B3 » (rejets « villes_ports » surtout) ; 100 % des plateaux sont réussis
   assert.strictEqual(rej.plateau_invalide, 0);
   assert.strictEqual(rej.connexite, 0);
   assert.strictEqual(rej.connexions, 0, 'le catalogue livré ne laisse jamais plus de 5 % de cases faibles après orientation');
@@ -522,10 +522,10 @@ test('budget de nœuds : une recherche d’orientation interrompue est signalée
 // Empreintes du générateur 4×4 depuis le branchement des catalogues « centrales ouvertes » (docs/46 : cases égales entre moitiés,
 // centrales orientées selon les ports, affinage du rythme ; graines 'emp-0' à 'emp-19', 60 candidats, mode par défaut puis « variées »,
 // puis la graine 'defaut' à 200 candidats avec son rapport). Elles ne changent que si le 4×4 est volontairement modifié (les empreintes
-// d'avant, docs/34, valaient pour le catalogue et le générateur de la version 3.04). Recalculées le 2026-10-18 : toute jonction est une
+// d'avant, docs/34, valaient pour le catalogue et le générateur de la version 3.04). Recalculées le 2026-10-18 (la graine emp-3 en mode « variées » change avec la préférence anti-goulets étendue au 4×4, docs/18 décision 4) : toute jonction est une
 // zone d'intérêt du rythme (docs/18), donc l'affinage du rythme et le classement des finalistes du 4×4 changent.
 const EMPREINTES_4X4 = [
-  'c7b84c04d8', 'c67f70b22a', 'bc9804d8fb', '49ec6c1763', 'd1b58d23aa', 'b849b7208e', '10915156ee', 'd0cb277dce', 'd850a1b869', '7203f8f526',
+  'c7b84c04d8', 'c67f70b22a', 'bc9804d8fb', '49ec6c1763', 'd1b58d23aa', 'b849b7208e', '10915156ee', '586cc893b3', 'd850a1b869', '7203f8f526',
   'a4da801b19', '47ecc07d80', 'cbc169bf66', '6798312960', '2ed6de112a', 'd574c6c673', '8ee3208ef5', 'eafac54e7c', '2b03155fa7', '0d333266b7',
   '928c4975b9', '2ba53d56ce', '304b762f96', '3a5e15c89d', '35418b6859', '648c604e4d', '942ad45295', '080d881eee', 'e32517cdfd', '417f823d3a',
   'd2a6e5b9ce', 'efcf47b9e5', 'beb2734d92', '00eb11f779', '20d23f4d46', '5d1db830e2', '0813f4b905', '98c08d3a59', 'cbb8d5229d', 'eaeeb65ec2',

@@ -1360,7 +1360,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
 
   /**
    * Revalide tout le plateau : { erreurs, alertes }, éléments { code, message, ref }.
-   * erreurs : tuiles (verifierTuilePosee), exemplaires dépassés, jetons invalides.
+   * erreurs : tuiles (verifierTuilePosee), jetons invalides (les poses ne sont pas limitées par les exemplaires, docs/46).
    * alertes : place des tuiles, raccords morts ou face au vide, ports vers le pourtour, jonctions mal reliées
    * (n'empêchent rien).
    * informations : les raccords sans vis-à-vis qui font face à un mur voulu (code 'raccord_mur', raccordsMorts / mursDuModele).

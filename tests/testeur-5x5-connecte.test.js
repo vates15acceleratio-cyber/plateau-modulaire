@@ -385,7 +385,7 @@ test('E3 `murs` : un JSON qui déclare un mur sur un côté à raccord ne crée 
   assert.equal(v.alertes.filter((a) => a.code === 'raccord_mort').length, 2, 'les raccords des voisines E et O face à O et E de LC4 sont des raccords morts');
 });
 
-test('E4 défaut : `murs` de très grande taille : la relecture est quadratique (sauvegarde.js:161, filter + indexOf)', { skip: 'défaut : sauvegarde.js:161 — filtre de `murs` en O(n²) (indexOf par élément valide, après n éléments invalides) : 80 000 + 80 000 éléments (≈ 1 Mo) = 3,9 s, 5 Mo (limite de fichier) ≈ 14 min ; la limite LIMITES n\'est pas appliquée à `murs`' }, () => {
+test('E4 `murs` de très grande taille : relecture en temps borné (sauvegarde.js, tronquée à 4 avant filtrage, docs/61 D1)', () => {
   const n = 40000;
   const t0 = Date.now();
   const lu = mursLus(Array(n).fill(5).concat(Array(n).fill(1)));

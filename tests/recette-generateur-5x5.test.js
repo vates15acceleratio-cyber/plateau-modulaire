@@ -28,8 +28,8 @@ const cle = (j) => j.i + ',' + j.j;
 const jetons = (vs) => vs.map((v) => ({ i: v.i, j: v.j, type: 'capture' }));
 const avecVilles = (doc, vs) => { const d = copie(doc); d.plateau.jetons = jetons(vs); return d; };
 
-/** Conseil de docs/36 § 5 (sans le point final : le panneau retire le point final de chaque blocage). */
-const CONSEIL = 'Les 3 villes du milieu sont sur une seule rangée : en mettre 2 sur l’une et 1 sur l’autre rétablit presque toujours l’équilibre';
+/** Conseil de docs/60 § 5 (sans le point final : le panneau retire le point final de chaque blocage). */
+const CONSEIL = 'Outils > Placer les villes pose les 7 villes au meilleur placement admissible';
 const CONSEIL_4X4 = 'Conseil : placer les deux jonctions-cases (sans ville) dans la rangée centrale, par exemple (1, 2) et (3, 2).';
 const CODES_PANNEAU_EQUILIBRE = ['cinq_contre_deux', 'ecart_rang_etendu', 'score_s', 'premiere_ville_inegale', 'ville_inaccessible'];
 
@@ -209,9 +209,9 @@ test('parcours à l’état : Nouveau 5×5 (vrai catalogue), Générer, Applique
 
 /* ---------- seuils communs aux deux formats (docs/36 § 1 et § 7), sauf S d’alerte et d’information (docs/48 § 4) ---------- */
 
-test('seuils : mêmes constantes pour les deux formats (rejet S 5, écart 2, blocage 3, 5 contre 2) ; seuils de S d’alerte et d’information propres à chaque format', () => {
+test('seuils : mêmes constantes pour les deux formats (rejet S 5, écart 2, blocage 3, 5 contre 2) ; tables de seuils de S d’alerte et d’information propres à chaque format (mêmes valeurs)', () => {
   assert.strictEqual(GR.SEUIL_S, 5);
-  assert.deepStrictEqual([GR.seuilS('4x4'), GR.seuilSInformation('4x4'), GR.seuilS('5x5'), GR.seuilSInformation('5x5')], [5, 4, 7, 5]);
+  assert.deepStrictEqual([GR.seuilS('4x4'), GR.seuilSInformation('4x4'), GR.seuilS('5x5'), GR.seuilSInformation('5x5')], [5, 4, 5, 4]);
   assert.strictEqual(GR.SEUIL_ECART, 2);
   assert.strictEqual(GR.SEUIL_BLOCAGE_ECART, 3);
   assert.strictEqual(GR.SEUIL_CINQ_CONTRE_DEUX, 5);
@@ -221,7 +221,7 @@ for (const [format, creer] of [['4x4', (k) => GEN.generer(doc4(), { graine: 'seu
   test('seuils ' + format + ' : chaque code d’équilibre apparaît si et seulement si son critère est franchi (1500 placements)', () => {
     const bases = []; for (let b = 0; b < 25; b++) bases.push(creer(b));
     const r = alea(format === '4x4' ? 4 : 5), n = format === '4x4' ? 4 : 5;
-    const sAlerte = format === '4x4' ? 5 : 7, sInfo = format === '4x4' ? 4 : 5; // seuils de S propres à chaque format (docs/18, docs/48)
+    const sAlerte = 5, sInfo = 4; // mêmes seuils de S dans les deux formats (docs/18 décision 1, docs/60)
     const vu = { score_s: 0, ecart_rang_etendu: 0, ecart_bloquant: 0, cinq_contre_deux: 0, sInfo: 0, quatreContreTrois: 0, aucun: 0 };
     for (let k = 0; k < 1500; k++) {
       const d = avecVilles(bases[k % bases.length], tirer(r, jonctions(n), 7)), e = GR.equilibre(d);
@@ -250,18 +250,17 @@ for (const [format, creer] of [['4x4', (k) => GEN.generer(doc4(), { graine: 'seu
   });
 }
 
-/* ---------- conseil « 3 villes du milieu » (docs/36 § 5) ---------- */
+/* ---------- conseil « Placer les villes » (docs/60 § 5) ---------- */
 
-/** Attendu, calculé à part : 2 en j = 1, 2 en j = 4, et les 3 autres toutes en j = 2 ou toutes en j = 3. */
-function conseilAttendu(vs) {
-  const n = (j) => vs.filter((v) => v.j === j).length;
-  return vs.length === 7 && n(1) === 2 && n(4) === 2 && (n(2) === 3 || n(3) === 3);
-}
+const cleTri = (vs) => vs.map(cle).sort().join(' ');
+/** Texte des messages de villes trop proches (alerte du panneau, qui porte aussi le renvoi à « Placer les villes » en 5×5). */
+const estVillesProches = (t) => /case\(s\) d.écart/.test(t);
 
-// graine choisie pour que les genres de pose portent des alertes malgré le seuil S >= 7 du 5×5 (docs/48) : avec le catalogue à 2 cases par
-// tuile (docs/55), « rec-conseil-30 » est la première graine qui donne des poses 3 sur une rangée avec « 5 contre 2 » seul, avec S seul et
-// sans alerte, et des poses 2 + 1 avec S seul
+// plateau fixe : le conseil ne dépend plus d'une graine choisie, mais des placements admissibles de ce plateau
 const PLATEAU_CONSEIL = GEN.generer(doc5(), { graine: 'rec-conseil-30', candidats: 8 }).doc;
+const ADMISSIBLES = new Set(GEN.placementsAdmissibles(PLATEAU_CONSEIL).placements.map(cleTri));
+/** Attendu, calculé à part : 7 villes qui ne forment pas un placement admissible (2-3-2, 3 ports, 3 cases d'écart). */
+const conseilAttendu = (vs) => vs.length === 7 && !ADMISSIBLES.has(cleTri(vs));
 
 /** Les 2016 placements 2-3-2 posés sur PLATEAU_CONSEIL, classés par genre d’alerte. */
 function classes() {
@@ -270,45 +269,43 @@ function classes() {
     const d = avecVilles(PLATEAU_CONSEIL, vs), e = GR.equilibre(d);
     const codes = e.blocages.concat(e.alertes).map((a) => a.code);
     const un = conseilAttendu(vs);
-    const k = (un ? 'une-rangee' : 'deux-plus-un') + '|' + (codes.includes('cinq_contre_deux') ? 'cinq' : '') + (codes.includes('score_s') ? 'S' : '') + (codes.length && !codes.includes('cinq_contre_deux') && !codes.includes('score_s') ? 'autre' : '') + (codes.length ? '' : 'rien');
+    const k = (un ? 'conseil' : 'admissible') + '|' + (codes.includes('cinq_contre_deux') ? 'cinq' : '') + (codes.includes('score_s') ? 'S' : '') + (codes.length && !codes.includes('cinq_contre_deux') && !codes.includes('score_s') ? 'autre' : '') + (codes.length ? '' : 'rien');
     (cl[k] = cl[k] || []).push({ vs, d, e, codes });
   });
   return cl;
 }
 
-test('conseil 5×5 : présent aux messages « 5 contre 2 » et S ≥ 7 si et seulement si squelette 2-3-2 avec les 3 villes du milieu sur une rangée (2016 placements, panneau et rapport)', () => {
+test('conseil 5×5 : présent aux messages « 5 contre 2 » et S ≥ 5 si et seulement si les villes ne forment pas un placement admissible (2016 placements, panneau et rapport)', () => {
   const cl = classes();
   const total = Object.values(cl).reduce((s, l) => s + l.length, 0);
   assert.strictEqual(total, 2016);
-  // les cas à couvrir existent sur ce plateau
   const cles = Object.keys(cl);
-  assert.ok(cles.some((c) => c.startsWith('une-rangee|') && c.includes('cinq')), 'aucune pose 3 sur une rangée avec 5 contre 2 : ' + cles);
-  assert.ok(cles.some((c) => c.startsWith('une-rangee|') && c.endsWith('rien')), cles.join());
-  assert.ok(cles.some((c) => c.startsWith('deux-plus-un|') && c.includes('S')), cles.join());
+  assert.ok(ADMISSIBLES.size > 0 && cles.some((c) => c.startsWith('admissible|')), 'aucun placement admissible : ' + cles);
+  assert.ok(cles.some((c) => c.startsWith('conseil|') && (c.includes('cinq') || c.includes('S'))), cles.join());
   let avec = 0, sans = 0;
   Object.keys(cl).forEach((k) => cl[k].forEach(({ vs, d, e }) => {
     const un = conseilAttendu(vs), txt = vs.map(cle).join(' ');
-    // 1) moteur
-    // « 5 contre 2 » et S >= 7 ensemble : le conseil n’est écrit qu’une fois (au message « 5 contre 2 »)
+    // 1) moteur : « 5 contre 2 » et S >= 5 ensemble : le conseil n’est écrit qu’une fois (au message « 5 contre 2 »)
     const aCinq = e.blocages.concat(e.alertes).some((a) => a.code === 'cinq_contre_deux');
     e.blocages.concat(e.alertes).forEach((a) => {
       const porteur = a.code === 'cinq_contre_deux' || a.code === 'score_s';
       assert.strictEqual(a.message.includes(CONSEIL), porteur && un && (a.code === 'cinq_contre_deux' || !aCinq), a.code + ' · ' + txt);
     });
-    // 2) panneau et rapport : le conseil figure dans un message si et seulement s’il y a un message porteur et un squelette en une rangée
+    // 2) panneau et rapport (hors alertes « villes trop proches », qui portent leur propre renvoi)
     const porteur = e.blocages.concat(e.alertes).some((a) => a.code === 'cinq_contre_deux' || a.code === 'score_s');
     const m = messagesInterface(d);
-    assert.strictEqual(m.panneau.some((t) => t.includes(CONSEIL)), porteur && un, 'panneau · ' + txt);
-    assert.strictEqual(m.rapport.some((t) => t.includes(CONSEIL)), porteur && un, 'rapport · ' + txt);
-    assert.ok(m.panneau.filter((t) => t.includes(CONSEIL)).length <= 1 && m.rapport.filter((t) => t.includes(CONSEIL)).length <= 1, 'conseil en double · ' + txt);
+    const dansPanneau = m.panneau.filter((t) => t.includes(CONSEIL) && !estVillesProches(t)), dansRapport = m.rapport.filter((t) => t.includes(CONSEIL));
+    assert.strictEqual(dansPanneau.length > 0, porteur && un, 'panneau · ' + txt);
+    assert.strictEqual(dansRapport.length > 0, porteur && un, 'rapport · ' + txt);
+    assert.ok(dansPanneau.length <= 1 && dansRapport.length <= 1, 'conseil en double · ' + txt);
     // le conseil n’est jamais dupliqué dans les informations
-    assert.ok(!m.informations.some((t) => t.includes('seule rangée')));
+    assert.ok(!m.informations.some((t) => t.includes(CONSEIL)));
     if (porteur && un) avec++; else if (porteur) sans++;
   }));
-  assert.ok(avec > 0 && sans > 0, avec + ' avec, ' + sans + ' sans');
+  assert.ok(avec > 0, avec + ' avec, ' + sans + ' sans');
 });
 
-test('conseil 5×5 : jamais sans squelette 2-3-2, ni avec 6 ou 8 villes, ni en 4×4 (placements libres)', () => {
+test('conseil 5×5 : jamais avec 6 ou 8 villes, ni en 4×4 ; sur un placement admissible, jamais (placements libres)', () => {
   const r = alea(36), base = PLATEAU_CONSEIL;
   let porteurs = 0;
   for (let k = 0; k < 1500; k++) {
@@ -317,7 +314,7 @@ test('conseil 5×5 : jamais sans squelette 2-3-2, ni avec 6 ou 8 villes, ni en 4
     const messages = e.blocages.concat(e.alertes);
     messages.forEach((a) => {
       if (a.code === 'cinq_contre_deux' || a.code === 'score_s') porteurs++;
-      assert.strictEqual(a.message.includes('seule rangée'), (a.code === 'cinq_contre_deux' || (a.code === 'score_s' && !messages.some((x) => x.code === 'cinq_contre_deux'))) && conseilAttendu(vs), n + ' villes · ' + a.code + ' · ' + vs.map(cle).join(' '));
+      assert.strictEqual(a.message.includes(CONSEIL), (a.code === 'cinq_contre_deux' || (a.code === 'score_s' && !messages.some((x) => x.code === 'cinq_contre_deux'))) && conseilAttendu(vs), n + ' villes · ' + a.code + ' · ' + vs.map(cle).join(' '));
     });
   }
   assert.ok(porteurs > 100, porteurs + ' messages porteurs rencontrés');
@@ -326,49 +323,43 @@ test('conseil 5×5 : jamais sans squelette 2-3-2, ni avec 6 ou 8 villes, ni en 4
   let cinq = 0;
   for (let k = 0; k < 2000; k++) {
     const e = GR.equilibre(avecVilles(bases4[k % bases4.length], tirer(r4, jonctions(4), 7)));
-    e.blocages.concat(e.alertes).forEach((a) => assert.ok(!a.message.includes('seule rangée'), '4×4 : ' + a.message));
+    e.blocages.concat(e.alertes).forEach((a) => assert.ok(!a.message.includes('Placer les villes'), '4×4 : ' + a.message));
     e.blocages.forEach((b) => { if (b.code === 'cinq_contre_deux') { cinq++; assert.ok(b.message.endsWith(CONSEIL_4X4), b.message); } });
     assert.deepStrictEqual(e.informations, [], '4×4 : jamais d’information « ports »');
   }
   assert.ok(cinq > 0, 'un « 5 contre 2 » 4×4 rencontré');
 });
 
-test('conseil 5×5 : variante 3 villes sur la rangée j = 3 aussi ; message à l’identique dans le panneau (erreur « desequilibre »)', () => {
+test('conseil 5×5 : message à l’identique dans le panneau (erreur « desequilibre »), et S ≥ 5 seul le porte comme alerte, pas comme erreur', () => {
   const cl = classes();
-  const sur3 = [].concat(...Object.values(cl)).filter(({ vs }) => vs.filter((v) => v.j === 3).length === 3 && conseilAttendu(vs));
-  const sur2 = [].concat(...Object.values(cl)).filter(({ vs }) => vs.filter((v) => v.j === 2).length === 3 && conseilAttendu(vs));
-  assert.ok(sur3.length > 0 && sur2.length > 0);
-  const alerte3 = sur3.find(({ codes }) => codes.includes('cinq_contre_deux') || codes.includes('score_s'));
-  const alerte2 = sur2.find(({ codes }) => codes.includes('cinq_contre_deux'));
-  assert.ok(alerte2, 'un 5 contre 2 sur la rangée j = 2');
-  const p = CT.calculer(alerte2.d);
-  const err = p.erreurs.find((x) => x.code === 'desequilibre');
+  const tous = [].concat(...Object.values(cl)).filter(({ vs }) => conseilAttendu(vs));
+  const cinq = tous.find(({ codes }) => codes.includes('cinq_contre_deux'));
+  assert.ok(cinq, 'un 5 contre 2 hors placement admissible');
+  const err = CT.calculer(cinq.d).erreurs.find((x) => x.code === 'desequilibre');
   assert.ok(err && err.message.includes(CONSEIL + '.'), err && err.message);
   assert.strictEqual(err.message.split(CONSEIL).length, 2, 'conseil écrit une seule fois');
-  if (alerte3) assert.ok(messagesInterface(alerte3.d).panneau.some((t) => t.includes(CONSEIL)));
-});
-
-test('conseil 5×5 : S ≥ 7 seul (sans 5 contre 2) le porte au panneau comme alerte, pas comme erreur', () => {
-  const cl = classes();
-  const c = (cl['une-rangee|S'] || []).concat(cl['une-rangee|cinqS'] || []).find(({ codes }) => codes.includes('score_s') && !codes.includes('cinq_contre_deux'));
-  assert.ok(c, 'aucune pose 3 sur une rangée avec S ≥ 7 seul sur ce plateau : ' + Object.keys(cl));
-  const p = CT.calculer(c.d);
+  const sSeul = tous.find(({ codes }) => codes.includes('score_s') && !codes.includes('cinq_contre_deux'));
+  assert.ok(sSeul, 'aucune pose avec S ≥ 5 seul sur ce plateau : ' + Object.keys(cl));
+  const p = CT.calculer(sSeul.d);
   const al = p.alertes.find((x) => x.code === 'score_s');
   assert.ok(al && al.message.includes(CONSEIL), al && al.message);
   assert.ok(!p.erreurs.some((x) => x.code === 'desequilibre'));
-  const rap = EQ.rapport(EQ.analyser(c.d));
+  const rap = EQ.rapport(EQ.analyser(sSeul.d));
   assert.ok(rap.alertes.some((t) => t.includes(CONSEIL)) && rap.blocages.length === 0);
 });
 
-test('conseil 5×5 : écart de rang seul, ou aucune alerte, ne porte pas le conseil (3 villes sur une rangée)', () => {
+test('conseil 5×5 : un placement admissible ne porte pas le conseil ; alerte « villes trop proches » : renvoi à « Placer les villes » en 5×5', () => {
   const cl = classes();
-  const rien = cl['une-rangee|rien'];
-  assert.ok(rien && rien.length > 0);
-  rien.slice(0, 20).forEach(({ d }) => {
+  const adm = [].concat(...Object.keys(cl).filter((k) => k.startsWith('admissible|')).map((k) => cl[k]));
+  assert.ok(adm.length > 0);
+  adm.forEach(({ d }) => {
     const m = messagesInterface(d);
-    assert.deepStrictEqual(m.panneau.filter((t) => t.includes('seule rangée')), []);
-    assert.deepStrictEqual(m.rapport.filter((t) => t.includes('seule rangée')), []);
+    assert.deepStrictEqual(m.panneau.filter((t) => t.includes(CONSEIL)), []);
+    assert.deepStrictEqual(m.rapport.filter((t) => t.includes(CONSEIL)), []);
   });
+  const proches = avecVilles(PLATEAU_CONSEIL, [{ i: 1, j: 1 }, { i: 2, j: 1 }, { i: 3, j: 2 }, { i: 1, j: 3 }, { i: 3, j: 3 }, { i: 2, j: 4 }, { i: 4, j: 4 }]);
+  const al = CT.calculer(proches).alertes.filter((x) => x.code === 'villes_proches');
+  assert.ok(al.length > 0 && al.every((x) => x.message.includes(CONSEIL)), JSON.stringify(al));
   // rapport : le texte d’explication du rapport 5×5 ne contient pas le conseil du 4×4, celui du 4×4 le garde
   assert.ok(!EQ.rapport(EQ.analyser(PLATEAU_CONSEIL)).explication.includes('jonctions-cases'));
   assert.ok(EQ.rapport(EQ.analyser(GEN.generer(doc4(), { graine: 'ex', candidats: 3 }).doc)).explication.includes('jonctions-cases'));

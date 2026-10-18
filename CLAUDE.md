@@ -35,7 +35,9 @@ Toujours répondre à l'utilisateur **en français**. Code, identifiants et comm
 - Dans une chaîne JS entre apostrophes droites, une apostrophe française casse la syntaxe : utiliser `’` ; lancer `node --check` après chaque modification.
 - Ne jamais modifier le fichier d'un sous-agent en cours avec une expression régulière large.
 
-## État (2026-10-18)
+## État (2026-10-18, soir)
 - Le travail se fait aussi sur un autre poste : **toujours commencer par `git fetch` puis `git pull`**. Les fonctionnalités se font sur une branche, fusionnée par PR. Le `main` local peut être en retard : comparer avec `origin/main`.
-- **Version 4.00.0 sur `main`** (PR #6 fusionnée, étiquette `4.00.0`) : passages sans case, catalogues organiques 4×4 (24 tuiles) et 5×5 (37 tuiles) branchés, générateur (moitiés égales, orientation, rythme, goulets 5×5, jonctions variées par défaut en 4×4), seuils S par format, stock imprimé dissocié du poids, proposition du nouveau catalogue aux documents 3.04 et v1, format version 3 pour les documents à passages. Rapports `docs/38` à `docs/52`. `node --test` 682 tests (675 OK, 7 PDF ignorés, ~75 s), recettes 337 / 116 OK.
-- **Prochaine étape** : ce qui reste dans `docs/25-travail-restant.md` (mesures 5 et 8 du `28`, conseil 5×5 à remesurer, articulations en 4×4, affichage mobile, régions thématiques, hexagonal en attente).
+- **Version 4.00.0 sur `main`** (étiquette `4.00.0`).
+- **Branche `connexions-5x5` (en cours, non fusionnée)** : refonte du **5×5 très connecté** (remarques de l’utilisateur après essai de la 4.00.0 ; décisions en fin de `docs/18` ; rapports `docs/53` à `docs/63`). Fait : catalogue 5×5 à 2 cases par tuile (porteuse latérale + relais ; centrales B3 LC1–LC7, bords LB2, coins LK2 ; 28 tuiles ; ≈ 57 cases), règles propres au 5×5, mesure des connexions (< 5 % de cases à ≤ 2), générateur 5×5, aide « Placer les villes », rythme (toute jonction = zone d’intérêt), murs déclarés en information, seuil S à 5 dans les deux formats, goulets évités aussi en 4×4. `node --test` 739 tests (732 OK, 7 PDF ignorés), recettes 358 / 116.
+- **En cours** : étude des **8 villes en 5×5** (décision de l’utilisateur, 4 par camp) par l’advisor design de jeu (rapport attendu en `docs/62`), puis décisions de l’utilisateur, production, testeur, relecteur, versionneur, PR.
+- **Travail restant** : `docs/25-travail-restant.md`.

@@ -38,10 +38,10 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var SEUIL_CINQ_CONTRE_DEUX = 5;
   var SEUIL_APPARITION_LOINTAINE = 7;
   var SEUIL_S = 5;                 // seuil de REJET du générateur, appliqué en 5×5 seulement (REJET_S de generateur.js) ; en 4×4, S n'est qu'un classement (docs/18, 2026-10-18 ; un plateau 4×4 généré reste à S <= 1)
-  /** Seuils d'alerte et d'information de S, propres à chaque format (docs/18, réponse de 2026-10-18 ; docs/48 § 4) : 4×4 alerte dès 5, information à 4 ;
-   *  5×5 alerte dès 7, information à 5 ou 6 (le 95e centile de la pose libre y est à 7). */
-  var SEUIL_S_PAR_FORMAT = Object.freeze({ '4x4': 5, '5x5': 7 });
-  var SEUIL_S_INFORMATION_PAR_FORMAT = Object.freeze({ '4x4': 4, '5x5': 5 });
+  /** Seuils d'alerte et d'information de S, propres à chaque format (docs/18, décision 1 de 2026-10-18 après docs/60) : 4×4 et 5×5 alerte dès 5, information à 4
+   *  (comme le rejet du générateur ; avec le catalogue très connecté, le 95e centile de la pose libre 5×5 est à 5). Les tables restent séparées : les formats peuvent diverger. */
+  var SEUIL_S_PAR_FORMAT = Object.freeze({ '4x4': 5, '5x5': 5 });
+  var SEUIL_S_INFORMATION_PAR_FORMAT = Object.freeze({ '4x4': 4, '5x5': 4 });
   var PORTS_VILLE_MIN = 3;         // 5×5 : ports minimum d'une jonction qui porte une ville ; en dessous, information seulement (docs/36) ; lu par le générateur et les outils
   var PORTS_JONCTION_MIN = G.MIN_PORTS_JONCTION; // ports minimum de toute jonction intérieure (condition ferme du générateur 5×5)
   /** Villes du 5×5 en « 2-3-2 » (docs/18) : groupes de rangées de jonctions et nombre de villes dans chaque groupe. */
@@ -50,7 +50,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     Object.freeze({ rangees: Object.freeze([2, 3]), nb: 3 }),
     Object.freeze({ rangees: Object.freeze([4]), nb: 2 })
   ]);
-  var CONSEIL_5X5 = ' Les 3 villes du milieu sont sur une seule rangée : en mettre 2 sur l’une et 1 sur l’autre rétablit presque toujours l’équilibre.';
+  var CONSEIL_5X5 = ' Outils > Placer les villes pose les 7 villes au meilleur placement admissible.';
   /**
    * Plateau très déséquilibré (docs/19, arbitrage de docs/20) : écart de plus de SEUIL_BLOCAGE_ECART pas à un
    * rang de 1 à 7, ou « 5 contre 2 » si CINQ_CONTRE_DEUX_BLOQUANT. Seuils définitifs dans les deux formats
@@ -278,21 +278,21 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var estFini = function (x) { return x !== undefined && isFinite(x); };
 
   /**
-   * Conseil 5×5 (docs/36) : vrai si les villes respectent le squelette 2-3-2 (2 en j = 1, 3 en j = 2 ou 3, 2 en j = 4)
-   * et que les 3 villes du milieu sont toutes sur la même rangée (j = 2 ou j = 3).
+   * Conseil 5×5 (docs/60 § 5) : renvoi à « Placer les villes ». Vrai si les 7 villes ne forment pas déjà un placement admissible,
+   * c'est-à-dire si elles ne respectent pas le squelette 2-3-2, ou si une ville est sur une jonction à moins de 3 ports,
+   * ou si deux villes sont à moins de 3 cases d'écart (g : graphe du document).
    */
-  function conseil5x5Applicable(villes) {
+  function conseil5x5Applicable(villes, g) {
     if (villes.length !== NB_VILLES) return false;
     var par = {};
     villes.forEach(function (v) { par[v.j] = (par[v.j] || 0) + 1; });
-    var total = 0;
-    return REPARTITION_VILLES_5X5.every(function (g) {
-      var n = 0, max = 0;
-      g.rangees.forEach(function (j) { n += par[j] || 0; max = Math.max(max, par[j] || 0); });
-      total += n;
-      // le groupe a son effectif ; un groupe de plusieurs rangées (le milieu) doit tenir sur une seule
-      return n === g.nb && (g.rangees.length === 1 || max === g.nb);
-    }) && total === NB_VILLES;
+    var squelette = REPARTITION_VILLES_5X5.every(function (gr) {
+      var n = 0;
+      gr.rangees.forEach(function (j) { n += par[j] || 0; });
+      return n === gr.nb;
+    });
+    var admissible = squelette && villes.every(function (v) { return v.ports >= PORTS_VILLE_MIN; }) && !(g && villesProches(g).length);
+    return !admissible;
   }
 
   /**
@@ -313,7 +313,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    *  - inaccessibles : {1: [{i, j}], 2: [{i, j}]} ; apparitions : {1, 2} (nombre de cases d'apparition) ;
    *  - blocages : [{code, message}] (plateau très déséquilibré : « 5 contre 2 », écart > SEUIL_BLOCAGE_ECART) ;
    *    tresDesequilibre : blocages non vide ;
-   *  - aSurveiller : S >= seuilS(format) (4×4 : 5 ; 5×5 : 7) ; sInformation : S de seuilSInformation(format) à l'alerte exclue (4×4 : 4 ; 5×5 : 5 ou 6), sans alerte ;
+   *  - aSurveiller : S >= seuilS(format) (4×4 et 5×5 : 5) ; sInformation : S de seuilSInformation(format) à l'alerte exclue (4×4 et 5×5 : 4), sans alerte ;
    *  - informations : [{code, message}] (5×5 : ville sur une jonction à moins de 3 ports, jamais une alerte) ;
    *  - alertes : [{code, message}] ; lacunes : [texte] ; complet : booléen (7 villes, au moins une case
    *    d'apparition par camp, toutes les tuiles posées avec un modèle présent dans la bibliothèque) ; partiel : !complet.
@@ -399,7 +399,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     // Plateau très déséquilibré (blocages) puis alertes
     var blocages = [], alertes = [], informations = [];
     var est5x5 = M.formatDuDocument(doc).id === '5x5';
-    var conseil5x5 = est5x5 && conseil5x5Applicable(villes) ? CONSEIL_5X5 : '';
+    var conseil5x5 = est5x5 && conseil5x5Applicable(villes, g) ? CONSEIL_5X5 : '';
     var sAlerte = seuilS(M.formatDuDocument(doc).id), sInfo = seuilSInformation(M.formatDuDocument(doc).id);
     if (est5x5) {
       villes.forEach(function (v) {

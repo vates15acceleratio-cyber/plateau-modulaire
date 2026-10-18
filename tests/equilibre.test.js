@@ -488,23 +488,23 @@ test('equilibre : score S, écart aux rangs 1 à 7, D6 étendu, première ville,
   assert.strictEqual(GR.equilibre(M.nouveauDocument()).S, null);
 });
 
-test('equilibre 5×5 : alerte S dès 7, information S = 5 ou 6 (docs/18, 2026-10-18) ; le 4×4 garde 5 et 4', () => {
+test('equilibre 5×5 : alerte S dès 5, information S = 4, comme le 4×4 (docs/18 décision 1 de 2026-10-18, docs/60)', () => {
   const DOC5 = M.nouveauDocument('5x5');
   const d1 = [2, 3, 3, 4, 5, 6, 6];
-  const attendus = [[[2, 4, 4, 5, 6, 6, 6], 4, false, false], [[2, 4, 4, 5, 6, 6, 7], 5, false, true], [[2, 4, 4, 5, 6, 7, 7], 6, false, true], [[2, 4, 4, 5, 7, 7, 7], 7, true, false]];
+  const attendus = [[[2, 3, 3, 4, 5, 6, 6], 0, false, false], [[2, 4, 4, 5, 6, 6, 6], 4, false, true], [[2, 4, 4, 5, 6, 6, 7], 5, true, false], [[2, 4, 4, 5, 6, 7, 7], 6, true, false], [[2, 4, 4, 5, 7, 7, 7], 7, true, false]];
   for (const [d2, S, alerte, info] of attendus) {
     const e = GR.equilibre(DOC5, { graphe: grapheDistances(d1, d2) });
     assert.strictEqual(e.S, S);
     assert.strictEqual(e.aSurveiller, alerte, '5×5 S = ' + S);
     assert.strictEqual(e.sInformation, info, '5×5 S = ' + S);
     assert.strictEqual(e.alertes.some((a) => a.code === 'score_s'), alerte, '5×5 S = ' + S);
-    // le même graphe sur un document 4×4 : alerte dès 5, information à 4
+    // le même graphe sur un document 4×4 : mêmes seuils
     const e4 = GR.equilibre(DOC_VIDE, { graphe: grapheDistances(d1, d2) });
     assert.strictEqual(e4.aSurveiller, S >= 5, '4×4 S = ' + S);
     assert.strictEqual(e4.sInformation, S === 4, '4×4 S = ' + S);
   }
   const al = GR.equilibre(DOC5, { graphe: grapheDistances(d1, [2, 4, 4, 5, 7, 7, 7]) }).alertes.find((x) => x.code === 'score_s');
-  assert.ok(al.message.includes('à partir de 7'), al.message);
+  assert.ok(al.message.includes('à partir de 5'), al.message);
 });
 
 test('cinq contre deux : sans case d’apparition pour un camp (plateau incomplet), pas de blocage', () => {

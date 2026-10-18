@@ -25,7 +25,7 @@ L'utilisateur a marqué une pause ; il reprendra **après discussion**. Rien ne 
 - **Revue de la branche `passages` (`docs/51`, 2026-10-18)** : fait — rejet de S aligné (5×5 seulement), `version: 3` pour les documents à passages (la 3.04 les refuse), test de temps en temps processeur, recette du démarrage depuis une sauvegarde automatique 3.04 (`recette-interface`, S11, 4×4 et 5×5, Garder / Charger / Ctrl+Z / Ctrl+Y), `poids` en alerte (1 à 999), texte de la proposition v1 identique, commentaires et conseil 4×4 présenté comme conseil de pose à la main.
 - **Remarques de `docs/51` à reporter** (non traitées) :
   - 7 : la proposition du nouveau catalogue revient à chaque démarrage tant que l'utilisateur garde ses tuiles ; on pourrait retenir le refus pour la session ;
-  - 8 : les seuils de S dépendent du format, pas du catalogue (un document 5×5 au catalogue 3.04 passe aussi à l'alerte S ≥ 7) ; à mentionner dans le CHANGELOG ;
+  - 8 : les seuils de S dépendent du format, pas du catalogue (un document 5×5 au catalogue 3.04 passe aussi à l'alerte S ≥ 5 (7 avant la décision 1 de `docs/18` du 2026-10-18 après `docs/60`)) ; à mentionner dans le CHANGELOG ;
   - 9 : `casesParMoitie` (`graphe.js`) compte les jonctions posées même sans modèle trouvé, alors que le compteur « Cases » de `controles.js` les ignore ; réutiliser `M.portsJonction` ;
   - 10 : test des goulets à remplacer par une comparaison avec / sans le terme des articulations ; empreintes de `generateur-5x5.test.js` et `passages.test.js` à régénérer à chaque réglage du générateur ; stock testé sur 100 graines (cible mesurée sur 200) ;
   - 11 : conseil 4×4 « rangée centrale » (`graphe.js`, `equilibre.js`) devenu un conseil de pose à la main ; le générateur ne le suit plus par défaut ;
@@ -70,8 +70,8 @@ Proposée par l'utilisateur au moment de l'arrêt, **pas encore définie** : à 
 - **Reste à mesurer ou à vérifier** :
   - point 5 du `docs/28` § 6 : S selon la jonction de la 7e ville (seule la répartition des villes est mesurée) ;
   - point 8 du `docs/28` § 6 : distance entre apparitions verte et rouge par la rangée neutre ;
-  - conseil 5×5 « 3 villes du milieu sur une rangée » (`docs/36` point 5) : **à remesurer** sur le catalogue organique avant de le garder tel quel (l'alerte S n'apparaît plus qu'à partir de 7, donc le conseil est moins souvent affiché) ;
-  - 4×4 en « jonctions variées » : 1,5 % des plateaux générés (3 sur 200) ont un point d'articulation, la préférence n'est appliquée qu'en 5×5 ; à étendre au 4×4 si l'utilisateur le souhaite ;
+  - conseil 5×5 « 3 villes du milieu sur une rangée » (`docs/36` point 5) : **fait** (`docs/60`, décision 1 de `docs/18`) : remplacé par un renvoi à « Outils > Placer les villes », et seuil S du 5×5 revenu à 5 (information 4) ;
+  - 4×4 en « jonctions variées » : 2,0 % des plateaux générés (4 sur 200) avaient un point d'articulation ; **fait** (décision 4 de `docs/18`) : la préférence s'applique aussi au 4×4, 0 % sur 200 plateaux ;
   - villes au centre en 5×5 : 13,5 %, sous la cible de 20 % du `docs/38` (à reprendre avec les « régions thématiques »).
 - **Suite prévue** : relecteur, versionneur (numéro, étiquette, `CHANGELOG.md`), PR.
 

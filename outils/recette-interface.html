@@ -918,10 +918,10 @@
 
     /* ============================================================== */
     /** S9c : parcours du générateur 5×5 dans l’interface (vrai catalogue) : Nouveau → 5×5, Plateau aléatoire, Générer, Appliquer, Ctrl+Z,
-     *  rapport d’équilibre, conseil « 3 villes du milieu » en pose manuelle, information « ville sur jonction à moins de 3 ports ». */
+     *  rapport d’équilibre, conseil « Placer les villes » en pose manuelle, information « ville sur jonction à moins de 3 ports ». */
     function s8c_generateur5x5_parcours() {
       titre('S9c Générateur 5×5 : parcours dans l’interface (docs/34, docs/36)');
-      var CONSEIL = 'Les 3 villes du milieu sont sur une seule rangée : en mettre 2 sur l’une et 1 sur l’autre rétablit presque toujours l’équilibre';
+      var CONSEIL = 'Outils > Placer les villes pose les 7 villes au meilleur placement admissible';
       var GR = PM.graphe, GEN = PM.generateur;
       function bouton(zone, texte) {
         var bs = zone.querySelectorAll('button'), r = null;
@@ -932,7 +932,9 @@
       function cle(v) { return v.i + ',' + v.j; }
       function codes(e) { return e.blocages.concat(e.alertes).map(function (a) { return a.code; }); }
       function nbSur(vs, jj) { return vs.filter(function (v) { return v.j === jj; }).length; }
-      function unePlace(vs) { return nbSur(vs, 1) === 2 && nbSur(vs, 4) === 2 && (nbSur(vs, 2) === 3 || nbSur(vs, 3) === 3); }
+      function cleTri(vs) { return vs.map(cle).sort().join(' '); }
+      var ADM = {};
+      function conseilAttendu(vs) { return !ADM[cleTri(vs)]; } // docs/60 § 5 : le conseil n’est pas joint à un placement admissible
       function avecVilles(vs) { var d = JSON.parse(JSON.stringify(etat.doc())); d.plateau.jetons = vs.map(function (v) { return { i: v.i, j: v.j, type: 'capture' }; }); return d; }
       /** Met les villes du plateau en place par des clics sur les jonctions (retire d’abord celles qui ne servent pas). */
       function poserVilles(vs) {
@@ -1031,16 +1033,17 @@
         // pose manuelle : placements 2-3-2 cherchés dans la page avec le moteur (et non codés en dur)
         var trouve = { cinq: null, deuxUn: null, rien: null };
         var pl = GEN.placementsVilles5x5();
+        GEN.placementsAdmissibles(etat.doc()).placements.forEach(function (p) { ADM[cleTri(p)] = 1; });
         for (var k = 0; k < pl.length && !(trouve.cinq && trouve.deuxUn && trouve.rien); k++) {
-          var vv = pl[k], ee = GR.equilibre(avecVilles(vv)), un = unePlace(vv);
+          var vv = pl[k], ee = GR.equilibre(avecVilles(vv)), un = conseilAttendu(vv);
           if (un && codes(ee).indexOf('cinq_contre_deux') >= 0 && !trouve.cinq) trouve.cinq = vv;
-          if (!un && codes(ee).indexOf('score_s') >= 0 && !trouve.deuxUn) trouve.deuxUn = vv;
-          if (un && !codes(ee).length && !trouve.rien) trouve.rien = vv;
+          if (un && codes(ee).indexOf('score_s') >= 0 && codes(ee).indexOf('cinq_contre_deux') < 0 && !trouve.deuxUn) trouve.deuxUn = vv;
+          if (!un && !codes(ee).length && !trouve.rien) trouve.rien = vv;
         }
-        ctrl('recherche de placements : 3 sur une rangée avec 5 contre 2, 2+1 avec S ≥ 5, 3 sur une rangée sans alerte', !!(trouve.cinq && trouve.deuxUn && trouve.rien));
+        ctrl('recherche de placements : 5 contre 2 hors placement admissible, S ≥ 5 seul hors placement admissible, placement admissible sans alerte', !!(trouve.cinq && trouve.deuxUn && trouve.rien));
         return trouve;
       }).then(function (trouve) {
-        // (a) 3 villes du milieu sur une rangée + « 5 contre 2 »
+        // (a) « 5 contre 2 » hors placement admissible
         poserVilles(trouve.cinq);
         var e = GR.equilibre(etat.doc());
         ctrl('pose manuelle (a) : villes posées par clics, moteur : « 5 contre 2 » bloquant', etat.doc().plateau.jetons.length === 7 && codes(e).indexOf('cinq_contre_deux') >= 0 && e.blocages.length >= 1, J(codes(e)) + ' ' + etat.doc().plateau.jetons.length);
@@ -1049,22 +1052,22 @@
         var rap = ouvrirRapport();
         ctrl('pose manuelle (a) : le rapport d’équilibre affiche le conseil une seule fois (au message « 5 contre 2 », même si S ≥ 5 s’y ajoute)', rap.indexOf(CONSEIL) >= 0 && rap.split(CONSEIL).length - 1 === 1 && /Plateau très déséquilibré/.test(rap), (rap.split(CONSEIL).length - 1) + ' conseil(s)');
         PM.dialogue.fermer();
-        // (b) 2 + 1 et S >= 5 : pas de conseil
+        // (b) S >= 5 seul hors placement admissible : le conseil est joint à l’alerte
         poserVilles(trouve.deuxUn);
         e = GR.equilibre(etat.doc());
-        ctrl('pose manuelle (b) : 2 + 1 sur le milieu, moteur : S ≥ 5', codes(e).indexOf('score_s') >= 0, J(codes(e)));
+        ctrl('pose manuelle (b) : moteur : S ≥ 5', codes(e).indexOf('score_s') >= 0, J(codes(e)));
         t = texteControles();
-        ctrl('pose manuelle (b) : le panneau signale le score S, sans conseil', /Score S/.test(t) && t.indexOf('seule rangée') < 0, t.replace(/\s+/g, ' ').slice(0, 300));
+        ctrl('pose manuelle (b) : le panneau signale le score S avec le conseil', /Score S/.test(t) && t.indexOf(CONSEIL) >= 0, t.replace(/\s+/g, ' ').slice(0, 300));
         rap = ouvrirRapport();
-        ctrl('pose manuelle (b) : le rapport signale S, sans conseil', /Score S = /.test(rap) && rap.indexOf('seule rangée') < 0);
+        ctrl('pose manuelle (b) : le rapport signale S avec le conseil', /Score S = /.test(rap) && rap.indexOf(CONSEIL) >= 0);
         PM.dialogue.fermer();
-        // (c) 3 sur une rangée, aucune alerte : pas de conseil
+        // (c) placement admissible, aucune alerte : pas de conseil
         poserVilles(trouve.rien);
         e = GR.equilibre(etat.doc());
         t = texteControles();
-        ctrl('pose manuelle (c) : 3 sur une rangée sans alerte : ni alerte ni conseil au panneau', codes(e).length === 0 && t.indexOf('seule rangée') < 0 && !/Plateau très déséquilibré|Score S/.test(t), J(codes(e)));
+        ctrl('pose manuelle (c) : placement admissible sans alerte : ni alerte ni conseil au panneau', codes(e).length === 0 && t.indexOf('Placer les villes pose') < 0 && !/Plateau très déséquilibré|Score S/.test(t), J(codes(e)));
         rap = ouvrirRapport();
-        ctrl('pose manuelle (c) : rapport « Aucune alerte d’équilibre. » sans conseil', /Aucune alerte d.équilibre\./.test(rap) && rap.indexOf('seule rangée') < 0);
+        ctrl('pose manuelle (c) : rapport « Aucune alerte d’équilibre. » sans conseil', /Aucune alerte d.équilibre\./.test(rap) && rap.indexOf('Placer les villes pose') < 0);
         PM.dialogue.fermer();
         // (d) information : une ville sur une jonction à moins de 3 ports
         var peu = null, beaucoup = [];
