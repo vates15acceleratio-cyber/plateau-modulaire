@@ -427,18 +427,23 @@ test('anciens documents (catalogue précédent) : un plateau complet 4×4 et 5×
   assert.deepEqual(M.validerPlateau(d5).alertes, []);
 });
 
-test('anciens documents (catalogue précédent) : générateurs 4×4 et 5×5 à graine donnée, mêmes plateaux (empreintes du générateur de docs/46)', () => {
+test('anciens documents (catalogue précédent) : générateur 4×4 à graine donnée, mêmes plateaux (empreintes de docs/46) ; 5×5 : abandon expliqué', () => {
   // le générateur a changé avec le branchement des catalogues « centrales ouvertes » (moitiés égales, orientation 4×4, cible de cases,
   // affinage du rythme) : un ancien document s'ouvre à l'identique, mais un nouveau tirage y donne un autre plateau qu'en version 3.04
   const h = (o) => crypto.createHash('sha1').update(JSON.stringify(o)).digest('hex').slice(0, 12);
   const attendu = EMPREINTES_ANCIENS;
-  for (const g of ['4x4', '5x5']) {
+  for (const g of ['4x4']) {
     const obtenu = [0, 1, 2].map((k) => {
       const r = PM.generateur.generer(docPrecedent(g), { graine: 's' + k, candidats: 8, jonctionsVariees: false }); // 4×4 : option décochée (le défaut est « variées » depuis docs/48)
       return h(r.doc) + ':' + h(GR.equilibre(r.doc));
     });
     assert.deepEqual(obtenu, attendu[g], g);
   }
+  // 5×5 (docs/18, « 5×5 très connecté ») : les tuiles 3.04 laissent bien plus de 5 % de cases à 2 connexions ; le générateur abandonne
+  // et conseille le catalogue livré (le document lui-même s'ouvre toujours à l'identique, test précédent)
+  const r5 = PM.generateur.generer(docPrecedent('5x5'), { graine: 's0', candidats: 8 });
+  assert.equal(r5.ok, false);
+  assert.match(r5.raison, /Abandon après 25 échecs consécutifs.*Le catalogue 5×5 livré/);
 });
 
 /* ---------- Éditeur : fonctions pures ---------- */

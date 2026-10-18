@@ -449,19 +449,51 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return e;
   });
 
-  // Ports et raccords : alertes R1 à R4 (docs/19) et extrémités sur un bord extérieur du gabarit
-  regles.push(function (m) {
-    var e = [], sorties = sortiesDesCases(m), gabarit = gabaritConnu(m.gabarit);
-    var portsParCase = dict(), raccordsParCase = dict(), typeCase = dict();
+  /**
+   * Règles propres au 5×5 (docs/53, docs/55 point 7 ; décisions de docs/18 « 5×5 très connecté ») : R1 levée pour la PORTEUSE
+   * LATÉRALE et R3 levée en partie. Pour une case porteuse (au moins un port de coin) d'un modèle 5×5, `coins` étant ses coins,
+   * renvoie ce qui lui est permis :
+   *  - 2 ports sur les coins k et k + 1 (les deux coins du côté k) : porteuse latérale, seul raccord permis (k, milieu) ;
+   *  - 1 port sur le coin k, sur un modèle de gabarit coin seulement : raccords permis (k − 1, fin) et (k, début), la « paire basse »
+   *    qui longe ce coin (porteuse du coin) ;
+   *  - sinon (2 ports en diagonale, 3 ports ou plus) : aucun raccord, et l'alerte R1 (comme en 4×4).
+   * Renvoie { laterale (vrai si 2 ports d'un même côté), raccords: [clés « côté:pos »] }. R2 (aucune autre porteuse reliée), R4
+   * (aucun port sur l'apparition) et « une porteuse ne touche jamais un passage » restent des alertes dans les deux formats.
+   */
+  function porteuse5x5(coins, gabarit) {
+    var c = coins.slice().sort(function (a, b) { return a - b; });
+    if (c.length === 1) return gabarit !== 'coin' ? { laterale: false, raccords: [] } : { laterale: false, raccords: [((c[0] + 3) % 4) + ':2', c[0] + ':0'] };
+    if (c.length === 2) {
+      var k = (c[0] + 1) % 4 === c[1] ? c[0] : ((c[1] + 1) % 4 === c[0] ? c[1] : -1);
+      if (k >= 0) return { laterale: true, raccords: [k + ':1'] };
+    }
+    return { laterale: false, raccords: [] };
+  }
+
+  // Ports et raccords : alertes R1 à R4 (docs/19 ; R1 et R3 propres au 5×5 ci-dessus) et extrémités sur un bord extérieur du gabarit
+  regles.push(function (m, F) {
+    var e = [], sorties = sortiesDesCases(m), gabarit = gabaritConnu(m.gabarit), cinq = !!F && F.id === '5x5';
+    var portsParCase = dict(), raccordsParCase = dict(), typeCase = dict(), coinsParCase = dict(), racParCase = dict();
     tab(m.cases).forEach(function (c) { if (estObjet(c) && estId(c.id)) typeCase[c.id] = c.type; });
     sorties.forEach(function (s) {
       var table = s.type === 'coin' ? portsParCase : raccordsParCase;
       table[s.caseId] = (table[s.caseId] || 0) + 1;
+      if (s.type === 'coin') (coinsParCase[s.caseId] = coinsParCase[s.caseId] || []).push(s.autre.coin);
+      else (racParCase[s.caseId] = racParCase[s.caseId] || []).push(s.autre.raccord.cote + ':' + s.autre.raccord.pos);
     });
     function porteuse(id) { return !!portsParCase[id]; }
     Object.keys(portsParCase).forEach(function (id) {
-      if (portsParCase[id] > 1) e.push(alerte('ports_case', 'La case ' + id + ' porte plusieurs ports de coin : ' + RISQUE_ECART + '.', refCase(id)));
-      if (raccordsParCase[id]) e.push(alerte('raccord_porteuse', 'La case ' + id + ' porte un port et un raccord : ' + RISQUE_ECART + '.', refCase(id)));
+      var permis = cinq ? porteuse5x5(coinsParCase[id], gabarit) : { laterale: false, raccords: [] };
+      if (portsParCase[id] > 1 && !permis.laterale) {
+        e.push(alerte('ports_case', 'La case ' + id + ' porte plusieurs ports de coin' + (cinq ? ' qui ne sont pas les deux coins d’un même côté' : '') + ' : ' + RISQUE_ECART + '.', refCase(id)));
+      }
+      var rac = racParCase[id] || [], vus = dict(), refus = rac.filter(function (r) {
+        var double = vus[r]; vus[r] = true;
+        return double || permis.raccords.indexOf(r) < 0;
+      });
+      if (refus.length) {
+        e.push(alerte('raccord_porteuse', 'La case ' + id + ' porte un port et un raccord' + (cinq ? ' que n’autorise pas la règle du 5×5 (porteuse latérale : le milieu de son côté seulement ; porteuse d’un coin : la paire qui longe ce coin)' : '') + ' : ' + RISQUE_ECART + '.', refCase(id)));
+      }
       if (typeCase[id] === 'apparition') e.push(alerte('port_apparition', 'La case d\'apparition ' + id + ' porte un port de coin : ' + RISQUE_ECART + '.', refCase(id)));
     });
     tab(m.chemins).forEach(function (ch) {

@@ -1,7 +1,7 @@
 'use strict';
 /*
  * Tests du générateur de plateau aléatoire (src/generateur.js), adapté aux règles v2.
- * Bibliothèque de test : PM.modele.copieExemples(grille) (conforme à R1 à R4). Le catalogue de la version 1
+ * Bibliothèque de test : PM.modele.copieExemples(grille) (conforme à R1 à R4) en 4×4 ; en 5×5, le catalogue livré (docGen). Le catalogue de la version 1
  * ne permet aucun plateau à 3 cases d'écart entre villes : le générateur doit l'expliquer.
  */
 const test = require('node:test');
@@ -25,6 +25,12 @@ function docExemples(grille) {
   d.modeles.push(variante);
   return d;
 }
+
+/**
+ * Bibliothèque du format : exemples en 4×4 ; catalogue livré en 5×5, car le 5×5 demande des tuiles très connectées (moins de 5 % de cases
+ * à 2 connexions, docs/18) que les exemples à une case porteuse par port ne donnent pas (le générateur l'explique, generateur-5x5.test.js).
+ */
+function docGen(grille) { return grille === '5x5' ? PM.catalogue.nouveauDocument('5x5') : docExemples(grille); }
 
 test('même graine et même bibliothèque : même plateau (graine texte et graine nombre)', () => {
   for (const graine of ['essai', 42]) {
@@ -52,7 +58,7 @@ test('sans graine : une graine est générée et renvoyée, et la rejouer redonn
 test('plateau généré 4×4 et 5×5 : grille pleine, 7 villes, valide, compteurs PM.controles à ok, aucune erreur', () => {
   for (const grille of ['4x4', '5x5']) {
     for (const graine of ['a', 'b']) {
-      const r = GEN.generer(docExemples(grille), { graine, candidats: 40 });
+      const r = GEN.generer(docGen(grille), { graine, candidats: 40 });
       assert.ok(r.ok, r.raison);
       const n = PM.geometrie.format(grille).GRILLE.colonnes;
       assert.strictEqual(r.doc.grille, grille);
@@ -63,6 +69,7 @@ test('plateau généré 4×4 et 5×5 : grille pleine, 7 villes, valide, compteur
       assert.strictEqual(M.validerPlateau(r.doc).erreurs.length, 0);
       const c = PM.controles.calculer(r.doc);
       assert.deepStrictEqual(c.erreurs, []);
+      if (grille === '5x5') assert.ok(c.compteurs.some((x) => x.cle === 'connexions'));
       for (const cpt of c.compteurs) assert.strictEqual(cpt.etat, 'ok', grille + ' ' + cpt.cle + ' : ' + cpt.valeur + ' / ' + cpt.cible);
       // bords et coins dans leur rotation suggérée
       for (const t of r.doc.plateau.tuiles) {
@@ -75,7 +82,7 @@ test('plateau généré 4×4 et 5×5 : grille pleine, 7 villes, valide, compteur
 
 test('critère v2 vérifié indépendamment : 3 cases entre villes, connexe, pas de blocage, écart ≤ 2, première ville égale', () => {
   for (let k = 0; k < 6; k++) {
-    const r = GEN.generer(docExemples(k % 2 ? '5x5' : '4x4'), { graine: 'v' + k, candidats: 30 });
+    const r = GEN.generer(docGen(k % 2 ? '5x5' : '4x4'), { graine: 'v' + k, candidats: 30 });
     assert.ok(r.ok, r.raison);
     const g = GR.construire(r.doc);
     assert.deepStrictEqual(GR.villesProches(g), []);
@@ -194,7 +201,7 @@ test('tolérance : S du plateau rendu ≤ Smin + tolérance (1 par défaut, 0 = 
 test('temps : 200 candidats en moins de 12 s de temps processeur sous Node (4×4 et 5×5)', () => {
   for (const grille of ['4x4', '5x5']) {
     const t0 = Date.now(), c0 = process.cpuUsage();
-    const r = GEN.generer(docExemples(grille), { graine: 'chrono' });
+    const r = GEN.generer(docGen(grille), { graine: 'chrono' });
     const horloge = Date.now() - t0, c = process.cpuUsage(c0);
     const cpu = Math.round((c.user + c.system) / 1000);
     assert.ok(r.ok, r.raison);
@@ -242,10 +249,9 @@ test('un modèle à 0 exemplaire n\u2019est jamais tiré', () => {
 
 test('rôles respectés par le tirage : coin dans un coin, bord sur le pourtour, centrale au centre (4×4 et 5×5), toutes les poses valides', () => {
   for (const grille of ['4x4', '5x5']) {
-    const r = GEN.generer(docExemples(grille), { graine: 'roles', candidats: 20 });
+    const r = GEN.generer(docGen(grille), { graine: 'roles', candidats: 20 });
     assert.ok(r.ok, r.raison);
-    const gab = { 'ex-coin': 'coin', 'ex-bord': 'bord', 'ex-centrale': 'centrale', 'ex-centrale-b': 'centrale' };
-    for (const t of r.doc.plateau.tuiles) assert.strictEqual(gab[t.modeleId], M.gabaritCellule(t.col, t.lig, grille), `${t.modeleId} en (${t.col},${t.lig})`);
+    for (const t of r.doc.plateau.tuiles) assert.strictEqual(M.modeleParId(r.doc, t.modeleId).gabarit, M.gabaritCellule(t.col, t.lig, grille), `${t.modeleId} en (${t.col},${t.lig})`);
   }
 });
 

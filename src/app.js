@@ -122,7 +122,8 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
 
   /** Texte commun des deux propositions du nouveau catalogue (la première phrase dit d'où vient la bibliothèque). */
   function texteNouveauCatalogue(origine, grille) {
-    return origine + ' Un nouveau catalogue (' + descriptionGrille(grille).nom + ') aux tracés plus organiques, avec des virages sans case, est disponible. Le charger remplace la bibliothèque par le nouveau catalogue et vide le plateau ; Ctrl+Z permet de revenir au document tel qu’il était. Si vous gardez vos tuiles, le document reste inchangé.';
+    var nature = grille === '5x5' ? 'à deux cases par tuile, très connecté (trois connexions par case ou plus)' : 'aux tracés plus organiques, avec des virages sans case';
+    return origine + ' Un nouveau catalogue (' + descriptionGrille(grille).nom + ') ' + nature + ', est disponible. Le charger remplace la bibliothèque par le nouveau catalogue et vide le plateau ; Ctrl+Z permet de revenir au document tel qu’il était. Si vous gardez vos tuiles, le document reste inchangé.';
   }
 
   /**
@@ -137,13 +138,13 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       'Nouveau catalogue chargé, plateau vidé (Ctrl+Z pour revenir à l’ancien document).');
   }
 
-  /** Le document porte-t-il la bibliothèque du catalogue précédent (version 3.04), sans modification ? */
+  /** Le document porte-t-il la bibliothèque d'un catalogue précédent (version 3.04 ; en 5×5, aussi 4.00.0), sans modification ? */
   function aCataloguePrecedent(doc) {
     return !!(PM.sauvegarde && typeof PM.sauvegarde.bibliothequeCataloguePrecedent === 'function' && PM.sauvegarde.bibliothequeCataloguePrecedent(doc));
   }
 
   /**
-   * Propose le nouveau catalogue (tuiles organiques, passages sans case) à un document qui porte encore celui de la version 3.04.
+   * Propose le nouveau catalogue à un document qui porte encore un catalogue précédent (version 3.04 ; en 5×5, aussi celui de la 4.00.0).
    * Refuser ne change rien au document. Accepter remplace la bibliothèque par le nouveau catalogue de la même grille et VIDE le
    * plateau : les tuiles posées sont celles de l’ancien catalogue, qui ne se mélangent pas au nouveau (le générateur tire dans toute la
    * bibliothèque). C’est une seule étape d’historique : Ctrl+Z rend l’ancien document tel qu’il était, plateau compris.

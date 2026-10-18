@@ -84,26 +84,28 @@ test('génération 5×5 (150 graines, 1 à 3 candidats) : 25 tuiles à leur rôl
   });
 });
 
-test('génération 5×5 : au plus 6 B1 (ses exemplaires), B1 seulement sur le pourtour, 4 coins K2, 78 à 81 cases, moitiés égales', () => {
-  const vus = {};
+test('génération 5×5 : 4 coins LK2, 12 bords LB2, 9 centrales du catalogue (stock exact), 59 cases, moitiés égales, moins de 5 % de cases à 2 connexions', () => {
   plateaux().forEach((r, k) => {
-    const d = r.doc, id = 'rec-' + k;
-    const b1 = d.plateau.tuiles.filter((t) => t.modeleId === 'B1');
-    assert.ok(b1.length <= 6, id + ' : ' + b1.length + ' B1 (6 exemplaires, docs/46)');
-    vus[b1.length] = (vus[b1.length] || 0) + 1;
-    b1.forEach((t) => assert.strictEqual(M.gabaritCellule(t.col, t.lig, '5x5'), 'bord', id + ' : B1 hors bord'));
-    const coins = d.plateau.tuiles.filter((t) => M.gabaritCellule(t.col, t.lig, '5x5') === 'coin');
-    assert.deepStrictEqual(coins.map((t) => t.modeleId), ['K2', 'K2', 'K2', 'K2'], id);
-    // catalogue (docs/46) : K2 5 ; B1 6, B7 8 ; U1 5, P3 2, P5 2, P1 1, P2 1
+    const d = r.doc, id = 'rec-' + k, n = {};
     d.plateau.tuiles.forEach((t) => {
+      n[t.modeleId] = (n[t.modeleId] || 0) + 1;
       const role = M.gabaritCellule(t.col, t.lig, '5x5');
-      if (role === 'centrale') assert.ok(['U1', 'P1', 'P2', 'P3', 'P5'].includes(t.modeleId), id);
-      if (role === 'bord' && t.modeleId !== 'B1') assert.strictEqual(t.modeleId, 'B7', id);
+      if (role === 'coin') assert.strictEqual(t.modeleId, 'LK2', id);
+      if (role === 'bord') assert.strictEqual(t.modeleId, 'LB2', id);
+      if (role === 'centrale') assert.ok(['LC1', 'LC2', 'LC3', 'LC4'].includes(t.modeleId), id);
     });
-    assert.ok(r.score.cases.total >= 78 && r.score.cases.total <= 81, id + ' : ' + r.score.cases.total + ' cases');
+    // catalogue (docs/55) : la composition est celle du stock à imprimer, donc tout plateau généré se monte avec la boîte
+    d.modeles.forEach((m) => assert.ok((n[m.id] || 0) <= m.exemplaires, id + ' : ' + m.id));
+    assert.strictEqual(r.score.cases.total, 59, id);
     assert.strictEqual(r.score.cases.ecart, 0, id);
+    // connexions par case (docs/53 § 1), mesurées indépendamment : degré de chaque case de tuile et ports de chaque jonction-case
+    const g = GR.construire(d, { villesTraversables: false });
+    let faibles = 0, cases = 0;
+    g.cases.forEach((c, cid) => { cases++; if (g.voisins.get(cid).size <= 2) faibles++; });
+    g.jonctions.forEach((jn) => { if (jn.type === 'case') { cases++; if (M.portsJonction(d, jn.i, jn.j).ports <= 2) faibles++; } });
+    assert.strictEqual(cases, 59, id);
+    assert.ok(faibles / cases < 0.05, id + ' : ' + faibles + ' cases à 2 connexions ou moins');
   });
-  assert.ok(Object.keys(vus).length >= 2, 'plusieurs compositions sortent : ' + JSON.stringify(vus));
 });
 
 test('génération 5×5 : villes en 2-3-2 sur des jonctions à 3 ports au moins ; toutes les jonctions à 2 ports au moins (M.portsJonction)', () => {
@@ -179,7 +181,7 @@ test('parcours à l’état : Nouveau 5×5 (vrai catalogue), Générer, Applique
   const nouveau = PM.nouveau.documentPourGrille('5x5');
   assert.ok(nouveau.ok, nouveau.raison);
   assert.strictEqual(nouveau.doc.grille, '5x5');
-  assert.deepStrictEqual(nouveau.doc.modeles.map((m) => m.id).sort(), ['B1', 'B7', 'K2', 'P1', 'P2', 'P3', 'P5', 'U1']);
+  assert.deepStrictEqual(nouveau.doc.modeles.map((m) => m.id).sort(), ['LB2', 'LC1', 'LC2', 'LC3', 'LC4', 'LK2']);
   assert.deepStrictEqual(nouveau.doc.plateau, { tuiles: [], jetons: [] });
   const etat = PM.etat.creer(PM.nouveau.documentPourGrille('4x4').doc);
   etat.remplacer(nouveau.doc, 'nouveau plateau 5×5');
@@ -255,9 +257,10 @@ function conseilAttendu(vs) {
   return vs.length === 7 && n(1) === 2 && n(4) === 2 && (n(2) === 3 || n(3) === 3);
 }
 
-// graine choisie pour que les genres de pose portent des alertes malgré le seuil S >= 7 du 5×5 (docs/48) : « rec-conseil-4 » donne des poses
-// 3 sur une rangée avec « 5 contre 2 » seul, avec S seul et sans alerte, et des poses 2 + 1 avec S seul
-const PLATEAU_CONSEIL = GEN.generer(doc5(), { graine: 'rec-conseil-4', candidats: 8 }).doc;
+// graine choisie pour que les genres de pose portent des alertes malgré le seuil S >= 7 du 5×5 (docs/48) : avec le catalogue à 2 cases par
+// tuile (docs/55), « rec-conseil-30 » est la première graine qui donne des poses 3 sur une rangée avec « 5 contre 2 » seul, avec S seul et
+// sans alerte, et des poses 2 + 1 avec S seul
+const PLATEAU_CONSEIL = GEN.generer(doc5(), { graine: 'rec-conseil-30', candidats: 8 }).doc;
 
 /** Les 2016 placements 2-3-2 posés sur PLATEAU_CONSEIL, classés par genre d’alerte. */
 function classes() {
@@ -373,7 +376,8 @@ test('conseil 5×5 : écart de rang seul, ou aucune alerte, ne porte pas le cons
 /* ---------- information « ville sur une jonction à moins de 3 ports » (docs/36 § 1) ---------- */
 
 test('information « ville sur une jonction à moins de 3 ports » : dans le rapport, jamais alerte ni erreur, 5×5 seulement', () => {
-  const d0 = plateaux()[3].doc, ports = (i, j) => M.portsJonction(d0, i, j).ports;
+  // un plateau généré qui a une jonction-case à 2 ports (la plupart en ont une, docs/56)
+  const d0 = plateaux().find((r) => GEN.portsParJonction(r.doc).some((p) => p < 3)).doc, ports = (i, j) => M.portsJonction(d0, i, j).ports;
   const toutes = jonctions(5).map((v) => Object.assign(v, { p: ports(v.i, v.j) }));
   const peu = toutes.filter((v) => v.p < 3), beaucoup = toutes.filter((v) => v.p >= 3);
   assert.ok(peu.length > 0, 'ce plateau a au moins une jonction à 2 ports');

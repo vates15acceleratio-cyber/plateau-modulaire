@@ -777,9 +777,10 @@ test('générateur : même graine, même plateau (200 candidats par défaut), 4�
   const x = GEN.generer(libGenerateur(), { graine: 'recette' }), y = GEN.generer(libGenerateur(), { graine: 'recette2' });
   assert.notDeepStrictEqual(x.doc.plateau, y.doc.plateau);
   assert.deepStrictEqual(GEN.generer(libGenerateur(), { graine: 42, candidats: 20 }).doc, GEN.generer(libGenerateur(), { graine: '42', candidats: 20 }).doc);
-  const c5 = GEN.generer(libGenerateur('5x5'), { graine: 'recette', candidats: 40 });
+  // 5×5 : catalogue livré (le 5×5 demande des tuiles très connectées, que les exemples ne donnent pas : docs/18)
+  const c5 = GEN.generer(PM.catalogue.nouveauDocument('5x5'), { graine: 'recette', candidats: 40 });
   assert.ok(c5.ok, c5.raison);
-  assert.deepStrictEqual(c5.doc, GEN.generer(libGenerateur('5x5'), { graine: 'recette', candidats: 40 }).doc);
+  assert.deepStrictEqual(c5.doc, GEN.generer(PM.catalogue.nouveauDocument('5x5'), { graine: 'recette', candidats: 40 }).doc);
 });
 
 const GRAINES = ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8'];

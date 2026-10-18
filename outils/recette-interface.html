@@ -623,7 +623,7 @@
       reset(docExemples('5x5'));
       var cp = compteurs();
       ctrl('5×5 : 25 cellules et 16 jonctions', document.querySelectorAll('[data-cellule]').length === 25 && document.querySelectorAll('[data-jonction]').length === 16);
-      ctrl('5×5 : compteurs tuiles 0 / 25, apparitions 0 / 7, cases (≈ 80)', cp['Tuiles posées'].v === '0 / 25' && cp['Apparitions vert'].v === '0 / 7' && /≈ 80/.test(cp['Cases (tuiles et jonctions)'].v), J(cp));
+      ctrl('5×5 : compteurs tuiles 0 / 25, apparitions 0 / 7, cases (≈ 59)', cp['Tuiles posées'].v === '0 / 25' && cp['Apparitions vert'].v === '0 / 7' && /≈ 59/.test(cp['Cases (tuiles et jonctions)'].v), J(cp));
       ctrl('5×5 : rangée centrale neutre', /Bord, neutre/.test(document.querySelector('[data-cellule="0,2"]').textContent));
     }
 
@@ -876,7 +876,7 @@
       ctrl('fin du scénario : retour à un plateau 4×4', etat.doc().grille === '4x4' && $('indicateur-grille').textContent === 'Grille 4×4 · 48 × 48 cm');
     }
 
-    /** Nouveau → 5×5 avec le VRAI catalogue (aucun faux catalogue) : 8 vignettes, une pose valide, « Plateau aléatoire » sans exception. */
+    /** Nouveau → 5×5 avec le VRAI catalogue (aucun faux catalogue) : 6 vignettes, une pose valide, « Plateau aléatoire » sans exception. */
     function s8b_catalogue5x5_reel() {
       titre('S9b Nouveau → 5×5 avec le vrai catalogue 5×5');
       reset(PM.catalogue.nouveauDocument('4x4'));
@@ -885,9 +885,9 @@
       radio.checked = true;
       document.querySelector('#dialogue-contenu .pm-nouveau-creer').click();
       ctrl('vrai catalogue : Créer 5×5 ferme la boîte et crée un document 5×5 sans tuile', !$('dialogue').open && etat.doc().grille === '5x5' && nbTuiles() === 0);
-      ctrl('vrai catalogue : 8 vignettes en bibliothèque (K2, B1, B7, U1, P1, P2, P3, P5)', document.querySelectorAll('.pm-biblio-vignette').length === 8 && ['K2', 'B1', 'B7', 'U1', 'P1', 'P2', 'P3', 'P5'].every(function (id) { return !!document.querySelector('[data-vignette="' + id + '"]'); }));
-      // une pose valide : coin K2 en (0,0), bord B1 en (1,0), centrale U1 en (1,1)
-      var g1 = glisser('K2', 0, 0, 0), g2 = glisser('B1', 1, 0, 0), g3 = glisser('U1', 1, 1, 0);
+      ctrl('vrai catalogue : 6 vignettes en bibliothèque (LK2, LB2, LC1 à LC4)', document.querySelectorAll('.pm-biblio-vignette').length === 6 && ['LK2', 'LB2', 'LC1', 'LC2', 'LC3', 'LC4'].every(function (id) { return !!document.querySelector('[data-vignette="' + id + '"]'); }));
+      // une pose valide : coin LK2 en (0,0), bord LB2 en (1,0), centrale LC1 en (1,1)
+      var g1 = glisser('LK2', 0, 0, 0), g2 = glisser('LB2', 1, 0, 0), g3 = glisser('LC1', 1, 1, 0);
       ctrl('vrai catalogue : pose d’un coin, d’un bord et d’une centrale', g1.demarre && g2.demarre && g3.demarre && nbTuiles() === 3, nbTuiles() + ' ' + msg());
       ctrl('vrai catalogue : aucune erreur sur ce début de plateau', niveau() !== 'erreur', msg());
       var c = compteurs();
@@ -943,7 +943,7 @@
         var dlg = $('dialogue-contenu');
         ctrl('boîte « Plateau aléatoire » ouverte, champ graine et bouton Générer présents', $('dialogue').open && !!dlg.querySelector('.pm-generateur-graine') && !!bouton(dlg, 'Générer'));
         ctrl('5×5 : option « jonctions variées » absente de la boîte', !dlg.querySelector('.pm-generateur-variees') && !/[Jj]onctions variées/.test(dlg.textContent), dlg.textContent.slice(0, 200));
-        ctrl('5×5 : explication du 2-3-2, des 78 à 81 cases et des moitiés dans la boîte', /2-3-2/.test(dlg.textContent) && /78 à 81 cases/.test(dlg.textContent) && /moitié verte/.test(dlg.textContent));
+        ctrl('5×5 : explication du 2-3-2, des villes placées d’abord, des 59 cases à moins de 5 % de cases à 2 connexions et des moitiés dans la boîte', /2-3-2/.test(dlg.textContent) && /villes placées d’abord/.test(dlg.textContent) && /59 cases, dont moins de 5 % à 2 connexions/.test(dlg.textContent) && /moitié verte/.test(dlg.textContent));
         var appl = bouton(dlg, 'Appliquer');
         ctrl('Appliquer désactivé avant la première génération', !!appl && appl.disabled);
         dlg.querySelector('.pm-generateur-graine').value = 'recette-5x5-ui';
@@ -953,7 +953,7 @@
         var dlg = $('dialogue-contenu'), r1 = resume();
         ctrl('Générer : aperçu et résumé affichés, Appliquer actif', !!r1 && !!dlg.querySelector('.pm-generateur-apercu svg') && !bouton(dlg, 'Appliquer').disabled, r1 && r1.slice(0, 80));
         ctrl('Générer : la graine saisie est rendue dans le résumé', !!r1 && r1.indexOf('recette-5x5-ui') >= 0);
-        ctrl('Générer : le résumé annonce 2-3-2 et les B1', !!r1 && /2-3-2/.test(r1) && /bord\(s\) B1/.test(r1));
+        ctrl('Générer : le résumé annonce 2-3-2, le placement avant l’orientation et les connexions par case', !!r1 && /2-3-2/.test(r1) && /avant l’orientation des centrales/.test(r1) && /Connexions par case : \d+ case\(s\) à 2 connexions ou moins sur 59/.test(r1));
         ctrl('Générer ne touche pas au plateau avant Appliquer', nbTuiles() === 0);
         dlg.querySelector('.pm-generateur-graine').value = 'recette-5x5-ui';
         bouton(dlg, 'Générer').click();
@@ -965,10 +965,9 @@
         var d = etat.doc();
         ctrl('Appliquer : boîte fermée, 25 tuiles, 7 villes, grille 5×5', !$('dialogue').open && d.grille === '5x5' && nbTuiles() === 25 && d.plateau.jetons.length === 7, nbTuiles() + ' ' + msg());
         ctrl('Appliquer : message avec la graine et Ctrl+Z', /Plateau aléatoire appliqué \(graine recette-5x5-ui\)/.test(msg()) && /Ctrl\+Z/.test(msg()), msg());
-        var nb1 = d.plateau.tuiles.filter(function (t) { return t.modeleId === 'B1'; }).length;
         var nbCases = d.plateau.tuiles.reduce(function (s, t) { return s + M.modeleParId(d, t.modeleId).cases.length; }, 0) + 9;
-        var moit = PM.graphe.casesParMoitie(d, PM.graphe.construire(d));
-        ctrl('plateau appliqué : au plus 6 B1, 78 à 81 cases, autant de cases dans chaque moitié', nb1 <= 6 && nbCases >= 78 && nbCases <= 81 && moit.ecart === 0, nb1 + ' B1, ' + nbCases + ' cases, ' + J(moit));
+        var moit = PM.graphe.casesParMoitie(d, PM.graphe.construire(d)), cx = PM.graphe.connexions(d);
+        ctrl('plateau appliqué : 59 cases, autant de cases dans chaque moitié, moins de 5 % de cases à 2 connexions', nbCases === 59 && moit.ecart === 0 && cx.conforme && cx.cases === 59, nbCases + ' cases, ' + J(moit) + ' ' + cx.faibles);
         var mini = 9, ports3 = true, vs = d.plateau.jetons;
         for (var j = 1; j <= 4; j++) for (var i = 1; i <= 4; i++) mini = Math.min(mini, M.portsJonction(d, i, j).ports);
         vs.forEach(function (v) { if (M.portsJonction(d, v.i, v.j).ports < 3) ports3 = false; });
@@ -976,6 +975,7 @@
         ctrl('plateau appliqué : villes en 2-3-2', nbSur(vs, 1) === 2 && nbSur(vs, 2) + nbSur(vs, 3) === 3 && nbSur(vs, 4) === 2, vs.map(cle).join(' '));
         var c = compteurs();
         ctrl('plateau appliqué : compteur « Tuiles posées » 25 / 25', c['Tuiles posées'].v === '25 / 25', J(c));
+        ctrl('plateau appliqué : information « Cases à 2 connexions ou moins » au panneau (cible < 5 %)', !!c['Cases à 2 connexions ou moins'] && c['Cases à 2 connexions ou moins'].v === cx.faibles + ' (' + (Math.round(cx.part * 1000) / 10).toString().replace('.', ',') + ' %) (visé : < 5 %)', J(c['Cases à 2 connexions ou moins']));
         var e = GR.equilibre(d);
         ctrl('plateau appliqué : moteur sans alerte ni blocage ni information', e.complet && e.alertes.length === 0 && e.blocages.length === 0 && e.informations.length === 0, J(codes(e)));
         var t = texteControles();
@@ -983,7 +983,7 @@
         ctrl('panneau : aucune erreur (barre d’état)', niveau() !== 'erreur', niveau() + ' ' + pastille());
         var rap = ouvrirRapport();
         ctrl('rapport d’équilibre : « Aucune alerte d’équilibre. », pas de section Informations', /Aucune alerte d.équilibre\./.test(rap) && !document.querySelector('#dialogue-contenu .pm-equilibre-informations'), rap.replace(/\s+/g, ' ').slice(0, 200));
-        ctrl('rapport d’équilibre : rythme, accès au centre et cases par moitié en information (docs/46)', document.querySelectorAll('#dialogue-contenu .pm-equilibre-organique li').length === 3 && /Rythme : au plus/.test(rap) && /Accès au centre/.test(rap) && /Cases par moitié : vert \d+, rouge \d+ \(égales\)/.test(rap), rap.replace(/\s+/g, ' ').slice(0, 200));
+        ctrl('rapport d’équilibre : rythme, accès au centre, cases par moitié et connexions par case en information (docs/46, docs/53)', document.querySelectorAll('#dialogue-contenu .pm-equilibre-organique li').length === 4 && /Rythme : au plus/.test(rap) && /Accès au centre/.test(rap) && /Cases par moitié : vert \d+, rouge \d+ \(égales\)/.test(rap) && /Connexions par case : \d+ case\(s\) à 2 connexions ou moins sur 59/.test(rap), rap.replace(/\s+/g, ' ').slice(0, 200));
         ctrl('rapport d’équilibre 5×5 : sans conseil des jonctions-cases du 4×4', !/jonctions-cases/.test(rap));
         PM.dialogue.fermer();
         var avant = docJ();
@@ -991,6 +991,26 @@
         ctrl('Ctrl+Z : plateau vidé, grille toujours 5×5', etat.doc().grille === '5x5' && nbTuiles() === 0 && etat.doc().plateau.jetons.length === 0, nbTuiles() + ' tuiles');
         ctrlY();
         ctrl('Ctrl+Y : le plateau généré revient à l’identique', docJ() === avant);
+        // aide « Placer les villes » (docs/18) : villes retirées à la main, le bouton les repose au meilleur placement, Ctrl+Z annule
+        var bp = bouton($('controles'), 'Placer les villes');
+        ctrl('panneau : bouton « Placer les villes » présent et actif', !!bp && !bp.disabled);
+        var villesGen = J(etat.doc().plateau.jetons);
+        etat.doc().plateau.jetons.slice().forEach(function (v) { cliquerJonction(v.i, v.j); });
+        ctrl('villes retirées par clics avant l’aide', etat.doc().plateau.jetons.length === 0, etat.doc().plateau.jetons.length + ' villes');
+        var attendu = GEN.meilleurPlacementVilles(etat.doc());
+        bp.click();
+        var dv = etat.doc();
+        ctrl('« Placer les villes » : 7 villes posées au meilleur placement, message avec S et Ctrl+Z', dv.plateau.jetons.length === 7 && J(dv.plateau.jetons) === J(attendu.jetons) && /7 villes placées au meilleur placement \(S = \d+/.test(msg()) && /Ctrl\+Z/.test(msg()), msg());
+        ctrl('« Placer les villes » : villes à 3 cases d’écart au moins, aucune alerte de villes proches', GR.villesProches(GR.construire(dv, { villesTraversables: false })).length === 0 && !/Villes trop proches/.test(texteControles()));
+        ctrlZ();
+        ctrl('Ctrl+Z après « Placer les villes » : plateau sans ville', etat.doc().plateau.jetons.length === 0);
+        // refus expliqué sur un plateau incomplet : rien ne change
+        etat.appliquer(function (x) { return M.retirerTuile(x, 2, 2); }, 'retrait');
+        var avantClic = docJ();
+        bp.click();
+        ctrl('« Placer les villes » sur un plateau incomplet : refus expliqué, document inchangé', docJ() === avantClic && /Posez d’abord toutes les tuiles du plateau \(24 sur 25\)/.test(msg()), msg());
+        ctrlZ();
+        ctrl('Ctrl+Z : la tuile retirée revient (25 tuiles, sans ville)', nbTuiles() === 25 && etat.doc().plateau.jetons.length === 0 && villesGen.length > 2);
         // pose manuelle : placements 2-3-2 cherchés dans la page avec le moteur (et non codés en dur)
         var trouve = { cinq: null, deuxUn: null, rien: null };
         var pl = GEN.placementsVilles5x5();
@@ -1288,14 +1308,16 @@
      * `PM.catalogue.precedent`, une tuile posée, écrits par `versJSON` comme la 3.04) ; le `localStorage` est remis en état à la fin.
      */
     function s11_demarrage_304() {
-      titre('S11 démarrage depuis une sauvegarde automatique 3.04 (4×4 puis 5×5)');
+      titre('S11 démarrage depuis une sauvegarde automatique 3.04 (4×4 puis 5×5) et 4.00.0 (5×5)');
       var S = PM.sauvegarde, cle = S.CLE_AUTOSAVE, avantStockage = null, stockageOk = true;
       try { avantStockage = localStorage.getItem(cle); } catch (e) { stockageOk = false; }
       ctrl('localStorage accessible pour la recette du démarrage', stockageOk);
       if (!stockageOk) return;
-      var ancienDoc = function (g) {
+      // version : '3.04' (PM.catalogue.precedent) ou, en 5×5, '4.00' (catalogue organique de la 4.00.0, PM.catalogue.precedents)
+      var ancienDoc = function (g, version) {
         var d = PM.catalogue.nouveauDocument(g);
-        d.modeles = JSON.parse(J(PM.catalogue.precedent[g]));
+        var src = version && version !== '3.04' ? PM.catalogue.precedents[g].filter(function (x) { return x.version === version; })[0].modeles : PM.catalogue.precedent[g];
+        d.modeles = JSON.parse(J(src));
         d.plateau.tuiles = [{ modeleId: d.modeles[0].id, col: 1, lig: 1, rot: 0 }];
         return d;
       };
@@ -1326,40 +1348,42 @@
       }
       function toucheDans(w, k) { w.document.body.dispatchEvent(new w.KeyboardEvent('keydown', { key: k, ctrlKey: true, bubbles: true, cancelable: true })); }
       var cjw = function (w) { return CJ(w.PM.app.etat.doc()); };
-      function pourGrille(g, nouveauId, ancienId) {
-        var brut = S.versJSON(ancienDoc(g)), voulu = CJ(S.depuisJSON(brut).doc);
+      function pourGrille(grille, nouveauId, ancienId, version) {
+        var g = grille, libelle = version ? grille + ' (' + version + ')' : grille;
+        var brut = S.versJSON(ancienDoc(g, version)), voulu = CJ(S.depuisJSON(brut).doc);
         return demarrer(brut).then(function (w) {
           var d = w.document.getElementById('dialogue'), c = w.document.getElementById('dialogue-contenu');
           var etat1 = w.PM.app && w.PM.app.etat;
-          ctrl(g + ' : l\'application démarre depuis la sauvegarde 3.04 (ancien catalogue, 1 tuile)', !!etat1 && !!w.PM.modele.modeleParId(etat1.doc(), ancienId) && etat1.doc().plateau.tuiles.length === 1 && cjw(w) === voulu, etat1 && etat1.doc().modeles.length);
-          ctrl(g + ' : la boîte « Nouveau catalogue de tuiles » s\'affiche (texte, virages sans case, Ctrl+Z, sans style en ligne)',
+          ctrl(libelle + ' : l\'application démarre depuis la sauvegarde 3.04 (ancien catalogue, 1 tuile)', !!etat1 && !!w.PM.modele.modeleParId(etat1.doc(), ancienId) && etat1.doc().plateau.tuiles.length === 1 && cjw(w) === voulu, etat1 && etat1.doc().modeles.length);
+          ctrl(libelle + ' : la boîte « Nouveau catalogue de tuiles » s\'affiche (texte : virages sans case en 4×4, deux cases par tuile en 5×5 ; Ctrl+Z, sans style en ligne)',
             d.open && w.document.getElementById('dialogue-titre').textContent === 'Nouveau catalogue de tuiles' && /catalogue précédent/.test(c.textContent) &&
-            /virages sans case/.test(c.textContent) && /vide le plateau/.test(c.textContent) && /Ctrl\+Z/.test(c.textContent) && /reste inchangé/.test(c.textContent) &&
+            (g === '5x5' ? /à deux cases par tuile, très connecté/.test(c.textContent) : /virages sans case/.test(c.textContent)) && /vide le plateau/.test(c.textContent) && /Ctrl\+Z/.test(c.textContent) && /reste inchangé/.test(c.textContent) &&
             !!boutonDe(w, 'Charger le nouveau catalogue') && !!boutonDe(w, 'Garder mes tuiles') && !c.querySelector('[style]'), c.textContent.slice(0, 100));
           boutonDe(w, 'Garder mes tuiles').click();
-          ctrl(g + ' : « Garder mes tuiles » ferme la boîte et laisse le document tel quel', !d.open && cjw(w) === voulu);
+          ctrl(libelle + ' : « Garder mes tuiles » ferme la boîte et laisse le document tel quel', !d.open && cjw(w) === voulu);
           iframes.pop().remove();
           return attendre(30);
         }).then(function () {
           return demarrer(brut);   // la proposition revient à chaque démarrage tant que la sauvegarde est celle de la 3.04
         }).then(function (w) {
           var d = w.document.getElementById('dialogue');
-          ctrl(g + ' : au démarrage suivant la proposition revient (document de la sauvegarde inchangé)', d.open && cjw(w) === voulu);
+          ctrl(libelle + ' : au démarrage suivant la proposition revient (document de la sauvegarde inchangé)', d.open && cjw(w) === voulu);
           boutonDe(w, 'Charger le nouveau catalogue').click();
           var etat2 = w.PM.app.etat, doc2 = etat2.doc();
-          ctrl(g + ' : « Charger » remplace la bibliothèque (' + nouveauId + ', plus de ' + ancienId + '), vide le plateau, ferme la boîte, dit le message',
+          ctrl(libelle + ' : « Charger » remplace la bibliothèque (' + nouveauId + ', plus de ' + ancienId + '), vide le plateau, ferme la boîte, dit le message',
             !d.open && !!w.PM.modele.modeleParId(doc2, nouveauId) && !w.PM.modele.modeleParId(doc2, ancienId) && doc2.plateau.tuiles.length === 0 && doc2.grille === g &&
             /Nouveau catalogue chargé/.test(w.document.getElementById('barre-etat').textContent), w.document.getElementById('barre-etat').textContent);
           var charge = cjw(w);
           toucheDans(w, 'z');
-          ctrl(g + ' : Ctrl+Z rend le document de la sauvegarde 3.04, plateau compris', cjw(w) === voulu);
+          ctrl(libelle + ' : Ctrl+Z rend le document de la sauvegarde 3.04, plateau compris', cjw(w) === voulu);
           toucheDans(w, 'y');
-          ctrl(g + ' : Ctrl+Y refait le chargement du nouveau catalogue', cjw(w) === charge && etat2.doc().plateau.tuiles.length === 0);
+          ctrl(libelle + ' : Ctrl+Y refait le chargement du nouveau catalogue', cjw(w) === charge && etat2.doc().plateau.tuiles.length === 0);
           iframes.pop().remove();
           return attendre(30);
         });
       }
-      return pourGrille('4x4', 'Q1', 'C1').then(function () { return pourGrille('5x5', 'U1', 'C7'); }).then(null, function (e) {
+      return pourGrille('4x4', 'Q1', 'C1').then(function () { return pourGrille('5x5', 'LC1', 'C7'); })
+        .then(function () { return pourGrille('5x5', 'LC1', 'U1', '4.00'); }).then(null, function (e) {
         nEchec++; rapportEl.textContent += 'ÉCHEC  exception dans le démarrage 3.04 : ' + (e && e.stack || e) + '\n';
       }).then(function () {
         iframes.forEach(function (f) { f.remove(); });

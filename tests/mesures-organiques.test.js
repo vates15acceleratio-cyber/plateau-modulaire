@@ -276,7 +276,9 @@ test('affinage du rythme : une préférence (jamais un rejet) qui raccourcit la 
       // mêmes candidats, mêmes rejets : l'affinage ne joue qu'au choix final
       assert.deepEqual(a.rejets, b.rejets);
       assert.equal(a.candidats, b.candidats);
-      assert.ok(a.score.S <= a.score.Smin + 1, 'S dans la tolérance');
+      // 4×4 : S dans la tolérance ; 5×5 : S n'est que la dernière préférence (docs/53 § 3), sous le seuil de rejet
+      if (g0 === '4x4') assert.ok(a.score.S <= a.score.Smin + 1, 'S dans la tolérance');
+      else assert.ok(a.score.S < GR.SEUIL_S, 'S sous le seuil de rejet');
       const e = GR.equilibre(a.doc);
       assert.deepEqual(e.blocages, []);
       if (g0 === '5x5') assert.deepEqual(e.alertes, []);
@@ -285,7 +287,7 @@ test('affinage du rythme : une préférence (jamais un rejet) qui raccourcit la 
       accAvec += Math.abs(a.score.acces.ecart); accSans += Math.abs(b.score.acces.ecart);
       assert.ok(a.rapport.some((t) => /affiné/.test(t)) && b.rapport.some((t) => /sans affinage/.test(t)));
     }
-    // mesuré (40 graines, 40 candidats) : chaîne moyenne 4×4 2,98 contre 4,13 ; 5×5 2,65 contre 3,75
+    // mesuré (40 graines, 40 candidats) : chaîne moyenne 4×4 2,98 contre 4,13 ; 5×5 (catalogue de docs/55, 12 graines) : voir docs/56
     assert.ok(avec < sans, g0 + ' : chaîne ' + avec + ' contre ' + sans);
     assert.ok(accAvec <= accSans, g0 + ' : accès ' + accAvec + ' contre ' + accSans);
   }
@@ -316,7 +318,8 @@ test('goulets 5×5 : le générateur préfère les plateaux sans point d\'articu
 test('rapport d\'équilibre : rythme, accès au centre et cases par moitié en information (jamais une alerte)', () => {
   for (const g0 of ['4x4', '5x5']) {
     const doc = plateaux(g0)[0], a = PM.equilibre.analyser(doc), r = PM.equilibre.rapport(a);
-    assert.equal(r.organique.length, 3);
+    assert.equal(r.organique.length, g0 === '5x5' ? 4 : 3);
+    if (g0 === '5x5') assert.match(r.organique[3], /^Connexions par case : \d+ case\(s\) à 2 connexions ou moins sur 59 \(.* %.*\) ; .* connexions par case en moyenne/);
     assert.match(r.organique[0], /^Rythme : au plus \d+ case/);
     assert.match(r.organique[1], /^Accès au centre/);
     assert.match(r.organique[2], /^Cases par moitié : vert \d+, rouge \d+ \(égales\)/);

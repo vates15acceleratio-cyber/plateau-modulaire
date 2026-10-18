@@ -74,3 +74,13 @@ Proposée par l'utilisateur au moment de l'arrêt, **pas encore définie** : à 
   - 4×4 en « jonctions variées » : 1,5 % des plateaux générés (3 sur 200) ont un point d'articulation, la préférence n'est appliquée qu'en 5×5 ; à étendre au 4×4 si l'utilisateur le souhaite ;
   - villes au centre en 5×5 : 13,5 %, sous la cible de 20 % du `docs/38` (à reprendre avec les « régions thématiques »).
 - **Suite prévue** : relecteur, versionneur (numéro, étiquette, `CHANGELOG.md`), PR.
+
+## 5. 5×5 très connecté (branche `connexions-5x5`, 2026-10-18, `docs/53` à `docs/56`)
+- **Fait** (`docs/56`) : catalogue 5×5 à 2 cases par tuile (LC1 à LC4, LB2, LK2 ; 25 tuiles à imprimer, le stock exact d'un plateau), règles propres au 5×5 (porteuse latérale, paire basse du coin ; R2 et R4 gardées ; 4×4 inchangé), mesure `PM.graphe.connexions` (panneau et rapport d'équilibre), générateur 5×5 qui place les villes avant d'orienter les centrales (rejet au-delà de 5 % de cases à 2 connexions), aide « Placer les villes », proposition du nouveau catalogue aux documents 5×5 de la 4.00.0, mesures de contrôle sur 200 plateaux (`outils/mesures-5x5-connecte.js`).
+- **À soumettre à l'utilisateur** (`docs/56`) :
+  - **chaîne du rythme** : 4,7 en moyenne (3 à 5) en 5×5, au-dessus de la cible 3 (texte « au-dessus de la cible » au rapport) ; cible à revoir pour le 5×5 ?
+  - **composition fixe** : avec les poids livrés, le tirage par quotas donne toujours 3 LC1, 2 LC2, 3 LC3 et 1 LC4 (variété par la position et la rotation seulement) ; faut-il un tirage plus libre (stock à relever) ?
+  - **documents gardés avec leurs anciennes tuiles 5×5** (3.04, 4.00.0) : ils s'ouvrent, mais le générateur 5×5 abandonne et conseille le nouveau catalogue ;
+  - **2 raccords morts par plateau** (murs de « Deux ponts ») : 2 alertes « Raccords morts » au panneau sur chaque plateau 5×5 généré ;
+  - **placements de villes** : 8,3 admissibles par plateau en moyenne (1 à 21), 47 placements différents sur 200 plateaux.
+- **Reste** : relecture, recette indépendante, versionneur ; l'ancien outil `outils/mesures-5x5.js` (`docs/35`) est historique ; prépresse des nouvelles tuiles (marges de 3,79 à 10,04 mm, `docs/55`) à faire contrôler à l'impression.

@@ -221,14 +221,14 @@ test('bibliothèque : le modèle de l\'autre grille est signalé (autreGrille), 
 /* Compteurs, contrôles, équilibre                                     */
 /* ------------------------------------------------------------------ */
 
-test('compteurs du 5×5 : 7 villes, 25 tuiles, ≈ 80 cases, 7 apparitions par camp, 50 × 50 cm', () => {
+test('compteurs du 5×5 : 7 villes, 25 tuiles, ≈ 59 cases, 7 apparitions par camp, 50 × 50 cm', () => {
   const r = C.calculer(plein5());
   const c = (cle) => r.compteurs.find((x) => x.cle === cle);
   assert.equal(c('villes').valeur, 7);
   assert.equal(c('villes').cible, 7);
   assert.equal(c('tuiles').valeur, 25);
   assert.equal(c('tuiles').cible, 25);
-  assert.equal(c('cases').cible, '≈ 80');
+  assert.equal(c('cases').cible, '≈ 59');
   assert.equal(c('apparitions_vert').valeur, 7);
   assert.equal(c('apparitions_vert').cible, 7);
   assert.equal(c('apparitions_rouge').valeur, 7);
@@ -313,7 +313,11 @@ test('générateur 5×5 : plateau complet valide, villes en 2-3-2, jonctions-cas
   assert.ok(GEN.pairesJonctionsCases(F5, false).every((p) => p.length === 9));
   assert.deepEqual(GEN.pairesJonctionsCases(F5, true), GEN.pairesJonctionsCases(F5, false));
   assert.ok(GEN.pairesJonctionsCases(PM.geometrie.format('4x4'), false).length > 0);
-  const doc = doc5();
+  // le catalogue livré : le 5×5 demande des tuiles très connectées (les exemples n'en donnent pas, docs/18)
+  const avant = PM.catalogue; // ce fichier teste aussi l'interface sans catalogue : on le charge le temps de copier sa bibliothèque
+  require('../src/catalogue.js');
+  const doc = PM.catalogue.nouveauDocument('5x5');
+  PM.catalogue = avant;
   const r = GEN.generer(doc, { graine: 'essai-5x5', candidats: 30 });
   assert.equal(r.ok, true, r.raison);
   assert.equal(r.doc.grille, '5x5');

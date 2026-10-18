@@ -800,7 +800,47 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return { tuiles: tuiles, jonctions: jonctions, vert: vert, rouge: rouge, ecart: vert - rouge };
   }
 
+  /** Part des cases à 2 connexions ou moins au-delà de laquelle un plateau 5×5 n'est pas conforme (docs/18, docs/53 § 1 : moins de 5 %). */
+  var PART_CONNEXIONS_MAX = 0.05;
+  var CONNEXIONS_FAIBLES = 2; // une case « peu connectée » a 2 connexions ou moins
+
+  /**
+   * Connexions par case (docs/53 § 1) : nombre de cases DIFFÉRENTES que l'on atteint en un déplacement, c'est-à-dire le degré du
+   * nœud dans le graphe `g` (chemins internes, raccords appariés, ports, passages ; une même voisine compte une fois ; un raccord mort
+   * ne compte pas ; une voisine ville compte). Cases comptées : les cases des tuiles (apparitions comprises) et les jonctions-cases
+   * (jonctions sans ville dont les 4 tuiles sont posées, comme compteursDuPlateau) ; les villes sont à part (règle des « 3 accès »).
+   * Renvoie { cases, parDegre: {degré: nombre}, faibles (cases à 2 connexions ou moins), part (faibles / cases, 0 si aucune case),
+   * degreMoyen (null si aucune case), conforme (part < 5 %), liste: [id des cases faibles], jonctionsFaibles: [{i, j}] }.
+   */
+  function connexions(doc, g) {
+    g = g || construire(doc, { villesTraversables: false });
+    var posees = doc && doc.plateau && Array.isArray(doc.plateau.tuiles) ? doc.plateau.tuiles : [], pose = {};
+    posees.forEach(function (t) { if (t) pose[t.col + ',' + t.lig] = true; });
+    var ids = [], jonc = {};
+    g.cases.forEach(function (c, id) { ids.push(id); });
+    g.jonctions.forEach(function (jn) {
+      if (jn.type !== 'ville' && pose[(jn.i - 1) + ',' + (jn.j - 1)] && pose[jn.i + ',' + (jn.j - 1)] && pose[(jn.i - 1) + ',' + jn.j] && pose[jn.i + ',' + jn.j]) {
+        ids.push(jn.id); jonc[jn.id] = jn;
+      }
+    });
+    var parDegre = {}, somme = 0, liste = [], jonctionsFaibles = [];
+    ids.forEach(function (id) {
+      var d = g.voisins.get(id).size;
+      parDegre[d] = (parDegre[d] || 0) + 1;
+      somme += d;
+      if (d <= CONNEXIONS_FAIBLES) { liste.push(id); if (jonc[id]) jonctionsFaibles.push({ i: jonc[id].i, j: jonc[id].j }); }
+    });
+    var part = ids.length ? liste.length / ids.length : 0;
+    return {
+      cases: ids.length, parDegre: parDegre, faibles: liste.length, part: part, degreMoyen: ids.length ? somme / ids.length : null,
+      conforme: part < PART_CONNEXIONS_MAX, liste: liste, jonctionsFaibles: jonctionsFaibles
+    };
+  }
+
   PM.graphe = {
+    PART_CONNEXIONS_MAX: PART_CONNEXIONS_MAX,
+    CONNEXIONS_FAIBLES: CONNEXIONS_FAIBLES,
+    connexions: connexions,
     NB_VILLES: NB_VILLES,
     CHAINE_CIBLE: CHAINE_CIBLE,
     PORTS_VILLE_MIN: PORTS_VILLE_MIN,

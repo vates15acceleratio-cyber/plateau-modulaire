@@ -20,9 +20,9 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   var M = PM.modele;
 
-  /** Composition visée : 7 villes ; cases (cases des tuiles + cases de jonction) ≈ 63 en 4×4 (accepté par l’utilisateur, docs/18), ≈ 75 en 5×5 (docs/20). */
+  /** Composition visée : 7 villes ; cases (cases des tuiles + cases de jonction) ≈ 58 en 4×4 (docs/46), 59 en 5×5 (2 cases par tuile, docs/55). */
   var NB_VILLES = 7;
-  var CIBLE_CASES = { '4x4': 58, '5x5': 80 }; // cases par plateau du catalogue livré : 4×4 mesuré à 58,4 ; 5×5 visé de 78 à 81 (docs/46)
+  var CIBLE_CASES = { '4x4': 58, '5x5': 59 }; // cases par plateau du catalogue livré : 4×4 mesuré à 58,4 ; 5×5 : 50 cases de tuiles + 9 jonctions-cases (docs/55)
 
   /** Dimensions du plateau (en cm) pour le format F. */
   function dimensions(F) { return (F.GRILLE.colonnes * F.COTE / 10) + ' × ' + (F.GRILLE.lignes * F.COTE / 10) + ' cm'; }
@@ -209,6 +209,23 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     ];
   }
 
+  /** Part en pour cent, une décimale, virgule française. */
+  function pourCent(x) { return (Math.round(x * 1000) / 10).toString().replace('.', ',') + ' %'; }
+
+  /**
+   * 5×5 seulement (docs/18, docs/53 § 1) : information « cases à 2 connexions ou moins » (PM.graphe.connexions), mesurée quand toutes
+   * les tuiles sont posées (avant, des raccords sont encore sans vis-à-vis) ; cible : moins de 5 % des cases. Jamais une alerte.
+   */
+  function compteursConnexions(doc, g) {
+    var F = M.formatDuDocument(doc);
+    if (F.id !== '5x5' || !PM.graphe || typeof PM.graphe.connexions !== 'function') return [];
+    var cible = '< ' + pourCent(PM.graphe.PART_CONNEXIONS_MAX);
+    if (!g || !plateauRempli(doc, F)) return [{ cle: 'connexions', libelle: 'Cases à 2 connexions ou moins', valeur: '—', cible: cible + ', plateau complet', etat: 'ok' }];
+    var c;
+    try { c = PM.graphe.connexions(doc, g); } catch (x) { return []; }
+    return [{ cle: 'connexions', libelle: 'Cases à 2 connexions ou moins', valeur: c.faibles + ' (' + pourCent(c.part) + ')', cible: cible, etat: c.conforme ? 'ok' : 'ecart' }];
+  }
+
   /* ------------------------------------------------------------------ */
   /* Regroupement des erreurs et alertes                                 */
   /* ------------------------------------------------------------------ */
@@ -261,7 +278,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var alertes = v.alertes.map(function (x) { return versEntree(x, 'alerte', doc); })
       .concat(alertesGraphe(doc, g)).concat(alertesEquilibre(eq));
     return {
-      compteurs: compteursDuPlateau(doc),
+      compteurs: compteursDuPlateau(doc).concat(compteursConnexions(doc, g)),
       erreurs: erreurs,
       alertes: alertes,
       regroupees: regrouper(erreurs.concat(alertes))
@@ -289,7 +306,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var li = el('li', 'pm-controles-compteur pm-controles-compteur--' + c.etat);
     li.appendChild(el('span', 'pm-controles-libelle', c.libelle));
     var numerique = estNb(c.valeur) && estNb(c.cible);
-    var texte = numerique ? c.valeur + ' / ' + c.cible : (estNb(c.valeur) ? c.valeur + ' (' + c.cible + ')' : String(c.valeur));
+    var texte = numerique ? c.valeur + ' / ' + c.cible : (estNb(c.valeur) ? c.valeur + ' (' + c.cible + ')'
+      : String(c.valeur) + (typeof c.cible === 'string' && c.cible !== c.valeur ? ' (visé : ' + c.cible + ')' : ''));
     li.appendChild(el('span', 'pm-controles-valeur', texte));
     if (numerique) {
       var pct = c.cible > 0 ? Math.min(100, c.valeur / c.cible * 100) : (c.valeur > 0 ? 100 : 0);
@@ -333,19 +351,24 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     blocAlertes.appendChild(zoneAlertes);
     racine.appendChild(blocAlertes);
 
-    // Outils de priorité 2 : actifs dès que leur module est chargé (PM.equilibre, PM.generateur),
-    // qui exposent ouvrir(etat) et affichent leur contenu dans la boîte de dialogue commune (PM.dialogue).
+    // Outils de priorité 2 : actifs dès que leur module est chargé (PM.equilibre, PM.generateur), qui exposent ouvrir(etat) et
+    // affichent leur contenu dans la boîte de dialogue commune (PM.dialogue) ; « Placer les villes » (PM.generateur.placerVilles, docs/18)
+    // agit directement sur le plateau (annulable par Ctrl+Z) ou explique son refus dans la barre d'état.
     var blocAVenir = el('section', 'pm-controles-bloc');
     blocAVenir.appendChild(el('h2', 'pm-controles-titre', 'Outils'));
     var listeAVenir = el('ul', 'pm-controles-avenir');
-    [['Rapport d\'équilibre', 'equilibre'], ['Plateau aléatoire', 'generateur']].forEach(function (outil) {
+    [['Rapport d\'équilibre', 'equilibre', 'ouvrir'], ['Plateau aléatoire', 'generateur', 'ouvrir'], ['Placer les villes', 'generateur', 'placerVilles']].forEach(function (outil) {
       var li = el('li', 'pm-controles-avenir-item');
       var bouton = el('button', 'pm-controles-avenir-bouton', outil[0]);
       bouton.type = 'button';
-      var module = PM[outil[1]];
+      var module = PM[outil[1]], action = outil[2];
+      if (action === 'placerVilles') {
+        bouton.classList.add('pm-controles-placer-villes');
+        bouton.title = 'Pose les 7 villes au meilleur placement permis sur le plateau complet (3 cases d’écart, 3 ports par ville en 5×5, équilibre) ; Ctrl+Z pour revenir.';
+      }
       li.appendChild(bouton);
-      if (module && typeof module.ouvrir === 'function') {
-        bouton.addEventListener('click', function () { module.ouvrir(etat); });
+      if (module && typeof module[action] === 'function') {
+        bouton.addEventListener('click', function () { module[action](etat); });
       } else {
         bouton.disabled = true;
         li.appendChild(el('span', 'pm-controles-badge', 'bientôt'));

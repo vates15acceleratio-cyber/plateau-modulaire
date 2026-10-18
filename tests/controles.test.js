@@ -46,13 +46,13 @@ test('plateau complet équilibré (4×4) : tous les compteurs à ok, aucune erre
   });
 });
 
-test('5×5 : cibles (25 tuiles, 7 apparitions par camp, ≈ 80 cases, 50 × 50 cm)', () => {
+test('5×5 : cibles (25 tuiles, 7 apparitions par camp, ≈ 59 cases, 50 × 50 cm)', () => {
   avecGraphe(() => {
     const r = C.calculer(A.plateauComplet('5x5', true));
     const par = parCle(r);
     assert.deepEqual([par.tuiles.valeur, par.tuiles.cible], [25, 25]);
     assert.deepEqual([par.apparitions_vert.valeur, par.apparitions_vert.cible, par.apparitions_rouge.cible], [7, 7, 7]);
-    assert.equal(par.cases.cible, '≈ 80');
+    assert.equal(par.cases.cible, '≈ 59');
     assert.equal(par.dimensions.valeur, '50 × 50 cm');
     assert.deepEqual(r.erreurs, []);
   });

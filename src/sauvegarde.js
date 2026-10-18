@@ -256,20 +256,28 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return JSON.stringify(valeur);
   }
 
+  /** Listes de modèles des catalogues précédents de la grille `g` : PM.catalogue.precedents[g] (3.04, 5×5 : 3.04 et 4.00.0), à défaut PM.catalogue.precedent[g]. */
+  function cataloguesPrecedents(C, g) {
+    if (C && C.precedents && Array.isArray(C.precedents[g])) return C.precedents[g].map(function (x) { return x && x.modeles; }).filter(Array.isArray);
+    return C && C.precedent && Array.isArray(C.precedent[g]) ? [C.precedent[g]] : [];
+  }
+
   /**
-   * Bibliothèque du catalogue précédent (version 3.04, PM.catalogue.precedent) : mêmes modèles, mêmes tracés, aux exemplaires et aux
-   * noms près. Un modèle modifié, ajouté ou retiré par l'utilisateur donne faux : le nouveau catalogue n'est alors pas proposé
-   * (il remplacerait un travail personnel). Faux aussi pour un catalogue de la version 1 ou pour le catalogue courant.
+   * Bibliothèque d'un catalogue précédent (PM.catalogue.precedents : version 3.04 ; en 5×5, aussi le catalogue organique de la
+   * version 4.00.0) : mêmes modèles, mêmes tracés, aux exemplaires, aux poids et aux noms près. Un modèle modifié, ajouté ou retiré par
+   * l'utilisateur donne faux : le nouveau catalogue n'est alors pas proposé (il remplacerait un travail personnel). Faux aussi pour
+   * un catalogue de la version 1 ou pour le catalogue courant.
    */
   function bibliothequeCataloguePrecedent(doc) {
     try {
       var C = PM.catalogue, g = M.formatDuDocument(doc).id;
-      if (!C || !C.precedent || !C.precedent[g] || !Array.isArray(doc.modeles)) return false;
-      var ref = C.precedent[g];
-      if (doc.modeles.length !== ref.length) return false;
-      return ref.every(function (m) {
-        var q = doc.modeles.filter(function (x) { return x && x.id === m.id; })[0];
-        return !!q && signatureModele(q) === signatureModele(m);
+      if (!C || !Array.isArray(doc.modeles)) return false;
+      return cataloguesPrecedents(C, g).some(function (ref) {
+        if (doc.modeles.length !== ref.length) return false;
+        return ref.every(function (m) {
+          var q = doc.modeles.filter(function (x) { return x && x.id === m.id; })[0];
+          return !!q && signatureModele(q) === signatureModele(m);
+        });
       });
     } catch (e) { return false; }
   }

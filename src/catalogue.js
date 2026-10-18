@@ -6,24 +6,28 @@
  *  - 4×4 (tuiles de 120 mm, tests/catalogue.test.js) : 6 modèles, 24 exemplaires à imprimer (21 de poids de tirage, docs/47) :
  *      centrales Q1 « Trident à virage » (4 cases, 3 coins, 1 virage sans case ; ×4) et Q2 « Étoile à crochet » (5 cases, 4 coins,
  *      1 crochet ; ×3) ; bords B1 « Bord en V » (×8) et B8 « Bord à virage » (1 passage ; ×1) ; coins K2 (×4) et K4 (×1) ;
- *  - 5×5 (tuiles de 100 mm, tests/catalogue-5x5.test.js) : 8 modèles, 37 exemplaires (5 coins, 14 bords, 18 centrales ; 30 de poids de tirage, docs/47) :
- *      centrales U1 « Trident à virage » (4 cases, 3 coins ; ×5), P1 « Virage double » (×1), P2 « Équerre à virage » (×1),
- *      P3 « T sans case » (×2), P5 « Double virage » (2 passages ; ×2), toutes à 3 cases et 2 coins sauf U1 ; bords B1 (×6) et
- *      B7 « Bord simple » (×8, sans miroir : sert par rotation) ; coin K2 (×5).
- *      Avec 4 K2, 9 centrales et 12 bords : cases = 72 + nB1 + nU1 et ports = 34 + nB1 + nU1 (cases = ports + 38). Le générateur
- *      vise 78 à 81 cases (docs/18, réponse 1), donc 40 à 43 ports : 1 à 4 ports de plus que le minimum (39 = 16 × 2 + 7) pour
- *      7 villes à 3 accès, d'où plusieurs placements de villes admissibles. Il faut nB1 + nU1 = 6 à 9 ; B1 passe à 6 exemplaires
- *      (3 dans docs/45, qui visait 77 cases et n'avait qu'un placement admissible), B7 à 8.
+ *  - 5×5 (tuiles de 100 mm, tests/catalogue-5x5.test.js) : catalogue « très connecté » de docs/55 (décisions de docs/18, « 5×5 très
+ *      connecté »), 2 cases par tuile, 59 cases par plateau : 6 modèles, 25 exemplaires (le stock exact d'un plateau, docs/56) :
+ *      centrales LC1 « Pont et relais » (×3), LC2 « Pont et relais décalé » (×2, même topologie), LC3 « Pont et fourche » (T sans
+ *      case ; ×3), LC4 « Deux ponts » (deux porteuses latérales opposées, murs E et O : 2 raccords morts par pose ; ×1) ; bord LB2
+ *      « Bord à pont » (×12) ; coin LK2 « Coin à porteuse » (×4). 48 ports par plateau (16 jonctions × 3).
  * Les nombres de modèle écrits ci-dessous (« ×4 », « ×5 »…) sont les POIDS de tirage (champ `poids`) ; le stock à imprimer (`exemplaires`)
- * vient de STOCK (B8 ×3 et K4 ×2 en 4×4 ; P3 ×4, P5 ×3, P1 ×3 et P2 ×3 en 5×5), pour que 90 % des plateaux générés se montent (docs/47).
- * Les catalogues précédents (version 3.04 : 4×4 C1 à C6, B1, B3 à B6, K2, K4 ; 5×5 C7, C8, B1, B7, B7m, K2) restent lisibles dans
- * PM.catalogue.precedent (gelé) : un document enregistré porte ses propres copies de modèles et s'ouvre sans changement ; ce champ
- * sert aux tests de compatibilité et de référence. Les ids communs aux deux révisions (B1, K2, K4 en 4×4 ; B1, B7, K2 en 5×5)
- * désignent des modèles identiques.
+ * vient de STOCK (B8 ×3 et K4 ×2 en 4×4 ; en 5×5 il vaut les poids, le générateur tirant les centrales par quotas), pour que 90 % au
+ * moins des plateaux générés se montent (docs/47 ; 100 % en 5×5).
+ * Les catalogues précédents restent lisibles, gelés : PM.catalogue.precedent (version 3.04 : 4×4 C1 à C6, B1, B3 à B6, K2, K4 ; 5×5 C7,
+ * C8, B1, B7, B7m, K2) et PM.catalogue.precedents (toutes les versions par grille ; en 5×5 aussi le catalogue organique de la 4.00.0 :
+ * U1, P1, P2, P3, P5, B1, B7, K2). Un document enregistré porte ses propres copies de modèles et s'ouvre sans changement ; ces champs
+ * servent à proposer le nouveau catalogue (PM.sauvegarde.bibliothequeCataloguePrecedent) et aux tests. Les ids communs à plusieurs
+ * révisions (B1, K2, K4 en 4×4 ; B1, B7, K2 entre 3.04 et 4.00.0 en 5×5) désignent des modèles identiques ; les ids du 5×5 courant
+ * (préfixe L, « latérale », ceux de docs/55) n'existent dans aucun catalogue précédent.
  *
  * Règles que tous les modèles livrés respectent (aucune erreur ni alerte de PM.modele.validerModele, aucun problème de tracé) :
  *  - R1 une case porte au plus un port de coin ; R2 deux cases porteuses ne sont jamais reliées directement ;
  *  - R3 aucun raccord latéral sur une case porteuse ; R4 la case d'apparition ne porte jamais de port ;
+ *  - 5×5 seulement (règles propres au format, PM.modele) : R1 et R3 levées pour la PORTEUSE LATÉRALE (2 ports sur les coins k et
+ *    k + 1, seul raccord au milieu du côté k) et pour la porteuse d'un coin (1 port, paire basse le long de ce coin) ; R2 et R4
+ *    gardées ; murs permis sur « Deux ponts » ; l'écart de 3 cases entre villes n'est plus garanti par les tuiles mais par le placement
+ *    des villes (générateur, aide « placer les villes », alerte villes_proches) ; ce qui suit vaut pour le 4×4 ;
  *  - passages (docs/18) : une case porteuse ne touche jamais un passage ; pas de passage vers un coin, ni depuis une case
  *    d'apparition ; un passage au plus par bord ou coin ; pas de passage traversant (d'un côté au côté opposé) ; en 4×4, un
  *    passage au plus par centrale ; aucune paire miroir (chaque modèle sert par rotation) ;
@@ -130,57 +134,47 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   }
 
   /*
-   * Catalogue 5×5 livré (révision « centrales ouvertes », docs/45 ; exemplaires revus pour 78 à 81 cases, docs/46) :
-   * coordonnées de outils/catalogue-organique.js. Centrales à 3 cases (relais et deux porteuses) sauf U1 (4 cases, 3 coins).
+   * Catalogue 5×5 livré (version 5 du catalogue, docs/53 et docs/55, décisions de docs/18 « 5×5 très connecté ») : voie « porteuse
+   * latérale + relais », 2 cases par tuile, 59 cases par plateau (50 cases de tuiles + 9 jonctions-cases). Coordonnées validées par
+   * l'advisor géométrie (docs/55, marges de 3,79 à 10,04 mm). Ids de docs/55 (préfixe L, « latérale ») : aucun n'existe dans les
+   * catalogues précédents. Une PORTEUSE LATÉRALE (règle propre au 5×5, PM.modele) dessert les deux coins d'un même côté et porte le
+   * raccord du milieu de ce côté ; la porteuse du coin (1 port) porte la paire basse (E2 / S0).
    */
   function construire5() {
     function m5(id, nom, gabarit, ex, cases, chemins, pivots, passages) { return modeleOrganique('5x5', id, nom, gabarit, ex, cases, chemins, pivots, passages); }
+    /** Porteuse latérale nord `c` : ports NO et NE, raccord N au milieu. */
+    function pont(c) { return [port('p1', c, 0), port('p2', c, 1), raccord('rn', c, 0, 1)]; }
     return [
-      /* Centrales */
-      // Trident à virage : quart de tour sans case au sud-ouest ; le relais tient N et E et les ports NO, NE et SE
-      m5('U1', 'Trident à virage', 'centrale', 5,
-        [kase('r', 58, 44), kase('c1', 26, 26), kase('c2', 74, 26), kase('c3', 74, 74)], [
-          raccord('rn', 'r', 0, 1), raccord('re', 'r', 1, 1), lien('h1', 'r', 'c1'), lien('h2', 'r', 'c2'), lien('h3', 'r', 'c3'),
-          port('p1', 'c1', 0), port('p2', 'c2', 1), port('p3', 'c3', 2)
-        ], [], [passage('q1', R(2, 1), R(3, 1))]),
-      // T sans case : les raccords O, N et E se rejoignent en T (pivot sans case) ; fourche au sud (pas un traversant, docs/18)
-      m5('P3', 'T sans case', 'centrale', 2,
-        [kase('s', 50, 70), kase('c4', 24, 76), kase('c3', 76, 76)], [
-          raccord('rs', 's', 2, 1), lien('h4', 's', 'c4'), lien('h3', 's', 'c3'),
-          port('p4', 'c4', 3), port('p3', 'c3', 2)
-        ], [pivot('v', 50, 34)], [passage('t1', R(3, 1), V('v')), passage('t2', R(0, 1), V('v')), passage('t3', R(1, 1), V('v'))]),
-      // Double virage : deux quarts de tour sans case (N-E et S-O), couloir diagonal de 3 cases entre les jonctions NO et SE
-      m5('P5', 'Double virage', 'centrale', 2,
-        [kase('c1', 26, 26), kase('r', 50, 50), kase('c3', 74, 74)], [
-          lien('h1', 'c1', 'r'), lien('h3', 'r', 'c3'), port('p1', 'c1', 0), port('p3', 'c3', 2)
-        ], [], [passage('q1', R(0, 1), R(1, 1), { x: 52, y: 48 }), passage('q2', R(2, 1), R(3, 1), { x: 48, y: 52 })]),
-      // Virage double : quart de tour sans case au sud-ouest ; le relais prend N et E, ports NO et SE
-      m5('P1', 'Virage double', 'centrale', 1,
-        [kase('r', 60, 40), kase('c1', 26, 26), kase('c3', 74, 74)], [
-          raccord('rn', 'r', 0, 1), raccord('re', 'r', 1, 1), lien('h1', 'r', 'c1'), lien('h3', 'r', 'c3'),
-          port('p1', 'c1', 0), port('p3', 'c3', 2)
-        ], [], [passage('q1', R(2, 1), R(3, 1))]),
-      // Équerre à virage : même quart de tour ; le relais prend N et E, ports NE et SE (deux coins voisins)
-      m5('P2', 'Équerre à virage', 'centrale', 1,
-        [kase('r', 50, 40), kase('c2', 76, 24), kase('c3', 74, 74)], [
-          raccord('rn', 'r', 0, 1), raccord('re', 'r', 1, 1), lien('h2', 'r', 'c2'), lien('h3', 'r', 'c3'),
-          port('p2', 'c2', 1), port('p3', 'c3', 2)
-        ], [], [passage('q1', R(2, 1), R(3, 1))]),
-      /* Bords (extérieur N, raccourci E pos 0 + O pos 2, raccord S au milieu depuis l'apparition) */
-      m5('B1', 'Bord en V', 'bord', 6,
-        [appar('a', 50, 40), kase('c1', 82, 66), kase('c2', 18, 66)], [
-          lien('h1', 'a', 'c1'), lien('h2', 'a', 'c2'), port('p1', 'c1', 2), port('p2', 'c2', 3)
-        ].concat(raccourciBord('a'), [raccord('r3', 'a', 2, 1)])),
-      // Bord simple : un seul port (SE), sans miroir : posé par rotation, il nourrit la jonction suivante dans le sens horaire
-      m5('B7', 'Bord simple', 'bord', 8,
-        [appar('a', 56, 38), kase('c1', 84, 64)], [
-          lien('h1', 'a', 'c1'), port('p1', 'c1', 2)
-        ].concat(raccourciBord('a'), [raccord('r3', 'a', 2, 1)])),
-      /* Coin (extérieurs N et O, port SE, raccourci E pos 0 + S pos 2) */
-      m5('K2', 'Coin à relais', 'coin', 5,
-        [appar('a', 32, 32), kase('r', 53, 53), kase('c1', 74, 74)], [
-          lien('h1', 'a', 'r'), lien('h2', 'r', 'c1'), port('p1', 'c1', 2)
-        ].concat(raccourciCoin('a', 'a')))
+      /* Centrales (porteuse latérale nord + relais, ou deux porteuses) */
+      // Pont et relais : le relais tient E, S et O au milieu, un lien vers la porteuse
+      m5('LC1', 'Pont et relais', 'centrale', 3,
+        [kase('p', 50, 25), kase('r', 50, 58)],
+        pont('p').concat([lien('h1', 'p', 'r'), raccord('re', 'r', 1, 1), raccord('rs', 'r', 2, 1), raccord('ro', 'r', 3, 1)])),
+      // Pont et relais décalé : même topologie, relais décalé vers le sud-est (variété du dessin)
+      m5('LC2', 'Pont et relais décalé', 'centrale', 2,
+        [kase('p', 44, 27), kase('r', 62, 62)],
+        pont('p').concat([lien('h1', 'p', 'r'), raccord('re', 'r', 1, 1), raccord('rs', 'r', 2, 1), raccord('ro', 'r', 3, 1)])),
+      // Pont et fourche : le relais tient E ; un T sans case (pivot hors du relais) le relie à S et à O (motif organique)
+      m5('LC3', 'Pont et fourche', 'centrale', 3,
+        [kase('p', 50, 25), kase('r', 62, 60)],
+        pont('p').concat([lien('h1', 'p', 'r'), raccord('re', 'r', 1, 1)]),
+        [pivot('v', 31, 76)], [passage('t1', R(2, 1), V('v')), passage('t2', R(3, 1), V('v')), passage('t3', C('r'), V('v'))]),
+      // Deux ponts : porteuses latérales nord (NO, NE, N) et sud (SE, SO, S), non reliées ; côtés E et O sans raccord (murs voulus)
+      m5('LC4', 'Deux ponts', 'centrale', 1,
+        [kase('p', 50, 25), kase('q', 50, 75)],
+        pont('p').concat([port('p3', 'q', 2), port('p4', 'q', 3), raccord('rs', 'q', 2, 1)])),
+      /* Bord (extérieur N) : apparition à raccourci E0 / O2 et paire basse E2 / O0 ; porteuse latérale sud (SE, SO, S au milieu) */
+      m5('LB2', 'Bord à pont', 'bord', 12,
+        [appar('a', 50, 48), kase('c', 50, 81)], [
+          raccord('r1', 'a', 1, 0), raccord('r2', 'a', 3, 2), raccord('r3', 'a', 1, 2), raccord('r4', 'a', 3, 0), lien('h1', 'a', 'c'),
+          port('p1', 'c', 2), port('p2', 'c', 3), raccord('r5', 'c', 2, 1)
+        ]),
+      /* Coin (extérieurs N et O) : apparition à raccourci E0 / S2 ; porteuse du coin SE avec la paire basse E2 / S0 */
+      m5('LK2', 'Coin à porteuse', 'coin', 4,
+        [appar('a', 39, 42), kase('c', 75, 75)], [
+          raccord('r1', 'a', 1, 0), raccord('r2', 'a', 2, 2), lien('h1', 'a', 'c'),
+          port('p1', 'c', 2), raccord('r3', 'c', 1, 2), raccord('r4', 'c', 2, 0)
+        ])
     ];
   }
 
@@ -331,6 +325,62 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     ];
   }
 
+  /*
+   * Catalogue 5×5 PRÉCÉDENT de la version 4.00.0 (révision « centrales ouvertes », docs/45 ; exemplaires revus pour 78 à 81 cases,
+   * docs/46 ; stock de docs/47) : coordonnées de outils/catalogue-organique.js. Centrales à 3 cases (relais et deux porteuses) sauf
+   * U1 (4 cases, 3 coins). Gardé en lecture seule (PM.catalogue.precedents['5x5']) : reconnaissance des documents 4.00.0, tests.
+   */
+  function construirePrecedent5Organique() {
+    function m5(id, nom, gabarit, ex, cases, chemins, pivots, passages) { return modeleOrganique('5x5', id, nom, gabarit, ex, cases, chemins, pivots, passages); }
+    return [
+      /* Centrales */
+      // Trident à virage : quart de tour sans case au sud-ouest ; le relais tient N et E et les ports NO, NE et SE
+      m5('U1', 'Trident à virage', 'centrale', 5,
+        [kase('r', 58, 44), kase('c1', 26, 26), kase('c2', 74, 26), kase('c3', 74, 74)], [
+          raccord('rn', 'r', 0, 1), raccord('re', 'r', 1, 1), lien('h1', 'r', 'c1'), lien('h2', 'r', 'c2'), lien('h3', 'r', 'c3'),
+          port('p1', 'c1', 0), port('p2', 'c2', 1), port('p3', 'c3', 2)
+        ], [], [passage('q1', R(2, 1), R(3, 1))]),
+      // T sans case : les raccords O, N et E se rejoignent en T (pivot sans case) ; fourche au sud (pas un traversant, docs/18)
+      m5('P3', 'T sans case', 'centrale', 2,
+        [kase('s', 50, 70), kase('c4', 24, 76), kase('c3', 76, 76)], [
+          raccord('rs', 's', 2, 1), lien('h4', 's', 'c4'), lien('h3', 's', 'c3'),
+          port('p4', 'c4', 3), port('p3', 'c3', 2)
+        ], [pivot('v', 50, 34)], [passage('t1', R(3, 1), V('v')), passage('t2', R(0, 1), V('v')), passage('t3', R(1, 1), V('v'))]),
+      // Double virage : deux quarts de tour sans case (N-E et S-O), couloir diagonal de 3 cases entre les jonctions NO et SE
+      m5('P5', 'Double virage', 'centrale', 2,
+        [kase('c1', 26, 26), kase('r', 50, 50), kase('c3', 74, 74)], [
+          lien('h1', 'c1', 'r'), lien('h3', 'r', 'c3'), port('p1', 'c1', 0), port('p3', 'c3', 2)
+        ], [], [passage('q1', R(0, 1), R(1, 1), { x: 52, y: 48 }), passage('q2', R(2, 1), R(3, 1), { x: 48, y: 52 })]),
+      // Virage double : quart de tour sans case au sud-ouest ; le relais prend N et E, ports NO et SE
+      m5('P1', 'Virage double', 'centrale', 1,
+        [kase('r', 60, 40), kase('c1', 26, 26), kase('c3', 74, 74)], [
+          raccord('rn', 'r', 0, 1), raccord('re', 'r', 1, 1), lien('h1', 'r', 'c1'), lien('h3', 'r', 'c3'),
+          port('p1', 'c1', 0), port('p3', 'c3', 2)
+        ], [], [passage('q1', R(2, 1), R(3, 1))]),
+      // Équerre à virage : même quart de tour ; le relais prend N et E, ports NE et SE (deux coins voisins)
+      m5('P2', 'Équerre à virage', 'centrale', 1,
+        [kase('r', 50, 40), kase('c2', 76, 24), kase('c3', 74, 74)], [
+          raccord('rn', 'r', 0, 1), raccord('re', 'r', 1, 1), lien('h2', 'r', 'c2'), lien('h3', 'r', 'c3'),
+          port('p2', 'c2', 1), port('p3', 'c3', 2)
+        ], [], [passage('q1', R(2, 1), R(3, 1))]),
+      /* Bords (extérieur N, raccourci E pos 0 + O pos 2, raccord S au milieu depuis l'apparition) */
+      m5('B1', 'Bord en V', 'bord', 6,
+        [appar('a', 50, 40), kase('c1', 82, 66), kase('c2', 18, 66)], [
+          lien('h1', 'a', 'c1'), lien('h2', 'a', 'c2'), port('p1', 'c1', 2), port('p2', 'c2', 3)
+        ].concat(raccourciBord('a'), [raccord('r3', 'a', 2, 1)])),
+      // Bord simple : un seul port (SE), sans miroir : posé par rotation, il nourrit la jonction suivante dans le sens horaire
+      m5('B7', 'Bord simple', 'bord', 8,
+        [appar('a', 56, 38), kase('c1', 84, 64)], [
+          lien('h1', 'a', 'c1'), port('p1', 'c1', 2)
+        ].concat(raccourciBord('a'), [raccord('r3', 'a', 2, 1)])),
+      /* Coin (extérieurs N et O, port SE, raccourci E pos 0 + S pos 2) */
+      m5('K2', 'Coin à relais', 'coin', 5,
+        [appar('a', 32, 32), kase('r', 53, 53), kase('c1', 74, 74)], [
+          lien('h1', 'a', 'r'), lien('h2', 'r', 'c1'), port('p1', 'c1', 2)
+        ].concat(raccourciCoin('a', 'a')))
+    ];
+  }
+
   /** Gèle récursivement un objet (le catalogue partagé ne doit pas être modifié). */
   function geler(o) {
     if (o && typeof o === 'object' && !Object.isFrozen(o)) {
@@ -346,7 +396,9 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * plateaux : mesures d'équilibre inchangées) ; les exemplaires sont ceux de ce tableau, relevés pour qu'au moins 90 % des plateaux
    * générés se montent avec la boîte imprimée (docs/47). Le stock ne limite jamais la pose.
    */
-  var STOCK = { '4x4': { Q1: 4, Q2: 3, B1: 8, B8: 3, K2: 4, K4: 2 }, '5x5': { U1: 5, P3: 4, P5: 3, P1: 3, P2: 3, B1: 6, B7: 8, K2: 5 } };
+  var STOCK = { '4x4': { Q1: 4, Q2: 3, B1: 8, B8: 3, K2: 4, K4: 2 }, '5x5': { LC1: 3, LC2: 2, LC3: 3, LC4: 1, LB2: 12, LK2: 4 } };
+  /** Stock du catalogue 5×5 de la version 4.00.0 (docs/47), gardé avec lui dans PM.catalogue.precedents['5x5']. */
+  var STOCK_5X5_400 = { U1: 5, P3: 4, P5: 3, P1: 3, P2: 3, B1: 6, B7: 8, K2: 5 };
   function avecStock(liste, stock) {
     liste.forEach(function (m) {
       m.poids = m.exemplaires;
@@ -359,10 +411,19 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var MODELES_5X5 = geler(avecStock(construire5(), STOCK['5x5']));
   var PAR_GRILLE = geler({ '4x4': MODELES, '5x5': MODELES_5X5 });
   var PRECEDENT = geler({ '4x4': construirePrecedent4(), '5x5': construirePrecedent5() });
+  /*
+   * Tous les catalogues précédents, du plus ancien au plus récent, par grille : 4×4 : 3.04 ; 5×5 : 3.04 puis 4.00.0 (organique à
+   * 3 ou 4 cases par centrale, remplacé par le catalogue à 2 cases par tuile). Un document dont la bibliothèque est exactement l'un
+   * d'eux se voit proposer le catalogue courant (PM.sauvegarde.bibliothequeCataloguePrecedent) ; ses modèles restent protégés.
+   */
+  var PRECEDENTS = geler({
+    '4x4': [{ version: '3.04', modeles: PRECEDENT['4x4'] }],
+    '5x5': [{ version: '3.04', modeles: PRECEDENT['5x5'] }, { version: '4.00', modeles: avecStock(construirePrecedent5Organique(), STOCK_5X5_400) }]
+  });
 
   /**
    * Document neuf de la grille demandée ('4x4' par défaut) contenant une copie modifiable de ses modèles
-   * (6 en 4×4, 8 en 5×5). Lève une Error pour une grille inconnue.
+   * (6 en 4×4, 6 en 5×5). Lève une Error pour une grille inconnue.
    */
   function nouveauDocument(grille) {
     var g = grille === undefined || grille === null ? '4x4' : grille;
@@ -373,10 +434,11 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   }
 
   PM.catalogue = {
-    version: 3,                       // 3 : catalogues « organiques » (docs/45, docs/46) ; 2 : catalogues de la version 3.04 (precedent)
+    version: 4,                       // 4 : 5×5 à 2 cases par tuile (docs/55) ; 3 : catalogues « organiques » (docs/46) ; 2 : version 3.04
     modeles: MODELES,                 // tableau gelé (lecture seule) : catalogue 4×4, gardé pour la compatibilité
     modelesParGrille: PAR_GRILLE,     // { '4x4': [...], '5x5': [...] } gelé
     precedent: PRECEDENT,             // { '4x4': [...], '5x5': [...] } gelé : catalogues de la version 3.04 (compatibilité, tests)
+    precedents: PRECEDENTS,           // { grille: [{ version, modeles }] } gelé : tous les catalogues précédents (3.04 ; 5×5 : aussi 4.00.0)
     nouveauDocument: nouveauDocument
   };
 

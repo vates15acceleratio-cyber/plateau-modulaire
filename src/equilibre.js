@@ -46,13 +46,14 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     var resultat = GR.equilibre(doc, Object.assign({}, options, { graphe: graphe }));
     return {
       grille: PM.modele.formatDuDocument(doc).id, graphe: graphe, resultat: resultat, goulets: { 1: GR.goulets(graphe, 1), 2: GR.goulets(graphe, 2) },
-      rythme: GR.rythme(doc, graphe), acces: GR.accesCentre(doc, graphe), moities: GR.casesParMoitie(doc, graphe)
+      rythme: GR.rythme(doc, graphe), acces: GR.accesCentre(doc, graphe), moities: GR.casesParMoitie(doc, graphe),
+      connexions: GR.connexions ? GR.connexions(doc, graphe) : null
     };
   }
 
   /**
-   * Lignes d'information sur le rythme, l'accès au centre et les cases par moitié (jamais des alertes) ; [] si l'analyse ne les a pas
-   * (analyse construite à la main). Rangée neutre et jonctions du milieu à part.
+   * Lignes d'information sur le rythme, l'accès au centre, les cases par moitié et, en 5×5, les connexions par case (jamais des
+   * alertes) ; [] si l'analyse ne les a pas (analyse construite à la main). Rangée neutre et jonctions du milieu à part.
    */
   function lignesOrganiques(analyse) {
     var ry = analyse.rythme, ac = analyse.acces, mo = analyse.moities, res = [];
@@ -65,8 +66,19 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       ac.portes.rouge + ' côté rouge (écart ' + ac.ecart + ') ; chemins indépendants depuis les apparitions : vert ' + ac.chemins.vert + ', rouge ' + ac.chemins.rouge + '.');
     res.push('Cases par moitié : vert ' + mo.vert + ', rouge ' + mo.rouge + (mo.ecart ? ' (écart ' + mo.ecart + ')' : ' (égales)') + ' ; à part : ' +
       (est5x5 ? mo.tuiles.neutre + ' sur la rangée neutre et ' : '') + mo.jonctions.milieu + ' jonction(s)-case(s) du milieu.');
+    // 5×5 (docs/18, docs/53 § 1) : connexions par case, en information seulement
+    var cx = analyse.connexions;
+    if (est5x5 && cx && cx.cases) {
+      res.push('Connexions par case : ' + cx.faibles + ' case(s) à 2 connexions ou moins sur ' + cx.cases + ' (' + texteParts(cx.part) + ' ; visé : moins de ' +
+        texteParts(GR.PART_CONNEXIONS_MAX) + (cx.conforme ? ', tenu' : ', non tenu') + ') ; ' + texteDegre(cx.degreMoyen) + ' connexions par case en moyenne (villes à part).');
+    }
     return res;
   }
+
+  /** Part en pour cent, une décimale, virgule française (0,034 -> « 3,4 % »). */
+  function texteParts(x) { return (Math.round(x * 1000) / 10).toString().replace('.', ',') + ' %'; }
+  /** Nombre à deux décimales, virgule française. */
+  function texteDegre(x) { return x === null || x === undefined ? '—' : (Math.round(x * 100) / 100).toString().replace('.', ','); }
 
   function texteDistance(d) { return d === null || d === undefined ? '—' : (isFinite(d) ? String(d) : '∞'); }
   function nomVille(v) { return '(' + v.i + ', ' + v.j + ')'; }
@@ -209,7 +221,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       racine.appendChild(sInfo);
     }
 
-    // Rythme, accès au centre, cases par moitié (information, docs/46)
+    // Rythme, accès au centre, cases par moitié, connexions en 5×5 (information, docs/46, docs/53)
     if (m.organique.length) {
       var sOrg = section(doc, 'Rythme, accès et moitiés (information)');
       var lOrg = el(doc, 'ul', 'pm-equilibre-organique');

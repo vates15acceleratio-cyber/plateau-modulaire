@@ -180,3 +180,49 @@ test('catalogue précédent : de vrais documents écrits par la version 3.04.0 (
     assert.strictEqual(S.bibliothequeCataloguePrecedent(r.doc), true, g);
   }
 });
+
+/* ---------- catalogue 5×5 de la version 4.00.0 (organique), précédent du catalogue à 2 cases par tuile (docs/55, docs/56) ---------- */
+
+test('catalogue précédent 4.00.0 (5×5) : un vrai document écrit par la version 4.00.0 est reconnu, après aller-retour aussi ; modifié, il ne l\'est plus', () => {
+  const fs = require('fs'), path = require('path');
+  const texte = fs.readFileSync(path.join(__dirname, 'donnees', 'document-4.00-5x5.json'), 'utf8');
+  const r = S.depuisJSON(texte);
+  assert.ok(r.ok, JSON.stringify(r.erreurs));
+  assert.strictEqual(r.doc.grille, '5x5');
+  assert.strictEqual(r.doc.plateau.tuiles.length, 25);
+  assert.deepStrictEqual(r.doc.modeles.map((m) => m.id), ['U1', 'P3', 'P5', 'P1', 'P2', 'B1', 'B7', 'K2']);
+  assert.strictEqual(S.bibliothequeCataloguePrecedent(r.doc), true);
+  assert.strictEqual(S.bibliothequeCataloguePrecedent(S.depuisJSON(S.versJSON(r.doc)).doc), true, 'relu');
+  // le document s'ouvre tel quel (ses copies de modèles), sans erreur
+  assert.deepStrictEqual(M.validerPlateau(r.doc).erreurs, []);
+  // exemplaires et noms changés : toujours reconnu ; une case déplacée ou un modèle en plus : plus reconnu
+  const ex = copie(r.doc); ex.modeles.forEach((m) => { m.exemplaires = 1; m.nom = 'x'; });
+  assert.strictEqual(S.bibliothequeCataloguePrecedent(ex), true);
+  const bouge = copie(r.doc); bouge.modeles[0].cases[0].x += 2;
+  assert.strictEqual(S.bibliothequeCataloguePrecedent(bouge), false);
+  const plus = copie(r.doc); plus.modeles.push(Object.assign(copie(plus.modeles[0]), { id: 'perso' }));
+  assert.strictEqual(S.bibliothequeCataloguePrecedent(plus), false);
+  // mélange 4.00.0 et 3.04 (C7 à la place de U1) : aucun des deux catalogues
+  const mele = copie(r.doc); mele.modeles[0] = copie(CAT.precedent['5x5'][0]);
+  assert.strictEqual(S.bibliothequeCataloguePrecedent(mele), false);
+  // les deux catalogues précédents du 5×5 sont reconnus ; le catalogue courant ne l'est pas
+  for (const x of CAT.precedents['5x5']) {
+    const d = CAT.nouveauDocument('5x5'); d.modeles = copie(x.modeles);
+    assert.strictEqual(S.bibliothequeCataloguePrecedent(d), true, x.version);
+  }
+  assert.strictEqual(S.bibliothequeCataloguePrecedent(CAT.nouveauDocument('5x5')), false);
+});
+
+test('catalogue précédent 4.00.0 (5×5) : accepter la proposition charge le catalogue à 2 cases par tuile, vide le plateau, Ctrl+Z rend le document', () => {
+  require('../src/etat.js');
+  const fs = require('fs'), path = require('path');
+  const doc = S.depuisJSON(fs.readFileSync(path.join(__dirname, 'donnees', 'document-4.00-5x5.json'), 'utf8')).doc;
+  const etat = PM.etat.creer(doc), avant = JSON.stringify(etat.doc());
+  etat.remplacer(CAT.nouveauDocument('5x5'), 'nouveau catalogue'); // ce que fait le bouton « Charger le nouveau catalogue » (app.js)
+  assert.deepStrictEqual(etat.doc().modeles.map((m) => m.id), ['LC1', 'LC2', 'LC3', 'LC4', 'LB2', 'LK2']);
+  assert.deepStrictEqual(etat.doc().plateau, { tuiles: [], jetons: [] });
+  assert.strictEqual(etat.doc().grille, '5x5');
+  assert.strictEqual(S.bibliothequeCataloguePrecedent(etat.doc()), false, 'plus de proposition ensuite');
+  etat.annuler();
+  assert.strictEqual(JSON.stringify(etat.doc()), avant);
+});
