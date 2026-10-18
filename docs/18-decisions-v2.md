@@ -125,3 +125,7 @@ Après les avis `28-avis-design-5x5.md` (design de jeu) et `29-avis-geometrie-5x
 2. **Goulets 5×5** : le générateur **préfère** les plateaux sans point d'articulation (préférence, pas rejet ; objectif ≈ 0 %).
 3. **4×4 : « jonctions variées » par défaut** (12 placements de villes au lieu de 3).
 4. **Rythme et accès au centre : information seulement**, jamais d'alerte ; texte « bien au-dessus de la cible » si chaîne ≥ 7 ou distMax ≥ 6.
+
+## Réponses de l'utilisateur à la revue de la branche `passages` (2026-10-18, `51`)
+- **Rejet de S au générateur** : comportement inchangé depuis la 3.04 : **5×5 : rejet de S ≥ 5 ; 4×4 : pas de rejet, classement des candidats par S** (sans effet pratique, S ≤ 1 sur les plateaux 4×4 générés). *Note de l'orchestrateur* : la phrase « le générateur continue de rejeter S ≥ 5 dans les deux formats » de la section précédente venait d'une question mal formulée par l'orchestrateur ; elle est remplacée par la présente.
+- **Format des documents** : un document dont un modèle a des passages ou des pivots est écrit en **`version: 3`** ; la 3.04 le refuse alors avec un message clair au lieu de perdre les passages sans prévenir. Les documents v1 et v2 s'ouvrent toujours.
