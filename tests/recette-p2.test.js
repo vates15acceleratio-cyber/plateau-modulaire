@@ -302,7 +302,7 @@ test('export : bibliothèque modifiée, exemplaires pris en compte, modèle inco
 });
 
 test('export : tuiles posées d\'abord, portée « posées », tuiles imprimées neutres (aucun joueur)', () => {
-  const r = plateau('export');
+  const r = plateau('export-2');
   const posees = E.listeTuiles(r.doc, { portee: 'posees' });
   assert.strictEqual(posees.tuiles.length, 16);
   assert.ok(posees.tuiles.every((t) => t.posee));
@@ -493,7 +493,7 @@ test('export : PDF A4 du catalogue (11 pages 210 x 297) et PDF de la bibliothèq
 });
 
 test('export : PDF des jetons (A4) et de l\'aperçu (A3) : tailles, texte, repères', { skip: SANS_PYMUPDF }, () => {
-  const sortie = E.preparerSorties(plateau('export').doc, { tuiles: false, jetons: true, apercu: true });
+  const sortie = E.preparerSorties(plateau('export-2').doc, { tuiles: false, jetons: true, apercu: true });
   assert.strictEqual(sortie.feuilles.length, 2);
   const pdf = E.pdfDepuisPlanches(sortie.feuilles);
   const r = analysePdf(pdf, 'jetons-apercu', []);

@@ -371,7 +371,7 @@ test('plateau complet des exemples : aucune erreur ni alerte, en 4×4 et en 5×5
   for (const grille of ['4x4', '5x5']) {
     const d = plateauComplet(grille), n = G.format(grille).GRILLE.colonnes;
     assert.strictEqual(d.plateau.tuiles.length, n * n);
-    assert.deepStrictEqual(M.validerPlateau(d), { erreurs: [], alertes: [] }, grille);
+    assert.deepStrictEqual(M.validerPlateau(d), { erreurs: [], alertes: [], informations: [] }, grille);
     assert.deepStrictEqual(M.raccordsMorts(d).filter((r) => r.raison !== 'absent'), []);
   }
 });

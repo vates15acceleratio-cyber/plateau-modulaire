@@ -40,9 +40,21 @@ function bfs(g, source, bloque) {
   return d;
 }
 
-/** Zones d'intérêt écrites sans PM.graphe.rythme : villes, cases des réseaux de passages économes de 2 cases ou plus, raccourcis. */
+/** Jonctions (id de nœud) dont les 4 tuiles sont posées, écrites sans PM.graphe : les villes et les jonctions-cases complètes. */
+function jonctionsCompletesOracle(doc, g) {
+  const posee = new Set(doc.plateau.tuiles.map((t) => t.col + ',' + t.lig)), res = [];
+  for (const id of g.noeuds) {
+    const m = /^J(\d+),(\d+)$/.exec(id);
+    if (!m) continue;
+    const i = +m[1], j = +m[2];
+    if (g.villes.has(id) || (posee.has((i - 1) + ',' + (j - 1)) && posee.has(i + ',' + (j - 1)) && posee.has((i - 1) + ',' + j) && posee.has(i + ',' + j))) res.push(id);
+  }
+  return res;
+}
+
+/** Zones d'intérêt écrites sans PM.graphe.rythme : jonctions (villes et jonctions-cases complètes), cases des réseaux de passages économes de 2 cases ou plus, raccourcis. */
 function zonesOracle(doc, g) {
-  const z = new Set(g.villes);
+  const z = new Set([...g.villes, ...jonctionsCompletesOracle(doc, g)]);
   GR.reseauxPassages(doc).economes.forEach((s) => { if (s.size >= 2) s.forEach((id) => z.add(id)); });
   const tuile = (id) => id.split(':')[0];
   g.cases.forEach((c, id) => {
@@ -93,7 +105,7 @@ test('réseaux de passages : un virage raccord–raccord est économe, un croche
 
 /* ---------------------------- rythme ---------------------------- */
 
-test('rythme : zones = villes, passages économes et raccourcis ; chaîne et distance maximale égales à un oracle (4×4 et 5×5)', () => {
+test('rythme : zones = jonctions (villes et jonctions-cases complètes), passages économes et raccourcis ; chaîne et distance maximale égales à un oracle (4×4 et 5×5)', () => {
   for (const g0 of ['4x4', '5x5']) {
     for (const doc of plateaux(g0)) {
       const g = GR.construire(doc), r = GR.rythme(doc, g), z = zonesOracle(doc, g);
@@ -130,10 +142,30 @@ test('rythme : le raccourci compte comme zone d\'intérêt (docs/18, réponse 3)
   }
 });
 
-test('rythme : témoin, sans passage ni raccourci la chaîne s\'allonge (plateau des exemples, villes seules)', () => {
+test('rythme : toute jonction est une zone d’intérêt, dans les deux formats (docs/18, réponse 1 sur le 5×5 très connecté) ; une jonction aux tuiles manquantes n’en est pas une', () => {
+  for (const g0 of ['4x4', '5x5']) {
+    const N = G.format(g0).GRILLE.colonnes - 1; // jonctions intérieures par ligne
+    for (const doc of plateaux(g0).slice(0, 10)) {
+      const g = GR.construire(doc), r = GR.rythme(doc, g), a = GR.rythme(doc, g, { sansJonctions: true });
+      assert.equal(r.casesJonction.length, N * N - g.villes.size, g0 + ' : toutes les jonctions-cases complètes');
+      assert.ok(r.casesJonction.every((id) => g.jonctions.find((jn) => jn.id === id).type === 'case'));
+      for (let j = 1; j <= N; j++) for (let i = 1; i <= N; i++) assert.ok(g.villes.has('J' + i + ',' + j) || r.casesJonction.includes('J' + i + ',' + j));
+      assert.equal(a.casesJonction.length, 0);
+      assert.ok(r.zones > a.zones);
+      assert.ok(r.chaineMax <= a.chaineMax && r.distMax <= a.distMax, 'ajouter des zones ne rallonge ni la chaîne ni la distance');
+      // une tuile retirée : les jonctions qu'elle bordait ne sont plus des zones (sauf les villes)
+      const p = JSON.parse(JSON.stringify(doc)); p.plateau.tuiles = p.plateau.tuiles.filter((t) => !(t.col === 1 && t.lig === 1));
+      const gp = GR.construire(p), rp = GR.rythme(p, gp);
+      assert.ok(rp.casesJonction.every((id) => !['J1,1', 'J2,1', 'J1,2', 'J2,2'].includes(id)), g0);
+      assert.equal(rp.casesJonction.length, jonctionsCompletesOracle(p, gp).filter((id) => !gp.villes.has(id)).length);
+    }
+  }
+});
+
+test('rythme : témoin, sans passage, raccourci ni jonction-case la chaîne s’allonge (plateau des exemples, villes seules)', () => {
   const AV2 = require('./aides-v2.js');
   const doc = AV2.plateauComplet('4x4', true), g = GR.construire(doc);
-  const r = GR.rythme(doc, g, { sansRaccourci: true }), z = new Set(g.villes);
+  const r = GR.rythme(doc, g, { sansRaccourci: true, sansJonctions: true }), z = new Set(g.villes);
   assert.equal(r.zones, 7);
   assert.equal(r.chaineMax, chaineOracle(g, z));
   assert.ok(GR.rythme(doc, g).chaineMax <= r.chaineMax, 'ajouter les raccourcis ne rallonge pas la chaîne ici');

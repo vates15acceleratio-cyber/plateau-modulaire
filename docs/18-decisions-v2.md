@@ -149,3 +149,7 @@ Après les avis `28-avis-design-5x5.md` (design de jeu) et `29-avis-geometrie-5x
 2. **Composition 5×5** : bords et coins gardent leur composition ; **plus de choix dans les tuiles centrales** qu'aujourd'hui (nouveaux modèles de centrales, dans les règles du 5×5 très connecté ; tirage plus varié des centrales, stock à recalculer).
 3. **Murs voulus** (« Deux ponts ») : les raccords morts face à un mur voulu passent **en information**, plus en alerte ; les autres raccords morts restent des alertes.
 4. **« Placer les villes »** : gardé dans les deux formats.
+
+## Choix de l'utilisateur sur les nouvelles centrales 5×5 (2026-10-18, `58`)
+- **Jeu « B3 »** : centrales LC1 ×2, LC2 ×1, LC3 ×3, LC4 ×1, **LC5 Pont et carrefour ×2, LC6 Pont et fourche libres ×1, LC7 Pont et relais libres ×2** (12 centrales, 28 tuiles au total, 5 planches A3). LC8 à LC10 non retenues.
+- **Environ 57 cases par plateau** acceptées (LC5 n'a qu'une case).

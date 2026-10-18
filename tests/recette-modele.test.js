@@ -89,7 +89,7 @@ for (const grille of ['4x4', '5x5']) {
 
   test(grille + ' : plateau plein des exemples, aucune erreur ni alerte, aucun raccord mort, toutes les jonctions à 4 ports', () => {
     const d = documentPlein(grille), n = G.format(grille).GRILLE.colonnes;
-    assert.deepEqual(M.validerPlateau(d), { erreurs: [], alertes: [] });
+    assert.deepEqual(M.validerPlateau(d), { erreurs: [], alertes: [], informations: [] });
     assert.deepEqual(M.raccordsMorts(d).filter((r) => r.raison !== 'absent'), []);
     for (let j = 1; j < n; j++) for (let i = 1; i < n; i++) assert.deepEqual(M.portsJonction(d, i, j), { ports: 4, tuiles: 4 });
   });

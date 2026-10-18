@@ -50,17 +50,19 @@ function porteuseDeDeuxVilles(doc) {
   return [...g.cases.keys()].some((id) => [...g.voisins.get(id)].filter((v) => g.villes.has(v)).length >= 2);
 }
 
-test('200 graines : plateau valide, 25 tuiles, 7 villes, compteurs à ok, aucune erreur ; seules alertes : les 2 raccords morts de « Deux ponts »', () => {
+test('200 graines : plateau valide, 25 tuiles, 7 villes, compteurs à ok, aucune erreur ; aucune alerte ; les 2 murs de « Deux ponts » en information', () => {
   plateaux().forEach((r, k) => {
     const doc = r.doc, v = M.validerPlateau(doc);
     assert.strictEqual(doc.grille, '5x5');
     assert.strictEqual(doc.plateau.tuiles.length, 25, 'g5-' + k);
     assert.strictEqual(doc.plateau.jetons.length, 7, 'g5-' + k);
     assert.deepStrictEqual(v.erreurs, [], 'g5-' + k);
-    assert.deepStrictEqual(v.alertes.map((a) => a.code), ['raccord_mort', 'raccord_mort'], 'g5-' + k);
+    assert.deepStrictEqual(v.alertes, [], 'g5-' + k);
+    assert.deepStrictEqual(v.informations.map((a) => a.code), ['raccord_mur', 'raccord_mur'], 'g5-' + k); // les murs voulus de « Deux ponts » (docs/18)
     const c = PM.controles.calculer(doc);
     assert.deepStrictEqual(c.erreurs.map((e) => e.code), [], 'g5-' + k);
-    assert.deepStrictEqual(c.alertes.map((e) => e.code), ['raccord_mort', 'raccord_mort'], 'g5-' + k);
+    assert.deepStrictEqual(c.alertes, [], 'g5-' + k);
+    assert.deepStrictEqual(c.informations.map((e) => e.code), ['raccord_mur', 'raccord_mur'], 'g5-' + k);
     assert.deepStrictEqual(c.compteurs.filter((x) => x.etat !== 'ok').map((x) => x.cle), [], 'g5-' + k);
     assert.strictEqual(r.rejets.plateau_invalide, 0);
   });
@@ -138,7 +140,8 @@ test('200 graines : préférences et mesures gardées (chaîne, distance maximal
     assert.strictEqual(r.score.chaine, ry.chaineMax);
     assert.strictEqual(r.score.distMax, ry.distMax);
     assert.deepStrictEqual(r.score.acces, { vert: ac.portes.vert, rouge: ac.portes.rouge, ecart: ac.ecart });
-    assert.strictEqual(r.score.raccordsMorts, 2, 'g5-' + k + ' : les deux murs de LC4');
+    assert.strictEqual(r.score.raccordsMorts, 0, 'g5-' + k + ' : les deux murs de LC4 sont voulus, donc ne comptent pas');
+    assert.strictEqual(M.raccordsMorts(r.doc).filter((x) => x.mur).length, 2, 'g5-' + k);
     assert.strictEqual(r.score.articulations, GR.goulets(GR.construire(r.doc, { villesTraversables: false }), 1).articulations.length + GR.goulets(GR.construire(r.doc, { villesTraversables: false }), 2).articulations.length);
     assert.ok(r.score.placementsAdmissibles >= 1, 'g5-' + k);
     assert.strictEqual(r.score.placementsAdmissibles, GEN.placementsAdmissibles5x5(r.doc));
@@ -495,13 +498,14 @@ test('budget de nœuds : une recherche d’orientation interrompue est signalée
 // Empreintes du générateur 4×4 depuis le branchement des catalogues « centrales ouvertes » (docs/46 : cases égales entre moitiés,
 // centrales orientées selon les ports, affinage du rythme ; graines 'emp-0' à 'emp-19', 60 candidats, mode par défaut puis « variées »,
 // puis la graine 'defaut' à 200 candidats avec son rapport). Elles ne changent que si le 4×4 est volontairement modifié (les empreintes
-// d'avant, docs/34, valaient pour le catalogue et le générateur de la version 3.04).
+// d'avant, docs/34, valaient pour le catalogue et le générateur de la version 3.04). Recalculées le 2026-10-18 : toute jonction est une
+// zone d'intérêt du rythme (docs/18), donc l'affinage du rythme et le classement des finalistes du 4×4 changent.
 const EMPREINTES_4X4 = [
-  'cc51470500', '246271612f', '92a566ce6e', '5981107510', '43e4ad7ce8', '9214010d4f', 'f31302608c', '108f564629', 'a6b27a7b30', 'bad0dc90f0',
-  '39f0c79733', 'a2eecf3c25', 'a1d94d62fe', 'c7da110096', '3425c93c26', '4b616a5df1', '5208d28f4d', 'ae8b324e7a', 'f09c2be2a4', '579dc8625f',
-  '1ccbfff93e', 'e7777499de', 'e30441f014', '8227e5ed09', '769e4aa3ad', '96cea7885e', 'e702f071ce', '18d35bc1fe', '6440133aff', '4eb00f21b0',
-  'e1dc029b7b', 'edb1ae75be', 'aaa73697c3', '799e4da997', '2fba9126bf', '86376f6505', '5591b9c420', '63e3bf5285', '62c20533ca', 'fc27fda8c7',
-  '3768a123a1'
+  'c7b84c04d8', 'c67f70b22a', 'bc9804d8fb', '49ec6c1763', 'd1b58d23aa', 'b849b7208e', '10915156ee', 'd0cb277dce', 'd850a1b869', '7203f8f526',
+  'a4da801b19', '47ecc07d80', 'cbc169bf66', '6798312960', '2ed6de112a', 'd574c6c673', '8ee3208ef5', 'eafac54e7c', '2b03155fa7', '0d333266b7',
+  '928c4975b9', '2ba53d56ce', '304b762f96', '3a5e15c89d', '35418b6859', '648c604e4d', '942ad45295', '080d881eee', 'e32517cdfd', '417f823d3a',
+  'd2a6e5b9ce', 'efcf47b9e5', 'beb2734d92', '00eb11f779', '20d23f4d46', '5d1db830e2', '0813f4b905', '98c08d3a59', 'cbb8d5229d', 'eaeeb65ec2',
+  'a73459917d'
 ];
 const sha = (x) => crypto.createHash('sha1').update(JSON.stringify(x)).digest('hex').slice(0, 10);
 

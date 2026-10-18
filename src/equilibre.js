@@ -60,7 +60,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     if (!ry || !ac || !mo) return res;
     var est5x5 = analyse.grille === '5x5';
     var tresHaut = ry.chaineMax >= 2 * GR.CHAINE_CIBLE + 1 || ry.distMax >= DIST_MAX_TRES_HAUTE; // chaîne >= 7 ou distMax >= 6 : information seulement
-    res.push('Rythme : au plus ' + ry.chaineMax + ' case(s) d’affilée sans zone d’intérêt (ville, passage sans case qui fait gagner un pas, raccourci du pourtour) ; cible ' +
+    res.push('Rythme : au plus ' + ry.chaineMax + ' case(s) d’affilée sans zone d’intérêt (jonction, c’est-à-dire ville ou jonction-case entourée de ses 4 tuiles ; passage sans case qui fait gagner un pas ; raccourci du pourtour) ; cible ' +
       GR.CHAINE_CIBLE + ' ou moins' + (tresHaut ? ' (bien au-dessus de la cible).' : (ry.chaineMax > GR.CHAINE_CIBLE ? ' (au-dessus de la cible).' : '.')) + ' Distance maximale d’une case à une zone : ' + ry.distMax + ' pas.');
     res.push('Accès au centre (' + (est5x5 ? 'rangée neutre et jonctions qui la bordent' : 'rangée de jonctions du milieu') + ') : ' + ac.portes.vert + ' porte(s) côté vert, ' +
       ac.portes.rouge + ' côté rouge (écart ' + ac.ecart + ') ; chemins indépendants depuis les apparitions : vert ' + ac.chemins.vert + ', rouge ' + ac.chemins.rouge + '.');

@@ -486,6 +486,7 @@ test('rythme : villes traversables ou non (option du graphe) : la chaîne reste 
           const zones = new Set(gr.villes);
           r.casesPassage.forEach((x) => zones.add(x));
           r.casesRaccourci.forEach((x) => zones.add(x));
+          r.casesJonction.forEach((x) => zones.add(x));
           assert.equal(r.zones, zones.size);
           assert.equal(r.chaineMax, chaineOracle(gr, zones), g + ' graine ' + k + (trav ? ' villes traversables' : '') + (n ? ' partiel' : ''));
         }
@@ -494,15 +495,16 @@ test('rythme : villes traversables ou non (option du graphe) : la chaîne reste 
   }
 });
 
-test('rythme : sans villes (jetons retirés), les zones sont les passages et les raccourcis seulement ; les sept villes ajoutent des zones', () => {
+test('rythme : sans villes (jetons retirés), les zones sont les jonctions, les passages et les raccourcis ; les sept villes sont déjà sur des jonctions-zones et n’en ajoutent aucune', () => {
   for (const g of ['4x4', '5x5']) {
     const doc = plateauGenere(g, 2);
     const sans = copie(doc); sans.plateau.jetons = [];
     const gr = GR.construire(sans), r = GR.rythme(sans, gr);
     assert.equal(gr.villes.size, 0);
-    assert.equal(new Set([...r.casesPassage, ...r.casesRaccourci]).size, r.zones);
+    assert.equal(new Set([...r.casesPassage, ...r.casesRaccourci, ...r.casesJonction]).size, r.zones);
     const { r: r2 } = mesures(doc);
-    assert.ok(r2.zones >= r.zones + 7, 'sept villes de plus');
+    assert.equal(r2.zones, r.zones, 'plateau complet : chaque ville remplace une jonction-case déjà zone');
+    assert.equal(r2.casesJonction.length, r.casesJonction.length - 7);
   }
 });
 

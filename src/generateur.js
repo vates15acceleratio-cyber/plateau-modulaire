@@ -498,9 +498,9 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     return GR.goulets(g, 1).articulations.length + GR.goulets(g, 2).articulations.length;
   }
 
-  /** Pénalité secondaire d'un candidat (raccords morts au-delà de 2, jonctions mal reliées, apparition à moins de 2 sorties, 5×5 sans ville équidistante). */
+  /** Pénalité secondaire d'un candidat (raccords morts hors murs voulus au-delà de 2, jonctions mal reliées, apparition à moins de 2 sorties, 5×5 sans ville équidistante). */
   function penaliteDe(cand, ev, est5x5) {
-    var raccords = M.raccordsMorts(cand).filter(function (r) { return r.raison !== 'absent'; }).length;
+    var raccords = M.raccordsMorts(cand).filter(function (r) { return r.raison !== 'absent' && !r.mur; }).length; // les murs voulus (mursDuModele) ne sont pas des raccords morts
     var malReliees = M.jonctionsMalReliees(cand).length;
     return {
       raccords: raccords, malReliees: malReliees,
@@ -1291,9 +1291,9 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     rapport.push('Villes plus proches du joueur vert : ' + crit.partage[1] + ', du joueur rouge : ' + crit.partage[2] + ', à égalité : ' + crit.partage.egalite + '.');
     rapport.push('Cases : ' + score.cases.total + ' (moitié verte ' + score.cases.vert + ', moitié rouge ' + score.cases.rouge + (est5x5 ? ', le reste sur la rangée neutre et les jonctions du milieu' : ', le reste sur les jonctions du milieu') + ')' +
       (est5x5 ? ' ; ' + score.placementsAdmissibles + ' placement(s) de villes en 2-3-2 admissible(s) sur ce plateau.' : '.'));
-    rapport.push('Rythme : au plus ' + score.chaine + ' case(s) d’affilée sans ville, passage ni raccourci (cible ' + GR.CHAINE_CIBLE + ') ; accès au centre : ' +
+    rapport.push('Rythme : au plus ' + score.chaine + ' case(s) d’affilée sans jonction, passage ni raccourci (cible ' + GR.CHAINE_CIBLE + ') ; accès au centre : ' +
       score.acces.vert + ' porte(s) côté vert, ' + score.acces.rouge + ' côté rouge (écart ' + score.acces.ecart + ').');
-    rapport.push('Raccords morts : ' + score.raccordsMorts + (est5x5 ? '' : ' ; jonctions mal reliées : ' + score.jonctionsMalReliees) + ' ; sorties minimales d\'une case d\'apparition : ' + score.sortiesMin + '.');
+    rapport.push('Raccords morts (murs voulus exclus) : ' + score.raccordsMorts + (est5x5 ? '' : ' ; jonctions mal reliées : ' + score.jonctionsMalReliees) + ' ; sorties minimales d\'une case d\'apparition : ' + score.sortiesMin + '.');
     if (tronques) rapport.push('Attention : ' + tronques + ' recherche(s) d’orientation interrompue(s) (budget de calcul dépassé) : l’orientation retenue n’est peut-être pas la meilleure.');
     if (validation.erreurs.length) rapport.push('Attention : ' + validation.erreurs[0].message);
 
@@ -1345,7 +1345,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     racine.appendChild(el(d, 'p', 'pm-generateur-explication',
       'Tire un plateau ' + F.GRILLE.colonnes + '×' + F.GRILLE.lignes + ' complet dans la bibliothèque (un modèle peut servir plusieurs fois, la variété est favorisée ; le poids du modèle, à défaut ses exemplaires, pèse dans le tirage) : 7 villes à 3 cases d\'écart au moins, ' +
       'les autres jonctions restent des cases chemin' + (F.id === '4x4' ? ' (les deux jonctions-cases sont placées au mieux parmi 12 paires équilibrées, ou dans la rangée centrale si l’option « jonctions variées » est décochée)' : ' (villes placées d’abord, en 2-3-2 sur des jonctions à 3 ports au moins, sans case qui desserve deux villes ; 59 cases, dont moins de 5 % à 2 connexions ; centrales orientées pour ce placement)') + ' ; ' +
-      'autant de cases dans la moitié verte que dans la moitié rouge ; centrales orientées selon les ports puis pour le rythme (au plus 3 cases d’affilée sans ville, passage ni raccourci, visé) et l’équilibre des accès au centre ; ' +
+      'autant de cases dans la moitié verte que dans la moitié rouge ; centrales orientées selon les ports puis pour le rythme (au plus 3 cases d’affilée sans jonction, passage ni raccourci, visé) et l’équilibre des accès au centre ; ' +
       'plateau équilibré tiré au hasard parmi les meilleurs candidats. ' +
       'La même graine redonne le même plateau.'));
 

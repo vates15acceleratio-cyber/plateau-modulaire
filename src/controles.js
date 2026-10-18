@@ -31,6 +31,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var LIBELLES = {
     desequilibre: 'Plateau très déséquilibré',
     raccord_mort: 'Raccords morts',
+    raccord_mur: 'Raccords face à un mur voulu (information)',
     port_pourtour: 'Ports vers le bord du plateau',
     jonction_ports: 'Jonctions mal reliées',
     gabarit_place: 'Tuiles hors de leur place',
@@ -230,9 +231,10 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /* Regroupement des erreurs et alertes                                 */
   /* ------------------------------------------------------------------ */
 
-  /** Rang d'affichage : erreurs, raccords morts, ports vers le bord, autres. */
+  /** Rang d'affichage : erreurs, raccords morts, ports vers le bord, autres alertes, puis les informations. */
   function rangDe(entree) {
     if (entree.niveau === 'erreur') return 0;
+    if (entree.niveau === 'information') return 4;
     if (entree.code === 'raccord_mort') return 1;
     if (entree.code === 'port_pourtour') return 2;
     return 3;
@@ -263,8 +265,9 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   /**
    * Calcule compteurs, erreurs, alertes et groupes d'un document. Ne modifie pas `doc`.
-   * Renvoie { compteurs, erreurs, alertes, regroupees }.
-   * erreurs / alertes : [{ code, message, niveau: 'erreur'|'alerte', cible }].
+   * Renvoie { compteurs, erreurs, alertes, informations, regroupees } ; informations : les raccords face à un mur voulu
+   * (niveau 'information', hors du compte des alertes) ; regroupees les contient en dernier.
+   * erreurs / alertes / informations : [{ code, message, niveau: 'erreur'|'alerte'|'information', cible }].
    */
   function calculer(doc) {
     var p = doc && doc.plateau;
@@ -277,11 +280,14 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var erreurs = v.erreurs.map(function (x) { return versEntree(x, 'erreur', doc); }).concat(erreursEquilibre(eq));
     var alertes = v.alertes.map(function (x) { return versEntree(x, 'alerte', doc); })
       .concat(alertesGraphe(doc, g)).concat(alertesEquilibre(eq));
+    // informations (docs/18, murs voulus) : jamais comptées parmi les alertes
+    var informations = (v.informations || []).map(function (x) { return versEntree(x, 'information', doc); });
     return {
       compteurs: compteursDuPlateau(doc).concat(compteursConnexions(doc, g)),
       erreurs: erreurs,
       alertes: alertes,
-      regroupees: regrouper(erreurs.concat(alertes))
+      informations: informations,
+      regroupees: regrouper(erreurs.concat(alertes, informations))
     };
   }
 
@@ -386,11 +392,10 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       if (actif && zoneAlertes.contains(actif) && actif.getAttribute('data-repere')) repere = actif.getAttribute('data-repere');
 
       zoneAlertes.textContent = '';
-      titreAlertes.textContent = groupes.length ? 'Erreurs et alertes (' + groupes.reduce(function (s, g) { return s + g.nombre; }, 0) + ')' : 'Erreurs et alertes';
-      if (!groupes.length) {
-        zoneAlertes.appendChild(el('p', 'pm-controles-vide', 'Aucune erreur ni alerte.'));
-        return;
-      }
+      var nbAlertes = groupes.reduce(function (s, g) { return s + (g.niveau === 'information' ? 0 : g.nombre); }, 0);
+      titreAlertes.textContent = nbAlertes ? 'Erreurs et alertes (' + nbAlertes + ')' : 'Erreurs et alertes';
+      if (!nbAlertes) zoneAlertes.appendChild(el('p', 'pm-controles-vide', 'Aucune erreur ni alerte.'));
+      if (!groupes.length) return;
       var liste = el('ul', 'pm-controles-groupes');
       groupes.forEach(function (g) {
         var li = el('li', 'pm-controles-groupe pm-controles-groupe--' + g.niveau);

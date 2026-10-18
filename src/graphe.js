@@ -646,13 +646,28 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   }
 
   /**
+   * Jonctions-cases COMPLÈTES (jonction sans ville dont les 4 tuiles sont posées) : avec les villes, ce sont les jonctions
+   * du plateau, zones d'intérêt du rythme (docs/18, réponse 1 sur le 5×5 très connecté réalisé).
+   */
+  function jonctionsCompletes(doc, g) {
+    var posees = doc && doc.plateau && Array.isArray(doc.plateau.tuiles) ? doc.plateau.tuiles : [], pose = {}, res = [];
+    posees.forEach(function (t) { if (t) pose[t.col + ',' + t.lig] = true; });
+    g.jonctions.forEach(function (jn) {
+      if (jn.type !== 'ville' && pose[(jn.i - 1) + ',' + (jn.j - 1)] && pose[jn.i + ',' + (jn.j - 1)] && pose[(jn.i - 1) + ',' + jn.j] && pose[jn.i + ',' + jn.j] && g.voisins.has(jn.id)) res.push(jn.id);
+    });
+    return res;
+  }
+
+  /**
    * Rythme du plateau (docs/18 ; mesure STRICTE de docs/44, raccourci compté comme zone d'intérêt, docs/18 réponse 3).
-   * Zones d'intérêt : les villes, les cases d'un réseau de passages qui relie au moins 2 cases ET économise un pas (reseauxPassages),
+   * Zones d'intérêt : les JONCTIONS (villes et jonctions-cases dont les 4 tuiles sont posées, docs/18 réponse 1 sur le 5×5 très
+   * connecté, dans les deux formats), les cases d'un réseau de passages qui relie au moins 2 cases ET économise un pas (reseauxPassages),
    * et les cases reliées par un raccourci (casesRaccourci).
    *  - distMax : plus grande distance d'une case sans zone à la zone la plus proche ;
    *  - chaine : plus court chemin entre deux zones A et B qui ne passe par aucune autre zone et qu'aucun autre itinéraire ne
    *    raccourcit ; sa longueur est le nombre de cases sans zone traversées ; chaineMax = la plus longue du plateau (cible CHAINE_CIBLE).
    * options : { large: true } tout réseau de passages de 2 cases ou plus (ancienne mesure, information) ;
+   *           { sansJonctions: true } les jonctions-cases ne comptent pas (ancienne mesure, pour comparaison) ;
    *           { sansRaccourci: true } le raccourci ne compte pas (mesure stricte de docs/45, pour comparaison) ;
    *           { reseaux } résultat de reseauxPassages déjà calculé.
    * Renvoie { zones, distMax, repartition, injoignables, chaineMax, chaine: [ids], casesPassage: [ids], casesRaccourci: [ids], plusLoin: [ids] }.
@@ -665,6 +680,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       if (grp.size >= 2) grp.forEach(function (id) { if (g.voisins.has(id)) { zones.add(id); passages.add(id); } });
     });
     raccourcis.forEach(function (id) { zones.add(id); });
+    var jonctionsCases = options.sansJonctions ? [] : jonctionsCompletes(doc, g);
+    jonctionsCases.forEach(function (id) { zones.add(id); });
     var d = new Map(), file = [];
     zones.forEach(function (z) { d.set(z, 0); file.push(z); });
     for (var q = 0; q < file.length; q++) {
@@ -702,7 +719,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return {
       zones: zones.size, distMax: distMax, repartition: repartition, injoignables: injoignables,
       chaineMax: chaine.longueur, chaine: chaine.chemin,
-      casesPassage: Array.from(passages), casesRaccourci: Array.from(raccourcis),
+      casesPassage: Array.from(passages), casesJonction: jonctionsCases, casesRaccourci: Array.from(raccourcis),
       plusLoin: g.noeuds.filter(function (id) { return !zones.has(id) && d.get(id) === distMax; })
     };
   }

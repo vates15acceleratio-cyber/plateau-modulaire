@@ -385,7 +385,7 @@ function plateauComplet() {
   return doc;
 }
 
-test('plateau 5×5 complet : 25 tuiles du stock exact, aucune erreur, 2 raccords morts (murs de LC4) seulement, aucune jonction mal reliée', () => {
+test('plateau 5×5 complet : 25 tuiles du stock exact, aucune erreur, aucune alerte (les 2 murs de LC4 sont des informations), aucune jonction mal reliée', () => {
   const doc = plateauComplet();
   assert.equal(doc.plateau.tuiles.length, 25);
   const utilises = {};
@@ -394,8 +394,9 @@ test('plateau 5×5 complet : 25 tuiles du stock exact, aucune erreur, 2 raccords
   for (const m of C5) assert.equal(utilises[m.id], m.exemplaires, m.id);
   const v = M.validerPlateau(doc);
   assert.deepEqual(v.erreurs, []);
-  assert.deepEqual(v.alertes.map((a) => a.code), ['raccord_mort', 'raccord_mort']);
-  assert.deepEqual(M.raccordsMorts(doc).map((r) => [r.col, r.lig, r.cote]), [[1, 3, 1], [3, 3, 3]]); // les voisins des murs E et O de LC4 (2, 3)
+  assert.deepEqual(v.alertes, []);
+  assert.deepEqual(v.informations.map((a) => a.code), ['raccord_mur', 'raccord_mur']);
+  assert.deepEqual(M.raccordsMorts(doc).map((r) => [r.col, r.lig, r.cote, r.mur]), [[1, 3, 1, true], [3, 3, 3, true]]); // les voisins des murs E et O de LC4 (2, 3)
   assert.deepEqual(M.jonctionsMalReliees(doc), []);
   for (const t of doc.plateau.tuiles) assert.equal(M.gabaritCellule(t.col, t.lig, '5x5'), M.modeleParId(doc, t.modeleId).gabarit);
 });
@@ -481,7 +482,7 @@ test('chaîne : enregistrement / réouverture JSON d\'un plateau 5×5 complet, s
   const r = PM.sauvegarde.depuisJSON(texte);
   assert.equal(r.ok, true, JSON.stringify(r.erreurs));
   assert.deepEqual(r.erreurs, []);
-  assert.deepEqual(r.alertes.map((a) => a.code), ['raccord_mort', 'raccord_mort']); // les murs de « Deux ponts » (alertes de plateau)
+  assert.deepEqual(r.alertes.map((a) => a.code), []); // les murs de « Deux ponts » sont des informations de plateau, plus des alertes
   assert.equal(r.migre, false);
   assert.equal(r.doc.grille, '5x5');
   assert.deepEqual(r.doc.modeles, doc.modeles);
@@ -489,7 +490,7 @@ test('chaîne : enregistrement / réouverture JSON d\'un plateau 5×5 complet, s
   const r2 = PM.sauvegarde.depuisJSON(PM.sauvegarde.versJSON(r.doc));
   assert.deepEqual(r2.doc, r.doc);
   const v = M.validerPlateau(r.doc);
-  assert.deepEqual([v.erreurs, v.alertes.map((a) => a.code)], [[], ['raccord_mort', 'raccord_mort']]);
+  assert.deepEqual([v.erreurs, v.alertes, v.informations.map((a) => a.code)], [[], [], ['raccord_mur', 'raccord_mur']]);
   const vide = PM.sauvegarde.depuisJSON(PM.sauvegarde.versJSON(CAT.nouveauDocument('5x5')));
   assert.equal(vide.ok, true);
   assert.equal(vide.doc.grille, '5x5');
@@ -536,10 +537,12 @@ test('chaîne : annuler / rétablir sur un document 5×5 (pose, remplacement), g
   assert.equal(modele('LK2').cases[0].x, 39);
 });
 
-test('chaîne : PM.controles.calculer sur le plateau 5×5 complet (7 villes) : aucune erreur, les seules alertes sont les 2 raccords morts, compteurs à leur cible', () => {
+test('chaîne : PM.controles.calculer sur le plateau 5×5 complet (7 villes) : aucune erreur, aucune alerte, 2 informations (murs de « Deux ponts »), compteurs à leur cible', () => {
   const c = PM.controles.calculer(plateauAvecVilles());
   assert.deepEqual(c.erreurs, []);
-  assert.deepEqual(c.alertes.map((a) => a.code), ['raccord_mort', 'raccord_mort']);
+  assert.deepEqual(c.alertes, []);
+  assert.deepEqual(c.informations.map((a) => a.code), ['raccord_mur', 'raccord_mur']);
+  assert.deepEqual(c.regroupees.map((g) => [g.code, g.niveau, g.nombre]), [['raccord_mur', 'information', 2]]);
   const v = (cle) => c.compteurs.find((x) => x.cle === cle);
   assert.equal(v('villes').valeur, 7);
   assert.equal(v('cases').valeur, 59);

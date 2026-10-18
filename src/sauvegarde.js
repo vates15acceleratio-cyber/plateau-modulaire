@@ -157,6 +157,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     if (Array.isArray(brut.passages)) m.passages = passages;
     // poids de tirage du générateur : facultatif (absent : les exemplaires font le poids) ; une valeur invalide est ignorée
     if (estEntier(brut.poids) && brut.poids >= 1 && brut.poids <= LIMITES.exemplaires) m.poids = brut.poids;
+    // murs voulus : facultatif (liste de côtés 0 à 3, sans doublon) ; absent = détection par défaut (PM.modele.mursDuModele)
+    if (Array.isArray(brut.murs)) m.murs = brut.murs.filter(function (c, k, a) { return (c === 0 || c === 1 || c === 2 || c === 3) && a.indexOf(c) === k; });
     if (!M.validerModele(m, grille).complet) {
       alertes.push(erreur('modele_incomplet', 'Le modèle « ' + libelle + ' » est incomplet : conservé comme brouillon, non posable.'));
     }
@@ -244,13 +246,13 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return ids.indexOf('A1') >= 0 && ids.indexOf('A2') >= 0;
   }
 
-  /** Signature stable d'un modèle : clés triées, sans exemplaires, poids ni nom, sans tableau vide (un 3.04 enregistré n'a ni pivots ni passages). */
+  /** Signature stable d'un modèle : clés triées, sans exemplaires, poids, murs ni nom, sans tableau vide (un 3.04 enregistré n'a ni pivots ni passages). */
   function signatureModele(valeur) {
     if (Array.isArray(valeur)) return '[' + valeur.map(signatureModele).join(',') + ']';
     if (valeur && typeof valeur === 'object') {
       return '{' + Object.keys(valeur).sort().filter(function (k) {
         var v = valeur[k];
-        return k !== 'exemplaires' && k !== 'poids' && k !== 'nom' && v !== undefined && !(Array.isArray(v) && !v.length);
+        return k !== 'exemplaires' && k !== 'poids' && k !== 'murs' && k !== 'nom' && v !== undefined && !(Array.isArray(v) && !v.length);
       }).map(function (k) { return JSON.stringify(k) + ':' + signatureModele(valeur[k]); }).join(',') + '}';
     }
     return JSON.stringify(valeur);

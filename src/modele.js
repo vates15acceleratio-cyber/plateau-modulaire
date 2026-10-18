@@ -1020,12 +1020,32 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   /** Le modèle porte-t-il au moins une case d'apparition ? */
   function aUneApparition(m) { return tab(m && m.cases).some(function (c) { return estObjet(c) && c.type === 'apparition'; }); }
 
-  /** Masques d'une tuile posée, après rotation : { raccords, portsCoin }. */
+  /**
+   * Murs voulus d'un modèle (docs/18, réponse 3 sur le 5×5 très connecté réalisé) : masque de 4 bits (bit c = côté c dans le repère du
+   * modèle, N E S O) des côtés VOLONTAIREMENT fermés, sans aucun raccord. Un raccord de la voisine qui leur fait face est une
+   * information (« mur voulu »), non une alerte.
+   *  - champ facultatif `murs` : liste de côtés (0 à 3) ; seuls ceux qui n'ont aucun raccord comptent ; `murs: []` = aucun mur ;
+   *  - sans ce champ : pour une centrale qui porte des raccords, tout côté sans raccord est un mur (« Deux ponts », « Étoile fermée ») ;
+   *    bords et coins n'en ont jamais sans le champ (leurs côtés sans raccord sont ceux du pourtour).
+   */
+  function mursDuModele(m) {
+    if (!m || typeof m !== 'object') return 0;
+    var racc = masquesDuModele(m).raccords, murs = 0, k;
+    if (Array.isArray(m.murs)) {
+      m.murs.forEach(function (c) { if (c === 0 || c === 1 || c === 2 || c === 3) murs |= 1 << c; });
+    } else if (m.gabarit === 'centrale' && racc !== 0) {
+      murs = 15;
+    }
+    for (k = 0; k < 4; k++) if (G.triplet(racc, k) !== 0) murs &= ~(1 << k);
+    return murs;
+  }
+
+  /** Masques d'une tuile posée, après rotation : { raccords, portsCoin, murs }. */
   function masquesTuilePosee(doc, tuile) {
     var m = modeleParId(doc, tuile.modeleId);
-    if (!m) return { raccords: 0, portsCoin: 0 };
+    if (!m) return { raccords: 0, portsCoin: 0, murs: 0 };
     var mm = masquesDuModele(m);
-    return { raccords: G.tournerRaccords(mm.raccords, tuile.rot), portsCoin: G.tournerPorts(mm.portsCoin, tuile.rot) };
+    return { raccords: G.tournerRaccords(mm.raccords, tuile.rot), portsCoin: G.tournerPorts(mm.portsCoin, tuile.rot), murs: G.tournerPorts(mursDuModele(m), tuile.rot) };
   }
 
   /** Phrase de refus quand le rôle (gabarit) du modèle ne correspond pas à la cellule. */
@@ -1191,7 +1211,8 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   /**
    * Raccords sans vis-à-vis : [{ col, lig, cote, pos, raison }] (côté dans le repère du plateau).
    * raison : 'absent' = cellule voisine pas encore posée ; 'vide' = bord du plateau ;
-   * 'mort' = voisin posé sans raccord en face.
+   * 'mort' = voisin posé sans raccord en face ; `mur: true` quand ce côté de la voisine est un mur voulu (mursDuModele) : le raccord
+   * est alors une simple information (validerPlateau), pas une alerte.
    */
   function raccordsMorts(doc) {
     var res = [], F = formatDuDocument(doc);
@@ -1200,16 +1221,18 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
       for (var cote = 0; cote < 4; cote++) {
         if (G.triplet(mA, cote) === 0) continue;
         var d = G.coteVoisin(cote), vc = t.col + d.dc, vl = t.lig + d.dl;
-        var v = tuileEn(doc, vc, vl), morts, raison;
+        var v = tuileEn(doc, vc, vl), morts, raison, mur = false;
         if (v) {
-          morts = G.apparier(mA, cote, masquesTuilePosee(doc, v).raccords).mortsA;
+          var mV = masquesTuilePosee(doc, v);
+          morts = G.apparier(mA, cote, mV.raccords).mortsA;
           raison = 'mort';
+          mur = G.triplet(mV.raccords, (cote + 2) % 4) === 0 && ((mV.murs >> ((cote + 2) % 4)) & 1) === 1;
         } else {
           morts = G.triplet(mA, cote);
           raison = dansGrille(vc, vl, F) ? 'absent' : 'vide';
         }
         for (var pos = 0; pos < 3; pos++) {
-          if ((morts >> pos) & 1) res.push({ col: t.col, lig: t.lig, cote: cote, pos: pos, raison: raison });
+          if ((morts >> pos) & 1) res.push({ col: t.col, lig: t.lig, cote: cote, pos: pos, raison: raison, mur: mur });
         }
       }
     });
@@ -1344,9 +1367,10 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
    * erreurs : tuiles (verifierTuilePosee), exemplaires dépassés, jetons invalides.
    * alertes : place des tuiles, raccords morts ou face au vide, ports vers le pourtour, jonctions mal reliées
    * (n'empêchent rien).
+   * informations : les raccords sans vis-à-vis qui font face à un mur voulu (code 'raccord_mur', raccordsMorts / mursDuModele).
    */
   function validerPlateau(doc) {
-    var erreurs = [], alertes = [];
+    var erreurs = [], alertes = [], informations = [];
     doc.plateau.tuiles.forEach(function (t) {
       erreurs = erreurs.concat(verifierTuilePosee(doc, t));
       alertes = alertes.concat(alertesTuilePosee(doc, t));
@@ -1356,6 +1380,10 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     });
     raccordsMorts(doc).forEach(function (r) {
       if (r.raison === 'absent') return;
+      if (r.mur) {
+        informations.push(err('raccord_mur', 'Raccord face à un mur voulu de la tuile voisine.', { type: 'raccord', col: r.col, lig: r.lig, cote: r.cote, pos: r.pos }));
+        return;
+      }
       alertes.push(err('raccord_mort', r.raison === 'vide' ? 'Raccord face au vide.' : 'Raccord sans vis-à-vis.',
         { type: 'raccord', col: r.col, lig: r.lig, cote: r.cote, pos: r.pos }));
     });
@@ -1367,7 +1395,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
       alertes.push(err('jonction_ports', 'La jonction (' + x.i + ', ' + x.j + ') n\'est reliée que par ' + x.ports + ' port(s) : sa case est mal reliée au reste du plateau.',
         { type: 'jeton', i: x.i, j: x.j }));
     });
-    return { erreurs: erreurs, alertes: alertes };
+    return { erreurs: erreurs, alertes: alertes, informations: informations };
   }
 
   /** Ajoute un modèle (pure, copie). Lève une Error si l'id est invalide ou déjà pris. */
@@ -1436,6 +1464,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     modeleParId: modeleParId,
     tuileEn: tuileEn,
     masquesTuilePosee: masquesTuilePosee,
+    mursDuModele: mursDuModele,
     peutPoserTuile: peutPoserTuile,
     poserTuile: poserTuile,
     retirerTuile: retirerTuile,

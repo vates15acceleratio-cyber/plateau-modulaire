@@ -268,7 +268,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   /**
    * Alertes à dessiner (pure), en mm dans le repère du plateau :
-   *  - raccords morts de raison 'vide' ou 'mort' (pas 'absent') : {type:'raccord', col, lig, cote, pos, raison, x, y, nx, ny} ;
+   *  - raccords morts de raison 'vide' ou 'mort' (pas 'absent') : {type:'raccord', col, lig, cote, pos, raison, mur, x, y, nx, ny} ;
+   *    `mur: true` = face à un mur voulu (information, dessinée sans triangle d'alerte) ;
    *  - ports de coin vers le bord du plateau : {type:'port', col, lig, coin, i, j, x, y, nx, ny}.
    * (x, y) = point sur la frontière ou au coin ; (nx, ny) = direction vers l'intérieur de la tuile.
    */
@@ -277,7 +278,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     M().raccordsMorts(doc).forEach(function (r) {
       if (r.raison === 'absent') return;
       var p = F.pointRaccord(r.cote, r.pos), n = NORMALE[r.cote];
-      res.push({ type: 'raccord', col: r.col, lig: r.lig, cote: r.cote, pos: r.pos, raison: r.raison,
+      res.push({ type: 'raccord', col: r.col, lig: r.lig, cote: r.cote, pos: r.pos, raison: r.raison, mur: !!r.mur,
         x: r.col * C + p.x, y: r.lig * C + p.y, nx: n.x, ny: n.y });
     });
     M().portsVersPourtour(doc).forEach(function (p) {
@@ -397,8 +398,14 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     alertesPlateau(doc).forEach(function (a) {
       var lg = a.type === 'raccord' ? F.LARGEUR_CHEMIN + 2 : 24;
       var titre = a.type === 'port' ? 'Port de coin vers le bord du plateau (aucune case de jonction)'
+        : a.mur ? 'Raccord face à un mur voulu de la tuile voisine (information)'
         : a.raison === 'vide' ? 'Raccord face au vide' : 'Raccord sans vis-à-vis';
       var ax = a.x + a.nx * 5, ay = a.y + a.ny * 5; // triangle légèrement à l'intérieur
+      if (a.mur) { // information : un trait gris discret, ni triangle ni point d'exclamation
+        s.push('<g class="pm-assemblage-mur" data-alerte="mur"><path class="pm-assemblage-mur-trait" d="M' + arrondi(a.x) + ' ' + arrondi(a.y) + ' L' +
+          arrondi(a.x + a.nx * lg) + ' ' + arrondi(a.y + a.ny * lg) + '"/><title>' + echapper(titre) + '</title></g>');
+        return;
+      }
       s.push('<g class="pm-assemblage-alerte" data-alerte="' + a.type + '">' +
         '<path class="pm-assemblage-alerte-trait" d="M' + arrondi(a.x) + ' ' + arrondi(a.y) + ' L' + arrondi(a.x + a.nx * lg) + ' ' + arrondi(a.y + a.ny * lg) + '"/>' +
         '<path class="pm-assemblage-alerte-triangle" d="M' + arrondi(ax) + ' ' + arrondi(ay - 9) + ' L' + arrondi(ax + 8) + ' ' + arrondi(ay + 5.5) +
