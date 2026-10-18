@@ -137,3 +137,9 @@ Après les avis `28-avis-design-5x5.md` (design de jeu) et `29-avis-geometrie-5x
   - **deux cases par tuile au maximum, sur toutes les tuiles** (coins et bords compris, case d'apparition comprise). Jugement de l'utilisateur sur le 5×5 actuel : « terrible ».
 - Connexions sans case supplémentaires dans l'éditeur : abandonné (« oublie ça »).
 - Conséquences à étudier par les advisors (non encore tranchées) : un coin à 2 cases ressemble au coin direct K1 retiré en v2 ; au plus 50 cases de tuiles + 9 jonctions-cases ≈ 59 cases (décision précédente : 78 à 81) ; règles R1 à R4 (écart d'au moins 3 cases entre villes) et « 3 accès aux villes » à confronter à l'objectif de degré 3.
+
+## Décisions de l'utilisateur pour le 5×5 très connecté (2026-10-18, `53`, `54`, `55`)
+- **Voie « porteuse latérale + relais »** (`53`, vérifiée en `55`) pour un **nouveau catalogue 5×5 à 2 cases par tuile, 59 cases par plateau**, qui remplace entièrement le catalogue 5×5 de la 4.00.0 (le 4×4 ne change pas). Conséquences acceptées avec ce choix : R1 levée (une case peut porter 2 ports, sur les deux coins d'un même côté) et R3 levée en partie, en règles **propres au 5×5** ; R2 assouplie, R4 gardée ; paire basse (E2 / O0) sur le pourtour ; coin à deux cases (première ville à 2 pas de l'apparition, comme l'ancien K1).
+- **« Deux ponts » (LC4) gardé avec ses murs** (2 raccords morts par pose acceptés).
+- **« Pont et fourche » (LC3) gardé sur quelques tuiles** (environ 3 centrales sur 9), pour le côté organique.
+- **Écart d'au moins 3 cases entre villes maintenu**, garanti par le placement des villes (générateur ; aide au placement et alerte dans l'éditeur), plus par les tuiles.
