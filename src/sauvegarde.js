@@ -19,14 +19,17 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var M = PM.modele;
   var FORMAT = 'plateau-modulaire';
   var VERSION = 2;
-  /** Versions de fichier lues : 1 (convertie à la lecture) et 2. */
-  var VERSIONS_LUES = [1, 2];
+  /** Version écrite dès qu'un modèle porte des passages ou des pivots (docs/18, réponse du 2026-10-18 à la revue docs/51) : la 3.04 refuse
+   *  alors le fichier (« Version de fichier absente ou inconnue ») au lieu de retirer les passages sans prévenir. */
+  var VERSION_PASSAGES = 3;
+  /** Versions de fichier lues : 1 (convertie à la lecture), 2 et 3 (passages et pivots). */
+  var VERSIONS_LUES = [1, 2, 3];
   var CLE_AUTOSAVE = 'plateau-modulaire:autosave';
   /**
    * Plafonds à l'ouverture d'un fichier (audit de sécurité : un fichier hostile ne doit pas bloquer le
    * navigateur). Très au-dessus de tout usage normal : 5×5 tuiles, 7 villes, une trentaine de modèles.
    */
-  var LIMITES = { octets: 5e6, modeles: 500, cases: 64, chemins: 256, tuiles: 64, jetons: 64, texte: 200, coordonnee: 1000, exemplaires: 999 };
+  var LIMITES = { octets: 5e6, modeles: 500, cases: 64, chemins: 256, pivots: 8, passages: 16, tuiles: 64, jetons: 64, texte: 200, coordonnee: 1000, exemplaires: 999 };
   /** Intervalle minimal entre deux écritures dans localStorage (ms). */
   var DELAI_AUTOSAVE = 1000;
   /** Délai de repli après retour du focus, pour détecter une annulation sans événement `cancel` (ms). */
@@ -105,6 +108,25 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       if (estEntier(e.coin)) return { coin: e.coin };
       return null;
     }
+    // Passages sans case : extrémité case, raccord, pivot ou coin (le coin est gardé pour que la validation le refuse)
+    function normaliserExtremitePassage(e) {
+      // même ordre que PM.geometrie.typeExtremitePassage : case, raccord, puis pivot
+      if (estObjet(e) && e['case'] === undefined && e.raccord === undefined && e.pivot !== undefined) { var id = texteOuNul(e.pivot); return id === null ? null : { pivot: id }; }
+      return normaliserExtremite(e);
+    }
+    function normaliserPassage(c) {
+      if (!estObjet(c)) return null;
+      var a = normaliserExtremitePassage(c.a), b = normaliserExtremitePassage(c.b);
+      if (!a || !b) return null;
+      var n = { id: texteOuNul(c.id), a: a, b: b };
+      if (estObjet(c.courbe) && nombre(c.courbe.x) && nombre(c.courbe.y)) n.courbe = { x: c.courbe.x, y: c.courbe.y };
+      else if (c.courbe !== undefined) ignores++; // courbe mal formée : retirée (courbe par défaut) et signalée dans elements_ignores
+      return n;
+    }
+    function normaliserPivot(p) {
+      if (!estObjet(p) || !nombre(p.x) || !nombre(p.y)) return null;
+      return { id: texteOuNul(p.id), x: p.x, y: p.y };
+    }
     function normaliserChemin(c) {
       if (!estObjet(c)) return null;
       var a = normaliserExtremite(c.a), b = normaliserExtremite(c.b);
@@ -119,13 +141,22 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     }
     var cases = garder(tab(brut.cases).slice(0, LIMITES.cases), normaliserCase);
     var chemins = garder(tab(brut.chemins).slice(0, LIMITES.chemins), normaliserChemin);
-    var tronques = Math.max(0, tab(brut.cases).length - LIMITES.cases) + Math.max(0, tab(brut.chemins).length - LIMITES.chemins);
+    var pivots = garder(tab(brut.pivots).slice(0, LIMITES.pivots), normaliserPivot);
+    var passages = garder(tab(brut.passages).slice(0, LIMITES.passages), normaliserPassage);
+    var avecPassages = Array.isArray(brut.pivots) || Array.isArray(brut.passages);
+    var tronques = Math.max(0, tab(brut.cases).length - LIMITES.cases) + Math.max(0, tab(brut.chemins).length - LIMITES.chemins) +
+      Math.max(0, tab(brut.pivots).length - LIMITES.pivots) + Math.max(0, tab(brut.passages).length - LIMITES.passages);
     if (tronques) ignores += tronques;
-    if (ignores) alertes.push(erreur('elements_ignores', 'Le modèle « ' + libelle + ' » : ' + ignores + ' case(s) ou chemin(s) mal formé(s) ignoré(s).'));
+    if (ignores) alertes.push(erreur('elements_ignores', 'Le modèle « ' + libelle + ' » : ' + ignores + (avecPassages ? ' case(s), chemin(s), pivot(s) ou passage(s)' : ' case(s) ou chemin(s)') + ' mal formé(s) ignoré(s).'));
     var m = {
       id: typeof brut.id === 'string' ? brut.id.slice(0, LIMITES.texte) : brut.id, nom: nom.slice(0, LIMITES.texte), gabarit: gabaritLu(brut),
       grille: FORMATS.indexOf(brut.grille) >= 0 ? brut.grille : grille, exemplaires: exemplaires, cases: cases, chemins: chemins
     };
+    // pivots et passages : champs facultatifs, présents seulement s'ils sont dans le fichier (les anciens modèles ne changent pas)
+    if (Array.isArray(brut.pivots)) m.pivots = pivots;
+    if (Array.isArray(brut.passages)) m.passages = passages;
+    // poids de tirage du générateur : facultatif (absent : les exemplaires font le poids) ; une valeur invalide est ignorée
+    if (estEntier(brut.poids) && brut.poids >= 1 && brut.poids <= LIMITES.exemplaires) m.poids = brut.poids;
     if (!M.validerModele(m, grille).complet) {
       alertes.push(erreur('modele_incomplet', 'Le modèle « ' + libelle + ' » est incomplet : conservé comme brouillon, non posable.'));
     }
@@ -213,11 +244,41 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return ids.indexOf('A1') >= 0 && ids.indexOf('A2') >= 0;
   }
 
+  /** Signature stable d'un modèle : clés triées, sans exemplaires, poids ni nom, sans tableau vide (un 3.04 enregistré n'a ni pivots ni passages). */
+  function signatureModele(valeur) {
+    if (Array.isArray(valeur)) return '[' + valeur.map(signatureModele).join(',') + ']';
+    if (valeur && typeof valeur === 'object') {
+      return '{' + Object.keys(valeur).sort().filter(function (k) {
+        var v = valeur[k];
+        return k !== 'exemplaires' && k !== 'poids' && k !== 'nom' && v !== undefined && !(Array.isArray(v) && !v.length);
+      }).map(function (k) { return JSON.stringify(k) + ':' + signatureModele(valeur[k]); }).join(',') + '}';
+    }
+    return JSON.stringify(valeur);
+  }
+
+  /**
+   * Bibliothèque du catalogue précédent (version 3.04, PM.catalogue.precedent) : mêmes modèles, mêmes tracés, aux exemplaires et aux
+   * noms près. Un modèle modifié, ajouté ou retiré par l'utilisateur donne faux : le nouveau catalogue n'est alors pas proposé
+   * (il remplacerait un travail personnel). Faux aussi pour un catalogue de la version 1 ou pour le catalogue courant.
+   */
+  function bibliothequeCataloguePrecedent(doc) {
+    try {
+      var C = PM.catalogue, g = M.formatDuDocument(doc).id;
+      if (!C || !C.precedent || !C.precedent[g] || !Array.isArray(doc.modeles)) return false;
+      var ref = C.precedent[g];
+      if (doc.modeles.length !== ref.length) return false;
+      return ref.every(function (m) {
+        var q = doc.modeles.filter(function (x) { return x && x.id === m.id; })[0];
+        return !!q && signatureModele(q) === signatureModele(m);
+      });
+    } catch (e) { return false; }
+  }
+
   /* ------------------------------------------------------------------ */
   /* Lecture et écriture du JSON (fonctions pures)                        */
   /* ------------------------------------------------------------------ */
 
-  /** Contrôle d'enveloppe : texte, JSON, objet, format, version (1 ou 2) et grille. Renvoie {ok, objet, erreurs}. */
+  /** Contrôle d'enveloppe : texte, JSON, objet, format, version (1, 2 ou 3) et grille. Renvoie {ok, objet, erreurs}. */
   function analyser(texte) {
     if (typeof texte !== 'string' || texte.trim() === '') {
       return { ok: false, erreurs: [erreur('vide', 'Le fichier est vide.')] };
@@ -244,11 +305,21 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return { ok: true, objet: objet, erreurs: [] };
   }
 
+  /** Version à écrire : 3 si un modèle a au moins un passage ou un pivot, sinon 2. */
+  function versionEcriture(modeles) {
+    var l = Array.isArray(modeles) ? modeles : [];
+    for (var i = 0; i < l.length; i++) {
+      var m = l[i];
+      if (m && typeof m === 'object' && ((Array.isArray(m.passages) && m.passages.length) || (Array.isArray(m.pivots) && m.pivots.length))) return VERSION_PASSAGES;
+    }
+    return VERSION;
+  }
+
   /** Texte JSON indenté du document : en-tête format/version/grille/date, puis modèles et plateau. */
   function versJSON(doc) {
     return JSON.stringify({
       format: FORMAT,
-      version: VERSION,
+      version: versionEcriture(doc.modeles),
       grille: M.formatDuDocument(doc).id,
       date: new Date().toISOString(),
       modeles: doc.modeles,
@@ -297,7 +368,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function bibliothequeVersJSON(doc) {
     return JSON.stringify({
       format: FORMAT,
-      version: VERSION,
+      version: versionEcriture(doc.modeles),
       grille: M.formatDuDocument(doc).id,
       contenu: 'bibliotheque',
       date: new Date().toISOString(),
@@ -518,6 +589,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   PM.sauvegarde = {
     FORMAT: FORMAT,
     VERSION: VERSION,
+    VERSION_PASSAGES: VERSION_PASSAGES,
     VERSIONS_LUES: VERSIONS_LUES,
     CLE_AUTOSAVE: CLE_AUTOSAVE,
     LIMITES: LIMITES,
@@ -526,6 +598,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     bibliothequeVersJSON: bibliothequeVersJSON,
     fusionnerBibliotheque: fusionnerBibliotheque,
     bibliothequeVersion1: bibliothequeVersion1,
+    bibliothequeCataloguePrecedent: bibliothequeCataloguePrecedent,
     telecharger: telecharger,
     ouvrirFichier: ouvrirFichier,
     autosave: autosave,

@@ -8,6 +8,7 @@
  *  - chemin vers un raccord : amorce perpendiculaire de 10 mm depuis le bord, puis segment vers la case ;
  *  - chemin vers un port de coin : amorce de 28 mm sur la bissectrice depuis le coin, puis segment vers la case.
  * Sur la tuile imprimée, raccords et ports sont prolongés jusqu'au bord (et dans le fond perdu).
+ * Passages sans case : courbes (M L Q C) en vert comme les chemins, même largeur (voir tracesPassages et cheminPassage) ; les chemins restent droits.
  * Quart de case de jonction (docs/20 D1) : quart de disque Ø 20 centré sur chaque coin intérieur du gabarit,
  * fond blanc, contour noir sur l'arc seulement, par-dessus l'amorce du port.
  * Case d'apparition (docs/20 D3) : carré inscrit dans le disque, noir et blanc à l'impression ; à l'écran,
@@ -25,7 +26,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
 
   var AMORCE_RACCORD = G.AMORCE_RACCORD; // valeurs du format 4×4, gardées pour l'API
   var AMORCE_PORT = G.AMORCE_PORT;
-  /** Nombre de segments du polygone qui approche l'arc d'un quart de case de jonction (le PDF ne lit que M L H V Z). */
+  /** Nombre de segments du polygone qui approche l'arc d'un quart de case de jonction. */
   var SEGMENTS_ARC = 16;
 
   /** Palette d'impression (docs/archives/6-avis-prepresse.md) ; `neutre` sert seulement à l'écran. */
@@ -42,6 +43,39 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
    * Renvoie [{id, type: 'lien'|'raccord'|'port', cases: [case...], pts: [{x,y}...], raccord?, coin?}].
    */
   function tracesModele(m, format) { return G.tracesModele(m, leFormat(format)); }
+
+  /**
+   * Tracés des passages sans case d'un modèle (courbes), en coordonnées locales canoniques : voir PM.geometrie.tracesPassages.
+   * Renvoie [{id, type: 'passage', cmds, pts, cases, pivots, bouts, controle, parDefaut, rayonMin}].
+   */
+  function tracesPassages(m, format) { return G.tracesPassages(m, leFormat(format)); }
+
+  /** Rotation d'un tracé de passage (points, commandes de courbe, bouts et normales, point de contrôle). */
+  function tournerTracePassage(t, rot, format) {
+    var F = leFormat(format), n = ((rot % 4) + 4) % 4;
+    function pt(p) { return F.tournerPoint(p, rot); }
+    function vec(v) { var x = v.x, y = v.y, k, tmp; for (k = 0; k < n; k++) { tmp = x; x = -y; y = tmp; } return { x: x, y: y }; }
+    return Object.assign({}, t, {
+      cmds: t.cmds.map(function (c) { return [c[0]].concat(c.slice(1).map(pt)); }),
+      pts: t.pts.map(pt),
+      bouts: t.bouts.map(function (b) { return { p: pt(b.p), n: vec(b.n), idx: b.idx }; }),
+      controle: pt(t.controle)
+    });
+  }
+
+  /** Attribut `d` d'un passage (commandes M L Q C absolues) ; les bouts sur un raccord sont prolongés de `fp` dans le fond perdu. */
+  function cheminPassage(t, fp) {
+    var cmds = t.cmds.map(function (c) { return [c[0]].concat(c.slice(1)); }), res = [];
+    var debut = t.bouts.filter(function (b) { return b.idx === 0; })[0], fin = t.bouts.filter(function (b) { return b.idx === 1; })[0];
+    function dehors(b) { return { x: b.p.x - b.n.x * fp, y: b.p.y - b.n.y * fp }; }
+    if (debut && fp > 0) {
+      cmds.splice(1, 0, ['L', cmds[0][1]]); // le départ d'origine devient le premier segment droit
+      cmds[0] = ['M', dehors(debut)];
+    }
+    if (fin && fp > 0) cmds.push(['L', dehors(fin)]);
+    cmds.forEach(function (c) { res.push(c[0] + c.slice(1).map(function (p) { return f(p.x) + ' ' + f(p.y); }).join(' ')); });
+    return res.join(' ');
+  }
 
   /** Applique une rotation (quarts de tour horaires) aux points d'un tracé, autour du centre de la tuile du format. */
   function tournerTrace(t, rot, format) {
@@ -112,6 +146,21 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
       s.push('<path d="' + chemin(pts) + '" fill="none" stroke="' + COULEURS.vert + '" stroke-width="' + L +
         '" stroke-linecap="butt" stroke-linejoin="round" data-chemin="' + echapper(t.id) + '"/>');
     });
+    // Passages sans case : courbes vertes comme les chemins (même largeur), prolongées dans le fond perdu aux raccords ;
+    // un disque de la largeur du trait rend propre la rencontre des branches d'un pivot
+    var degrePivot = Object.create(null);
+    tracesPassages(m, F).forEach(function (t) {
+      t.pivots.forEach(function (id) { degrePivot[id] = (degrePivot[id] || 0) + 1; });
+      var tt = tournerTracePassage(t, rot, F);
+      s.push('<path d="' + cheminPassage(tt, fp) + '" fill="none" stroke="' + COULEURS.vert + '" stroke-width="' + L +
+        '" stroke-linecap="butt" stroke-linejoin="round" data-passage="' + echapper(t.id) + '"/>');
+    });
+    (m && Array.isArray(m.pivots) ? m.pivots : []).forEach(function (pv) {
+      if (!pv || typeof pv !== 'object' || typeof pv.x !== 'number' || typeof pv.y !== 'number' || !isFinite(pv.x) || !isFinite(pv.y)) return;
+      if ((degrePivot[pv.id] || 0) < 2) return; // pivot sans branche ou en bout d'une seule : rien à imprimer (docs/41 C3)
+      var p = F.tournerPoint({ x: pv.x, y: pv.y }, rot);
+      s.push('<circle cx="' + f(p.x) + '" cy="' + f(p.y) + '" r="' + f(L / 2) + '" fill="' + COULEURS.vert + '" data-pivot="' + echapper(pv.id) + '"/>');
+    });
     // Quarts de case de jonction sur les coins intérieurs du gabarit déclaré, même sans port
     var gabarit = m && Object.prototype.hasOwnProperty.call(G.GABARITS, m.gabarit) ? G.GABARITS[m.gabarit] : null;
     if (gabarit) gabarit.coinsInterieurs.forEach(function (k) { s.push(quartJonction(k, rot, fp, F)); });
@@ -160,7 +209,10 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     AMORCE_PORT: AMORCE_PORT,
     COULEURS: COULEURS,
     tracesModele: tracesModele,
+    tracesPassages: tracesPassages,
     tournerTrace: tournerTrace,
+    tournerTracePassage: tournerTracePassage,
+    cheminPassage: cheminPassage,
     contenuTuile: contenuTuile,
     svgTuile: svgTuile,
     contenuJeton: contenuJeton

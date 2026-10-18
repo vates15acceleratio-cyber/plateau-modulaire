@@ -221,14 +221,14 @@ test('bibliothèque : le modèle de l\'autre grille est signalé (autreGrille), 
 /* Compteurs, contrôles, équilibre                                     */
 /* ------------------------------------------------------------------ */
 
-test('compteurs du 5×5 : 7 villes, 25 tuiles, ≈ 75 cases, 7 apparitions par camp, 50 × 50 cm', () => {
+test('compteurs du 5×5 : 7 villes, 25 tuiles, ≈ 80 cases, 7 apparitions par camp, 50 × 50 cm', () => {
   const r = C.calculer(plein5());
   const c = (cle) => r.compteurs.find((x) => x.cle === cle);
   assert.equal(c('villes').valeur, 7);
   assert.equal(c('villes').cible, 7);
   assert.equal(c('tuiles').valeur, 25);
   assert.equal(c('tuiles').cible, 25);
-  assert.equal(c('cases').cible, '≈ 75');
+  assert.equal(c('cases').cible, '≈ 80');
   assert.equal(c('apparitions_vert').valeur, 7);
   assert.equal(c('apparitions_vert').cible, 7);
   assert.equal(c('apparitions_rouge').valeur, 7);

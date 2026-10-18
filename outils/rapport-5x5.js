@@ -3,6 +3,8 @@
  * rapport-5x5.js : rédige docs/35-mesures-5x5.md à partir des fichiers de collecte de outils/mesures-5x5.js
  * (f1-*.json, f2.json, f2b.json, c1.json). Aucun calcul de graphe ici : on relit les mesures brutes.
  * Lancement : node outils/mesures-5x5.js rapport <dossier des .json> [fichier du rapport]
+ * Écrit pour le catalogue 5×5 de la version 3.04 (C7, C8, B1, B7, B7m, K2 : PM.catalogue.precedent['5x5']) : ses textes figés
+ * ne décrivent pas le catalogue livré depuis docs/46 (U1, P1, P2, P3, P5, B1, B7, K2).
  */
 const fs = require('fs');
 const path = require('path');

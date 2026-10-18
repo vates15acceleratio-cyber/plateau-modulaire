@@ -1,6 +1,6 @@
 /*
  * aides-v2.js : plateaux de test des règles v2, communs aux tests Node et aux pages de recette (Edge).
- * Aucune dépendance au catalogue : seulement PM.modele.copieExemples(grille), conformes à R1 à R4.
+ * Aucune dépendance au catalogue (seulement PM.modele.copieExemples(grille), conformes à R1 à R4), sauf documentPrecedent.
  * Sous Node : require('./aides-v2.js') ; dans une page : <script src="../tests/aides-v2.js"></script>
  * après src/modele.js. Expose PM.aidesV2 (ce fichier n'est pas un fichier de test : il n'est pas lancé seul).
  */
@@ -66,8 +66,19 @@ if (!PM.modele && typeof require === 'function') require('../src/modele.js');
   /** Déséquilibre modéré (S = 5, alerte « à surveiller », pas d'erreur). */
   function plateauASurveiller() { return plateauSansApparitions([[0, 2], [3, 2], [1, 3], [2, 3]]); }
 
+  /**
+   * Document vide de la grille avec une copie du catalogue PRÉCÉDENT (version 3.04, PM.catalogue.precedent : 4×4 C1 à C6, B1, B3 à B6,
+   * K2, K4 ; 5×5 C7, C8, B1, B7, B7m, K2) : un « ancien document », pour les tests d'interface écrits avec ces identifiants et ceux de
+   * compatibilité. Demande PM.catalogue (chargé par l'appelant).
+   */
+  function documentPrecedent(grille) {
+    var g = grille || '4x4', doc = M.nouveauDocument(g);
+    doc.modeles = JSON.parse(JSON.stringify(PM.catalogue.precedent[g]));
+    return doc;
+  }
+
   PM.aidesV2 = {
-    ID: ID, VILLES: VILLES, documentExemples: documentExemples, plateauComplet: plateauComplet,
+    ID: ID, VILLES: VILLES, documentExemples: documentExemples, plateauComplet: plateauComplet, documentPrecedent: documentPrecedent,
     plateauSansApparitions: plateauSansApparitions, plateauDesequilibre: plateauDesequilibre, plateauASurveiller: plateauASurveiller
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = PM.aidesV2;

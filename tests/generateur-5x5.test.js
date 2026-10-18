@@ -1,9 +1,11 @@
 'use strict';
 /*
- * Tests du générateur 5×5 (src/generateur.js), règles de docs/18 (« Décisions de l'utilisateur pour le catalogue 5×5 »),
- * docs/24 § 8, docs/28 et docs/29 : centrales et bords orientés, 5 ou 6 B1 (de préférence sur la rangée neutre), villes en 2-3-2
- * sur des jonctions à 3 ports au moins, toute jonction à 2 ports au moins (rejet), seuils d'équilibre définitifs du 5×5 (docs/36),
- * abandon sur bibliothèque impossible, vrais miroirs, bornes des options, PM.graphe.flancs en 5×5 et 4×4 inchangé (empreintes). Bibliothèque : le vrai catalogue 5×5 (PM.catalogue).
+ * Tests du générateur 5×5 (src/generateur.js), règles de docs/18 (« Décisions de l'utilisateur pour le catalogue 5×5 », réponses sur la
+ * révision « centrales ouvertes »), docs/24 § 8, docs/28, docs/29 et docs/46 : 78 à 81 cases (nombre de B1 choisi pour la cible, sans
+ * dépasser ses exemplaires, de préférence sur la rangée neutre), cases égales entre moitiés, centrales orientées, villes en 2-3-2 sur des
+ * jonctions à 3 ports au moins, toute jonction à 2 ports au moins (rejet), seuils d'équilibre définitifs du 5×5 (docs/36), affinage du
+ * rythme, abandon sur bibliothèque impossible, vrais miroirs (bibliothèque du catalogue précédent), bornes des options, PM.graphe.flancs,
+ * empreintes du 4×4. Bibliothèque : le vrai catalogue 5×5 (PM.catalogue).
  */
 const test = require('node:test');
 const assert = require('node:assert');
@@ -47,28 +49,52 @@ test('200 graines : plateau valide, 25 tuiles, 7 villes, compteurs à ok, aucune
   });
 });
 
-test('200 graines : 5 ou 6 B1, cases = 72 + nB1, ports = 34 + nB1, B1 sur les bords de la rangée neutre', () => {
-  const vus = { 5: 0, 6: 0 };
+test('200 graines : 78 à 81 cases (= 72 + nB1 + nU1), ports = cases − 38, au plus 6 B1, cases égales entre moitiés', () => {
+  const casesVues = {};
+  let neutres = 0;
   plateaux().forEach((r, k) => {
-    const doc = r.doc, nB1 = doc.plateau.tuiles.filter((t) => t.modeleId === 'B1').length;
-    assert.ok(nB1 === 5 || nB1 === 6, 'g5-' + k + ' : ' + nB1 + ' B1');
-    vus[nB1]++;
+    const doc = r.doc, n = (id) => doc.plateau.tuiles.filter((t) => t.modeleId === id).length, nB1 = n('B1'), nU1 = n('U1');
+    assert.ok(nB1 <= 6, 'g5-' + k + ' : ' + nB1 + ' B1 pour 6 exemplaires');
     assert.strictEqual(r.score.b1, nB1);
-    // les deux bords de la rangée neutre (0,2) et (4,2) portent un B1
-    ['0,2', '4,2'].forEach((p) => {
-      const [col, lig] = p.split(',').map(Number);
-      assert.strictEqual(M.tuileEn(doc, col, lig).modeleId, 'B1', 'g5-' + k + ' : bord (' + p + ')');
-    });
-    // composition : 4 K2, 9 centrales à 3 cases, bords B1 / B7 / B7m
+    // composition : 4 K2, centrales U1 / P1 / P2 / P3 / P5, bords B1 / B7
     const parRole = (g) => doc.plateau.tuiles.filter((t) => M.gabaritCellule(t.col, t.lig, '5x5') === g).map((t) => t.modeleId);
     assert.deepStrictEqual(parRole('coin'), ['K2', 'K2', 'K2', 'K2']);
-    assert.ok(parRole('centrale').every((id) => id === 'C7' || id === 'C8'));
+    assert.ok(parRole('centrale').every((id) => ['U1', 'P1', 'P2', 'P3', 'P5'].includes(id)));
+    assert.ok(parRole('bord').every((id) => id === 'B1' || id === 'B7'));
     const cases = doc.plateau.tuiles.reduce((s, t) => s + M.modeleParId(doc, t.modeleId).cases.length, 0) + 9;
-    assert.strictEqual(cases, 72 + nB1, 'g5-' + k);
-    assert.strictEqual(GEN.portsParJonction(doc).reduce((a, b) => a + b, 0), 34 + nB1, 'g5-' + k);
-    assert.strictEqual(PM.controles.calculer(doc).compteurs.find((x) => x.cle === 'cases').valeur, 72 + nB1);
+    assert.strictEqual(cases, 72 + nB1 + nU1, 'g5-' + k);
+    assert.ok(cases >= GEN.CASES_CIBLE_5X5[0] && cases <= GEN.CASES_CIBLE_5X5[1], 'g5-' + k + ' : ' + cases + ' cases');
+    assert.deepStrictEqual(GEN.CASES_CIBLE_5X5, [78, 81]);
+    casesVues[cases] = (casesVues[cases] || 0) + 1;
+    assert.strictEqual(GEN.portsParJonction(doc).reduce((a, b) => a + b, 0), cases - 38, 'g5-' + k);
+    assert.strictEqual(PM.controles.calculer(doc).compteurs.find((x) => x.cle === 'cases').valeur, cases);
+    assert.strictEqual(r.score.cases.total, cases);
+    // décision 2 (docs/18) : autant de cases dans la moitié verte que dans la moitié rouge (tuiles et jonctions-cases)
+    const mo = GR.casesParMoitie(doc, GR.construire(doc));
+    assert.strictEqual(mo.ecart, 0, 'g5-' + k + ' : ' + JSON.stringify(mo));
+    assert.strictEqual(GEN.ecartMoities(doc.plateau.tuiles, PM.geometrie.format('5x5'), Object.fromEntries(doc.modeles.map((m) => [m.id, m.cases.length]))), 0);
+    if (M.tuileEn(doc, 0, 2).modeleId === 'B1' && M.tuileEn(doc, 4, 2).modeleId === 'B1') neutres++;
   });
-  assert.ok(vus[5] > 20 && vus[6] > 20, 'les deux compositions sont tirées : ' + JSON.stringify(vus));
+  // mesuré (200 graines) : 78 : 10, 79 : 26, 80 : 78, 81 : 86 ; les 4 valeurs sont tirées
+  assert.deepStrictEqual(Object.keys(casesVues).sort(), ['78', '79', '80', '81'], JSON.stringify(casesVues));
+  // préférence (pas une règle) : B1 d'abord sur les deux bords de la rangée neutre ; l'égalité des moitiés peut les déplacer (mesuré 65 %)
+  assert.ok(neutres > NB_GRAINES / 2, neutres + ' plateaux avec deux B1 sur la rangée neutre');
+});
+
+test('200 graines : plusieurs placements de villes admissibles, rythme et accès au centre mesurés (préférences)', () => {
+  const chaines = [], ecarts = [];
+  plateaux().forEach((r, k) => {
+    // au moins 40 ports : plusieurs placements 2-3-2 sur des jonctions à 3 ports (un seul à 39 ports, docs/45)
+    assert.ok(r.score.placementsAdmissibles >= 2, 'g5-' + k + ' : ' + r.score.placementsAdmissibles + ' placement(s)');
+    assert.strictEqual(r.score.placementsAdmissibles, GEN.placementsAdmissibles5x5(r.doc));
+    const g = GR.construire(r.doc), ry = GR.rythme(r.doc, g), ac = GR.accesCentre(r.doc, g, { sansFlot: true });
+    assert.strictEqual(r.score.chaine, ry.chaineMax);
+    assert.deepStrictEqual(r.score.acces, { vert: ac.portes.vert, rouge: ac.portes.rouge, ecart: ac.ecart });
+    chaines.push(ry.chaineMax); ecarts.push(Math.abs(ac.ecart));
+  });
+  // préférences mesurées (6 candidats par graine) : chaîne <= 3 sur la plupart des plateaux, écart d'accès <= 1 sur la plupart
+  assert.ok(chaines.filter((c) => c <= 3).length > NB_GRAINES * 0.8, 'chaînes : ' + JSON.stringify(chaines));
+  assert.ok(ecarts.filter((e) => e <= 1).length > NB_GRAINES * 0.8, 'écarts : ' + JSON.stringify(ecarts));
 });
 
 test('200 graines : villes en 2-3-2 sur des jonctions à 3 ports au moins, toute jonction à 2 ports au moins', () => {
@@ -132,9 +158,11 @@ test('mesure rapide : identique à PM.graphe sur des placements quelconques d\'u
   }
 });
 
-test('orientation : pas de rotation au hasard, aucune rotation d\'une seule centrale ni miroir d\'un bord ne couvre mieux', () => {
-  // clé de couverture : [villes 2-3-2 possibles, jonctions à 3 ports, -déséquilibre nord / sud] ; plus grand = meilleur
-  const compare = (a, b) => { for (let q = 0; q < 3; q++) if (a[q] !== b[q]) return a[q] > b[q] ? 1 : -1; return 0; };
+test('orientation : pas de rotation au hasard, aucune rotation d\'une seule centrale ne couvre mieux (ports d\'abord)', () => {
+  // clé de couverture : [villes 2-3-2 possibles, jonctions à 3 ports, -déséquilibre nord / sud] ; plus grand = meilleur. Les deux premiers
+  // termes priment (orientation selon les ports, docs/18) ; le troisième peut céder à l'affinage du rythme et des accès (préférence
+  // venue après, docs/46) : il n'est pas comparé ici
+  const compare = (a, b) => { for (let q = 0; q < 2; q++) if (a[q] !== b[q]) return a[q] > b[q] ? 1 : -1; return 0; };
   let strictementMeilleur = 0, alternatives = 0;
   plateaux().slice(0, 60).forEach((r, k) => {
     const doc = r.doc, ref = GEN.cleCouverture(doc);
@@ -151,18 +179,11 @@ test('orientation : pas de rotation au hasard, aucune rotation d\'une seule cent
           if (alt.toutes2) assert.ok(compare(alt.cle, ref.cle) <= 0, 'g5-' + k + ' : centrale (' + t.col + ',' + t.lig + ') tournée de ' + rot);
           if (!alt.toutes2 || compare(alt.cle, ref.cle) < 0) strictementMeilleur++;
         }
-      } else if (role === 'bord' && (t.modeleId === 'B7' || t.modeleId === 'B7m')) {
-        const d = JSON.parse(JSON.stringify(doc));
-        d.plateau.tuiles[n].modeleId = t.modeleId === 'B7' ? 'B7m' : 'B7';
-        const alt = GEN.cleCouverture(d);
-        alternatives++;
-        if (alt.toutes2) assert.ok(compare(alt.cle, ref.cle) <= 0, 'g5-' + k + ' : miroir du bord (' + t.col + ',' + t.lig + ')');
-        if (!alt.toutes2 || compare(alt.cle, ref.cle) < 0) strictementMeilleur++;
       }
     });
   });
   // une orientation autre que celle choisie est souvent moins bonne (les égalités existent : la comparaison n'est pas stricte partout)
-  assert.ok(strictementMeilleur > alternatives / 4, strictementMeilleur + ' alternatives moins bonnes sur ' + alternatives);
+  assert.ok(strictementMeilleur > alternatives / 5, strictementMeilleur + ' alternatives moins bonnes sur ' + alternatives);
 });
 
 test('orientation : les centrales tirées au hasard ne couvrent pas toutes les jonctions (le choix de rotation est utile)', () => {
@@ -181,7 +202,7 @@ test('outils de mesure : tirages orientés sans ville pour tous les plateaux, re
   const MES = require('../outils/mesures-equilibre.js');
   const r = MES.tirerPlateaux5x5(20, 3);
   assert.strictEqual(r.entrees.length + r.sansOrientation, 20);
-  assert.ok(r.entrees.every((e) => e.doc.plateau.tuiles.length === 25 && e.doc.plateau.jetons.length === 0 && (e.b1 === 5 || e.b1 === 6)));
+  assert.ok(r.entrees.every((e) => e.doc.plateau.tuiles.length === 25 && e.doc.plateau.jetons.length === 0 && e.b1 <= 6));
   assert.ok(r.entrees.every((e) => GEN.cleCouverture(e.doc).toutes2));
   assert.strictEqual(r.generateur.essais, 20);
   assert.ok(r.generateur.acceptes >= 15 && 'jonction_ports' in r.generateur.rejets);
@@ -199,7 +220,7 @@ test('reproductibilité : même graine, même plateau et mêmes compteurs ; grai
   assert.ok(profils.size >= 190, 'plateaux distincts : ' + profils.size + ' / ' + NB_GRAINES);
 });
 
-test('tirage : les modèles sont répartis (variété), les rôles sont respectés, B7 et B7m servent tous deux', () => {
+test('tirage : les modèles sont répartis (variété), les rôles sont respectés, chaque modèle du catalogue sert', () => {
   const vus = {};
   plateaux().forEach((r) => {
     r.doc.plateau.tuiles.forEach((t) => { vus[t.modeleId] = (vus[t.modeleId] || 0) + 1; });
@@ -208,33 +229,33 @@ test('tirage : les modèles sont répartis (variété), les rôles sont respect�
       assert.strictEqual(role, M.gabaritCellule(t.col, t.lig, '5x5'));
     });
   });
-  ['K2', 'B1', 'B7', 'B7m', 'C7', 'C8'].forEach((id) => assert.ok(vus[id] > 0, id + ' jamais tiré'));
-  // les poids sont les exemplaires : C7 (6) et C8 (5) restent du même ordre de grandeur
-  assert.ok(vus.C7 / vus.C8 > 0.5 && vus.C7 / vus.C8 < 2, JSON.stringify(vus));
+  ['K2', 'B1', 'B7', 'U1', 'P1', 'P2', 'P3', 'P5'].forEach((id) => assert.ok(vus[id] > 0, id + ' jamais tiré'));
+  // les poids sont les exemplaires : U1 (5) sort plus que P3 (2), qui sort plus que P1 (1)
+  assert.ok(vus.U1 > vus.P3 && vus.P3 > vus.P1, JSON.stringify(vus));
 });
 
 test('bibliothèque sans B1 : pas de règle des B1, tirage ordinaire ; bibliothèque trop pauvre en ports : rejet explicite', () => {
   const sansB1 = doc5();
   sansB1.modeles = sansB1.modeles.filter((m) => m.id !== 'B1');
   const r = GEN.generer(sansB1, { graine: 'sans-b1', candidats: 5 });
-  // peu de ports (K2, B7, C7, C8 seulement) : si un plateau sort, il respecte les conditions fermes
+  // peu de ports (K2, B7 et les centrales seulement) : si un plateau sort, il respecte les conditions fermes
   if (r.ok) {
     GEN.portsParJonction(r.doc).forEach((p) => assert.ok(p >= 2));
     assert.ok(r.doc.plateau.tuiles.every((t) => t.modeleId !== 'B1'));
   } else {
     assert.match(r.raison, /Aucun plateau acceptable/);
   }
-  // que des bords à un port : 3 ports aux villes introuvables, mais 2 ports par jonction encore possibles
+  // que des bords à un port et des centrales à 2 ports : 34 ports, 3 ports aux villes introuvables, 2 ports par jonction encore possibles
   const pauvre = doc5();
-  pauvre.modeles = pauvre.modeles.filter((m) => m.id !== 'B1' && m.id !== 'B7m' && m.id !== 'C8');
+  pauvre.modeles = pauvre.modeles.filter((m) => m.id !== 'B1' && m.id !== 'U1');
   const p = GEN.generer(pauvre, { graine: 'pauvre', candidats: 3, essaisMax: 12 });
   assert.strictEqual(p.ok, false);
   assert.strictEqual(p.rejets.villes_ports, 12, JSON.stringify(p.rejets));
   assert.match(p.raison, /aucun placement des villes en 2-3-2 sur des jonctions à 3 ports au moins : 12/);
   // centrales à un seul port : 25 ports pour 16 jonctions à 2 ports, aucune orientation ne convient
   const maigre = doc5();
-  maigre.modeles = maigre.modeles.filter((m) => m.id !== 'B1' && m.id !== 'B7m' && m.id !== 'C8');
-  const c7 = maigre.modeles.find((m) => m.id === 'C7');
+  maigre.modeles = maigre.modeles.filter((m) => m.id !== 'B1' && m.gabarit !== 'centrale' || m.id === 'P1');
+  const c7 = maigre.modeles.find((m) => m.id === 'P1');
   c7.cases = c7.cases.filter((c) => c.id !== 'c3');
   c7.chemins = c7.chemins.filter((c) => c.id !== 'h3' && c.id !== 'p3');
   assert.ok(M.validerModele(c7, '5x5').complet);
@@ -271,7 +292,7 @@ test('taux de rejet par cause et temps (200 candidats) sur le catalogue 5×5', (
 test('abandon : bibliothèque impossible en 5×5 = 25 échecs structurels consécutifs, message clair, sans geler', () => {
   const t0 = Date.now();
   const pauvre = doc5();
-  pauvre.modeles = pauvre.modeles.filter((m) => m.id !== 'B1' && m.id !== 'B7m' && m.id !== 'C8');
+  pauvre.modeles = pauvre.modeles.filter((m) => m.id !== 'B1' && m.id !== 'U1');
   const p = GEN.generer(pauvre, { graine: 'abandon-1' });
   assert.strictEqual(p.ok, false);
   assert.strictEqual(p.essais, 25, 'abandon après 25 essais, pas 1000');
@@ -281,14 +302,15 @@ test('abandon : bibliothèque impossible en 5×5 = 25 échecs structurels consé
   // B1 présent mais à 0 exemplaire (non tirable) : le message le nomme quand même
   const sansExemplaire = doc5();
   sansExemplaire.modeles.find((m) => m.id === 'B1').exemplaires = 0;
+  sansExemplaire.modeles.find((m) => m.id === 'U1').exemplaires = 0; // U1 (3 ports) suffirait sinon à fournir les ports manquants
   const z = GEN.generer(sansExemplaire, { graine: 'abandon-0' });
   assert.strictEqual(z.ok, false);
   assert.strictEqual(z.essais, 25);
   assert.match(z.raison, /il manque le bord « B1 »/);
-  // B1 tirable mais trop peu de ports (centrale C7 amputée) : conseil général, B1 n'est pas accusé à tort
+  // B1 tirable mais trop peu de ports (seule centrale : P1 amputée) : conseil général, B1 n'est pas accusé à tort
   const maigre = doc5();
-  maigre.modeles = maigre.modeles.filter((m) => m.id !== 'B7m' && m.id !== 'C8');
-  const c7 = maigre.modeles.find((m) => m.id === 'C7');
+  maigre.modeles = maigre.modeles.filter((m) => m.gabarit !== 'centrale' || m.id === 'P1');
+  const c7 = maigre.modeles.find((m) => m.id === 'P1');
   c7.cases = c7.cases.filter((c) => c.id !== 'c3');
   c7.chemins = c7.chemins.filter((c) => c.id !== 'h3' && c.id !== 'p3');
   const q = GEN.generer(maigre, { graine: 'abandon-2' });
@@ -308,8 +330,10 @@ test('abandon : le catalogue normal n\'est pas touché (aucun abandon, aucune re
   }
 });
 
-test('vrais miroirs : B7 <-> B7m seulement ; un bord de même taille mais de forme différente n\'est pas substitué', () => {
-  const F = PM.geometrie.format('5x5'), cat = doc5().modeles, id = (x) => cat.find((m) => m.id === x);
+test('vrais miroirs (bibliothèque du catalogue précédent) : B7 <-> B7m seulement ; un bord de même taille mais de forme différente n\'est pas substitué', () => {
+  // le catalogue livré n'a plus de paire miroir (docs/18) ; la substitution du vrai miroir sert encore aux documents qui en ont (B7 / B7m)
+  const docPrec = () => { const d = M.nouveauDocument('5x5'); d.modeles = JSON.parse(JSON.stringify(CAT.precedent['5x5'])); return d; };
+  const F = PM.geometrie.format('5x5'), cat = docPrec().modeles, id = (x) => cat.find((m) => m.id === x);
   assert.strictEqual(GEN.sontMiroirs(id('B7'), id('B7m'), F), true);
   assert.strictEqual(GEN.sontMiroirs(id('B7m'), id('B7'), F), true);
   assert.strictEqual(GEN.sontMiroirs(id('B7'), id('B7'), F), false);
@@ -327,7 +351,7 @@ test('vrais miroirs : B7 <-> B7m seulement ; un bord de même taille mais de for
   b7y.cases.find((c) => c.type === 'apparition').y = 30;
   assert.strictEqual(GEN.sontMiroirs(id('B7'), b7y, F), false);
   // tirage forcé : tous les bords simples tirés sont B7 ; B7y (même taille et même nombre de ports que B7m) est dans la bibliothèque
-  const doc = doc5();
+  const doc = docPrec();
   b7y.exemplaires = 4;
   doc.modeles.push(b7y);
   assert.ok(M.validerModele(b7y, '5x5').complet, 'B7y est un modèle complet (donc tirable)');
@@ -406,20 +430,22 @@ test('budget de nœuds : une recherche d\'orientation interrompue est signalée 
   assert.strictEqual(GEN.tuilesOrientees5x5(ctx, GEN.mulberry32(1)).tronque, true);
 });
 
-/* ---------- 4×4 inchangé ---------- */
+/* ---------- 4×4 : empreintes ---------- */
 
-// Empreintes du générateur 4×4 avant l'ajout du 5×5 (graines 'emp-0' à 'emp-19', 60 candidats, mode par défaut puis « variées »,
-// puis la graine 'defaut' à 200 candidats avec son rapport). Elles ne changent que si le 4×4 est volontairement modifié.
+// Empreintes du générateur 4×4 depuis le branchement des catalogues « centrales ouvertes » (docs/46 : cases égales entre moitiés,
+// centrales orientées selon les ports, affinage du rythme ; graines 'emp-0' à 'emp-19', 60 candidats, mode par défaut puis « variées »,
+// puis la graine 'defaut' à 200 candidats avec son rapport). Elles ne changent que si le 4×4 est volontairement modifié (les empreintes
+// d'avant, docs/34, valaient pour le catalogue et le générateur de la version 3.04).
 const EMPREINTES_4X4 = [
-  'e2ccae2c3e', 'bad26165c8', '19f76faf80', '42acc0b6c0', 'c39c335de0', '47b07ae841', 'fabc26632b', '276ecc5525', 'b8be8cd849', '3e943d5615',
-  'fe181aa735', '2ac924cf54', '2c613554d2', '733048d623', 'eacbf1d5bd', 'aa2634fcf3', 'd26918546c', 'ea41459027', 'e2773f1333', '8a5d5ec9f4',
-  'fba22ef13e', '32e2cbf165', 'ff4f4ee914', '7cdfdd5e2a', '4cd68bfdd9', '9629c68830', '3e89cfe564', '2da0b0a02d', '17735f4a1b', '63a5c1a56f',
-  '7625c20e64', '8c3ea18c14', '0e8f4697f3', '4ee1ac87b1', 'a29d787cfd', '5577d75e55', '54bbfa5c2a', 'cfc914e759', '1a883c6271', '8d0369da93',
-  'a4dccbb607'
+  'cc51470500', '246271612f', '92a566ce6e', '5981107510', '43e4ad7ce8', '9214010d4f', 'f31302608c', '108f564629', 'a6b27a7b30', 'bad0dc90f0',
+  '39f0c79733', 'a2eecf3c25', 'a1d94d62fe', 'c7da110096', '3425c93c26', '4b616a5df1', '5208d28f4d', 'ae8b324e7a', 'f09c2be2a4', '579dc8625f',
+  '1ccbfff93e', 'e7777499de', 'e30441f014', '8227e5ed09', '769e4aa3ad', '96cea7885e', 'e702f071ce', '18d35bc1fe', '6440133aff', '4eb00f21b0',
+  'e1dc029b7b', 'edb1ae75be', 'aaa73697c3', '799e4da997', '2fba9126bf', '86376f6505', '5591b9c420', '63e3bf5285', '62c20533ca', 'fc27fda8c7',
+  '3768a123a1'
 ];
 const sha = (x) => crypto.createHash('sha1').update(JSON.stringify(x)).digest('hex').slice(0, 10);
 
-test('4×4 inchangé : mêmes plateaux, mêmes rejets, mêmes scores qu\'avant le 5×5 (20 graines, 2 modes, empreintes)', () => {
+test('4×4 : mêmes plateaux, mêmes rejets, mêmes scores à graine donnée (20 graines, 2 modes, empreintes de docs/46)', () => {
   const obtenues = [];
   for (let k = 0; k < 20; k++) {
     for (const v of [false, true]) {
@@ -428,7 +454,7 @@ test('4×4 inchangé : mêmes plateaux, mêmes rejets, mêmes scores qu\'avant l
       assert.ok(!('jonction_ports' in r.rejets) && !('b1' in r.score), 'aucune clé propre au 5×5 en 4×4');
     }
   }
-  const d = GEN.generer(CAT.nouveauDocument('4x4'), { graine: 'defaut' });
+  const d = GEN.generer(CAT.nouveauDocument('4x4'), { graine: 'defaut', jonctionsVariees: false }); // rangée centrale : le défaut est « variées » depuis docs/48
   obtenues.push(sha([d.doc.plateau, d.essais, d.rejets, d.rapport]));
   assert.deepStrictEqual(obtenues, EMPREINTES_4X4);
 });

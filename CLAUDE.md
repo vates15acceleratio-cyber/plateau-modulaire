@@ -35,7 +35,7 @@ Toujours répondre à l'utilisateur **en français**. Code, identifiants et comm
 - Dans une chaîne JS entre apostrophes droites, une apostrophe française casse la syntaxe : utiliser `’` ; lancer `node --check` après chaque modification.
 - Ne jamais modifier le fichier d'un sous-agent en cours avec une expression régulière large.
 
-## État (2026-10-17)
-- Le travail se fait aussi sur un autre poste : **toujours commencer par `git fetch` puis `git pull`**. Les fonctionnalités se font sur une branche, fusionnée par PR.
-- Version 3.03.0 sur `main` ; branche `generateur-5x5` : générateur 5×5, mesures (`docs/35`), seuils définitifs (`docs/36`), recette et revue (`docs/37`).
-- **Travail restant et idées à étudier : `docs/25-travail-restant.md`** (questions à soumettre sur le tempo du 5×5 et le rôle des centrales, audit de sécurité des derniers ajouts, petites dettes dont l'affichage mobile, hexagonal en attente, idée des **régions thématiques** à discuter).
+## État (2026-10-18)
+- Le travail se fait aussi sur un autre poste : **toujours commencer par `git fetch` puis `git pull`**. Les fonctionnalités se font sur une branche, fusionnée par PR. Le `main` local peut être en retard : comparer avec `origin/main`.
+- Version 3.04.0 sur `main`. **Branche `passages` : version 4.00.0 prête, en PR** (non fusionnée) : passages sans case, catalogues organiques 4×4 (24 tuiles) et 5×5 (37 tuiles) branchés, générateur (moitiés égales, orientation, rythme, goulets 5×5, jonctions variées par défaut en 4×4), seuils S par format, stock imprimé dissocié du poids, proposition du nouveau catalogue aux documents 3.04 et v1, format version 3 pour les documents à passages. Rapports `docs/38` à `docs/52`. `node --test` 682 tests (675 OK, 7 PDF ignorés, ~75 s), recettes 337 / 116 OK.
+- **Prochaine étape** : relecture de la PR par l’utilisateur, fusion sur son accord, étiquette `4.00.0` sur `main`. Ensuite : ce qui reste dans `docs/25-travail-restant.md` (mesures 5 et 8 du `28`, conseil 5×5 à remesurer, articulations en 4×4, affichage mobile, régions thématiques, hexagonal en attente).

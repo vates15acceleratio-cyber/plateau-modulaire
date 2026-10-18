@@ -8,7 +8,7 @@ require('../src/geometrie.js');
 require('../src/modele.js');
 require('../src/rendu.js');
 const PM = globalThis.PM;
-const G = PM.geometrie, R = PM.rendu;
+const G = PM.geometrie, R = PM.rendu, M = PM.modele;
 
 function distPointSegment(p, a, b) {
   const dx = b.x - a.x, dy = b.y - a.y, l = dx * dx + dy * dy;
@@ -82,4 +82,88 @@ function problemesTrace(m, format) {
   return pb;
 }
 
-module.exports = { distPointSegment, orient, distSegments, distPolylignes, distPointPolyligne, rogner, traces, problemesTrace };
+/* ---------------------------------------------------------------------- */
+/* Passages sans case (docs/18, décisions du 2026-10-17) et variété        */
+/* ---------------------------------------------------------------------- */
+
+/** Cases porteuses (départ d'un chemin vers un coin) d'un modèle. */
+function porteuses(m) { return m.chemins.filter((ch) => ch.b.coin !== undefined).map((ch) => ch.a['case']); }
+
+/** Réseaux de passages d'un modèle : composantes des passages reliés par un pivot (un T = un réseau). */
+function reseauxDePassages(m) {
+  const ps = m.passages || [], parent = ps.map((_, k) => k);
+  const racine = (k) => { while (parent[k] !== k) k = parent[k]; return k; };
+  ps.forEach((p, k) => ps.forEach((q, n) => {
+    if (n <= k) return;
+    const pivots = (x) => [x.a, x.b].filter((e) => e.pivot !== undefined).map((e) => e.pivot);
+    if (pivots(p).some((v) => pivots(q).includes(v))) parent[racine(n)] = racine(k);
+  }));
+  const groupes = new Map();
+  ps.forEach((p, k) => { const r = racine(k); if (!groupes.has(r)) groupes.set(r, []); groupes.get(r).push(p); });
+  return [...groupes.values()];
+}
+
+/**
+ * Règles des passages décidées par l'utilisateur (docs/18) et de docs/39, vérifiées sur un modèle du catalogue (format '4x4' ou '5x5').
+ * Renvoie la liste des manquements (vide si tout est respecté) :
+ *  - aucun passage vers un coin ; aucun passage entre deux cases (c'est un chemin) ;
+ *  - aucun passage TRAVERSANT : un passage dont les deux bouts sont des raccords de côtés opposés (droit ou courbe) ; un T dont deux
+ *    branches vont à des côtés opposés n'en est pas un (P3 du 5×5, docs/18 réponse 5 : il porte des cases en plus) ;
+ *  - une case porteuse ne touche jamais un passage ;
+ *  - bords et coins : un réseau de passages au plus, jamais depuis la case d'apparition ;
+ *  - centrale 4×4 : un passage au plus (docs/18) ; centrale 5×5 : un T au plus (un pivot) ;
+ *  - aucun mur sur une centrale : chaque côté a un raccord (de chemin ou de passage) au milieu.
+ */
+function reglesPassages(m, format) {
+  const pb = [], ps = m.passages || [], port = new Set(porteuses(m));
+  const appar = new Set(m.cases.filter((c) => c.type === 'apparition').map((c) => c.id));
+  for (const p of ps) {
+    const ext = [p.a, p.b];
+    if (ext.some((e) => e.coin !== undefined)) pb.push(`${m.id} ${p.id} : passage vers un coin`);
+    if (ext.every((e) => e['case'] !== undefined)) pb.push(`${m.id} ${p.id} : passage entre deux cases`);
+    if (ext.every((e) => e.raccord) && (p.a.raccord.cote + 2) % 4 === p.b.raccord.cote) pb.push(`${m.id} ${p.id} : passage traversant`);
+    for (const e of ext) {
+      if (e['case'] !== undefined && port.has(e['case'])) pb.push(`${m.id} ${p.id} : touche la porteuse ${e['case']}`);
+      if (e['case'] !== undefined && appar.has(e['case'])) pb.push(`${m.id} ${p.id} : part de la case d'apparition`);
+    }
+  }
+  // une porteuse ne touche pas non plus un passage par un chemin vers un raccord qui ferait face à un passage : R3 (aucun raccord latéral)
+  for (const ch of m.chemins) if (ch.b.raccord && port.has(ch.a['case'])) pb.push(`${m.id} ${ch.id} : raccord sur une porteuse`);
+  if (m.gabarit !== 'centrale' && reseauxDePassages(m).length > 1) pb.push(`${m.id} : plus d'un passage sur un ${m.gabarit}`);
+  if (m.gabarit === 'centrale' && format === '4x4' && ps.length > 1) pb.push(`${m.id} : plus d'un passage sur une centrale 4×4`);
+  if (m.gabarit === 'centrale' && (m.pivots || []).length > 1) pb.push(`${m.id} : plus d'un T`);
+  if (m.gabarit === 'centrale') {
+    const rac = M.masquesDuModele(m).raccords;
+    for (let cote = 0; cote < 4; cote++) if (G.triplet(rac, cote) !== 0b010) pb.push(`${m.id} : côté ${cote} sans raccord au milieu (mur) ou hors du milieu`);
+  }
+  return pb;
+}
+
+/**
+ * Signature d'un modèle tourné de `rot` quarts de tour, puis reflété gauche-droite si `miroir` : cases étiquetées par leurs ports et
+ * leurs raccords (tournés), arêtes internes (chemins et passages) entre étiquettes ; un pivot est étiqueté par ses raccords. Deux
+ * modèles de même signature ont le même routage (mêmes coins, mêmes côtés, mêmes liaisons).
+ */
+function signature(m, rot, miroir) {
+  const coin = (k) => { const c = (k + rot) % 4; return miroir ? [1, 0, 3, 2][c] : c; };
+  const rac = (r) => { let c = (r.cote + rot) % 4, p = r.pos; if (miroir) { c = c === 1 ? 3 : (c === 3 ? 1 : c); p = 2 - p; } return 'r' + c + p; };
+  const etiquette = new Map(m.cases.map((c) => [c.id, []]).concat((m.pivots || []).map((v) => ['v:' + v.id, ['v']])));
+  const cle = (e) => e['case'] !== undefined ? e['case'] : 'v:' + e.pivot;
+  for (const ch of m.chemins) {
+    if (ch.b['case'] !== undefined) continue;
+    etiquette.get(ch.a['case']).push(ch.b.coin !== undefined ? 'p' + coin(ch.b.coin) : rac(ch.b.raccord));
+  }
+  for (const p of m.passages || []) {
+    if (p.a.raccord && p.b.raccord) continue; // passage raccord–raccord : compté à part
+    const [x, r] = p.a.raccord ? [p.b, p.a] : (p.b.raccord ? [p.a, p.b] : [null, null]);
+    if (x) etiquette.get(cle(x)).push('q' + rac(r.raccord));
+  }
+  const lab = (id) => etiquette.get(id).sort().join('') + (m.cases.some((c) => c.id === id && c.type === 'apparition') ? '*' : '');
+  const aretes = m.chemins.filter((ch) => ch.b['case'] !== undefined).map((ch) => 'h' + [lab(ch.a['case']), lab(ch.b['case'])].sort().join('-'))
+    .concat((m.passages || []).filter((p) => !p.a.raccord && !p.b.raccord).map((p) => 'q' + [lab(cle(p.a)), lab(cle(p.b))].sort().join('-')))
+    .concat((m.passages || []).filter((p) => p.a.raccord && p.b.raccord).map((p) => 'qq' + [rac(p.a.raccord), rac(p.b.raccord)].sort().join('-')))
+    .sort();
+  return [...etiquette.keys()].map(lab).sort().join(',') + '|' + aretes.join(',');
+}
+
+module.exports = { distPointSegment, orient, distSegments, distPolylignes, distPointPolyligne, rogner, traces, problemesTrace, porteuses, reseauxDePassages, reglesPassages, signature };

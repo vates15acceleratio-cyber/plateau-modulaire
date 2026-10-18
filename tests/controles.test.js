@@ -24,7 +24,7 @@ test('plateau vide : compteurs à zéro, aucune erreur ni alerte', () => {
   const par = parCle(r);
   assert.deepEqual(r.compteurs.map((c) => c.cle), ['villes', 'cases', 'tuiles', 'apparitions_vert', 'apparitions_rouge', 'dimensions', 'tuiles_petites']);
   assert.deepEqual([par.villes.valeur, par.villes.cible, par.villes.etat], [0, 7, 'ecart']);
-  assert.deepEqual([par.cases.valeur, par.cases.cible, par.cases.etat], [0, '≈ 63', 'ok']);
+  assert.deepEqual([par.cases.valeur, par.cases.cible, par.cases.etat], [0, '≈ 58', 'ok']);
   assert.deepEqual([par.tuiles.valeur, par.tuiles.cible], [0, 16]);
   assert.deepEqual([par.apparitions_vert.valeur, par.apparitions_vert.cible], [0, 6]);
   assert.deepEqual([par.apparitions_rouge.valeur, par.apparitions_rouge.cible], [0, 6]);
@@ -46,13 +46,13 @@ test('plateau complet équilibré (4×4) : tous les compteurs à ok, aucune erre
   });
 });
 
-test('5×5 : cibles (25 tuiles, 7 apparitions par camp, ≈ 75 cases, 50 × 50 cm)', () => {
+test('5×5 : cibles (25 tuiles, 7 apparitions par camp, ≈ 80 cases, 50 × 50 cm)', () => {
   avecGraphe(() => {
     const r = C.calculer(A.plateauComplet('5x5', true));
     const par = parCle(r);
     assert.deepEqual([par.tuiles.valeur, par.tuiles.cible], [25, 25]);
     assert.deepEqual([par.apparitions_vert.valeur, par.apparitions_vert.cible, par.apparitions_rouge.cible], [7, 7, 7]);
-    assert.equal(par.cases.cible, '≈ 75');
+    assert.equal(par.cases.cible, '≈ 80');
     assert.equal(par.dimensions.valeur, '50 × 50 cm');
     assert.deepEqual(r.erreurs, []);
   });

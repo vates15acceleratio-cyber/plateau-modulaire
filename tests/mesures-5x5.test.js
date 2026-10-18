@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Garde-fou léger des mesures 5×5 (outils/mesures-5x5.js, docs/35) : 50 plateaux tirés et orientés par le générateur, sans les 200 candidats.
+ * Garde-fou léger des mesures 5×5 (outils/mesures-5x5.js, docs/35 ; catalogue livré de docs/46) : 50 plateaux tirés et orientés par le générateur, sans les 200 candidats.
  * Invariants seulement (cases, ports, écart entre jonctions, ports par jonction, placements admissibles) ; aucun pourcentage figé.
  */
 const test = require('node:test');
@@ -30,22 +30,23 @@ function plateaux() {
   return CACHE;
 }
 
-test('mesures 5×5 : cases = 72 + nB1 (dans 75 ± 3), ports = 34 + nB1, 5 ou 6 B1', () => {
+test('mesures 5×5 : cases = 72 + nB1 + nU1 (78 à 81, docs/46), ports = cases − 38, au plus 6 B1', () => {
   plateaux().forEach(({ b }, n) => {
-    assert.ok(b.b1 === 5 || b.b1 === 6, 'plateau ' + n);
-    assert.strictEqual(b.props.modeles.B1, b.b1, 'plateau ' + n);
-    assert.strictEqual(b.props.cases, 72 + b.b1, 'plateau ' + n);
-    assert.ok(b.props.cases >= 72 && b.props.cases <= 78, 'plateau ' + n);
-    assert.strictEqual(b.props.ports, 34 + b.b1, 'plateau ' + n);
+    const nU1 = b.props.modeles.U1 || 0;
+    assert.ok(b.b1 <= 6, 'plateau ' + n);
+    assert.strictEqual(b.props.modeles.B1 || 0, b.b1, 'plateau ' + n);
+    assert.strictEqual(b.props.cases, 72 + b.b1 + nU1, 'plateau ' + n);
+    assert.ok(b.props.cases >= 78 && b.props.cases <= 81, 'plateau ' + n + ' : ' + b.props.cases);
+    assert.strictEqual(b.props.ports, b.props.cases - 38, 'plateau ' + n);
     assert.strictEqual(b.props.pj.reduce((a, c) => a + c, 0), b.props.ports);
   });
 });
 
-test('mesures 5×5 : chaque jonction a au moins 2 ports, au moins 7 jonctions en ont 3, écart minimal entre jonctions >= 4 pas', () => {
+test('mesures 5×5 : chaque jonction a au moins 2 ports, au moins 8 jonctions en ont 3 (40 ports au moins), écart minimal entre jonctions >= 4 pas', () => {
   plateaux().forEach(({ b }, n) => {
     assert.strictEqual(b.props.pj.length, 16);
     assert.ok(b.props.pj.every((p) => p >= 2), 'plateau ' + n + ' : ' + b.props.pj.join(','));
-    assert.ok(b.props.pj.filter((p) => p >= 3).length >= 7, 'plateau ' + n);
+    assert.ok(b.props.pj.filter((p) => p >= 3).length >= 8, 'plateau ' + n);
     assert.ok(b.props.ecartMin >= 4, 'plateau ' + n + ' : ' + b.props.ecartMin);
   });
 });
@@ -97,10 +98,10 @@ test('mesures 5×5 : le contrefactuel « B1 libres » garde les mêmes invariant
   for (let n = 0; n < 10; n++) {
     const e = MS.tirerEntreesF2(prep);
     if (e.cause) continue;
-    const doc = e.doc, nB1 = doc.plateau.tuiles.filter((t) => t.modeleId === 'B1').length;
-    assert.ok(nB1 === 5 || nB1 === 6);
+    const doc = e.doc, nb = (id) => doc.plateau.tuiles.filter((t) => t.modeleId === id).length, nB1 = nb('B1');
+    assert.ok(nB1 <= 6);
     const g0 = GR.construire(doc, { jetons: [] });
-    assert.strictEqual(MS.proprietesPlateau(doc, g0).cases, 72 + nB1);
+    assert.strictEqual(MS.proprietesPlateau(doc, g0).cases, 72 + nB1 + nb('U1'));
   }
   // la préparation du contrefactuel ne modifie pas le contexte du générateur : même catalogue, même format
   assert.strictEqual(CAT.nouveauDocument('5x5').grille, '5x5');

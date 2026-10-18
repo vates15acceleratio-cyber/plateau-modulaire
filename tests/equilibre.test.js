@@ -80,6 +80,35 @@ function oracleGraphe(doc, casesJonction) {
       if (autre) lier(r.caseId, autre);
     }
   }
+  // passages sans case (docs/18, docs/39), écrit sans PM.graphe : les passages relient des points (pivots, emplacements de raccord ;
+  // deux emplacements face à face sont un même point) en réseaux ; une case s'y RATTACHE (bout de passage, ou chemin qui aboutit face à
+  // un passage) sans jamais fondre deux réseaux ; les cases rattachées à un même réseau sont voisines deux à deux (1 pas)
+  const reseau = new Map(), rattache = [];
+  const groupe = (x) => { if (!reseau.has(x)) reseau.set(x, new Set([x])); return reseau.get(x); };
+  const fondre = (a, b) => { const ra = groupe(a), rb = groupe(b); if (ra === rb) return; for (const x of rb) { ra.add(x); reseau.set(x, ra); } };
+  const slot = (t, cote, pos) => `S${t.col},${t.lig},${cote},${pos}`;
+  const slots = [];
+  for (const { t, e } of elems) for (const p of e.passages || []) {
+    const point = (x) => x.pivot !== undefined ? 'P' + x.pivot : (x.raccord ? (slots.push({ t, cote: x.raccord.cote, pos: x.raccord.pos }), slot(t, x.raccord.cote, x.raccord.pos)) : null);
+    const pa = point(p.a), pb = point(p.b);
+    if (pa && pb) fondre(pa, pb);
+    else if (pa) { groupe(pa); rattache.push([p.b['case'], pa]); }
+    else if (pb) { groupe(pb); rattache.push([p.a['case'], pb]); }
+  }
+  for (const s0 of slots) {
+    const d = G.coteVoisin(s0.cote), f = G.raccordEnFace(s0.cote, s0.pos), face = slot({ col: s0.t.col + d.dc, lig: s0.t.lig + d.dl }, f.cote, f.pos);
+    if (reseau.has(face)) fondre(slot(s0.t, s0.cote, s0.pos), face);
+  }
+  for (const { t, e } of elems) for (const r of e.raccords) {
+    const d = G.coteVoisin(r.cote), f = G.raccordEnFace(r.cote, r.pos), face = slot({ col: t.col + d.dc, lig: t.lig + d.dl }, f.cote, f.pos);
+    if (reseau.has(face)) rattache.push([r.caseId, face]);
+  }
+  const membres = new Map();
+  for (const [c, x] of rattache) { const r = reseau.get(x); if (!membres.has(r)) membres.set(r, new Set()); membres.get(r).add(c); }
+  for (const cs0 of membres.values()) {
+    const cs = [...cs0].filter((id) => voisins.has(id));
+    for (let a = 0; a < cs.length; a++) for (let b = a + 1; b < cs.length; b++) lier(cs[a], cs[b]);
+  }
   for (let j = 1; j <= 3; j++) for (let i = 1; i <= 3; i++) {
     const id = `J${i},${j}`;
     noeud(id);
@@ -457,6 +486,33 @@ test('equilibre : score S, écart aux rangs 1 à 7, D6 étendu, première ville,
   assert.ok(e.alertes.some((a) => a.code === 'premiere_ville_inegale'));
   // plateau vide : S nul absent
   assert.strictEqual(GR.equilibre(M.nouveauDocument()).S, null);
+});
+
+test('equilibre 5×5 : alerte S dès 7, information S = 5 ou 6 (docs/18, 2026-10-18) ; le 4×4 garde 5 et 4', () => {
+  const DOC5 = M.nouveauDocument('5x5');
+  const d1 = [2, 3, 3, 4, 5, 6, 6];
+  const attendus = [[[2, 4, 4, 5, 6, 6, 6], 4, false, false], [[2, 4, 4, 5, 6, 6, 7], 5, false, true], [[2, 4, 4, 5, 6, 7, 7], 6, false, true], [[2, 4, 4, 5, 7, 7, 7], 7, true, false]];
+  for (const [d2, S, alerte, info] of attendus) {
+    const e = GR.equilibre(DOC5, { graphe: grapheDistances(d1, d2) });
+    assert.strictEqual(e.S, S);
+    assert.strictEqual(e.aSurveiller, alerte, '5×5 S = ' + S);
+    assert.strictEqual(e.sInformation, info, '5×5 S = ' + S);
+    assert.strictEqual(e.alertes.some((a) => a.code === 'score_s'), alerte, '5×5 S = ' + S);
+    // le même graphe sur un document 4×4 : alerte dès 5, information à 4
+    const e4 = GR.equilibre(DOC_VIDE, { graphe: grapheDistances(d1, d2) });
+    assert.strictEqual(e4.aSurveiller, S >= 5, '4×4 S = ' + S);
+    assert.strictEqual(e4.sInformation, S === 4, '4×4 S = ' + S);
+  }
+  const al = GR.equilibre(DOC5, { graphe: grapheDistances(d1, [2, 4, 4, 5, 7, 7, 7]) }).alertes.find((x) => x.code === 'score_s');
+  assert.ok(al.message.includes('à partir de 7'), al.message);
+});
+
+test('cinq contre deux : sans case d’apparition pour un camp (plateau incomplet), pas de blocage', () => {
+  const g = grapheDistances([2, 2, 2, 2, 2, 2, 2], [3, 3, 9, 9, 9, 9, 9]);
+  g.apparitions[2] = [];
+  const e = GR.equilibre(DOC_VIDE, { graphe: g });
+  assert.strictEqual(e.cinqContreDeux, false);
+  assert.deepStrictEqual(e.blocages, []);
 });
 
 test('equilibre : ville inaccessible → S et ecartMax7 null ; champs cinqContreDeux et premiereEgale exposés', () => {

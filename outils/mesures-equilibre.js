@@ -46,17 +46,25 @@ function mulberry32(graine) {
  * pénalité de répétition qui favorise la variété ; rotation suggérée (bords et coins tournés vers l'extérieur),
  * rotation aléatoire des centrales. Les 7 villes ne sont pas posées ici (voir PAIRES).
  */
-function tirerPlateau(rng) {
+function tirerPlateau(rng, options) {
   const doc = CAT.nouveauDocument();
   const F = M.formatDuDocument(doc);
   const GEN = PM.generateur;
+  if (options && options.orientes) { // tirage du générateur : cases égales entre moitiés et centrales orientées selon les ports
+    const ctx = GEN.contexteDocument4x4(doc);
+    let r = GEN.tuilesOrientees4x4(ctx, rng);
+    while (r.cause) r = GEN.tuilesOrientees4x4(ctx, rng);
+    doc.plateau.tuiles = r.tuiles;
+    return doc;
+  }
   doc.plateau.tuiles = GEN.tirerTuiles(GEN.modelesParGabarit(doc, F), GEN.cellulesDuFormat(F), F, rng);
   return doc;
 }
-function tirerPlateaux(nb, graine) {
+/** nb plateaux 4×4 ; options.orientes : composition du générateur (PM.generateur.tuilesOrientees4x4) au lieu de la pose libre. */
+function tirerPlateaux(nb, graine, options) {
   const rng = mulberry32(graine);
   const res = [];
-  for (let n = 0; n < nb; n++) res.push({ doc: tirerPlateau(rng) });
+  for (let n = 0; n < nb; n++) res.push({ doc: tirerPlateau(rng, options) });
   return res;
 }
 

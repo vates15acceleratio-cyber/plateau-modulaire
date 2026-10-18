@@ -26,14 +26,22 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var G = PM.geometrie;
   var M = PM.modele;
 
+  /** Seuil d'alerte de S du format (« 4x4 » ou « 5x5 ») ; le rejet du générateur (5×5 seulement) reste SEUIL_S. */
+  function seuilS(formatId) { return SEUIL_S_PAR_FORMAT[formatId] || SEUIL_S; }
+  /** Seuil à partir duquel S est une simple information (jusqu'au seuil d'alerte exclu). */
+  function seuilSInformation(formatId) { return SEUIL_S_INFORMATION_PAR_FORMAT[formatId] || SEUIL_S_INFORMATION_PAR_FORMAT['4x4']; }
+
   /** Nombre de villes et seuils (constantes uniques, lues aussi par controles.js et generateur.js). */
   var NB_VILLES = 7;
   var RANGS_COMPARES = 4;       // ancien D6 : écart aux rangs 1 à 4 (champ ecartRang, information seulement)
   var SEUIL_ECART = 2;          // alerte si l'écart dépasse 2 à un rang de 1 à 7 (docs/archives/16 b)
   var SEUIL_CINQ_CONTRE_DEUX = 5;
   var SEUIL_APPARITION_LOINTAINE = 7;
-  var SEUIL_S = 5;                 // constante unique pour les deux formats, lue par le générateur et l'interface (docs/36 : S >= 5 définitif)
-  var SEUIL_S_INFORMATION = 4;     // S = 4 : simple information, sans alerte (docs/22)
+  var SEUIL_S = 5;                 // seuil de REJET du générateur, appliqué en 5×5 seulement (REJET_S de generateur.js) ; en 4×4, S n'est qu'un classement (docs/18, 2026-10-18 ; un plateau 4×4 généré reste à S <= 1)
+  /** Seuils d'alerte et d'information de S, propres à chaque format (docs/18, réponse de 2026-10-18 ; docs/48 § 4) : 4×4 alerte dès 5, information à 4 ;
+   *  5×5 alerte dès 7, information à 5 ou 6 (le 95e centile de la pose libre y est à 7). */
+  var SEUIL_S_PAR_FORMAT = Object.freeze({ '4x4': 5, '5x5': 7 });
+  var SEUIL_S_INFORMATION_PAR_FORMAT = Object.freeze({ '4x4': 4, '5x5': 5 });
   var PORTS_VILLE_MIN = 3;         // 5×5 : ports minimum d'une jonction qui porte une ville ; en dessous, information seulement (docs/36) ; lu par le générateur et les outils
   var PORTS_JONCTION_MIN = G.MIN_PORTS_JONCTION; // ports minimum de toute jonction intérieure (condition ferme du générateur 5×5)
   /** Villes du 5×5 en « 2-3-2 » (docs/18) : groupes de rangées de jonctions et nombre de villes dans chaque groupe. */
@@ -59,6 +67,68 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /* ------------------------------------------------------------------ */
 
   function idJonction(i, j) { return 'J' + i + ',' + j; }
+
+  /**
+   * Passages sans case (docs/18, docs/39) : les cases qu'un réseau de passages relie, quelle que soit sa longueur ou sa
+   * ramification, sont voisines à 1 pas (un seul déplacement, aucun nœud intermédiaire).
+   * Union-find sur les emplacements de raccord des passages (« R col,lig,cote,pos ») et sur les pivots : deux raccords
+   * face à face sont réunis. Les cases ne sont jamais fusionnées, elles sont seulement attachées à une composante
+   * (sinon une case à deux sorties rapprocherait ses deux voisins) : celles d'un passage, et celles dont un chemin
+   * aboutit à un raccord qui fait face à un passage. Les cases attachées à une même composante forment une clique.
+   * Sans passage, ne fait rien : le graphe est strictement celui d'avant.
+   */
+  function relierPassages(elems, voisins, lier) {
+    var parent = new Map(), attaches = [];
+    function racine(x) {
+      if (!parent.has(x)) parent.set(x, x);
+      while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); }
+      return x;
+    }
+    function emplacement(t, cote, pos) { return 'R ' + t.col + ',' + t.lig + ',' + cote + ',' + pos; }
+    function enFace(t, cote, pos) {
+      var d = G.coteVoisin(cote), f = G.raccordEnFace(cote, pos);
+      return emplacement({ col: t.col + d.dc, lig: t.lig + d.dl }, f.cote, f.pos);
+    }
+    var emplacements = [];
+    elems.forEach(function (x) {
+      (x.e.passages || []).forEach(function (p) {
+        function ref(e) {
+          if (e.pivot !== undefined) return { cle: 'P ' + e.pivot };
+          if (e.raccord) { var k = emplacement(x.t, e.raccord.cote, e.raccord.pos); emplacements.push({ cle: k, tuile: x.t, cote: e.raccord.cote, pos: e.raccord.pos }); return { cle: k }; }
+          return { caseId: e['case'] };
+        }
+        var a = ref(p.a), b = ref(p.b);
+        if (a.cle && b.cle) parent.set(racine(a.cle), racine(b.cle));
+        else if (a.cle) attaches.push({ caseId: b.caseId, cle: a.cle });
+        else if (b.cle) attaches.push({ caseId: a.caseId, cle: b.cle });
+        else if (voisins.has(a.caseId) && voisins.has(b.caseId)) lier(a.caseId, b.caseId);
+      });
+    });
+    if (!emplacements.length && !attaches.length) return;
+    emplacements.forEach(function (s) { racine(s.cle); }); // tous les emplacements existent avant l'appariement
+    emplacements.forEach(function (s) {
+      var face = enFace(s.tuile, s.cote, s.pos);
+      if (parent.has(face)) parent.set(racine(s.cle), racine(face));
+    });
+    // Un chemin qui aboutit à un raccord faisant face à un passage : sa case est attachée à ce réseau
+    elems.forEach(function (x) {
+      (x.e.raccords || []).forEach(function (r) {
+        var face = enFace(x.t, r.cote, r.pos);
+        if (parent.has(face)) attaches.push({ caseId: r.caseId, cle: face });
+      });
+    });
+    var groupes = new Map();
+    attaches.forEach(function (a) {
+      if (!voisins.has(a.caseId)) return;
+      var r = racine(a.cle);
+      if (!groupes.has(r)) groupes.set(r, new Set());
+      groupes.get(r).add(a.caseId);
+    });
+    groupes.forEach(function (ensemble) {
+      var cs = Array.from(ensemble);
+      for (var i = 0; i < cs.length; i++) for (var j = i + 1; j < cs.length; j++) lier(cs[i], cs[j]);
+    });
+  }
 
   /**
    * Construit le graphe d'un document.
@@ -118,6 +188,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         portsParJonction.get(id).push(p.caseId);
       });
     });
+
+    relierPassages(elems, voisins, lier);
 
     // Villes : jetons 'capture' (le premier jeton d'une jonction compte)
     var villes = new Set();
@@ -241,7 +313,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    *  - inaccessibles : {1: [{i, j}], 2: [{i, j}]} ; apparitions : {1, 2} (nombre de cases d'apparition) ;
    *  - blocages : [{code, message}] (plateau très déséquilibré : « 5 contre 2 », écart > SEUIL_BLOCAGE_ECART) ;
    *    tresDesequilibre : blocages non vide ;
-   *  - aSurveiller : S >= SEUIL_S (5) ; sInformation : S = 4, information sans alerte (docs/22) ;
+   *  - aSurveiller : S >= seuilS(format) (4×4 : 5 ; 5×5 : 7) ; sInformation : S de seuilSInformation(format) à l'alerte exclue (4×4 : 4 ; 5×5 : 5 ou 6), sans alerte ;
    *  - informations : [{code, message}] (5×5 : ville sur une jonction à moins de 3 ports, jamais une alerte) ;
    *  - alertes : [{code, message}] ; lacunes : [texte] ; complet : booléen (7 villes, au moins une case
    *    d'apparition par camp, toutes les tuiles posées avec un modèle présent dans la bibliothèque) ; partiel : !complet.
@@ -319,7 +391,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var premiereVille = { 1: D[1].length ? D[1][0] : null, 2: D[2].length ? D[2][0] : null, ecart: null };
     if (premiereVille[1] !== null && premiereVille[2] !== null) premiereVille.ecart = Math.abs(premiereVille[1] - premiereVille[2]);
     var premiereEgale = premiereVille.ecart === 0;
-    var cinqContreDeux = villes.length === nbVilles && Math.max(partage[1], partage[2]) >= SEUIL_CINQ_CONTRE_DEUX;
+    var cinqContreDeux = villes.length === nbVilles && avecAppar && Math.max(partage[1], partage[2]) >= SEUIL_CINQ_CONTRE_DEUX;
 
     var villesA4 = { 1: D[1].filter(function (x) { return x <= 4; }).length, 2: D[2].filter(function (x) { return x <= 4; }).length, ecart: null };
     villesA4.ecart = Math.abs(villesA4[1] - villesA4[2]);
@@ -328,6 +400,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var blocages = [], alertes = [], informations = [];
     var est5x5 = M.formatDuDocument(doc).id === '5x5';
     var conseil5x5 = est5x5 && conseil5x5Applicable(villes) ? CONSEIL_5X5 : '';
+    var sAlerte = seuilS(M.formatDuDocument(doc).id), sInfo = seuilSInformation(M.formatDuDocument(doc).id);
     if (est5x5) {
       villes.forEach(function (v) {
         if (v.ports < PORTS_VILLE_MIN) {
@@ -338,7 +411,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     if (cinqContreDeux) {
       var fort = partage[1] >= partage[2] ? 1 : 2;
       var cinq = { code: 'cinq_contre_deux', message: 'Le joueur ' + NOM_JOUEUR[fort] + ' est plus proche de ' + partage[fort] + ' villes contre ' + partage[3 - fort] + ' pour le joueur ' + NOM_JOUEUR[3 - fort] + ' (« 5 contre 2 »).' +
-        // conseil propre au 4×4 (docs/22) ; conseil conditionnel propre au 5×5 (docs/36)
+        // conseil de pose à la main propre au 4×4 (docs/22 ; le générateur, lui, varie ses jonctions-cases) ; conseil conditionnel propre au 5×5 (docs/36)
         (M.formatDuDocument(doc).id === '4x4' ? ' Conseil : placer les deux jonctions-cases (sans ville) dans la rangée centrale, par exemple (1, 2) et (3, 2).' : conseil5x5) };
       (CINQ_CONTRE_DEUX_BLOQUANT ? blocages : alertes).push(cinq);
     }
@@ -347,8 +420,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     } else if (ecartMax7 !== null && ecartMax7 > SEUIL_ECART) {
       alertes.push({ code: 'ecart_rang_etendu', message: 'Un rang de villes (de 1 à 7) est à ' + ecartMax7 + ' pas d\'écart entre les deux joueurs (plus de ' + SEUIL_ECART + ').' });
     }
-    if (S !== null && S >= SEUIL_S) {
-      alertes.push({ code: 'score_s', message: 'Score S = ' + S + ' (somme des écarts sur les 7 rangs) : plateau à surveiller (à partir de ' + SEUIL_S + ').' + (cinqContreDeux ? '' : conseil5x5) });
+    if (S !== null && S >= sAlerte) {
+      alertes.push({ code: 'score_s', message: 'Score S = ' + S + ' (somme des écarts sur les 7 rangs) : plateau à surveiller (à partir de ' + sAlerte + ').' + (cinqContreDeux ? '' : conseil5x5) });
     }
     if (premiereVille.ecart !== null && premiereVille.ecart !== 0) {
       alertes.push({ code: 'premiere_ville_inegale', message: 'La première ville est à ' + premiereVille[1] + ' pas du joueur vert et à ' + premiereVille[2] + ' pas du joueur rouge (elle devrait être à la même distance).' });
@@ -372,7 +445,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
     return {
       villes: villes.map(function (v) { return { id: v.id, i: v.i, j: v.j }; }),
-      D: D, parRang: parRang, ecartRang: ecartRang, S: S, ecartMax7: ecartMax7, aSurveiller: S !== null && S >= SEUIL_S, sInformation: S !== null && S >= SEUIL_S_INFORMATION && S < SEUIL_S, villesA4: villesA4, partage: partage, alertes: alertes, informations: informations, tempo: tempo,
+      D: D, parRang: parRang, ecartRang: ecartRang, S: S, ecartMax7: ecartMax7, aSurveiller: S !== null && S >= sAlerte, sInformation: S !== null && S >= sInfo && S < sAlerte, villesA4: villesA4, partage: partage, alertes: alertes, informations: informations, tempo: tempo,
       cinqContreDeux: cinqContreDeux, premiereEgale: premiereEgale, blocages: blocages, tresDesequilibre: blocages.length > 0,
       apparitions: { 1: g.apparitions[1].length, 2: g.apparitions[2].length },
       premiereVille: premiereVille, inaccessibles: inaccessibles, lacunes: lacunes,
@@ -497,8 +570,239 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     });
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Rythme, accès au centre, cases par moitié (docs/18, docs/44, docs/45) */
+  /* ------------------------------------------------------------------ */
+
+  /** Chaîne visée : plus longue suite de cases sans zone d'intérêt (docs/18 : « environ 3 cases entre deux zones d'intérêt »). */
+  var CHAINE_CIBLE = 3;
+
+  /**
+   * Réseaux de passages du plateau (même règle que relierPassages) : pour chaque réseau, les cases qu'il relie ; et ceux qui
+   * ÉCONOMISENT un pas (un passage sans case à ses deux bouts : raccord–raccord, raccord–pivot ou case–pivot ; un simple crochet
+   * raccord -> case vaut un chemin ordinaire). Repris de outils/planche-organique.js (docs/45).
+   * Renvoie { tailles: [nombre de cases, décroissant], apparitions: cases d'apparition rattachées, groupes: [Set], economes: [Set] }.
+   */
+  function reseauxPassages(doc) {
+    var parent = new Map();
+    function racine(x) {
+      if (!parent.has(x)) parent.set(x, x);
+      while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); }
+      return x;
+    }
+    function emp(t, c, p) { return 'R ' + t.col + ',' + t.lig + ',' + c + ',' + p; }
+    function enFace(t, c, p) { var d = G.coteVoisin(c), f = G.raccordEnFace(c, p); return emp({ col: t.col + d.dc, lig: t.lig + d.dl }, f.cote, f.pos); }
+    var plateau = (doc && doc.plateau) || {}, elems = [];
+    (Array.isArray(plateau.tuiles) ? plateau.tuiles : []).forEach(function (t) { if (!t) return; var e = M.tuileEnPlateau(doc, t); if (e) elems.push({ t: t, e: e }); });
+    var attaches = [], emplacements = [], types = new Map(), econ = [];
+    elems.forEach(function (x) { x.e.cases.forEach(function (c) { types.set(c.id, c.type); }); });
+    elems.forEach(function (x) {
+      (x.e.passages || []).forEach(function (p) {
+        function ref(e) {
+          if (e.pivot !== undefined) return { cle: 'P ' + e.pivot, pivot: true };
+          if (e.raccord) { var k = emp(x.t, e.raccord.cote, e.raccord.pos); emplacements.push({ k: k, t: x.t, c: e.raccord.cote, p: e.raccord.pos }); return { cle: k }; }
+          return { caseId: e['case'] };
+        }
+        var a = ref(p.a), b = ref(p.b);
+        if (a.cle && b.cle) { parent.set(racine(a.cle), racine(b.cle)); econ.push(a.cle); }
+        else if (a.cle) { attaches.push({ caseId: b.caseId, cle: a.cle }); if (a.pivot) econ.push(a.cle); }
+        else if (b.cle) { attaches.push({ caseId: a.caseId, cle: b.cle }); if (b.pivot) econ.push(b.cle); }
+      });
+    });
+    emplacements.forEach(function (s) { racine(s.k); });
+    emplacements.forEach(function (s) { var f = enFace(s.t, s.c, s.p); if (parent.has(f)) parent.set(racine(s.k), racine(f)); });
+    elems.forEach(function (x) { x.e.raccords.forEach(function (r) { var f = enFace(x.t, r.cote, r.pos); if (parent.has(f)) attaches.push({ caseId: r.caseId, cle: f }); }); });
+    var groupes = new Map(), econome = new Set(econ.map(racine));
+    attaches.forEach(function (a) { var r = racine(a.cle); if (!groupes.has(r)) groupes.set(r, new Set()); groupes.get(r).add(a.caseId); });
+    var apparitions = 0, economes = [];
+    groupes.forEach(function (s, r) {
+      s.forEach(function (id) { if (types.get(id) === 'apparition') apparitions++; });
+      if (econome.has(r)) economes.push(s);
+    });
+    return {
+      tailles: Array.from(groupes.values()).map(function (s) { return s.size; }).sort(function (a, b) { return b - a; }),
+      apparitions: apparitions, groupes: Array.from(groupes.values()), economes: economes
+    };
+  }
+
+  /** Tuile d'une case du graphe (« col,lig:id ») ; null pour une jonction. */
+  function tuileDuNoeud(id) { var m = /^(\d+),(\d+):/.exec(id); return m ? { col: +m[1], lig: +m[2] } : null; }
+
+  /**
+   * Cases reliées par un RACCOURCI : arête du graphe entre deux cases d'apparition de tuiles différentes (raccourci de coin et de
+   * bord, docs/20 D5). Le raccourci compte comme une zone d'intérêt pour le rythme (docs/18, réponse 3 sur la révision « centrales ouvertes »).
+   */
+  function casesRaccourci(g) {
+    var res = new Set();
+    g.cases.forEach(function (c, id) {
+      if (c.type !== 'apparition') return;
+      var t = tuileDuNoeud(id);
+      g.voisins.get(id).forEach(function (w) {
+        var cw = g.cases.get(w), tw = tuileDuNoeud(w);
+        if (cw && cw.type === 'apparition' && tw && (tw.col !== t.col || tw.lig !== t.lig)) { res.add(id); res.add(w); }
+      });
+    });
+    return res;
+  }
+
+  /**
+   * Rythme du plateau (docs/18 ; mesure STRICTE de docs/44, raccourci compté comme zone d'intérêt, docs/18 réponse 3).
+   * Zones d'intérêt : les villes, les cases d'un réseau de passages qui relie au moins 2 cases ET économise un pas (reseauxPassages),
+   * et les cases reliées par un raccourci (casesRaccourci).
+   *  - distMax : plus grande distance d'une case sans zone à la zone la plus proche ;
+   *  - chaine : plus court chemin entre deux zones A et B qui ne passe par aucune autre zone et qu'aucun autre itinéraire ne
+   *    raccourcit ; sa longueur est le nombre de cases sans zone traversées ; chaineMax = la plus longue du plateau (cible CHAINE_CIBLE).
+   * options : { large: true } tout réseau de passages de 2 cases ou plus (ancienne mesure, information) ;
+   *           { sansRaccourci: true } le raccourci ne compte pas (mesure stricte de docs/45, pour comparaison) ;
+   *           { reseaux } résultat de reseauxPassages déjà calculé.
+   * Renvoie { zones, distMax, repartition, injoignables, chaineMax, chaine: [ids], casesPassage: [ids], casesRaccourci: [ids], plusLoin: [ids] }.
+   */
+  function rythme(doc, g, options) {
+    options = options || {};
+    var zones = new Set(g.villes), rs = options.reseaux || reseauxPassages(doc), raccourcis = options.sansRaccourci ? new Set() : casesRaccourci(g);
+    var passages = new Set();
+    (options.large ? rs.groupes : rs.economes).forEach(function (grp) {
+      if (grp.size >= 2) grp.forEach(function (id) { if (g.voisins.has(id)) { zones.add(id); passages.add(id); } });
+    });
+    raccourcis.forEach(function (id) { zones.add(id); });
+    var d = new Map(), file = [];
+    zones.forEach(function (z) { d.set(z, 0); file.push(z); });
+    for (var q = 0; q < file.length; q++) {
+      var x = file[q];
+      if (q >= zones.size && g.villes.has(x)) continue;
+      g.voisins.get(x).forEach(function (y) { if (!d.has(y)) { d.set(y, d.get(x) + 1); file.push(y); } });
+    }
+    var repartition = {}, distMax = 0, injoignables = 0;
+    g.noeuds.forEach(function (id) {
+      if (zones.has(id)) return;
+      if (!d.has(id)) { injoignables++; return; }
+      var v = d.get(id);
+      repartition[v] = (repartition[v] || 0) + 1;
+      distMax = Math.max(distMax, v);
+    });
+    var chaine = { longueur: 0, chemin: [] };
+    zones.forEach(function (s) {
+      var dr = new Map([[s, 0]]), pere = new Map(), f = [s];
+      for (var k = 0; k < f.length; k++) {
+        var y = f[k];
+        if (y !== s && zones.has(y)) continue;
+        g.voisins.get(y).forEach(function (w) { if (!dr.has(w)) { dr.set(w, dr.get(y) + 1); pere.set(w, y); f.push(w); } });
+      }
+      var dg = distances(g, s);
+      zones.forEach(function (t) {
+        if (t === s || !dr.has(t) || dg.get(t) !== dr.get(t)) return;
+        var n = dr.get(t) - 1;
+        if (n > chaine.longueur) {
+          var chemin = [t];
+          while (chemin[0] !== s) chemin.unshift(pere.get(chemin[0]));
+          chaine = { longueur: n, chemin: chemin };
+        }
+      });
+    });
+    return {
+      zones: zones.size, distMax: distMax, repartition: repartition, injoignables: injoignables,
+      chaineMax: chaine.longueur, chaine: chaine.chemin,
+      casesPassage: Array.from(passages), casesRaccourci: Array.from(raccourcis),
+      plusLoin: g.noeuds.filter(function (id) { return !zones.has(id) && d.get(id) === distMax; })
+    };
+  }
+
+  /**
+   * Zone d'un nœud pour l'équilibre des accès et les cases par moitié (docs/45) : 'vert', 'rouge' ou 'milieu'.
+   *  - case d'une tuile : camp de sa cellule ; rangée neutre du 5×5 = 'milieu' ;
+   *  - jonction (i, j) : 4×4 j = 1 vert, j = 2 milieu, j = 3 rouge ; 5×5 j = 1 vert, j = 2 et 3 milieu (elles bordent la rangée
+   *    neutre), j = 4 rouge.
+   */
+  function zoneDuNoeud(id, F) {
+    var N = F.GRILLE.lignes, demi = Math.floor(N / 2);
+    var m = /^J(\d+),(\d+)$/.exec(id);
+    if (m) { var j = +m[2]; return j < demi ? 'vert' : (j > N - demi ? 'rouge' : 'milieu'); }
+    var t = tuileDuNoeud(id);
+    return (t && F.campCellule(t.col, t.lig)) || 'milieu';
+  }
+
+  /** Flot maximal (sommets de capacité 1, sources illimitées) des `sources` vers l'ensemble `cible`, dans les nœuds `dans` ∪ cible. */
+  function flotVersEnsemble(g, sources, dans, cible) {
+    var ids = g.noeuds.filter(function (id) { return dans(id) || cible(id); }), index = new Map();
+    ids.forEach(function (id, n) { index.set(id, n); });
+    var N = ids.length, S = 2 * N, T = 2 * N + 1, tete = new Array(2 * N + 2).fill(-1), suiv = [], vers = [], cap = [];
+    function aj(a, b, c) { vers.push(b); cap.push(c); suiv.push(tete[a]); tete[a] = vers.length - 1; vers.push(a); cap.push(0); suiv.push(tete[b]); tete[b] = vers.length - 1; }
+    var INF = 1e6, src = new Set(sources);
+    ids.forEach(function (id, n) {
+      aj(2 * n, 2 * n + 1, src.has(id) ? INF : 1);
+      if (cible(id)) { aj(2 * n + 1, T, 1); return; } // une entrée du milieu compte une fois ; on ne la traverse pas
+      g.voisins.get(id).forEach(function (w) { if (index.has(w)) aj(2 * n + 1, 2 * index.get(w), 1); });
+    });
+    sources.forEach(function (s) { if (index.has(s)) aj(S, 2 * index.get(s), INF); });
+    var flot = 0;
+    for (;;) {
+      var pere = new Array(2 * N + 2).fill(-1), vu = new Array(2 * N + 2).fill(false), file = [S];
+      vu[S] = true;
+      for (var q = 0; q < file.length && !vu[T]; q++) {
+        for (var e = tete[file[q]]; e !== -1; e = suiv[e]) if (cap[e] > 0 && !vu[vers[e]]) { vu[vers[e]] = true; pere[vers[e]] = e; file.push(vers[e]); }
+      }
+      if (!vu[T]) break;
+      for (var v = T; v !== S; v = vers[pere[v] ^ 1]) { cap[pere[v]]--; cap[pere[v] ^ 1]++; }
+      flot++;
+    }
+    return flot;
+  }
+
+  /**
+   * Équilibre des accès au centre entre les deux camps (définition de docs/45).
+   *  - Milieu : 4×4 la rangée de jonctions j = 2 ; 5×5 la rangée neutre et les jonctions j = 2 et 3 (zoneDuNoeud).
+   *  - Portes d'un camp : arêtes du graphe entre un nœud du camp et un nœud du milieu (port, raccord ou réseau de passages).
+   *  - ecart = portes vertes − portes rouges (0 = équilibre) ; contacts : arêtes directes vert–rouge (servent les deux camps).
+   *  - chemins (sauf options.sansFlot) : nombre maximal de chemins sans case commune des apparitions du camp vers le milieu, dans
+   *    le camp (villes traversables) ; ecartChemins = vert − rouge.
+   * Renvoie { portes: {vert, rouge}, ecart, contacts, chemins?: {vert, rouge}, ecartChemins? }.
+   */
+  function accesCentre(doc, g, options) {
+    var F = M.formatDuDocument(doc), z = new Map();
+    g.noeuds.forEach(function (id) { z.set(id, zoneDuNoeud(id, F)); });
+    var portes = { vert: 0, rouge: 0 }, contacts = 0;
+    g.noeuds.forEach(function (a) {
+      g.voisins.get(a).forEach(function (b) {
+        if (a >= b) return;
+        var za = z.get(a), zb = z.get(b);
+        if (za === zb) return;
+        if (za === 'milieu' || zb === 'milieu') portes[za === 'milieu' ? zb : za]++;
+        else contacts++;
+      });
+    });
+    var res = { portes: portes, ecart: portes.vert - portes.rouge, contacts: contacts };
+    if (options && options.sansFlot) return res;
+    var milieu = function (id) { return z.get(id) === 'milieu'; };
+    res.chemins = {
+      vert: flotVersEnsemble(g, g.apparitions[1] || [], function (id) { return z.get(id) === 'vert'; }, milieu),
+      rouge: flotVersEnsemble(g, g.apparitions[2] || [], function (id) { return z.get(id) === 'rouge'; }, milieu)
+    };
+    res.ecartChemins = res.chemins.vert - res.chemins.rouge;
+    return res;
+  }
+
+  /**
+   * Cases par moitié (docs/18, réponse 2 sur la révision « centrales ouvertes ») : cases des tuiles par camp de leur cellule
+   * (rangée neutre du 5×5 à part) et jonctions-cases (jonctions sans ville) par zone (zoneDuNoeud).
+   * Renvoie { tuiles: {vert, rouge, neutre}, jonctions: {vert, rouge, milieu}, vert, rouge, ecart } avec vert / rouge = cases de la
+   * moitié (tuiles + jonctions-cases) et ecart = vert − rouge (0 = autant de cases de part et d'autre).
+   */
+  function casesParMoitie(doc, g) {
+    var F = M.formatDuDocument(doc), tuiles = { vert: 0, rouge: 0, neutre: 0 }, jonctions = { vert: 0, rouge: 0, milieu: 0 };
+    g.cases.forEach(function (c, id) { var t = tuileDuNoeud(id), camp = t && F.campCellule(t.col, t.lig); tuiles[camp || 'neutre']++; });
+    // comme compteursDuPlateau (controles.js) : une jonction-case ne compte que si ses 4 tuiles sont posées (docs/49)
+    var posees = doc && doc.plateau && Array.isArray(doc.plateau.tuiles) ? doc.plateau.tuiles : [];
+    function tuilePosee(col, lig) { return posees.some(function (t) { return t && t.col === col && t.lig === lig; }); }
+    g.jonctions.forEach(function (jn) {
+      if (jn.type !== 'ville' && tuilePosee(jn.i - 1, jn.j - 1) && tuilePosee(jn.i, jn.j - 1) && tuilePosee(jn.i - 1, jn.j) && tuilePosee(jn.i, jn.j)) jonctions[zoneDuNoeud(jn.id, F)]++;
+    });
+    var vert = tuiles.vert + jonctions.vert, rouge = tuiles.rouge + jonctions.rouge;
+    return { tuiles: tuiles, jonctions: jonctions, vert: vert, rouge: rouge, ecart: vert - rouge };
+  }
+
   PM.graphe = {
     NB_VILLES: NB_VILLES,
+    CHAINE_CIBLE: CHAINE_CIBLE,
     PORTS_VILLE_MIN: PORTS_VILLE_MIN,
     PORTS_JONCTION_MIN: PORTS_JONCTION_MIN,
     REPARTITION_VILLES_5X5: REPARTITION_VILLES_5X5,
@@ -506,7 +810,10 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     SEUIL_ECART: SEUIL_ECART,
     SEUIL_CINQ_CONTRE_DEUX: SEUIL_CINQ_CONTRE_DEUX,
     SEUIL_S: SEUIL_S,
-    SEUIL_S_INFORMATION: SEUIL_S_INFORMATION,
+    SEUIL_S_PAR_FORMAT: SEUIL_S_PAR_FORMAT,
+    SEUIL_S_INFORMATION_PAR_FORMAT: SEUIL_S_INFORMATION_PAR_FORMAT,
+    seuilS: seuilS,
+    seuilSInformation: seuilSInformation,
     SEUIL_BLOCAGE_ECART: SEUIL_BLOCAGE_ECART,
     CINQ_CONTRE_DEUX_BLOQUANT: CINQ_CONTRE_DEUX_BLOQUANT,
     NOM_JOUEUR: NOM_JOUEUR,
@@ -518,7 +825,13 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     equilibre: equilibre,
     goulets: goulets,
     profil: profil,
-    flancs: flancs
+    flancs: flancs,
+    reseauxPassages: reseauxPassages,
+    casesRaccourci: casesRaccourci,
+    rythme: rythme,
+    zoneDuNoeud: zoneDuNoeud,
+    accesCentre: accesCentre,
+    casesParMoitie: casesParMoitie
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = PM.graphe;

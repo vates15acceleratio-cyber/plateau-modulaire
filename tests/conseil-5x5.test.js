@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Tests de docs/36 : conseil conditionnel du 5×5 (joint à « 5 contre 2 » et S >= 5), information « ville sur une
+ * Tests de docs/36 : conseil conditionnel du 5×5 (joint à « 5 contre 2 » et à l’alerte S >= 7), information « ville sur une
  * jonction à moins de 3 ports », constante S unique, 4×4 inchangé.
  */
 const test = require('node:test');
@@ -42,11 +42,16 @@ function squeletteUneRangee(vs) {
   return n(1) === 2 && n(4) === 2 && (n(2) === 3 || n(3) === 3);
 }
 
-const doc5 = GEN.generer(CAT.nouveauDocument('5x5'), { graine: 'conseil', candidats: 6 }).doc;
+// graine choisie pour que les trois genres de placement portent des alertes (le plateau de la graine « conseil » est si équilibré
+// que le squelette 2 + 1 n'y donne jamais d'alerte, ce qui rendrait le test vide)
+const doc5 = GEN.generer(CAT.nouveauDocument('5x5'), { graine: 'conseil-2', candidats: 6 }).doc;
 
-test('constante S unique : 5, lue par le générateur et l’interface, aucun autre littéral de seuil', () => {
+test('seuils de S : rejet du générateur 5 (constante unique), alerte et information propres à chaque format, lus par l’interface', () => {
   assert.strictEqual(GR.SEUIL_S, 5);
   assert.strictEqual(PM.equilibre.EXPLICATION.includes('à partir de 5'), true);
+  assert.strictEqual(PM.equilibre.explication('4x4'), PM.equilibre.EXPLICATION);
+  assert.ok(PM.equilibre.explication('5x5').includes('à partir de 7 ; S = 5 ou 6 est une simple information'));
+  assert.ok(PM.equilibre.EXPLICATION.includes('S = 4 est une simple information'));
   const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'generateur.js'), 'utf8');
   assert.ok(/GR\.SEUIL_S\b/.test(src));
   assert.ok(!/provisoire/.test(src), 'le rejet S >= 5 n’est plus provisoire');
@@ -80,7 +85,7 @@ test('conseil 5×5 : le même message ne contient jamais le conseil du 4×4, et 
   const r4 = rng(9);
   const j4 = []; for (let j = 1; j <= 3; j++) for (let i = 1; i <= 3; i++) j4.push({ i, j });
   let trouve = false;
-  for (let g = 0; g < 20 && !trouve; g++) {
+  for (let g = 0; g < 200 && !trouve; g++) { // catalogue de docs/46 : « 5 contre 2 » rare (1 % des placements admissibles), recherche plus longue
     const doc4 = GEN.generer(CAT.nouveauDocument('4x4'), { graine: 'q' + g, candidats: 6 }).doc;
     for (let k = 0; k < 100; k++) {
       const e = GR.equilibre(doc4, { jetons: jetons(tirer(r4, j4, 7)) });

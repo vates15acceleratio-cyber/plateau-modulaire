@@ -93,3 +93,39 @@ Après les avis `28-avis-design-5x5.md` (design de jeu) et `29-avis-geometrie-5x
   - **Bords et coins** : **un passage au plus** par bord ou coin, jamais depuis la case d'apparition.
   - **Pas de paires miroir** : les tuiles doivent fonctionner dans les deux sens par rotation (moins de cartons) ; la paire B7 / B7m du 5×5 est à revoir dans la refonte.
   - Arbitrage de l'orchestrateur sur le reste : modèle et graphe selon `39` (pivots, passages, clique à 1 pas, aucun croisement) ; principes et familles de tuiles selon `38` ; les nouveaux catalogues sont **montrés à l'utilisateur en images avant les mesures**.
+
+## Réponses de l'utilisateur sur les catalogues organiques (2026-10-17, images du `42`)
+- **Pas de passage traversant** d'un côté au côté opposé, ni droit ni courbe : O4, O5 (4×4) et P4 (5×5) sortent.
+- **4×4 : un seul passage par centrale** : O2 et O3 sortent.
+- **Apparition reliée au passage d'une centrale voisine** (rencontre entre tuiles au niveau du plateau) : **acceptable**.
+- **Rythme plutôt que densité** (à la place du choix 75–77 / 78–80 en 5×5) : « éviter les longues chaînes de cases » ; sur les exemples, il y a parfois 6 cases d'affilée sans ville ni raccourci, soit autant de tours sans action. **Rester sur un déplacement sain d'environ 3 cases entre deux zones d'intérêt** (ville, passage) ; **la rapidité est plus intéressante** que la densité. Conséquence : moins de cases par tuile si nécessaire, et une mesure « plus longue chaîne de cases sans zone d'intérêt » à ajouter.
+
+## Réponses de l'utilisateur sur la révision « rythme » (2026-10-17, images du `44`)
+- **4×4** : « Les centrales doivent avoir plus de chemins ; cela crée trop de déséquilibre entre les deux camps ; il faut plus de routes aux coins. » Le 5×5 est un peu mieux équilibré, mais **les chemins vers le centre montrent un déséquilibre** entre les camps.
+- **5×5** : **garder 3 accès aux villes** et **réduire le nombre total de cases** ; **sur les centrales surtout, autoriser plus d'accès**.
+- Lecture de l'orchestrateur :
+  - les centrales doivent desservir **plus de coins** (jonctions, donc villes), 3 ou 4, par davantage de chemins, avec moins de cases de relais ;
+  - l'**équilibre des accès au centre** entre les deux camps devient un critère mesuré ;
+  - le plafond « 1 passage par centrale » en 4×4 reste en vigueur (non rouvert).
+
+## Réponses de l'utilisateur sur la révision « centrales ouvertes » (2026-10-17, `45`)
+1. **5×5 : plus de cases autorisées** pour retrouver la liberté de placement des villes : on ne vise plus « sous 78 » ; lecture de l'orchestrateur : 78 à 81 cases, avec plusieurs placements de villes admissibles et toujours 3 accès aux villes.
+2. **Pas de pose strictement symétrique** : « tant que ça crée de la diversité de gameplay, on peut avoir des chemins différents mais le même nombre de cases par moitié ». Lecture de l'orchestrateur : le générateur cherche **autant de cases dans la moitié verte que dans la moitié rouge** (rangée neutre à part en 5×5), avec des tuiles et des chemins libres de part et d'autre ; l'équilibre des accès au centre reste un critère.
+3. **4×4, chaînes de 4 le long du raccourci** : le **raccourci compte comme une zone d'intérêt** dans la mesure du rythme (option 2).
+4. **Q2 (Étoile à crochet) gardé.**
+5. **P3 (T sans case) n'est pas un traversant** : il porte des cases en plus ; il reste au catalogue.
+6. **Coin : K2 inchangé** (pas de coin plus léger).
+
+## Réponses de l'utilisateur après le branchement (2026-10-18, `46`)
+- **Jeu imprimé : imprimer davantage.** Les poses restent illimitées au générateur ; on augmente les exemplaires à imprimer pour que la plupart des plateaux générés se montent avec la boîte (cible de l'orchestrateur : au moins 90 % des plateaux générés, mesurés sur 200 par format).
+- **Anciens documents : proposer le nouveau catalogue** à l'ouverture (comme pour le passage v1 → v2) ; le document reste inchangé si l'utilisateur refuse.
+
+## Réponses de l'utilisateur aux mesures définitives des catalogues organiques (2026-10-18, `48`)
+1. **Seuil d'alerte S par format** : 4×4 inchangé (alerte S ≥ 5, information S = 4) ; **5×5 : alerte S ≥ 7, information S = 5 ou 6** (revirement assumé sur la constante commune du `36`) ; le générateur continue de rejeter S ≥ 5 dans les deux formats.
+2. **Goulets 5×5** : le générateur **préfère** les plateaux sans point d'articulation (préférence, pas rejet ; objectif ≈ 0 %).
+3. **4×4 : « jonctions variées » par défaut** (12 placements de villes au lieu de 3).
+4. **Rythme et accès au centre : information seulement**, jamais d'alerte ; texte « bien au-dessus de la cible » si chaîne ≥ 7 ou distMax ≥ 6.
+
+## Réponses de l'utilisateur à la revue de la branche `passages` (2026-10-18, `51`)
+- **Rejet de S au générateur** : comportement inchangé depuis la 3.04 : **5×5 : rejet de S ≥ 5 ; 4×4 : pas de rejet, classement des candidats par S** (sans effet pratique, S ≤ 1 sur les plateaux 4×4 générés). *Note de l'orchestrateur* : la phrase « le générateur continue de rejeter S ≥ 5 dans les deux formats » de la section précédente venait d'une question mal formulée par l'orchestrateur ; elle est remplacée par la présente.
+- **Format des documents** : un document dont un modèle a des passages ou des pivots est écrit en **`version: 3`** ; la 3.04 le refuse alors avec un message clair au lieu de perdre les passages sans prévenir. Les documents v1 et v2 s'ouvrent toujours.

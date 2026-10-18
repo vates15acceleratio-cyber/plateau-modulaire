@@ -1,5 +1,41 @@
 # Journal des modifications
 
+## [4.00.0] - 2026-10-18
+
+Majeure
+
+Nouvelle règle de déplacement : un passage sans case compte pour un seul déplacement, et les catalogues 4×4 et 5×5 sont entièrement remplacés par des tracés organiques. Les documents qui contiennent des passages s'enregistrent en version 3 du format, que la 3.04 refuse avec un message clair. Les documents 3.04 s'ouvrent avec la proposition du nouveau catalogue.
+
+### Ajouté
+- Passages sans case (courbes vertes) : virages en quart de tour et T par pivot, dans le modèle, le graphe, le rendu, le PDF (Q/C) et l'éditeur ; outil Passage (touche P) et pivots (Maj+clic) dans l'éditeur de tuiles.
+- Mesures d'équilibre du rythme, de l'accès et des moitiés de plateau.
+- Poids d'un modèle (entier de 1 à 999, facultatif) : il règle sa fréquence dans les plateaux aléatoires, les exemplaires restant le stock à imprimer. Un poids invalide est signalé en alerte, et le tirage retombe alors sur les exemplaires.
+- `PM.catalogue.precedent` et proposition du nouveau catalogue à l'ouverture d'un document 3.04 (fichier ou sauvegarde automatique) : « Garder mes tuiles » laisse le document tel quel, « Charger » remplace la bibliothèque.
+- Format de fichier version 3 pour les documents à passages ou pivots ; les versions 1 et 2 s'ouvrent toujours.
+- Recette S11 : démarrage depuis une sauvegarde automatique 3.04, en 4×4 puis en 5×5.
+
+### Modifié
+- Catalogue 4×4 entièrement remplacé : 6 modèles, 24 tuiles à imprimer (Q1, Q2, B1, B8, K2, K4), aucune case en impasse.
+- Catalogue 5×5 entièrement remplacé : 8 modèles, 37 tuiles à imprimer (U1, P1, P2, P3, P5, B1, B7, K2), aucune case en impasse ni mur.
+- Cibles de cases : environ 58 par plateau 4×4 (au lieu de 60 à 63) et 78 à 81 en 5×5 (cible 80).
+- Seuils de S par format : en 5×5, alerte dès 7 et information à 5 ou 6 ; en 4×4, inchangé (alerte à 5, information à 4). Ces seuils dépendent du format, pas du catalogue : un document 5×5 qui garde le catalogue 3.04 passe aussi à l'alerte dès 7, alors que la 3.04 alertait dès 5.
+- Le générateur rejette S ≥ 5 en 5×5 seulement, comme en 3.04 ; en 4×4 il classe les candidats par S.
+- Jonctions variées activées par défaut en 4×4.
+- Générateur : moitiés de même nombre de cases, orientation 4×4, affinage, préférence contre les goulets (points d'articulation) en 5×5.
+- Proposition du nouveau catalogue : même texte pour les documents version 1 et 3.04.
+
+### Corrigé
+- Alerte « 5 contre 2 » sans apparition : corrigée.
+- `casesParMoitie` sur un plateau incomplet : corrigé.
+- Test de rapidité du générateur : mesure le temps processeur (limite de 12 s) au lieu du temps écoulé, fragile quand les suites de tests tournent en parallèle.
+
+### Connu
+- La 3.04 perd `poids` sans prévenir : un document dont seul le poids est réglé reste en version 2.
+- Articulations en 4×4 : 1,5 % des plateaux.
+- Conseil 5×5 à remesurer.
+- Affichage mobile (375 px) dégradé, déjà présent avant cette version.
+- Format hexagonal en attente du feu vert de l'utilisateur.
+
 ## [3.04.0] - 2026-10-17
 
 Mineure

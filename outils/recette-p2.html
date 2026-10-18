@@ -195,7 +195,7 @@
       ctrl('boîte ouverte, titre « Exporter pour impression »', dialogueOuvert() && $('dialogue-titre').textContent === 'Exporter pour impression');
       ctrl('formulaire rempli (.pm-export)', !!contenu().querySelector('.pm-export .pm-export-formulaire'));
       var resume = contenu().querySelector('.pm-export-resume');
-      ctrl('résumé : 4 feuilles, 22 tuiles (catalogue, A3)', /4 feuille\(s\) : 22 tuile\(s\)/.test(resume.textContent), resume.textContent);
+      ctrl('résumé : 4 feuilles, 24 tuiles (catalogue livré, A3)', /4 feuille\(s\) : 24 tuile\(s\)/.test(resume.textContent), resume.textContent);
       ctrl('aucun avertissement avec le catalogue', contenu().querySelector('.pm-export-avertissement').textContent === '');
       var img = contenu().querySelector('img.pm-export-apercu');
       ctrl('aperçu : image avec adresse blob', img && /^blob:/.test(img.src) && !img.hidden, img && img.src.slice(0, 20));
@@ -206,7 +206,7 @@
         var bouton = contenu().querySelector('.pm-export-telecharger');
         ctrl('bouton Télécharger actif', bouton && !bouton.disabled);
         changer(radio('A4', 'format'), true);
-        ctrl('A4 : 11 feuilles, 22 tuiles', /11 feuille\(s\) : 22 tuile\(s\)/.test(resume.textContent), resume.textContent);
+        ctrl('A4 : 12 feuilles, 24 tuiles', /12 feuille\(s\) : 24 tuile\(s\)/.test(resume.textContent), resume.textContent);
         changer(radio('A3', 'format'), true);
         ctrl('retour A3 : 4 feuilles', /4 feuille\(s\)/.test(resume.textContent));
         changer(radio('posees', 'portee'), true);
@@ -226,8 +226,8 @@
     }
 
     function s1b_bibliothequeModifiee() {
-      titre('1b. Export : bibliothèque modifiée, modèle incomplet, nom hostile');
-      var doc = PM.catalogue.nouveauDocument();
+      titre('1b. Export : bibliothèque modifiée, modèle incomplet, nom hostile (ancien document : catalogue précédent, 13 modèles)');
+      var doc = PM.aidesV2.documentPrecedent('4x4');
       var hostile = '"><img src=x onerror=window.__pwn=1><script>window.__pwn=2<\/script>';
       doc.modeles.find(function (m) { return m.id === 'C1'; }).exemplaires = 3;
       doc.modeles.find(function (m) { return m.id === 'K2'; }).exemplaires = 2;
@@ -400,7 +400,7 @@
       ctrl('graine pré-remplie (6 chiffres), Appliquer inactif', /^\d{6}$/.test(champ.value) && bAppliquer.disabled, champ.value);
       ctrl('avertissement « le plateau actuel sera remplacé »', !!contenu().querySelector('.pm-generateur-avertissement'));
       var casesACocher = contenu().querySelectorAll('input[type=checkbox]');
-      ctrl('une seule option : « jonctions variées », décochée (plus de carrefours ni de villes traversables)', !contenu().querySelector('input[type=radio]') && casesACocher.length === 1 && !casesACocher[0].checked && /Jonctions variées/.test(contenu().querySelector('label[for="' + casesACocher[0].id + '"]').textContent));
+      ctrl('une seule option : « jonctions variées », cochée par défaut (plus de carrefours ni de villes traversables)', !contenu().querySelector('input[type=radio]') && casesACocher.length === 1 && casesACocher[0].checked && /Jonctions variées/.test(contenu().querySelector('label[for="' + casesACocher[0].id + '"]').textContent));
       ctrl('explication : jonctions-cases dans la rangée centrale', /rangée centrale/.test(texteDialogue()));
       ctrl('explication : 7 villes à 3 cases d\'écart, cases chemin', /7 villes à 3 cases d'écart/.test(texteDialogue()) && /cases chemin/.test(texteDialogue()));
       champ.value = 'recette';
@@ -450,7 +450,7 @@
         reset(PM.catalogue.nouveauDocument('5x5'));
         cliquer(boutonParTexte($('controles'), 'Plateau aléatoire'));
         ctrl('5×5 : pas d\'option « jonctions variées » (cases à cocher absentes)', contenu().querySelectorAll('input[type=checkbox]').length === 0);
-        ctrl('5×5 : explication des villes en 2-3-2 et des B1', /2-3-2/.test(texteDialogue()) && /B1/.test(texteDialogue()) && !/rangée centrale/.test(texteDialogue()));
+        ctrl('5×5 : explication des villes en 2-3-2, des 78 à 81 cases et des moitiés', /2-3-2/.test(texteDialogue()) && /78 à 81 cases/.test(texteDialogue()) && /moitié verte/.test(texteDialogue()) && !/rangée centrale/.test(texteDialogue()));
         contenu().querySelector('.pm-generateur-graine').value = 'recette-5x5';
         cliquer(boutonParTexte(contenu(), 'Générer'));
         return attendre(2500);
@@ -462,8 +462,9 @@
         var d5 = etat.doc(), ligne = function (j) { return d5.plateau.jetons.filter(function (x) { return x.j === j; }).length; };
         var nB1 = d5.plateau.tuiles.filter(function (t) { return t.modeleId === 'B1'; }).length;
         ctrl('5×5 appliqué : 25 tuiles, 7 villes en 2-3-2', d5.grille === '5x5' && d5.plateau.tuiles.length === 25 && ligne(1) === 2 && ligne(2) + ligne(3) === 3 && ligne(4) === 2);
-        ctrl('5×5 appliqué : 5 ou 6 B1, toutes les villes à 3 ports au moins, aucune jonction à moins de 2 ports',
-          (nB1 === 5 || nB1 === 6) && d5.plateau.jetons.every(function (x) { return M.portsJonction(d5, x.i, x.j).ports >= 3; }) && M.jonctionsMalReliees(d5).length === 0, String(nB1));
+        var nCases = d5.plateau.tuiles.reduce(function (s, t) { return s + M.modeleParId(d5, t.modeleId).cases.length; }, 0) + 9;
+        ctrl('5×5 appliqué : au plus 6 B1, 78 à 81 cases, toutes les villes à 3 ports au moins, aucune jonction à moins de 2 ports',
+          nB1 <= 6 && nCases >= 78 && nCases <= 81 && d5.plateau.jetons.every(function (x) { return M.portsJonction(d5, x.i, x.j).ports >= 3; }) && M.jonctionsMalReliees(d5).length === 0, nB1 + ' B1, ' + nCases + ' cases');
         ctrl('5×5 appliqué : plateau affiché (25 tuiles, 7 villes), contrôles sans alerte d\'équilibre', $('assemblage').querySelectorAll('.pm-assemblage-occupee').length === 25 && $('assemblage').querySelectorAll('.pm-assemblage-jeton').length === 7 &&
           !/très déséquilibré|Score S à surveiller|Première ville inégale|Écart de distance|Villes trop proches|Jonctions mal reliées/.test($('controles').textContent));
         PM.dialogue.fermer();

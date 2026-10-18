@@ -18,21 +18,54 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
 
   var GR = PM.graphe;
 
-  /** Conseil propre au 4×4 (deux jonctions-cases) : absent du rapport d'un plateau 5×5. */
+  /** Conseil de pose À LA MAIN propre au 4×4 (deux jonctions-cases) : absent du rapport d'un plateau 5×5. Il reste juste (0 % de « 5 contre 2 » dans la rangée centrale, docs/48), mais le générateur ne le suit plus par défaut (12 paires de jonctions variées équilibrées, docs/51 remarque 11). */
   var CONSEIL_4X4 = 'Pour éviter « 5 contre 2 » en 4×4, placez les deux jonctions-cases (sans ville) dans la rangée centrale. ';
-  var EXPLICATION = 'Pour chaque joueur (vert, rouge), on mesure en pas la distance de chaque ville à sa case d\'apparition la plus proche, ' +
-    'puis on trie les 7 distances. Plateau très déséquilibré (erreur) : un joueur plus proche de 5 villes ou plus (« 5 contre 2 ») ' +
-    'ou plus de ' + GR.SEUIL_BLOCAGE_ECART + ' pas d\'écart à un rang de 1 à 7. Alerte : plus de ' + GR.SEUIL_ECART + ' pas d\'écart à un rang. ' +
-    'Le score S est la somme de ces écarts sur les 7 rangs (à surveiller à partir de ' + GR.SEUIL_S + ' ; S = ' + GR.SEUIL_S_INFORMATION + ' est une simple information). ' +
-    CONSEIL_4X4 +
-    'La première ville doit être à la même distance pour les deux joueurs. Une ville n\'est qu\'une destination : on ne la traverse pas.';
+  var DIST_MAX_TRES_HAUTE = 6; // distMax à partir duquel le rythme est « bien au-dessus de la cible » (information seulement, docs/48 § 4)
 
-  /** Analyse complète : graphe, résultat d'équilibre et goulets des deux joueurs (villes non traversables). */
+  /** Texte d'explication du rapport pour le format (« 4x4 » par défaut) : les seuils de S sont propres à chaque format (docs/18, docs/48). */
+  function explicationDe(formatId) {
+    var id = formatId === '5x5' ? '5x5' : '4x4';
+    var info = GR.seuilSInformation(id), alerte = GR.seuilS(id);
+    return 'Pour chaque joueur (vert, rouge), on mesure en pas la distance de chaque ville à sa case d\'apparition la plus proche, ' +
+      'puis on trie les 7 distances. Plateau très déséquilibré (erreur) : un joueur plus proche de 5 villes ou plus (« 5 contre 2 ») ' +
+      'ou plus de ' + GR.SEUIL_BLOCAGE_ECART + ' pas d\'écart à un rang de 1 à 7. Alerte : plus de ' + GR.SEUIL_ECART + ' pas d\'écart à un rang. ' +
+      'Le score S est la somme de ces écarts sur les 7 rangs (à surveiller à partir de ' + alerte + ' ; S = ' + info + (alerte - 1 > info ? ' ou ' + (alerte - 1) : '') + ' est une simple information). ' +
+      (id === '4x4' ? CONSEIL_4X4 : '') +
+      'La première ville doit être à la même distance pour les deux joueurs. Une ville n\'est qu\'une destination : on ne la traverse pas.';
+  }
+  var EXPLICATION = explicationDe('4x4');
+
+  /**
+   * Analyse complète : graphe, résultat d'équilibre, goulets des deux joueurs (villes non traversables) et, en information
+   * (docs/18, docs/45, docs/46), rythme (PM.graphe.rythme), accès au centre (PM.graphe.accesCentre) et cases par moitié
+   * (PM.graphe.casesParMoitie).
+   */
   function analyser(doc, options) {
     options = options || {};
     var graphe = GR.construire(doc, options);
     var resultat = GR.equilibre(doc, Object.assign({}, options, { graphe: graphe }));
-    return { grille: PM.modele.formatDuDocument(doc).id, graphe: graphe, resultat: resultat, goulets: { 1: GR.goulets(graphe, 1), 2: GR.goulets(graphe, 2) } };
+    return {
+      grille: PM.modele.formatDuDocument(doc).id, graphe: graphe, resultat: resultat, goulets: { 1: GR.goulets(graphe, 1), 2: GR.goulets(graphe, 2) },
+      rythme: GR.rythme(doc, graphe), acces: GR.accesCentre(doc, graphe), moities: GR.casesParMoitie(doc, graphe)
+    };
+  }
+
+  /**
+   * Lignes d'information sur le rythme, l'accès au centre et les cases par moitié (jamais des alertes) ; [] si l'analyse ne les a pas
+   * (analyse construite à la main). Rangée neutre et jonctions du milieu à part.
+   */
+  function lignesOrganiques(analyse) {
+    var ry = analyse.rythme, ac = analyse.acces, mo = analyse.moities, res = [];
+    if (!ry || !ac || !mo) return res;
+    var est5x5 = analyse.grille === '5x5';
+    var tresHaut = ry.chaineMax >= 2 * GR.CHAINE_CIBLE + 1 || ry.distMax >= DIST_MAX_TRES_HAUTE; // chaîne >= 7 ou distMax >= 6 : information seulement
+    res.push('Rythme : au plus ' + ry.chaineMax + ' case(s) d’affilée sans zone d’intérêt (ville, passage sans case qui fait gagner un pas, raccourci du pourtour) ; cible ' +
+      GR.CHAINE_CIBLE + ' ou moins' + (tresHaut ? ' (bien au-dessus de la cible).' : (ry.chaineMax > GR.CHAINE_CIBLE ? ' (au-dessus de la cible).' : '.')) + ' Distance maximale d’une case à une zone : ' + ry.distMax + ' pas.');
+    res.push('Accès au centre (' + (est5x5 ? 'rangée neutre et jonctions qui la bordent' : 'rangée de jonctions du milieu') + ') : ' + ac.portes.vert + ' porte(s) côté vert, ' +
+      ac.portes.rouge + ' côté rouge (écart ' + ac.ecart + ') ; chemins indépendants depuis les apparitions : vert ' + ac.chemins.vert + ', rouge ' + ac.chemins.rouge + '.');
+    res.push('Cases par moitié : vert ' + mo.vert + ', rouge ' + mo.rouge + (mo.ecart ? ' (écart ' + mo.ecart + ')' : ' (égales)') + ' ; à part : ' +
+      (est5x5 ? mo.tuiles.neutre + ' sur la rangée neutre et ' : '') + mo.jonctions.milieu + ' jonction(s)-case(s) du milieu.');
+    return res;
   }
 
   function texteDistance(d) { return d === null || d === undefined ? '—' : (isFinite(d) ? String(d) : '∞'); }
@@ -42,7 +75,8 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
    * Modèle de présentation (sans DOM) :
    *  { explication, complet, blocages: [texte], lacunes: [texte], rangs: [{rang, d1, d2, ecart, fort, compte}],
    *    ecartRang (rangs 1 à 4, information), ecartMax7 (rangs 1 à 7), partage: {j1, j2, egalite}, tempo: [{pas, j1, j2}], premiere: {j1, j2, ecart},
-   *    goulets: [{ville, j1, j2, faible}], articulations: {1: [texte], 2: [texte]}, alertes: [texte], informations: [texte] }
+   *    goulets: [{ville, j1, j2, faible}], articulations: {1: [texte], 2: [texte]}, alertes: [texte], informations: [texte],
+   *    organique: [texte] (rythme, accès au centre, cases par moitié : information) }
    */
   function rapport(analyse) {
     var r = analyse.resultat, seuil = GR.SEUIL_ECART;
@@ -67,7 +101,8 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     return {
       S: r.S, scoreTexte: r.S === null ? '—' : String(r.S), aSurveiller: !!r.aSurveiller, sInformation: !!r.sInformation,
       villesA4: { j1: r.villesA4[1], j2: r.villesA4[2], ecart: r.villesA4.ecart },
-      explication: analyse.grille === '5x5' ? EXPLICATION.replace(CONSEIL_4X4, '') : EXPLICATION,
+      explication: explicationDe(analyse.grille),
+      seuilS: GR.seuilS(analyse.grille), seuilSInformation: GR.seuilSInformation(analyse.grille),
       complet: r.complet,
       blocages: r.blocages.map(function (b) { return b.message; }),
       lacunes: r.lacunes.slice(),
@@ -80,7 +115,8 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       goulets: goulets,
       articulations: { 1: articulations(g1), 2: articulations(g2) },
       alertes: r.alertes.map(function (a) { return a.message; }),
-      informations: (r.informations || []).map(function (a) { return a.message; })
+      informations: (r.informations || []).map(function (a) { return a.message; }),
+      organique: lignesOrganiques(analyse)
     };
   }
 
@@ -173,6 +209,15 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       racine.appendChild(sInfo);
     }
 
+    // Rythme, accès au centre, cases par moitié (information, docs/46)
+    if (m.organique.length) {
+      var sOrg = section(doc, 'Rythme, accès et moitiés (information)');
+      var lOrg = el(doc, 'ul', 'pm-equilibre-organique');
+      m.organique.forEach(function (t) { lOrg.appendChild(el(doc, 'li', 'pm-equilibre-note', t)); });
+      sOrg.appendChild(lOrg);
+      racine.appendChild(sOrg);
+    }
+
     // Distances triées
     var sDist = section(doc, 'Distances des villes (en pas), triées');
     if (m.rangs.length) {
@@ -185,7 +230,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
         ? 'Écart maximal aux rangs 1 à 7 : non calculable (ville manquante ou inaccessible).'
         : 'Écart maximal aux rangs 1 à 7 : ' + m.ecartMax7 + (m.ecartMax7 > GR.SEUIL_ECART ? ' (supérieur à ' + GR.SEUIL_ECART + ').' : '.')));
       var pS = el(doc, 'p', 'pm-equilibre-score' + (m.aSurveiller ? ' pm-equilibre-surveiller' : ''),
-        'Score S (somme des écarts sur les 7 rangs) : ' + m.scoreTexte + (m.aSurveiller ? ' : à surveiller (' + GR.SEUIL_S + ' ou plus).' : (m.sInformation ? ' (information : ' + GR.SEUIL_S_INFORMATION + ', sans alerte).' : '.')));
+        'Score S (somme des écarts sur les 7 rangs) : ' + m.scoreTexte + (m.aSurveiller ? ' : à surveiller (' + m.seuilS + ' ou plus).' : (m.sInformation ? ' (information : à partir de ' + m.seuilSInformation + ', sans alerte).' : '.')));
       sDist.appendChild(pS);
     } else {
       sDist.appendChild(el(doc, 'p', 'pm-equilibre-note', 'Aucune distance à afficher : il faut des villes et des apparitions reliées.'));
@@ -237,7 +282,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     return dessiner(contenu, etat.doc());
   }
 
-  PM.equilibre = { analyser: analyser, rapport: rapport, remplir: remplir, ouvrir: ouvrir, EXPLICATION: EXPLICATION };
+  PM.equilibre = { analyser: analyser, rapport: rapport, remplir: remplir, ouvrir: ouvrir, EXPLICATION: EXPLICATION, explication: explicationDe };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = PM.equilibre;
 })();

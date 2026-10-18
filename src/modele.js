@@ -12,6 +12,9 @@
  *    rotation libre, rotation suggérée pour un bord ou un coin sur le pourtour ;
  *  - jetons : villes seulement ('capture') ; une jonction sans ville est une case chemin (voir graphe.js).
  *
+ * Passages sans case (docs/18 fin, docs/39) : tableaux facultatifs `pivots` [{id, x, y}] et `passages` [{id, a, b, courbe?}]
+ * (extrémités case, raccord ou pivot) ; absents = vides, les anciens modèles sont inchangés. Leurs raccords entrent dans le masque.
+ *
  * Un modèle ne stocke PAS de masque : les masques `raccords` (12 bits) et
  * `portsCoin` (4 bits) sont calculés à partir des chemins (masquesDuModele).
  */
@@ -115,12 +118,81 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return res;
   }
 
-  /** Masques calculés à partir des chemins : { raccords (12 bits), portsCoin (4 bits) }. */
+  /* ------------------------------------------------------------------ */
+  /* Passages sans case (docs/18 fin, docs/39) : fonctions à part, les    */
+  /* fonctions des chemins ci-dessus ne les voient pas.                   */
+  /* ------------------------------------------------------------------ */
+
+  /** Extrémité de passage bien formée (case, raccord, pivot ou coin : le coin est reconnu pour être refusé par la validation). */
+  function extremitePassageValide(e) {
+    var t = G.typeExtremitePassage(e);
+    if (t === 'case') return estId(e['case']);
+    if (t === 'pivot') return estId(e.pivot);
+    if (t === 'raccord') return raccordValide(e.raccord);
+    if (t === 'coin') return estEntier(e.coin) && e.coin >= 0 && e.coin <= 3;
+    return false;
+  }
+
+  /** Passages dont les deux extrémités sont bien formées. */
+  function passagesBienFormes(modele) {
+    return tab(modele && modele.passages).filter(function (p) { return estObjet(p) && extremitePassageValide(p.a) && extremitePassageValide(p.b); });
+  }
+
+  /** Itérateur sur les extrémités des passages bien formés : fn(extremite, type, passage). */
+  function pourChaqueExtremitePassage(modele, fn) {
+    passagesBienFormes(modele).forEach(function (p) {
+      [p.a, p.b].forEach(function (e) { fn(e, G.typeExtremitePassage(e), p); });
+    });
+  }
+
+  /**
+   * Réseaux de passages, construits comme relierPassages de graphe.js : seuls les pivots et les raccords sont fusionnés,
+   * les cases sont seulement rattachées (une case à deux passages appartient à deux réseaux, comme dans le graphe où
+   * elle ne rapproche pas ses deux voisins). Renvoie { reseaux: [{ cases: [id], pivots: [id], raccords: n, passages: [passage] }] }.
+   * Pour case_isolee et reseau_sans_sortie, la fusion à travers les cases se fait en réunissant les cases de chaque réseau.
+   */
+  function reseauxDePassages(modele) {
+    var parent = dict(), reseaux = [];
+    function racine(x) {
+      if (parent[x] === undefined) parent[x] = x;
+      while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }
+      return x;
+    }
+    function cle(e) {
+      var t = G.typeExtremitePassage(e);
+      return t === 'pivot' ? 'pivot:' + e.pivot : t === 'raccord' ? 'raccord:' + e.raccord.cote + ':' + e.raccord.pos : null;
+    }
+    var passages = passagesBienFormes(modele).filter(function (p) { return G.typeExtremitePassage(p.a) !== 'coin' && G.typeExtremitePassage(p.b) !== 'coin'; });
+    var cles = passages.map(function (p, i) {
+      var ka = cle(p.a), kb = cle(p.b);
+      if (ka && kb) parent[racine(ka)] = racine(kb);
+      return ka || kb || 'seul:' + i; // case - case (refusé par ailleurs) : réseau à lui seul
+    });
+    var parRacine = dict();
+    passages.forEach(function (p, i) {
+      var r = racine(cles[i]);
+      var reseau = parRacine[r];
+      if (!reseau) { reseau = parRacine[r] = { cases: [], pivots: [], raccords: 0, passages: [] }; reseaux.push(reseau); }
+      reseau.passages.push(p);
+      [p.a, p.b].forEach(function (e) {
+        var t = G.typeExtremitePassage(e);
+        if (t === 'case' && reseau.cases.indexOf(e['case']) < 0) reseau.cases.push(e['case']);
+        else if (t === 'pivot' && reseau.pivots.indexOf(e.pivot) < 0) reseau.pivots.push(e.pivot);
+        else if (t === 'raccord') reseau.raccords++;
+      });
+    });
+    return { reseaux: reseaux };
+  }
+
+  /** Masques calculés à partir des chemins et des passages : { raccords (12 bits), portsCoin (4 bits) }. */
   function masquesDuModele(modele) {
     var raccords = 0, portsCoin = 0;
     pourChaqueExtremite(modele, function (e, t) {
       if (t === 'raccord') raccords |= 1 << G.bitRaccord(e.raccord.cote, e.raccord.pos);
       else if (t === 'coin') portsCoin |= 1 << e.coin;
+    });
+    pourChaqueExtremitePassage(modele, function (e, t) {
+      if (t === 'raccord') raccords |= 1 << G.bitRaccord(e.raccord.cote, e.raccord.pos);
     });
     return { raccords: raccords, portsCoin: portsCoin };
   }
@@ -175,6 +247,11 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   function refCoin(k) { return { type: 'coin', id: k }; }
   function refRaccord(r, ch) { return { type: 'raccord', id: r.cote + ':' + r.pos, cote: r.cote, pos: r.pos, chemin: ch && ch.id }; }
 
+  /** Borne du poids de tirage, la même qu'à la lecture d'un fichier (sauvegarde.js, LIMITES.exemplaires). */
+  var POIDS_MAX = 999;
+  /** Un poids de tirage est un entier de 1 à POIDS_MAX ; tout autre `poids` est ignoré par le tirage (docs/51, remarque 5). */
+  function poidsValide(p) { return estEntier(p) && p >= 1 && p <= POIDS_MAX; }
+
   /** Phrase commune aux alertes R1 à R4 (arbitrage de l'orchestrateur, docs/20). */
   var RISQUE_ECART = 'cette tuile peut rapprocher deux villes à moins de 3 cases';
 
@@ -199,6 +276,10 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     if (!estEntier(m.exemplaires) || m.exemplaires < 0) {
       e.push(err('exemplaires_invalides', 'Le nombre d\'exemplaires doit être un entier positif ou nul.', refModele(m)));
     }
+    // Alerte, pas erreur (docs/51, remarque 5) : poidsTirage retombe de lui-même sur les exemplaires, le modèle reste posable et tiré
+    if (m.poids !== undefined && !poidsValide(m.poids)) {
+      e.push(alerte('poids_invalide', 'Le poids de tirage doit être un entier de 1 à ' + POIDS_MAX + ' (ou absent) : sinon les exemplaires font le poids.', refModele(m)));
+    }
     var vus = dict();
     function verifier(el, type) {
       if (!estObjet(el)) return;
@@ -215,6 +296,8 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     }
     tab(m.cases).forEach(function (c) { verifier(c, 'case'); });
     tab(m.chemins).forEach(function (c) { verifier(c, 'chemin'); });
+    tab(m.pivots).forEach(function (c) { verifier(c, 'pivot'); });
+    tab(m.passages).forEach(function (c) { verifier(c, 'passage'); });
     return e;
   });
 
@@ -359,6 +442,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     // Case reliée à rien
     var touchees = dict();
     pourChaqueExtremite(m, function (x, t) { if (t === 'case') touchees[x['case']] = true; });
+    pourChaqueExtremitePassage(m, function (x, t) { if (t === 'case') touchees[x['case']] = true; });
     cases.forEach(function (c) {
       if (!touchees[c.id]) e.push(err('case_isolee', 'La case ' + c.id + ' n\'est reliée à rien : ajoutez-lui un chemin.', refCase(c.id)));
     });
@@ -409,9 +493,22 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
       if (parent[ch.a['case']] === undefined || parent[ch.b['case']] === undefined) return;
       parent[racine(ch.a['case'])] = racine(ch.b['case']);
     });
+    // Les cases d'un même réseau de passages sont reliées entre elles ; un passage vers un raccord est une sortie
+    var passages = reseauxDePassages(m);
+    passages.reseaux.forEach(function (rs) {
+      var premiere = null;
+      rs.cases.forEach(function (id) {
+        if (parent[id] === undefined) return;
+        if (premiere === null) premiere = id; else parent[racine(id)] = racine(premiere);
+      });
+    });
     var sortie = dict(), membres = dict(), relie = dict();
     sortiesDesCases(m).forEach(function (s) { if (parent[s.caseId] !== undefined) sortie[racine(s.caseId)] = true; });
+    passages.reseaux.forEach(function (rs) {
+      if (rs.raccords > 0) rs.cases.forEach(function (id) { if (parent[id] !== undefined) sortie[racine(id)] = true; });
+    });
     pourChaqueExtremite(m, function (x, t) { if (t === 'case') relie[x['case']] = true; });
+    pourChaqueExtremitePassage(m, function (x, t) { if (t === 'case') relie[x['case']] = true; });
     ids.forEach(function (id) { var r = racine(id); (membres[r] = membres[r] || []).push(id); });
     Object.keys(membres).forEach(function (r) {
       var groupe = membres[r];
@@ -423,11 +520,268 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     var degre = dict(), typeDe = dict();
     tab(m.cases).forEach(function (c) { if (estObjet(c) && estId(c.id)) typeDe[c.id] = c.type; });
     pourChaqueExtremite(m, function (x, t) { if (t === 'case') degre[x['case']] = (degre[x['case']] || 0) + 1; });
+    pourChaqueExtremitePassage(m, function (x, t) { if (t === 'case') degre[x['case']] = (degre[x['case']] || 0) + 1; });
     var avecSortie = dict();
     sortiesDesCases(m).forEach(function (s) { avecSortie[s.caseId] = true; });
+    passages.reseaux.forEach(function (rs) { if (rs.raccords > 0) rs.cases.forEach(function (id) { avecSortie[id] = true; }); });
     ids.forEach(function (id) {
       if (degre[id] !== 1 || avecSortie[id] || typeDe[id] === 'apparition' || !sortie[racine(id)]) return;
       e.push(alerte('poche', 'La case ' + id + ' est une poche : un seul chemin y mène et elle n\'a ni raccord ni port, c\'est une impasse qui ne mène nulle part.', refCase(id)));
+    });
+    return e;
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* Règles des passages sans case (docs/39 ; décisions de docs/18)      */
+  /* Blocages : structure, coin, case-case, raccord partagé, boucle,      */
+  /* doublon, pivot de degré > 3, croisement, case trop proche, zone de   */
+  /* coin, passage hors tuile. Alertes : voir regles « alertes ».         */
+  /* ------------------------------------------------------------------ */
+
+  function refPassage(p) { return { type: 'passage', id: p && p.id }; }
+  function refPivot(id) { return { type: 'pivot', id: id }; }
+
+  /** Seuil de rayon de courbure (mm) en dessous duquel un passage est signalé (docs/39). */
+  var RAYON_PASSAGE_MIN = 10;
+  var TOLERANCE_RAYON = 0.5;
+  /** Écart (mm) entre le trait d'un passage et celui d'un chemin ou d'un autre passage, en dessous duquel on alerte (largeur du trait). */
+  var ECART_PASSAGE = 8;
+  /** Plafond des cases touchées par un même réseau de passages avant alerte. */
+  var MAX_CASES_RESEAU = 4;
+  /** Degré maximal d'un pivot (un T). */
+  var DEGRE_MAX_PIVOT = 3;
+
+  /** Distance entre deux segments [a, b] et [c, d] et un point où elle est atteinte : { d, w }. */
+  function distanceSegments(a, b, c, d) {
+    var x = intersectionSegments(a, b, c, d);
+    if (x) return { d: 0, w: x };
+    var meilleur = { d: Infinity, w: null };
+    [[a, c, d], [b, c, d], [c, a, b], [d, a, b]].forEach(function (q) {
+      var v = distancePointSegment(q[0], q[1], q[2]);
+      if (v < meilleur.d) meilleur = { d: v, w: q[0] };
+    });
+    return meilleur;
+  }
+
+  // Structure : pivots, extrémités, coin, case-case, inconnus, boucle, doublon, raccords partagés, degré des pivots, courbe
+  function structurePassages(m, F) {
+    var e = [], ids = dict(), pivots = dict(), vus = dict(), degre = dict(), raccordsPris = dict(), marge = F.MARGE_COUPE_CASE, demi = F.LARGEUR_CHEMIN / 2;
+    var casesPlacees = tab(m.cases).filter(function (c) { return estObjet(c) && estId(c.id) && estNombre(c.x) && estNombre(c.y) && estNombre(c.diametre); });
+    tab(m.cases).forEach(function (c) { if (estObjet(c) && estId(c.id)) ids[c.id] = true; });
+    pourChaqueExtremite(m, function (x, t) { if (t === 'raccord') raccordsPris[cleExtremite(x)] = 'chemin'; });
+    tab(m.pivots).forEach(function (pv) {
+      if (!estObjet(pv) || !estId(pv.id) || !estNombre(pv.x) || !estNombre(pv.y)) {
+        e.push(err('pivot_invalide', 'Position ou identifiant de pivot invalide.', refPivot(estObjet(pv) ? pv.id : undefined)));
+        return;
+      }
+      pivots[pv.id] = true;
+      if (pv.x < marge - EPS || pv.y < marge - EPS || pv.x > F.COTE - marge + EPS || pv.y > F.COTE - marge + EPS) {
+        e.push(err('pivot_hors_tuile', 'Pivot trop près du bord de la tuile (' + marge + ' mm de marge).', refPivot(pv.id)));
+      }
+      // le disque du pivot (largeur du trait) reste hors de la zone de coin et à 4 mm au moins du bord des cases
+      for (var k = 0; k < 4; k++) {
+        var K = F.pointCoin(k);
+        if (Math.hypot(pv.x - K.x, pv.y - K.y) < F.RAYON_ZONE_COIN + demi - EPS) {
+          e.push(err('pivot_zone_coin', 'Le pivot ' + pv.id + ' est dans la zone du coin ' + nomCoin(k) + ' (réservée au jeton et à la case de jonction).', refPivot(pv.id)));
+          break;
+        }
+      }
+      casesPlacees.forEach(function (c) {
+        if (Math.hypot(pv.x - c.x, pv.y - c.y) < c.diametre / 2 + 4 + demi - EPS) {
+          e.push(err('pivot_case', 'Le pivot ' + pv.id + ' est trop près de la case ' + c.id + ' (4 mm au moins entre le bord de la case et le trait).', { type: 'pivot', id: pv.id, cases: [c.id] }));
+        }
+      });
+    });
+    tab(m.passages).forEach(function (p) {
+      if (!estObjet(p) || !extremitePassageValide(p.a) || !extremitePassageValide(p.b)) {
+        e.push(err('passage_invalide', 'Une extrémité de passage est mal formée.', refPassage(estObjet(p) ? p : null)));
+        return;
+      }
+      var ta = G.typeExtremitePassage(p.a), tb = G.typeExtremitePassage(p.b), ka = G.cleExtremitePassage(p.a), kb = G.cleExtremitePassage(p.b);
+      if (ta === 'coin' || tb === 'coin') {
+        e.push(err('passage_coin', 'Un passage ne peut pas aller vers un coin : il relie des cases, des raccords et des pivots seulement.', refPassage(p)));
+        return;
+      }
+      if (ta === 'case' && tb === 'case') {
+        e.push(err('passage_case_case', 'Un passage ne relie pas deux cases directement : c\'est un chemin droit.', refPassage(p)));
+      }
+      [p.a, p.b].forEach(function (x, i) {
+        var t = i === 0 ? ta : tb;
+        if (t === 'case' && !ids[x['case']]) e.push(err('passage_inconnu', 'Un passage vise une case qui n\'existe pas.', refPassage(p)));
+        if (t === 'pivot' && !pivots[x.pivot]) e.push(err('passage_inconnu', 'Un passage vise un pivot qui n\'existe pas.', refPassage(p)));
+        if (t === 'pivot') degre[x.pivot] = (degre[x.pivot] || 0) + 1;
+        if (t === 'raccord') {
+          var k = G.cleExtremitePassage(x);
+          if (raccordsPris[k]) {
+            e.push(err('raccord_double', raccordsPris[k] === 'chemin'
+              ? 'Un raccord est utilisé par un chemin et par un passage.' : 'Un raccord est utilisé par deux passages.', refRaccord(x.raccord, p)));
+          }
+          raccordsPris[k] = 'passage';
+        }
+      });
+      if (ka === kb) e.push(err('passage_boucle', 'Un passage ne peut pas relier un point à lui-même.', refPassage(p)));
+      var cle = ka < kb ? ka + '|' + kb : kb + '|' + ka;
+      if (vus[cle]) e.push(err('passage_double', 'Deux passages relient les mêmes points.', refPassage(p)));
+      vus[cle] = true;
+      if (p.courbe !== undefined && !(estObjet(p.courbe) && estNombre(p.courbe.x) && estNombre(p.courbe.y))) {
+        e.push(err('passage_courbe', 'Le point de contrôle de la courbe est invalide.', refPassage(p)));
+      }
+    });
+    Object.keys(degre).forEach(function (id) {
+      if (degre[id] > DEGRE_MAX_PIVOT) {
+        e.push(err('pivot_degre', 'Un pivot porte au plus ' + DEGRE_MAX_PIVOT + ' branches (un T) : ' + degre[id] + ' passages y aboutissent.', refPivot(id)));
+      }
+    });
+    return e;
+  }
+  regles.push(structurePassages);
+
+  // Tracés des passages : hors tuile, zone de coin, case trop proche, croisements (erreurs) ; rayon et écart (alertes)
+  // Coût borné (fichier hostile, docs/41 B1) : sautée si la structure des passages a déjà des erreurs ; paires de traits
+  // éloignées écartées par leurs boîtes englobantes ; sortie au premier croisement d'une paire.
+  regles.push(function (m, F) {
+    var e = [], L = F.LARGEUR_CHEMIN, demi = L / 2;
+    var tp = G.tracesPassages(m, F);
+    if (!tp.length || structurePassages(m, F).length) return e;
+    var cases = tab(m.cases).filter(function (c) { return estObjet(c) && estId(c.id) && estNombre(c.x) && estNombre(c.y) && estNombre(c.diametre); });
+    var pivots = dict();
+    tab(m.pivots).forEach(function (pv) { if (estObjet(pv) && estId(pv.id) && estNombre(pv.x) && estNombre(pv.y)) pivots[pv.id] = pv; });
+    var chemins = G.tracesModele(m, F);
+    function segments(t, fn) { for (var s = 0; s + 1 < t.pts.length; s++) { if (fn(t.pts[s], t.pts[s + 1], s) === false) return; } }
+    tp.forEach(function (t) {
+      var hors = t.pts.some(function (p) { return p.x < -EPS || p.y < -EPS || p.x > F.COTE + EPS || p.y > F.COTE + EPS; });
+      if (hors) e.push(err('passage_hors_tuile', 'Ce passage sort de la tuile : rapprochez son point de contrôle.', refPassage(t)));
+      var zone = false;
+      for (var k = 0; k < 4 && !zone; k++) {
+        var K = F.pointCoin(k);
+        segments(t, function (a, b) {
+          if (distancePointSegment(K, a, b) < F.RAYON_ZONE_COIN + demi - EPS) { zone = true; return false; }
+        });
+        if (zone) e.push(err('passage_zone_coin', 'Ce passage entre dans la zone du coin ' + nomCoin(k) + ' (réservée au jeton et à la case de jonction).', refPassage(t)));
+      }
+      cases.forEach(function (c) {
+        if (t.cases.indexOf(c) >= 0) return;
+        var proche = false;
+        segments(t, function (a, b) {
+          if (distancePointSegment(c, a, b) < c.diametre / 2 + 4 + demi - EPS) { proche = true; return false; }
+        });
+        if (proche) e.push(err('passage_case', 'Ce passage passe trop près de la case ' + c.id + ' qu\'il ne relie pas.', { type: 'passage', id: t.id, cases: [c.id] }));
+      });
+      if (t.rayonMin < RAYON_PASSAGE_MIN - TOLERANCE_RAYON) { // le demi-cercle par défaut en 5×5 (rayon 10) sort à 9,92 mm après approximation cubique
+        e.push(alerte('passage_rayon', 'Ce passage tourne trop court (rayon de ' + (Math.round(t.rayonMin * 10) / 10) + ' mm, ' + RAYON_PASSAGE_MIN + ' mm au moins) : il sera difficile à lire.', refPassage(t)));
+      }
+    });
+    // Croisements et écarts entre deux traits (un passage et un passage ou un chemin)
+    function zonesCommunes(t, u) {
+      var disques = t.cases.filter(function (c) { return u.cases.indexOf(c) >= 0; }).map(function (c) { return { x: c.x, y: c.y, r: c.diametre / 2 }; });
+      var pts = (t.pivots || []).filter(function (id) { return (u.pivots || []).indexOf(id) >= 0 && pivots[id]; }).map(function (id) { return pivots[id]; });
+      return { disques: disques, pivots: pts };
+    }
+    function dansZone(z, p, margeDisque, rayonPivot) {
+      return z.disques.some(function (c) { return Math.hypot(p.x - c.x, p.y - c.y) <= c.r + margeDisque + EPS; }) ||
+        z.pivots.some(function (v) { return Math.hypot(p.x - v.x, p.y - v.y) <= rayonPivot; });
+    }
+    /** Morceaux du segment [a, b] hors des disques de la zone commune (rayon r + margeDisque autour des cases, rayonPivot autour des pivots). */
+    function horsZones(a, b, z, margeDisque, rayonPivot) {
+      var disques = z.disques.map(function (c) { return { x: c.x, y: c.y, r: c.r + margeDisque }; })
+        .concat(z.pivots.map(function (v) { return { x: v.x, y: v.y, r: rayonPivot }; }));
+      var morceaux = [[0, 1]], dx = b.x - a.x, dy = b.y - a.y, A = dx * dx + dy * dy;
+      if (A < 1e-12) return [];
+      disques.forEach(function (c) {
+        var fx = a.x - c.x, fy = a.y - c.y, B = 2 * (fx * dx + fy * dy), C = fx * fx + fy * fy - c.r * c.r, D = B * B - 4 * A * C;
+        if (D <= 0) return;
+        var t0 = (-B - Math.sqrt(D)) / (2 * A), t1 = (-B + Math.sqrt(D)) / (2 * A), suite = [];
+        morceaux.forEach(function (q) {
+          if (t1 <= q[0] || t0 >= q[1]) { suite.push(q); return; }
+          if (t0 > q[0]) suite.push([q[0], t0]);
+          if (t1 < q[1]) suite.push([t1, q[1]]);
+        });
+        morceaux = suite;
+      });
+      return morceaux.filter(function (q) { return q[1] - q[0] > 1e-9; }).map(function (q) {
+        return [{ x: a.x + dx * q[0], y: a.y + dy * q[0] }, { x: a.x + dx * q[1], y: a.y + dy * q[1] }];
+      });
+    }
+    function boite(t) {
+      var bx = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+      t.pts.forEach(function (p) { bx.x0 = Math.min(bx.x0, p.x); bx.y0 = Math.min(bx.y0, p.y); bx.x1 = Math.max(bx.x1, p.x); bx.y1 = Math.max(bx.y1, p.y); });
+      return bx;
+    }
+    function comparer(t, u) {
+      var bt = t.boite || (t.boite = boite(t)), bu = u.boite || (u.boite = boite(u));
+      if (bt.x0 > bu.x1 + ECART_PASSAGE || bu.x0 > bt.x1 + ECART_PASSAGE || bt.y0 > bu.y1 + ECART_PASSAGE || bu.y0 > bt.y1 + ECART_PASSAGE) return { croise: false, ecart: false };
+      var z = zonesCommunes(t, u), i, j;
+      for (i = 0; i + 1 < t.pts.length; i++) {
+        for (j = 0; j + 1 < u.pts.length; j++) {
+          var p = intersectionSegments(t.pts[i], t.pts[i + 1], u.pts[j], u.pts[j + 1]);
+          if (p && !dansZone(z, p, 0, 1)) return { croise: true, ecart: false };
+        }
+      }
+      // Écart mesuré sur les seules parties hors des zones communes : deux traits qui partent d'une même case (ou d'un
+      // même pivot, zone de 2 L) se rejoignent normalement dans la zone, mais pas au-delà (docs/41 C2)
+      var mu = [];
+      for (j = 0; j + 1 < u.pts.length; j++) mu = mu.concat(horsZones(u.pts[j], u.pts[j + 1], z, demi, 2 * L));
+      for (i = 0; i + 1 < t.pts.length; i++) {
+        var mt = horsZones(t.pts[i], t.pts[i + 1], z, demi, 2 * L);
+        for (var k = 0; k < mt.length; k++) {
+          for (var n = 0; n < mu.length; n++) {
+            if (distanceSegments(mt[k][0], mt[k][1], mu[n][0], mu[n][1]).d < ECART_PASSAGE - EPS) return { croise: false, ecart: true };
+          }
+        }
+      }
+      return { croise: false, ecart: false };
+    }
+    for (var a = 0; a < tp.length; a++) {
+      for (var b = a + 1; b < tp.length; b++) {
+        var r = comparer(tp[a], tp[b]);
+        if (r.croise) e.push(err('passages_croises', 'Deux passages se croisent : ils ne se rejoignent que par un pivot.', { type: 'passage', id: tp[a].id, ids: [tp[a].id, tp[b].id] }));
+        else if (r.ecart) e.push(alerte('passages_proches', 'Deux passages passent à moins de ' + ECART_PASSAGE + ' mm l\'un de l\'autre.', { type: 'passage', id: tp[a].id, ids: [tp[a].id, tp[b].id] }));
+      }
+      chemins.forEach(function (ch) {
+        var r2 = comparer(tp[a], ch);
+        if (r2.croise) e.push(err('passage_chemin_croise', 'Un passage croise le chemin ' + ch.id + '.', { type: 'passage', id: tp[a].id, ids: [tp[a].id] }));
+        else if (r2.ecart) e.push(alerte('passage_chemin_proche', 'Un passage passe à moins de ' + ECART_PASSAGE + ' mm du chemin ' + ch.id + '.', { type: 'passage', id: tp[a].id, ids: [tp[a].id] }));
+      });
+    }
+    return e;
+  });
+
+  // Alertes des passages : porteuse, apparition, plusieurs passages sur un bord ou un coin, pivots, grands réseaux, raccords extérieurs
+  regles.push(function (m) {
+    var e = [], gabarit = gabaritConnu(m.gabarit);
+    if (!tab(m.passages).length && !tab(m.pivots).length) return e;
+    var typeCase = dict(), porteuses = dict(), vus = dict();
+    tab(m.cases).forEach(function (c) { if (estObjet(c) && estId(c.id)) typeCase[c.id] = c.type; });
+    sortiesDesCases(m).forEach(function (s) { if (s.type === 'coin') porteuses[s.caseId] = true; });
+    pourChaqueExtremitePassage(m, function (x, t, p) {
+      if (t === 'case' && porteuses[x['case']] && !vus['p' + x['case']]) {
+        vus['p' + x['case']] = true;
+        e.push(alerte('porteuse_passage', 'La case ' + x['case'] + ' porte un port de coin et touche un passage : ' + RISQUE_ECART + '.', refCase(x['case'])));
+      }
+      if (t === 'case' && typeCase[x['case']] === 'apparition' && !vus['a' + x['case']]) {
+        vus['a' + x['case']] = true;
+        e.push(alerte('passage_apparition', 'La case d\'apparition ' + x['case'] + ' touche un passage : ' + RISQUE_ECART + '.', refCase(x['case'])));
+      }
+      if (t === 'raccord' && gabarit && G.GABARITS[gabarit].cotesExterieurs.indexOf(x.raccord.cote) >= 0) {
+        e.push(alerte('raccord_exterieur', 'Raccord de passage sur le côté ' + nomCote(x.raccord.cote) + ', extérieur pour ' + LIBELLE_GABARIT[gabarit] + ' : il sera face au vide.', refRaccord(x.raccord, p)));
+      }
+    });
+    var rp = reseauxDePassages(m);
+    if ((gabarit === 'bord' || gabarit === 'coin') && rp.reseaux.length > 1) {
+      e.push(alerte('passages_bord', 'Cette tuile de ' + (gabarit === 'bord' ? 'bord' : 'coin') + ' porte ' + rp.reseaux.length + ' réseaux de passages : un seul est prévu.', refModele(m)));
+    }
+    rp.reseaux.forEach(function (rs) {
+      if (rs.cases.length > MAX_CASES_RESEAU) {
+        e.push(alerte('reseau_passages_grand', 'Un réseau de passages touche ' + rs.cases.length + ' cases (plus de ' + MAX_CASES_RESEAU + ') : ces cases sont toutes voisines.',
+          { type: 'case', id: rs.cases[0], ids: rs.cases.slice() }));
+      }
+    });
+    var degre = dict();
+    pourChaqueExtremitePassage(m, function (x, t) { if (t === 'pivot') degre[x.pivot] = (degre[x.pivot] || 0) + 1; });
+    tab(m.pivots).forEach(function (pv) {
+      if (!estObjet(pv) || !estId(pv.id)) return;
+      var d = degre[pv.id] || 0;
+      if (d < DEGRE_MAX_PIVOT) e.push(alerte('pivot_degre_faible', 'Le pivot ' + pv.id + ' n\'a que ' + d + ' branche(s) : un pivot sert à ramifier en T (3 branches).', refPivot(pv.id)));
     });
     return e;
   });
@@ -456,10 +810,10 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return { complet: erreurs.length === 0, erreurs: erreurs, alertes: alertes };
   }
 
-  /** Premier identifiant libre parmi les cases et chemins du modèle : prefixe + 1, 2, 3... */
+  /** Premier identifiant libre parmi les cases, chemins, pivots et passages du modèle : prefixe + 1, 2, 3... */
   function nouvelId(modele, prefixe) {
     var pris = dict();
-    tab(modele && modele.cases).concat(tab(modele && modele.chemins)).forEach(function (el) {
+    tab(modele && modele.cases).concat(tab(modele && modele.chemins), tab(modele && modele.pivots), tab(modele && modele.passages)).forEach(function (el) {
       if (estObjet(el) && typeof el.id === 'string') pris[el.id] = true;
     });
     prefixe = typeof prefixe === 'string' && prefixe ? prefixe : 'x';
@@ -588,6 +942,16 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   function exemplairesValides(modele) {
     var n = modele && typeof modele === 'object' ? modele.exemplaires : undefined;
     return estEntier(n) && n >= 0 ? n : 0;
+  }
+
+  /**
+   * Poids de tirage d'un modèle dans le générateur : le champ facultatif `poids` (entier de 1 à 999, comme à la lecture d’un fichier) s’il est présent, sinon le nombre
+   * d'exemplaires. Le poids règle la fréquence du modèle dans les plateaux aléatoires ; les exemplaires sont le stock à imprimer.
+   * Un modèle à 0 exemplaire n'est jamais tiré, quel que soit son poids.
+   */
+  function poidsTirage(modele) {
+    var p = modele && typeof modele === 'object' ? modele.poids : undefined;
+    return poidsValide(p) ? p : exemplairesValides(modele);
   }
 
   function jonctionInterieure(i, j, F) {
@@ -852,7 +1216,9 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   /**
    * Éléments d'une tuile posée en repère plateau (mm), pour le graphe global :
    * { cases: [{ id, x, y, diametre, type, camp }], aretes: [[idA, idB]],
-   *   raccords: [{ cote, pos, caseId }], ports: [{ coin, caseId, i, j }] }.
+   *   raccords: [{ cote, pos, caseId }], ports: [{ coin, caseId, i, j }] }, plus, seulement si le modèle a des passages :
+   *   pivots: [{ id, x, y }] et passages: [{ id, a, b, pts }] (extrémités { case } | { pivot } | { raccord: { cote, pos } } avec le côté tourné ;
+   *   pts = polyligne en mm plateau). Les raccords des passages ne sont PAS dans `raccords` (un raccord de chemin désigne une seule case).
    * camp ('vert' | 'rouge' | null) : camp de la cellule pour une case d'apparition, null sinon.
    * Les ids de case sont globaux (« col,lig:idLocal »). Renvoie null si le modèle est absent.
    * Le raccord (cote, pos) d'une tuile fait face au raccord PM.geometrie.raccordEnFace(cote, pos) du voisin.
@@ -884,6 +1250,26 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
         res.ports.push({ coin: k, caseId: gid(caseId), i: jn.i, j: jn.j });
       }
     });
+    // Passages sans case (champs présents seulement s'il y en a : les anciens modèles gardent exactement leur résultat)
+    var pivotsOk = tab(m.pivots).filter(function (pv) { return estObjet(pv) && estId(pv.id) && estNombre(pv.x) && estNombre(pv.y); });
+    var traces = G.tracesPassages(m, F), ids = dict();
+    traces.forEach(function (t) { ids[t.id] = t; });
+    var passages = passagesBienFormes(m).filter(function (ps) {
+      return ids[ps.id] && G.typeExtremitePassage(ps.a) !== 'coin' && G.typeExtremitePassage(ps.b) !== 'coin';
+    });
+    if (pivotsOk.length || passages.length) {
+      function enPlateau(p) { var q = F.tournerPoint(p, rot); return { x: q.x + tuile.col * F.COTE, y: q.y + tuile.lig * F.COTE }; }
+      function extPlateau(x) {
+        var t = G.typeExtremitePassage(x);
+        if (t === 'case') return { 'case': gid(x['case']) };
+        if (t === 'pivot') return { pivot: gid(x.pivot) };
+        return { raccord: { cote: (x.raccord.cote + rot) % 4, pos: x.raccord.pos } };
+      }
+      res.pivots = pivotsOk.map(function (pv) { var q = enPlateau(pv); return { id: gid(pv.id), x: q.x, y: q.y }; });
+      res.passages = passages.map(function (ps) {
+        return { id: gid(ps.id), a: extPlateau(ps.a), b: extPlateau(ps.b), pts: ids[ps.id].pts.map(enPlateau) };
+      });
+    }
     return res;
   }
 
@@ -1009,6 +1395,9 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     jonctionDuCoin: jonctionDuCoin,
     PLAFOND_TUILES: PLAFOND_TUILES,
     exemplairesValides: exemplairesValides,
+    poidsValide: poidsValide,
+    POIDS_MAX: POIDS_MAX,
+    poidsTirage: poidsTirage,
     aUneApparition: aUneApparition,
     nouveauDocument: nouveauDocument,
     clonerDocument: clonerDocument,
