@@ -44,14 +44,17 @@ test('poids : poidsTirage ignore toute valeur qui n\'est pas un entier d\'au moi
   assert.equal(M.poidsTirage(null), 0);
 });
 
-test('poids : validerModele refuse 0, négatif, décimal, texte, NaN, null, Infinity ; accepte absent et entier ≥ 1', () => {
+test('poids : validerModele signale en alerte (jamais en erreur) 0, négatif, décimal, texte, NaN, null, Infinity, au-delà de 999 ; accepte absent et entier de 1 à 999', () => {
   const m = copie(modele(nouveau('4x4'), 'B1'));
   delete m.poids;
-  assert.ok(!M.validerModele(m, '4x4').erreurs.some((e) => e.code === 'poids_invalide'), 'absent');
-  for (const ok of [1, 2, 999, 100000]) { m.poids = ok; assert.ok(!M.validerModele(m, '4x4').erreurs.some((e) => e.code === 'poids_invalide'), String(ok)); }
-  for (const mauvais of [0, -1, 1.5, 'x', '3', NaN, Infinity, null, true, [2], {}]) {
+  const signale = () => { const v = M.validerModele(m, '4x4'); return { alerte: v.alertes.some((e) => e.code === 'poids_invalide'), erreur: v.erreurs.some((e) => e.code === 'poids_invalide'), complet: v.complet }; };
+  assert.equal(signale().alerte, false, 'absent');
+  for (const ok of [1, 2, 999]) { m.poids = ok; assert.equal(signale().alerte, false, String(ok)); assert.equal(M.poidsTirage(m), ok); }
+  for (const mauvais of [0, -1, 1.5, 'x', '3', NaN, Infinity, null, true, [2], {}, 1000, 100000, 1e15]) {
     m.poids = mauvais;
-    assert.ok(M.validerModele(m, '4x4').erreurs.some((e) => e.code === 'poids_invalide'), 'poids ' + String(mauvais));
+    const s = signale();
+    assert.ok(s.alerte && !s.erreur && s.complet, 'poids ' + String(mauvais) + ' : alerte seule, modèle toujours posable');
+    assert.equal(M.poidsTirage(m), m.exemplaires, 'poids ' + String(mauvais) + ' : le tirage retombe sur les exemplaires');
   }
 });
 
@@ -119,8 +122,8 @@ test('poids : réouverture après sauvegarde, exemplaires changés par l\'utilis
   }
 });
 
-test('poids hostile en mémoire : valide (entier ≥ 1, même énorme) = plateau normal ; invalide = modèle incomplet, refus clair, jamais d\'exception', () => {
-  for (const v of [1, 1e6, 1e15, Number.MAX_SAFE_INTEGER]) {
+test('poids hostile en mémoire : valide (entier de 1 à 999) ou non = plateau normal (un poids invalide retombe sur les exemplaires), jamais d\'exception', () => {
+  for (const v of [1, 999]) {
     const doc = nouveau('4x4');
     doc.modeles.forEach((m) => { m.poids = v; });
     let r;
@@ -128,19 +131,19 @@ test('poids hostile en mémoire : valide (entier ≥ 1, même énorme) = plateau
     assert.ok(r.ok, 'poids ' + String(v) + ' : ' + r.raison);
     assert.equal(GR.equilibre(r.doc).blocages.length, 0);
   }
-  // poids invalide posé à la main dans le document : validerModele le refuse (poids_invalide), donc le modèle n'est plus « complet » et
-  // n'est pas tiré (la sauvegarde, elle, ignore ces valeurs : ce cas n'existe pas dans un fichier relu)
-  for (const v of [-5, 0, 2.5, 'abc', NaN, Infinity, null, [1], 1e300]) {
+  // poids invalide posé à la main dans le document : validerModele l'alerte (poids_invalide) et le tirage retombe sur les exemplaires, le
+  // modèle reste posable (la sauvegarde, elle, ignore ces valeurs : ce cas n'existe pas dans un fichier relu)
+  for (const v of [-5, 0, 2.5, 'abc', NaN, Infinity, null, [1], 1e300, 1000, 1e6, 1e15, Number.MAX_SAFE_INTEGER]) {
     const doc = nouveau('4x4');
     doc.modeles.forEach((m) => { m.poids = v; });
     let r;
     assert.doesNotThrow(() => { r = GEN.generer(doc, { graine: 'ph', candidats: 4 }); }, 'poids ' + String(v));
-    if (r.ok) assert.equal(GR.equilibre(r.doc).blocages.length, 0, 'poids ' + String(v));
-    else assert.match(r.raison, /Bibliothèque insuffisante/, 'poids ' + String(v));
+    assert.ok(r.ok, 'poids ' + String(v) + ' : ' + r.raison);
+    assert.equal(GR.equilibre(r.doc).blocages.length, 0, 'poids ' + String(v));
   }
-  // un poids énorme sur un seul modèle le favorise sans empêcher le plateau (les autres gabarits sont inchangés)
+  // un poids élevé (999) sur un seul modèle le favorise sans empêcher le plateau (les autres gabarits sont inchangés)
   const doc = nouveau('4x4');
-  modele(doc, 'B8').poids = 1e12;
+  modele(doc, 'B8').poids = 999;
   const r = GEN.generer(doc, { graine: 'ph2', candidats: 6 });
   assert.ok(r.ok, r.raison);
 });

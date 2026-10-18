@@ -19,8 +19,11 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var M = PM.modele;
   var FORMAT = 'plateau-modulaire';
   var VERSION = 2;
-  /** Versions de fichier lues : 1 (convertie à la lecture) et 2. */
-  var VERSIONS_LUES = [1, 2];
+  /** Version écrite dès qu'un modèle porte des passages ou des pivots (docs/18, réponse du 2026-10-18 à la revue docs/51) : la 3.04 refuse
+   *  alors le fichier (« Version de fichier absente ou inconnue ») au lieu de retirer les passages sans prévenir. */
+  var VERSION_PASSAGES = 3;
+  /** Versions de fichier lues : 1 (convertie à la lecture), 2 et 3 (passages et pivots). */
+  var VERSIONS_LUES = [1, 2, 3];
   var CLE_AUTOSAVE = 'plateau-modulaire:autosave';
   /**
    * Plafonds à l'ouverture d'un fichier (audit de sécurité : un fichier hostile ne doit pas bloquer le
@@ -275,7 +278,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /* Lecture et écriture du JSON (fonctions pures)                        */
   /* ------------------------------------------------------------------ */
 
-  /** Contrôle d'enveloppe : texte, JSON, objet, format, version (1 ou 2) et grille. Renvoie {ok, objet, erreurs}. */
+  /** Contrôle d'enveloppe : texte, JSON, objet, format, version (1, 2 ou 3) et grille. Renvoie {ok, objet, erreurs}. */
   function analyser(texte) {
     if (typeof texte !== 'string' || texte.trim() === '') {
       return { ok: false, erreurs: [erreur('vide', 'Le fichier est vide.')] };
@@ -302,11 +305,21 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return { ok: true, objet: objet, erreurs: [] };
   }
 
+  /** Version à écrire : 3 si un modèle a au moins un passage ou un pivot, sinon 2. */
+  function versionEcriture(modeles) {
+    var l = Array.isArray(modeles) ? modeles : [];
+    for (var i = 0; i < l.length; i++) {
+      var m = l[i];
+      if (m && typeof m === 'object' && ((Array.isArray(m.passages) && m.passages.length) || (Array.isArray(m.pivots) && m.pivots.length))) return VERSION_PASSAGES;
+    }
+    return VERSION;
+  }
+
   /** Texte JSON indenté du document : en-tête format/version/grille/date, puis modèles et plateau. */
   function versJSON(doc) {
     return JSON.stringify({
       format: FORMAT,
-      version: VERSION,
+      version: versionEcriture(doc.modeles),
       grille: M.formatDuDocument(doc).id,
       date: new Date().toISOString(),
       modeles: doc.modeles,
@@ -355,7 +368,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function bibliothequeVersJSON(doc) {
     return JSON.stringify({
       format: FORMAT,
-      version: VERSION,
+      version: versionEcriture(doc.modeles),
       grille: M.formatDuDocument(doc).id,
       contenu: 'bibliotheque',
       date: new Date().toISOString(),
@@ -576,6 +589,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   PM.sauvegarde = {
     FORMAT: FORMAT,
     VERSION: VERSION,
+    VERSION_PASSAGES: VERSION_PASSAGES,
     VERSIONS_LUES: VERSIONS_LUES,
     CLE_AUTOSAVE: CLE_AUTOSAVE,
     LIMITES: LIMITES,

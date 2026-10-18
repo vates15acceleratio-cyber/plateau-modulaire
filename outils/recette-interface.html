@@ -73,6 +73,7 @@
         var remettreAutosaveUtilisateur = function () {
           try { if (copieUtil !== null) localStorage.setItem(cleUtil, copieUtil); else localStorage.removeItem(cleUtil); } catch (e) { /* rien */ }
         };
+        window.remettreAutosaveUtilisateur = remettreAutosaveUtilisateur;
         window.addEventListener('load', function () {
           window.addEventListener('pagehide', function remiseEnPlaceApresApp() { remettreAutosaveUtilisateur(); });
         });
@@ -710,7 +711,9 @@
       reset(docComplet);
       var t = S.versJSON(etat.doc());
       var r = S.depuisJSON(t);
-      ctrl('versJSON → depuisJSON : ok sans alerte, version 2 et grille écrites', r.ok && r.alertes.length === 0 && JSON.parse(t).version === 2 && JSON.parse(t).grille === '4x4', J(r.erreurs) + J(r.alertes));
+      ctrl('versJSON → depuisJSON : ok sans alerte, version 2 (modèles sans passage) et grille écrites', r.ok && r.alertes.length === 0 && JSON.parse(t).version === 2 && JSON.parse(t).grille === '4x4', J(r.erreurs) + J(r.alertes));
+      var avecPassages = S.versJSON(PM.catalogue.nouveauDocument());
+      ctrl('catalogue livré (passages) : versJSON écrit la version 3 et depuisJSON le relit sans alerte', JSON.parse(avecPassages).version === 3 && S.depuisJSON(avecPassages).ok && S.depuisJSON(avecPassages).alertes.length === 0);
       ctrl('plateau complet assemblé par l\'interface : identique après aller-retour', CJ(r.doc) === CJ(etat.doc()));
       ['', '{', 'null', '[]', '{"format":"autre"}', '{"format":"plateau-modulaire","version":2,"modeles":"x"}', t.slice(0, t.length - 20)].forEach(function (mauvais, k) {
         var res;
@@ -1275,11 +1278,105 @@
       reset(docExemples('4x4'));
     }
 
+
+    /**
+     * Démarrage de l'application depuis une sauvegarde automatique de la version 3.04 (docs/51, point 4) : le chemin
+     * `aCataloguePrecedent(init.doc)` de `demarrer()` (app.js). index.html en iframe ne se laisse pas piloter en file:// (origine
+     * opaque : la page parente n'accède ni à `contentWindow.PM` ni au `localStorage` de l'iframe). L'application démarre donc dans une
+     * iframe `srcdoc` (même origine que cette page) construite avec la même coquille que cette page et les mêmes scripts `src/` ; le
+     * `localStorage` y est celui de cette page. Les documents de départ sont ceux de `tests/donnees/` (catalogue précédent de
+     * `PM.catalogue.precedent`, une tuile posée, écrits par `versJSON` comme la 3.04) ; le `localStorage` est remis en état à la fin.
+     */
+    function s11_demarrage_304() {
+      titre('S11 démarrage depuis une sauvegarde automatique 3.04 (4×4 puis 5×5)');
+      var S = PM.sauvegarde, cle = S.CLE_AUTOSAVE, avantStockage = null, stockageOk = true;
+      try { avantStockage = localStorage.getItem(cle); } catch (e) { stockageOk = false; }
+      ctrl('localStorage accessible pour la recette du démarrage', stockageOk);
+      if (!stockageOk) return;
+      var ancienDoc = function (g) {
+        var d = PM.catalogue.nouveauDocument(g);
+        d.modeles = JSON.parse(J(PM.catalogue.precedent[g]));
+        d.plateau.tuiles = [{ modeleId: d.modeles[0].id, col: 1, lig: 1, rot: 0 }];
+        return d;
+      };
+      var scripts = Array.prototype.map.call(document.querySelectorAll('script[src]'), function (x) { return x.getAttribute('src'); })
+        .filter(function (src) { return /^\.\.\/src\//.test(src); });
+      var liens = Array.prototype.map.call(document.querySelectorAll('link[rel="stylesheet"]'), function (x) { return x.getAttribute('href'); });
+      function coquille() {
+        var corps = document.body.cloneNode(true);
+        Array.prototype.slice.call(corps.querySelectorAll('script, #recette, iframe')).forEach(function (n) { n.remove(); });
+        return '<!doctype html><html lang="fr"><head><meta charset="utf-8">' +
+          liens.map(function (h) { return '<link rel="stylesheet" href="' + h + '">'; }).join('') + '</head><body>' + corps.innerHTML +
+          scripts.map(function (src) { return '<script src="' + src + '"></' + 'script>'; }).join('') + '</body></html>';
+      }
+      var iframes = [];
+      function demarrer(texte) {
+        localStorage.setItem(cle, texte);
+        return new Promise(function (resolve) {
+          var f = document.createElement('iframe');
+          f.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:800px;visibility:hidden';
+          f.addEventListener('load', function () { resolve(f.contentWindow); });
+          f.srcdoc = coquille();
+          document.body.appendChild(f);
+          iframes.push(f);
+        });
+      }
+      function boutonDe(w, texte) {
+        return Array.prototype.filter.call(w.document.querySelectorAll('#dialogue-contenu button'), function (b) { return b.textContent === texte; })[0];
+      }
+      function toucheDans(w, k) { w.document.body.dispatchEvent(new w.KeyboardEvent('keydown', { key: k, ctrlKey: true, bubbles: true, cancelable: true })); }
+      var cjw = function (w) { return CJ(w.PM.app.etat.doc()); };
+      function pourGrille(g, nouveauId, ancienId) {
+        var brut = S.versJSON(ancienDoc(g)), voulu = CJ(S.depuisJSON(brut).doc);
+        return demarrer(brut).then(function (w) {
+          var d = w.document.getElementById('dialogue'), c = w.document.getElementById('dialogue-contenu');
+          var etat1 = w.PM.app && w.PM.app.etat;
+          ctrl(g + ' : l\'application démarre depuis la sauvegarde 3.04 (ancien catalogue, 1 tuile)', !!etat1 && !!w.PM.modele.modeleParId(etat1.doc(), ancienId) && etat1.doc().plateau.tuiles.length === 1 && cjw(w) === voulu, etat1 && etat1.doc().modeles.length);
+          ctrl(g + ' : la boîte « Nouveau catalogue de tuiles » s\'affiche (texte, virages sans case, Ctrl+Z, sans style en ligne)',
+            d.open && w.document.getElementById('dialogue-titre').textContent === 'Nouveau catalogue de tuiles' && /catalogue précédent/.test(c.textContent) &&
+            /virages sans case/.test(c.textContent) && /vide le plateau/.test(c.textContent) && /Ctrl\+Z/.test(c.textContent) && /reste inchangé/.test(c.textContent) &&
+            !!boutonDe(w, 'Charger le nouveau catalogue') && !!boutonDe(w, 'Garder mes tuiles') && !c.querySelector('[style]'), c.textContent.slice(0, 100));
+          boutonDe(w, 'Garder mes tuiles').click();
+          ctrl(g + ' : « Garder mes tuiles » ferme la boîte et laisse le document tel quel', !d.open && cjw(w) === voulu);
+          iframes.pop().remove();
+          return attendre(30);
+        }).then(function () {
+          return demarrer(brut);   // la proposition revient à chaque démarrage tant que la sauvegarde est celle de la 3.04
+        }).then(function (w) {
+          var d = w.document.getElementById('dialogue');
+          ctrl(g + ' : au démarrage suivant la proposition revient (document de la sauvegarde inchangé)', d.open && cjw(w) === voulu);
+          boutonDe(w, 'Charger le nouveau catalogue').click();
+          var etat2 = w.PM.app.etat, doc2 = etat2.doc();
+          ctrl(g + ' : « Charger » remplace la bibliothèque (' + nouveauId + ', plus de ' + ancienId + '), vide le plateau, ferme la boîte, dit le message',
+            !d.open && !!w.PM.modele.modeleParId(doc2, nouveauId) && !w.PM.modele.modeleParId(doc2, ancienId) && doc2.plateau.tuiles.length === 0 && doc2.grille === g &&
+            /Nouveau catalogue chargé/.test(w.document.getElementById('barre-etat').textContent), w.document.getElementById('barre-etat').textContent);
+          var charge = cjw(w);
+          toucheDans(w, 'z');
+          ctrl(g + ' : Ctrl+Z rend le document de la sauvegarde 3.04, plateau compris', cjw(w) === voulu);
+          toucheDans(w, 'y');
+          ctrl(g + ' : Ctrl+Y refait le chargement du nouveau catalogue', cjw(w) === charge && etat2.doc().plateau.tuiles.length === 0);
+          iframes.pop().remove();
+          return attendre(30);
+        });
+      }
+      return pourGrille('4x4', 'Q1', 'C1').then(function () { return pourGrille('5x5', 'U1', 'C7'); }).then(null, function (e) {
+        nEchec++; rapportEl.textContent += 'ÉCHEC  exception dans le démarrage 3.04 : ' + (e && e.stack || e) + '\n';
+      }).then(function () {
+        iframes.forEach(function (f) { f.remove(); });
+        return attendre(50);
+      }).then(function () {
+        try { if (avantStockage !== null) localStorage.setItem(cle, avantStockage); else localStorage.removeItem(cle); } catch (e) { /* rien */ }
+        // l'iframe retirée a écrit son autosave en partant : la remise en place de l'utilisateur doit passer en dernier
+        if (typeof window.remettreAutosaveUtilisateur === 'function') window.addEventListener('pagehide', function () { window.remettreAutosaveUtilisateur(); });
+        ctrl('localStorage remis en état après le démarrage 3.04', (function () { try { return localStorage.getItem(cle) === avantStockage; } catch (e) { return false; } })());
+      });
+    }
+
     var chaine = Promise.resolve();
     function etape(f) { chaine = chaine.then(function () { try { return f(); } catch (e) { nEchec++; rapportEl.textContent += 'ÉCHEC  exception dans ' + f.name + ' : ' + (e && e.stack || e) + '\n'; } }); }
     if (!etat) { rapportEl.textContent = 'ÉCHEC  application non démarrée (PM.app.etat absent)\n'; nEchec++; }
     else {
-      [s0_chargement, s1_assemblage, s2_refus, s2b_clic_droit, s3_historique, s4_editeur, s5_controles, s7_raccourcis, robustesse, s8_nouveau5x5, s8b_catalogue5x5_reel, s8c_generateur5x5_parcours, s9_suppression_aide, s10_passages, s6_sauvegarde].forEach(etape);
+      [s0_chargement, s1_assemblage, s2_refus, s2b_clic_droit, s3_historique, s4_editeur, s5_controles, s7_raccourcis, robustesse, s8_nouveau5x5, s8b_catalogue5x5_reel, s8c_generateur5x5_parcours, s9_suppression_aide, s10_passages, s6_sauvegarde, s11_demarrage_304].forEach(etape);
     }
     chaine.then(function () {
       var nErr = (document.getElementById('erreurs').textContent.match(/ERREUR JS/g) || []).length;

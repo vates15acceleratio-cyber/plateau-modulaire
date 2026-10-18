@@ -5,7 +5,10 @@
  *  - au moins 90 % des plateaux générés se montent avec les tuiles imprimées (chaque modèle posé au plus autant de fois que ses exemplaires) ;
  *  - le champ `poids` : lecture, validation, sauvegarde ;
  *  - reconnaissance d'un document qui porte encore la bibliothèque du catalogue précédent (3.04), pour proposer le nouveau catalogue.
- * La proposition elle-même (boîte de dialogue, accepter / refuser, Ctrl+Z) est vérifiée par outils/recette-interface.html (étape S6).
+ * La proposition elle-même (boîte de dialogue, accepter / refuser, Ctrl+Z) est vérifiée par outils/recette-interface.html (étapes S6 et S11,
+ * cette dernière au démarrage depuis une sauvegarde automatique 3.04).
+ * Le stock est vérifié ici sur 100 graines par format, la cible de docs/18 étant mesurée sur 200 (95,5 % en 4×4 et 97,5 % en 5×5, docs/50) :
+ * la marge sur 90 % rend les 100 graines suffisantes pour une garde de non-régression (docs/51, remarque 10).
  */
 const test = require('node:test');
 const assert = require('node:assert');
@@ -86,13 +89,14 @@ test('poids : champ facultatif ; absent, il vaut les exemplaires ; un modèle à
   assert.ok(!GEN.modelesParGabarit(doc, F).bord.some((m) => m.id === 'B8'));
 });
 
-test('poids : validation (entier d\'au moins 1) et sauvegarde (conservé s\'il est valide, ignoré sinon)', () => {
+test('poids : validation (entier de 1 à 999, alerte sinon) et sauvegarde (conservé s\'il est valide, ignoré sinon)', () => {
   const doc = CAT.nouveauDocument('4x4');
   const m = doc.modeles[0];
   assert.ok(!M.validerModele(m, '4x4').erreurs.some((e) => e.code === 'poids_invalide'));
-  for (const mauvais of [0, -1, 1.5, 'x']) {
+  for (const mauvais of [0, -1, 1.5, 'x', 1000]) {
     const c = copie(m); c.poids = mauvais;
-    assert.ok(M.validerModele(c, '4x4').erreurs.some((e) => e.code === 'poids_invalide'), String(mauvais));
+    const v = M.validerModele(c, '4x4');   // alerte seule : le tirage retombe sur les exemplaires (docs/51, remarque 5)
+    assert.ok(v.alertes.some((e) => e.code === 'poids_invalide') && !v.erreurs.some((e) => e.code === 'poids_invalide'), String(mauvais));
   }
   const r = S.depuisJSON(S.versJSON(doc));
   assert.ok(r.ok);

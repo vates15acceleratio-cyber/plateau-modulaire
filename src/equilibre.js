@@ -18,7 +18,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
 
   var GR = PM.graphe;
 
-  /** Conseil propre au 4×4 (deux jonctions-cases) : absent du rapport d'un plateau 5×5. */
+  /** Conseil de pose À LA MAIN propre au 4×4 (deux jonctions-cases) : absent du rapport d'un plateau 5×5. Il reste juste (0 % de « 5 contre 2 » dans la rangée centrale, docs/48), mais le générateur ne le suit plus par défaut (12 paires de jonctions variées équilibrées, docs/51 remarque 11). */
   var CONSEIL_4X4 = 'Pour éviter « 5 contre 2 » en 4×4, placez les deux jonctions-cases (sans ville) dans la rangée centrale. ';
   var DIST_MAX_TRES_HAUTE = 6; // distMax à partir duquel le rythme est « bien au-dessus de la cible » (information seulement, docs/48 § 4)
 

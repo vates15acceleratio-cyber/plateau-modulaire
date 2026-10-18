@@ -26,7 +26,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var G = PM.geometrie;
   var M = PM.modele;
 
-  /** Seuil d'alerte de S du format (« 4x4 » ou « 5x5 ») ; le rejet du générateur reste SEUIL_S. */
+  /** Seuil d'alerte de S du format (« 4x4 » ou « 5x5 ») ; le rejet du générateur (5×5 seulement) reste SEUIL_S. */
   function seuilS(formatId) { return SEUIL_S_PAR_FORMAT[formatId] || SEUIL_S; }
   /** Seuil à partir duquel S est une simple information (jusqu'au seuil d'alerte exclu). */
   function seuilSInformation(formatId) { return SEUIL_S_INFORMATION_PAR_FORMAT[formatId] || SEUIL_S_INFORMATION_PAR_FORMAT['4x4']; }
@@ -37,7 +37,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var SEUIL_ECART = 2;          // alerte si l'écart dépasse 2 à un rang de 1 à 7 (docs/archives/16 b)
   var SEUIL_CINQ_CONTRE_DEUX = 5;
   var SEUIL_APPARITION_LOINTAINE = 7;
-  var SEUIL_S = 5;                 // seuil de REJET du générateur, le même dans les deux formats (docs/48 : un plateau généré reste à S <= 1)
+  var SEUIL_S = 5;                 // seuil de REJET du générateur, appliqué en 5×5 seulement (REJET_S de generateur.js) ; en 4×4, S n'est qu'un classement (docs/18, 2026-10-18 ; un plateau 4×4 généré reste à S <= 1)
   /** Seuils d'alerte et d'information de S, propres à chaque format (docs/18, réponse de 2026-10-18 ; docs/48 § 4) : 4×4 alerte dès 5, information à 4 ;
    *  5×5 alerte dès 7, information à 5 ou 6 (le 95e centile de la pose libre y est à 7). */
   var SEUIL_S_PAR_FORMAT = Object.freeze({ '4x4': 5, '5x5': 7 });
@@ -411,7 +411,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     if (cinqContreDeux) {
       var fort = partage[1] >= partage[2] ? 1 : 2;
       var cinq = { code: 'cinq_contre_deux', message: 'Le joueur ' + NOM_JOUEUR[fort] + ' est plus proche de ' + partage[fort] + ' villes contre ' + partage[3 - fort] + ' pour le joueur ' + NOM_JOUEUR[3 - fort] + ' (« 5 contre 2 »).' +
-        // conseil propre au 4×4 (docs/22) ; conseil conditionnel propre au 5×5 (docs/36)
+        // conseil de pose à la main propre au 4×4 (docs/22 ; le générateur, lui, varie ses jonctions-cases) ; conseil conditionnel propre au 5×5 (docs/36)
         (M.formatDuDocument(doc).id === '4x4' ? ' Conseil : placer les deux jonctions-cases (sans ville) dans la rangée centrale, par exemple (1, 2) et (3, 2).' : conseil5x5) };
       (CINQ_CONTRE_DEUX_BLOQUANT ? blocages : alertes).push(cinq);
     }

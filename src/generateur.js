@@ -150,8 +150,8 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
 
   /**
    * Jonctions-cases (les jonctions sans ville) que le générateur peut tirer, propres à chaque format.
-   *  - par défaut (4×4) : les 3 paires de la rangée centrale (j = 2), qui ne donnent jamais « 5 contre 2 » ;
-   *  - jonctions variées (4×4) : les paires qui gardent autant de jonctions-cases du côté vert (j = 1) que du côté rouge (j = 3),
+   *  - sans « jonctions variées » (option décochée, 4×4) : les 3 paires de la rangée centrale (j = 2), qui ne donnent jamais « 5 contre 2 » ;
+   *  - jonctions variées (4×4, par défaut) : les paires qui gardent autant de jonctions-cases du côté vert (j = 1) que du côté rouge (j = 3),
    *    pour des cases égales entre moitiés (docs/18) : une en j = 1 et une en j = 3 (9 paires), ou les deux en j = 2 (3 paires) ;
    *    aucune paire d'une même rangée extérieure (règle d'avant, toujours vraie) ;
    *  - 5×5 (docs/18, « 2-3-2 ») : les 2016 ensembles de 9 jonctions-cases, complémentaires des placements de 7 villes ;

@@ -28,13 +28,13 @@ docs/brouillons/    travaux inachevés, à consulter sans les appliquer
 |---|---|---|
 | `geometrie.js` | constantes (mm), côtés et coins, masques, rotation, appariement | non |
 | `modele.js` | structures Tuile / Case / Chemin / Jeton / Plateau et validation | non |
-| `catalogue.js` | catalogues « organiques » (docs/45, branchés en docs/46) 4×4 (6 modèles, 21 tuiles) et 5×5 (8 modèles, 30 tuiles), `modelesParGrille`, `nouveauDocument(grille)` ; `precedent` : catalogues de la version 3.04 (13 et 6 modèles), gelés, pour la compatibilité | non |
+| `catalogue.js` | catalogues « organiques » (docs/45, branchés en docs/46) 4×4 (6 modèles, 24 tuiles imprimées ; les « poids » de tirage sont distincts des exemplaires) et 5×5 (8 modèles, 37 tuiles imprimées), `modelesParGrille`, `nouveauDocument(grille)` ; `precedent` : catalogues de la version 3.04 (13 et 6 modèles), gelés, pour la compatibilité | non |
 | `rendu.js` | tracé SVG des tuiles et des jetons | non |
 | `etat.js` | état partagé, historique annuler / rétablir | non |
-| `sauvegarde.js` | JSON, migration des documents v1, sauvegarde automatique | oui (stockage, fichiers) |
-| `graphe.js` | graphe des cases, plus courts chemins, analyse d'équilibre (`equilibre` renvoie aussi `informations` : 5×5, ville sur une jonction à moins de `PORTS_VILLE_MIN` ports, jamais une alerte) ; exporte `PORTS_VILLE_MIN` (3), `PORTS_JONCTION_MIN` (2), `REPARTITION_VILLES_5X5` (2-3-2) et `flancs` (centre = colonnes 1 à colonnes − 2) ; mesures « organiques » (docs/46) : `reseauxPassages`, `rythme` (chaîne visée `CHAINE_CIBLE` = 3, raccourci compté comme zone d'intérêt), `accesCentre` (portes et chemins vers le milieu), `casesParMoitie` | non |
+| `sauvegarde.js` | JSON (version 3 écrite dès qu'un modèle a des passages ou des pivots, sinon 2 ; versions 1, 2 et 3 lues), migration des documents v1, champ `poids`, `bibliothequeCataloguePrecedent`, sauvegarde automatique | oui (stockage, fichiers) |
+| `graphe.js` | graphe des cases, plus courts chemins, analyse d'équilibre (`equilibre` renvoie aussi `informations` : 5×5, ville sur une jonction à moins de `PORTS_VILLE_MIN` ports, jamais une alerte) ; exporte `PORTS_VILLE_MIN` (3), `PORTS_JONCTION_MIN` (2), `REPARTITION_VILLES_5X5` (2-3-2) et `flancs` (centre = colonnes 1 à colonnes − 2) ; mesures « organiques » (docs/46) : `reseauxPassages`, `rythme` (chaîne visée `CHAINE_CIBLE` = 3, raccourci compté comme zone d'intérêt), `accesCentre` (portes et chemins vers le milieu), `casesParMoitie` Seuils de S par format : `seuilS(formatId)` / `seuilSInformation(formatId)` (4×4 : alerte 5, information 4 ; 5×5 : alerte 7, information 5 ou 6) ; `SEUIL_S` (5) n'est que le seuil de rejet du générateur, appliqué en 5×5 seulement. | non |
 | `equilibre.js` | rapport d'équilibre | partiel (calcul pur + boîte de dialogue) |
-| `generateur.js` | plateau aléatoire reproductible ; exporte aussi `causeRejet` (chaîne de filtres unique), `sontMiroirs`, `placementsVilles5x5` (gelés), `tuilesOrientees5x5` (`tronque` si le budget de nœuds est dépassé) ; 5×5 : abandon après 25 échecs consécutifs de manque de ports, `candidats` borné à 1000 ; docs/46 : cases égales entre moitiés (`equilibrerMoities`, rejet `cases_moities`), orientation 4×4 (`tuilesOrientees4x4`), 78 à 81 cases en 5×5 (`CASES_CIBLE_5X5`), affinage du rythme et des accès sur les meilleurs candidats (option `affinage`) | partiel (calcul pur + boîte de dialogue) |
+| `generateur.js` | plateau aléatoire reproductible ; exporte aussi `causeRejet` (chaîne de filtres unique), `sontMiroirs`, `placementsVilles5x5` (gelés), `tuilesOrientees5x5` (`tronque` si le budget de nœuds est dépassé) ; 5×5 : abandon après 25 échecs consécutifs de manque de ports, `candidats` borné à 1000 ; docs/46 : cases égales entre moitiés (`equilibrerMoities`, rejet `cases_moities`), orientation 4×4 (`tuilesOrientees4x4`), 78 à 81 cases en 5×5 (`CASES_CIBLE_5X5`), affinage du rythme et des accès sur les meilleurs candidats (option `affinage`) « Jonctions variées » par défaut en 4×4 (12 paires équilibrées) ; en 5×5 préférence, sans rejet, pour les plateaux sans point d'articulation ; `poids` de tirage (1 à 999, sinon exemplaires). | partiel (calcul pur + boîte de dialogue) |
 | `export.js` | planches PDF / SVG / PNG | oui |
 | `controles.js` | compteurs et alertes | partiel (calcul pur + boîte de dialogue) |
 | `bibliotheque.js` | colonne bibliothèque de modèles | oui |
@@ -57,6 +57,7 @@ Règle : les modules « non » ne touchent jamais au DOM, ce qui les rend testab
 
 ## Tests
 - `node --test` à la racine (Node 24 refuse `node --test tests/`). Exécuté aussi par la CI GitHub.
+- Aides de test : `tests/aides-stock-worker.js` (fils de calcul du stock), `tests/aides-v2.js`, `tests/aides-trace.js` ; documents de compatibilité dans `tests/donnees/` (`document-v1.json`, `document-3.04-4x4.json`, `document-3.04-5x5.json`). Le test de temps du générateur mesure le temps processeur (`process.cpuUsage()`).
 - Recettes navigateur manuelles : `outils/recette-interface.html`, `outils/recette-p2.html` (procédure dans `CLAUDE.md`).
 
 ## Où lire ensuite

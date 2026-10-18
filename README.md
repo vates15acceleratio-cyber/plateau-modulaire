@@ -17,14 +17,18 @@ Ouvrir `index.html` dans un navigateur récent (Chrome, Edge, Firefox). Aucune i
 
 ## Principes de conception
 
-- Grille 4×4 de tuiles carrées de 12 cm (environ 60 à 63 cases par plateau, cases de 2 cm de diamètre).
-- **Grille 5×5 disponible** (« Nouveau → 5×5 ») : tuiles carrées de 10 cm, plateau de 50 × 50 cm, environ 78 cases par plateau avec la pose de référence, rangée centrale neutre (ses apparitions ne servent à aucun camp).
+- Grille 4×4 de tuiles carrées de 12 cm (environ 58 cases par plateau, cases de 2 cm de diamètre).
+- **Grille 5×5 disponible** (« Nouveau → 5×5 ») : tuiles carrées de 10 cm, plateau de 50 × 50 cm, 78 à 81 cases par plateau, rangée centrale neutre (ses apparitions ne servent à aucun camp).
 - Deux joueurs, **vert** (nord) et **rouge** (sud) : les 2 rangées les plus proches de chaque joueur lui appartiennent.
 - **Toutes les tuiles du pourtour** (bords et coins) portent une case d'apparition, imprimée neutre et colorée à l'écran selon le camp. Les coins ont un raccourci vers la tuile de bord voisine.
 - **7 villes**, sous forme de jetons posés aux jonctions de 4 tuiles ; les autres jonctions sont des cases chemin. Au moins 3 cases entre deux villes. On s'arrête dans une ville (elle ne se traverse pas).
-- Catalogue 4×4 de 13 modèles (22 tuiles à imprimer) : 6 centrales, 5 modèles de bord, 2 modèles de coin (K2, K4) ; aucune case en impasse. Chaque modèle se pose autant de fois qu'on veut ; le coin se pose dans un coin, le bord sur un bord, la centrale au centre.
-- Catalogue 5×5 de 6 modèles (30 tuiles à imprimer) : coin K2 (5), bords B1 (6), B7 (4) et son miroir B7m (4), centrales C7 « Pont » (6) et C8 « Équerre » (5) ; aucune case en impasse ni mur.
-- Équilibre mesuré depuis les cases d'apparition de chaque camp : blocage si « 5 villes contre 2 » ou écart de plus de 3 cases entre joueurs ; alerte au-delà de 2 cases d'écart ou si le score d'équilibre atteint 5.
+- **Passages sans case** : un chemin peut relier deux côtés d'une tuile sans passer par une case (virage en quart de tour, T par un pivot) ; il s'imprime en vert, en courbe. Passer par un passage compte pour **un seul déplacement** : les cases qu'il relie sont voisines. Dans l'éditeur de tuiles, l'outil **Passage** (touche P) et les **pivots** (Maj+clic) les dessinent ; au plus un passage par bord ou coin, jamais depuis une case d'apparition ni vers un coin.
+- Catalogue 4×4 « organique » de 6 modèles (**24 tuiles à imprimer**) : centrales Q1 (4) et Q2 (3), bords B1 (8) et B8 (3), coins K2 (4) et K4 (2) ; aucune case en impasse. Chaque modèle se pose autant de fois qu'on veut ; le coin se pose dans un coin, le bord sur un bord, la centrale au centre.
+- Catalogue 5×5 de 8 modèles (**37 tuiles à imprimer**) : centrales U1 (5), P1 (3), P2 (3), P3 (4) et P5 (3), bords B1 (6) et B7 (8), coin K2 (5) ; aucune case en impasse ni mur.
+- **Poids et exemplaires** : les exemplaires d'un modèle sont le stock à imprimer ; son **poids** (facultatif, entier de 1 à 999, absent : les exemplaires) règle sa fréquence dans les plateaux aléatoires. Modifier les exemplaires d'un modèle du catalogue livré ne change donc pas sa fréquence de tirage (seule l'infobulle du champ le dit). Un poids invalide est signalé en alerte et le tirage retombe sur les exemplaires.
+- **Nouveau catalogue proposé** : à l'ouverture d'un document (fichier ou sauvegarde automatique) qui porte encore le catalogue de la version 3.04 ou de la version 1, l'application propose le nouveau catalogue ; « Garder mes tuiles » laisse le document tel quel, « Charger » remplace la bibliothèque et vide le plateau (Ctrl+Z revient en arrière).
+- **Fichiers** : un document dont un modèle a des passages ou des pivots s'enregistre en version 3 du format ; la version 3.04 le refuse avec un message clair (« Version de fichier absente ou inconnue : 3. »). Les fichiers des versions 1 et 2 s'ouvrent toujours.
+- Équilibre mesuré depuis les cases d'apparition de chaque camp : blocage si « 5 villes contre 2 » ou écart de plus de 3 cases entre joueurs ; alerte au-delà de 2 cases d'écart ou si le score d'équilibre S atteint 5 en 4×4 et 7 en 5×5 (information à 4 en 4×4, à 5 ou 6 en 5×5). Le générateur rejette S ≥ 5 en 5×5 seulement ; en 4×4 il classe les candidats par S.
 - Couleurs d'impression : vert, rouge, noir, blanc, avec des codes de forme lisibles sans la couleur.
 
 Les décisions et leurs raisons sont dans [`docs/`](docs/) : le brief d'origine (`0-brief.md`), les décisions de la version 2 (`18-decisions-v2.md`, prioritaires), l’historique de la version 1 (synthèse, avis de conception, mesures, revues) dans `docs/archives/`.

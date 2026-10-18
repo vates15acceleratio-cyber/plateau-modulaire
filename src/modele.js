@@ -247,6 +247,11 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   function refCoin(k) { return { type: 'coin', id: k }; }
   function refRaccord(r, ch) { return { type: 'raccord', id: r.cote + ':' + r.pos, cote: r.cote, pos: r.pos, chemin: ch && ch.id }; }
 
+  /** Borne du poids de tirage, la même qu'à la lecture d'un fichier (sauvegarde.js, LIMITES.exemplaires). */
+  var POIDS_MAX = 999;
+  /** Un poids de tirage est un entier de 1 à POIDS_MAX ; tout autre `poids` est ignoré par le tirage (docs/51, remarque 5). */
+  function poidsValide(p) { return estEntier(p) && p >= 1 && p <= POIDS_MAX; }
+
   /** Phrase commune aux alertes R1 à R4 (arbitrage de l'orchestrateur, docs/20). */
   var RISQUE_ECART = 'cette tuile peut rapprocher deux villes à moins de 3 cases';
 
@@ -271,8 +276,9 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     if (!estEntier(m.exemplaires) || m.exemplaires < 0) {
       e.push(err('exemplaires_invalides', 'Le nombre d\'exemplaires doit être un entier positif ou nul.', refModele(m)));
     }
-    if (m.poids !== undefined && (!estEntier(m.poids) || m.poids < 1)) {
-      e.push(err('poids_invalide', 'Le poids de tirage doit être un entier d\'au moins 1 (ou absent : les exemplaires font alors le poids).', refModele(m)));
+    // Alerte, pas erreur (docs/51, remarque 5) : poidsTirage retombe de lui-même sur les exemplaires, le modèle reste posable et tiré
+    if (m.poids !== undefined && !poidsValide(m.poids)) {
+      e.push(alerte('poids_invalide', 'Le poids de tirage doit être un entier de 1 à ' + POIDS_MAX + ' (ou absent) : sinon les exemplaires font le poids.', refModele(m)));
     }
     var vus = dict();
     function verifier(el, type) {
@@ -939,13 +945,13 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   }
 
   /**
-   * Poids de tirage d'un modèle dans le générateur : le champ facultatif `poids` (entier ≥ 1) s'il est présent, sinon le nombre
+   * Poids de tirage d'un modèle dans le générateur : le champ facultatif `poids` (entier de 1 à 999, comme à la lecture d’un fichier) s’il est présent, sinon le nombre
    * d'exemplaires. Le poids règle la fréquence du modèle dans les plateaux aléatoires ; les exemplaires sont le stock à imprimer.
    * Un modèle à 0 exemplaire n'est jamais tiré, quel que soit son poids.
    */
   function poidsTirage(modele) {
     var p = modele && typeof modele === 'object' ? modele.poids : undefined;
-    return estEntier(p) && p >= 1 ? p : exemplairesValides(modele);
+    return poidsValide(p) ? p : exemplairesValides(modele);
   }
 
   function jonctionInterieure(i, j, F) {
@@ -1389,6 +1395,8 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     jonctionDuCoin: jonctionDuCoin,
     PLAFOND_TUILES: PLAFOND_TUILES,
     exemplairesValides: exemplairesValides,
+    poidsValide: poidsValide,
+    POIDS_MAX: POIDS_MAX,
     poidsTirage: poidsTirage,
     aUneApparition: aUneApparition,
     nouveauDocument: nouveauDocument,

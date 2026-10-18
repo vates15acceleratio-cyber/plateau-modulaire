@@ -185,18 +185,22 @@ test('tolérance : S du plateau rendu ≤ Smin + tolérance (1 par défaut, 0 = 
   }
 });
 
-// Limite portée de 5 s à 12 s (docs/49) : garde contre un gel ou une régression d'un facteur 3, pas une mesure de performance. L'affinage du
-// rythme et l'orientation des centrales ont triplé le coût annoncé dans docs/34 (le 5×5 prend 4 à 4,5 s seul), et la suite lance ses fichiers
-// de test en parallèle sur tous les cœurs (le 5×5 monte alors à 6 à 7 s, plus encore avec le calcul de stock réparti sur des fils).
-test('temps : 200 candidats en moins de 12 s sous Node (4×4 et 5×5)', () => {
+// Limite portée de 5 s à 12 s (docs/49), puis mesurée en TEMPS PROCESSEUR du processus (docs/51, point 3) : garde contre un gel ou une
+// régression d'un facteur 3, pas une mesure de performance. L'affinage du rythme et l'orientation des centrales ont triplé le coût annoncé
+// dans docs/34 (le 5×5 prend 4 à 8 s seul). Le temps écoulé (horloge) dépendait de la charge de la machine : `node --test` lance tous les
+// fichiers en parallèle, dont les 8 fils de calcul du stock (stock-et-catalogue-precedent.test.js), et le testeur y a mesuré de 8,6 à 14 s
+// pour la même limite. `process.cpuUsage()` donne le temps processeur (utilisateur + système) du seul processus courant, et chaque fichier de
+// test a son propre processus : la mesure ne dépend plus des autres fichiers (ni de leurs fils). L'horloge est gardée en information.
+test('temps : 200 candidats en moins de 12 s de temps processeur sous Node (4×4 et 5×5)', () => {
   for (const grille of ['4x4', '5x5']) {
-    const t0 = Date.now();
+    const t0 = Date.now(), c0 = process.cpuUsage();
     const r = GEN.generer(docExemples(grille), { graine: 'chrono' });
-    const ms = Date.now() - t0;
+    const horloge = Date.now() - t0, c = process.cpuUsage(c0);
+    const cpu = Math.round((c.user + c.system) / 1000);
     assert.ok(r.ok, r.raison);
     assert.strictEqual(r.candidats, 200);
-    console.log(`# 200 candidats (${grille}) : ${ms} ms, ${r.essais} essais`);
-    assert.ok(ms < 12000, ms + ' ms');
+    console.log(`# 200 candidats (${grille}) : ${cpu} ms de processeur (${horloge} ms d'horloge), ${r.essais} essais`);
+    assert.ok(cpu < 12000, cpu + ' ms de processeur (' + horloge + ' ms d’horloge)');
   }
 });
 

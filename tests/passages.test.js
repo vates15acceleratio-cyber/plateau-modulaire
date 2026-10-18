@@ -317,6 +317,61 @@ test('sauvegarde : un ancien modèle (sans passage) ne reçoit aucun champ pivot
   lu.modeles.forEach((m) => { assert.equal('pivots' in m, false); assert.equal('passages' in m, false); });
 });
 
+/* ---------- Version du fichier (docs/18, réponse à la revue docs/51 : la 3.04 doit refuser un fichier à passages) ---------- */
+
+test('format : un document à passages ou pivots est écrit en version 3 et se relit ; sans passage il reste en version 2', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const m = clone(QUART);
+  const avec = doc([m], [['quart', 1, 1]]);
+  const objet = JSON.parse(S.versJSON(avec));
+  assert.equal(objet.version, 3);
+  assert.equal(S.VERSION_PASSAGES, 3);
+  const lu = S.depuisJSON(S.versJSON(avec));
+  assert.ok(lu.ok);
+  assert.deepEqual(lu.doc.modeles[0].passages, m.passages);
+  // pivots seuls (sans passage) : version 3 aussi ; la bibliothèque seule suit la même règle
+  const pv = clone(QUART); pv.passages = []; pv.pivots = [{ id: 'v1', x: 60, y: 100 }];
+  assert.equal(JSON.parse(S.versJSON(doc([pv], []))).version, 3);
+  assert.equal(JSON.parse(S.bibliothequeVersJSON(avec)).version, 3);
+  // listes vides ou champs absents : version 2
+  const vide = clone(QUART); vide.passages = []; vide.pivots = [];
+  assert.equal(JSON.parse(S.versJSON(doc([vide], []))).version, 2);
+  assert.equal(JSON.parse(S.versJSON(doc(M.copieExemples(), []))).version, 2);
+  assert.equal(JSON.parse(S.bibliothequeVersJSON(doc(M.copieExemples(), []))).version, 2);
+  // catalogue livré : les deux formats portent des passages (version 3), le catalogue précédent n'en a pas (version 2)
+  ['4x4', '5x5'].forEach((g) => {
+    assert.equal(JSON.parse(S.versJSON(PM.catalogue.nouveauDocument(g))).version, 3, g);
+    const prec = M.nouveauDocument(g); prec.modeles = clone(PM.catalogue.precedent[g]);
+    assert.equal(JSON.parse(S.versJSON(prec)).version, 2, g);
+    const relu = S.depuisJSON(S.versJSON(PM.catalogue.nouveauDocument(g)));
+    assert.ok(relu.ok && relu.erreurs.length === 0, g);
+  });
+  // la sauvegarde automatique écrit la même version et se relit
+  const mem = new Map();
+  const st = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
+  S.ecrireMaintenant(avec, st);
+  assert.equal(JSON.parse(mem.get(S.CLE_AUTOSAVE)).version, 3);
+  const r = S.restaurerAutosave(st);
+  assert.ok(r && r.ok);
+  assert.deepEqual(r.doc.modeles[0].passages, m.passages);
+  S.ecrireMaintenant(doc(M.copieExemples(), []), st);
+  assert.equal(JSON.parse(mem.get(S.CLE_AUTOSAVE)).version, 2);
+  // les documents v1 et 3.04 (version 2) s'ouvrent toujours
+  const v1 = S.depuisJSON(fs.readFileSync(path.join(__dirname, 'donnees', 'document-v1.json'), 'utf8'));
+  assert.ok(v1.ok && v1.migre);
+  ['4x4', '5x5'].forEach((g) => {
+    const brut = fs.readFileSync(path.join(__dirname, 'donnees', 'document-3.04-' + g + '.json'), 'utf8');
+    assert.equal(JSON.parse(brut).version, 2);
+    const r304 = S.depuisJSON(brut);
+    assert.ok(r304.ok, g);
+    assert.equal(r304.doc.grille, g);
+  });
+  // une version inconnue (4) reste refusée
+  const inconnue = S.depuisJSON(JSON.stringify({ format: S.FORMAT, version: 4, modeles: [], plateau: { tuiles: [] } }));
+  assert.equal(inconnue.ok, false);
+  assert.equal(inconnue.erreurs[0].code, 'version');
+});
+
 /* ---------- Anciens documents strictement inchangés ---------- */
 
 /** Empreintes [plateau : équilibre] du générateur sur un ancien document, graines s0 à s2 (recalculées en docs/46). */

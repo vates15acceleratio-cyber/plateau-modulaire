@@ -1,4 +1,4 @@
-# Travail restant et idées à étudier (point d'arrêt du 2026-10-16)
+# Travail restant et idées à étudier (mis à jour le 2026-10-18, après la revue de la branche `passages`, `docs/51`)
 
 L'utilisateur a marqué une pause ; il reprendra **après discussion**. Rien ne doit être lancé sans son accord. État au moment de l'arrêt : version 3.03.0 (voir `CHANGELOG.md`), tout est sur GitHub, `node --test` et les deux recettes navigateur passent.
 
@@ -22,6 +22,15 @@ L'utilisateur a marqué une pause ; il reprendra **après discussion**. Rien ne 
 - Testeur et relecteur sur les derniers ajouts (interface 5×5, retouches du 4×4, suppression des tuiles, légende illustrée). Le catalogue 5×5 est recetté (`docs/32`) et relu (`docs/33`) ; reste la recette du générateur 5×5 une fois fait.
 - Audit de sécurité ciblé sur ces ajouts (le dernier, `docs/23`, porte sur la 2.00.0).
 - Version, puis envoi sur GitHub.
+- **Revue de la branche `passages` (`docs/51`, 2026-10-18)** : fait — rejet de S aligné (5×5 seulement), `version: 3` pour les documents à passages (la 3.04 les refuse), test de temps en temps processeur, recette du démarrage depuis une sauvegarde automatique 3.04 (`recette-interface`, S11, 4×4 et 5×5, Garder / Charger / Ctrl+Z / Ctrl+Y), `poids` en alerte (1 à 999), texte de la proposition v1 identique, commentaires et conseil 4×4 présenté comme conseil de pose à la main.
+- **Remarques de `docs/51` à reporter** (non traitées) :
+  - 7 : la proposition du nouveau catalogue revient à chaque démarrage tant que l'utilisateur garde ses tuiles ; on pourrait retenir le refus pour la session ;
+  - 8 : les seuils de S dépendent du format, pas du catalogue (un document 5×5 au catalogue 3.04 passe aussi à l'alerte S ≥ 7) ; à mentionner dans le CHANGELOG ;
+  - 9 : `casesParMoitie` (`graphe.js`) compte les jonctions posées même sans modèle trouvé, alors que le compteur « Cases » de `controles.js` les ignore ; réutiliser `M.portsJonction` ;
+  - 10 : test des goulets à remplacer par une comparaison avec / sans le terme des articulations ; empreintes de `generateur-5x5.test.js` et `passages.test.js` à régénérer à chaque réglage du générateur ; stock testé sur 100 graines (cible mesurée sur 200) ;
+  - 11 : conseil 4×4 « rangée centrale » (`graphe.js`, `equilibre.js`) devenu un conseil de pose à la main ; le générateur ne le suit plus par défaut ;
+  - 6 : le poids est invisible dans l'interface (seule l'infobulle du champ des exemplaires le dit ; README mis à jour).
+- Autres écarts de recette de `docs/49` encore ouverts : refus répété dans le navigateur ; la 3.04 qui ouvre un document v3 met la sauvegarde automatique de côté (« illisible ») sans l'écraser.
 
 ### 1.5 Petites dettes
 - ~~Pages d’essai cassées et `outils/mesures-generateur.js`~~ : retirées (consolidation du 2026-10-16). Restent `essai-assemblage`, `essai-editeur-tuile`, `essai-generateur`, `essai-sauvegarde` et `verif-chargement`, non revérifiées.
@@ -57,7 +66,7 @@ Proposée par l'utilisateur au moment de l'arrêt, **pas encore définie** : à 
 - Ensuite : branchement du catalogue, générateur orienté pour le rythme (et peut-être symétrique), mesures, testeur, relecteur, version, PR.
 
 ## 4. Après les mesures définitives du catalogue organique (branche `passages`, 2026-10-18)
-- **Fait** (décisions de `docs/18`, fin de fichier ; mesures `docs/48`) : seuils de S par format (4×4 alerte dès 5 ; 5×5 alerte dès 7, information 5 ou 6 ; rejet du générateur à 5 dans les deux), préférence anti-point d'articulation en 5×5 (8,5 % de plateaux concernés sur 200 avant, 0 % après), « jonctions variées » cochée par défaut en 4×4, texte « bien au-dessus de la cible » (chaîne ≥ 7 ou distance maximale ≥ 6), correction de `casesParMoitie` (`docs/49`), mesures régénérées (`docs/croquis/organique/mesures.json`, `centrales-ouvertes-200.json`, commandes `node outils/planche-organique.js` puis `node outils/planche-organique.js series 200 > docs/croquis/organique/centrales-ouvertes-200.json`).
+- **Fait** (décisions de `docs/18`, fin de fichier ; mesures `docs/48`) : seuils de S par format (4×4 alerte dès 5 ; 5×5 alerte dès 7, information 5 ou 6 ; rejet du générateur à S ≥ 5 en 5×5 seulement ; en 4×4 classement par S, sans rejet), préférence anti-point d'articulation en 5×5 (8,5 % de plateaux concernés sur 200 avant, 0 % après), « jonctions variées » cochée par défaut en 4×4, texte « bien au-dessus de la cible » (chaîne ≥ 7 ou distance maximale ≥ 6), correction de `casesParMoitie` (`docs/49`), mesures régénérées (`docs/croquis/organique/mesures.json`, `centrales-ouvertes-200.json`, commandes `node outils/planche-organique.js` puis `node outils/planche-organique.js series 200 > docs/croquis/organique/centrales-ouvertes-200.json`).
 - **Reste à mesurer ou à vérifier** :
   - point 5 du `docs/28` § 6 : S selon la jonction de la 7e ville (seule la répartition des villes est mesurée) ;
   - point 8 du `docs/28` § 6 : distance entre apparitions verte et rouge par la rangée neutre ;

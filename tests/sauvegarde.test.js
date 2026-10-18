@@ -449,14 +449,15 @@ test('bibliothequeVersion1 : reconnue à ses modèles A1 et A2', () => {
   assert.strictEqual(S.bibliothequeVersion1(undefined), false);
 });
 
-test('version 2 : grille 5×5 conservée ; grille inconnue ou version inconnue refusées ; carrefour d\'un fichier v2 ignoré', () => {
+test('version 2 : grille 5×5 conservée ; grille inconnue ou version inconnue (4) refusées, version 3 lue ; carrefour d\'un fichier v2 ignoré', () => {
   const d = M.nouveauDocument('5x5');
   d.modeles = M.copieExemples('5x5');
   const r = S.depuisJSON(S.versJSON(d));
   assert.strictEqual(r.doc.grille, '5x5');
   assert.deepStrictEqual(r.doc, d);
   assert.strictEqual(S.depuisJSON(JSON.stringify({ version: 2, grille: 'hexagone', modeles: [], plateau: { tuiles: [] } })).erreurs[0].code, 'grille');
-  assert.strictEqual(S.depuisJSON(JSON.stringify({ version: 3, modeles: [], plateau: { tuiles: [] } })).erreurs[0].code, 'version');
+  assert.strictEqual(S.depuisJSON(JSON.stringify({ version: 4, modeles: [], plateau: { tuiles: [] } })).erreurs[0].code, 'version');
+  assert.strictEqual(S.depuisJSON(JSON.stringify({ version: 3, modeles: [], plateau: { tuiles: [] } })).ok, true, 'la version 3 (passages et pivots) est lue');
   const v2 = S.depuisJSON(JSON.stringify({ version: 2, modeles: [], plateau: { tuiles: [], jetons: [{ i: 1, j: 1, type: 'carrefour' }] } }));
   assert.deepStrictEqual(v2.doc.plateau.jetons, []);
   assert.ok(v2.alertes.some((a) => a.code === 'jeton_ignore'));
