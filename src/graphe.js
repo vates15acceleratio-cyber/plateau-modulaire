@@ -31,11 +31,32 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /** Seuil à partir duquel S est une simple information (jusqu'au seuil d'alerte exclu). */
   function seuilSInformation(formatId) { return SEUIL_S_INFORMATION_PAR_FORMAT[formatId] || SEUIL_S_INFORMATION_PAR_FORMAT['4x4']; }
 
-  /** Nombre de villes et seuils (constantes uniques, lues aussi par controles.js et generateur.js). */
+  /**
+   * Nombre de villes et seuils (constantes uniques, lues aussi par controles.js, assemblage.js et generateur.js).
+   * Nombre de villes PAR FORMAT (docs/18, décisions du 2026-10-19 après docs/62) : 7 en 4×4, 8 en 5×5 (4 par camp, en damier avec le
+   * catalogue livré). NB_VILLES garde la valeur du 4×4 (ancienne constante unique) ; tout calcul passe par nbVilles(formatId).
+   */
   var NB_VILLES = 7;
+  var NB_VILLES_PAR_FORMAT = Object.freeze({ '4x4': 7, '5x5': 8 });
+  /** Nombre de villes du format (« 4x4 » : 7, « 5x5 » : 8) ; format inconnu : 7. */
+  function nbVilles(formatId) { return NB_VILLES_PAR_FORMAT[formatId] || NB_VILLES; }
   var RANGS_COMPARES = 4;       // ancien D6 : écart aux rangs 1 à 4 (champ ecartRang, information seulement)
-  var SEUIL_ECART = 2;          // alerte si l'écart dépasse 2 à un rang de 1 à 7 (docs/archives/16 b)
-  var SEUIL_CINQ_CONTRE_DEUX = 5;
+  var SEUIL_ECART = 2;          // alerte si l'écart dépasse 2 à un rang de 1 à N (N = nbVilles du format ; docs/archives/16 b)
+  var SEUIL_CINQ_CONTRE_DEUX = 5; // majorité bloquante du 4×4 (« 5 contre 2 ») ; par format : seuilMajorite
+  /**
+   * Majorités (docs/18, décision 3 du 2026-10-19) : un joueur strictement plus proche d'au moins N − 2 villes est un blocage
+   * (« 5 contre 2 » en 4×4, « 6 contre 2 » en 5×5) ; en 5×5, 5 villes (« 5 contre 3 ») sont une alerte. Le 4×4 n'a pas d'alerte de majorité.
+   */
+  var SEUIL_MAJORITE_PAR_FORMAT = Object.freeze({ '4x4': 5, '5x5': 6 });
+  var SEUIL_MAJORITE_ALERTE_PAR_FORMAT = Object.freeze({ '5x5': 5 });
+  var LIBELLE_MAJORITE_PAR_FORMAT = Object.freeze({ '4x4': '5 contre 2', '5x5': '6 contre 2' });
+  var LIBELLE_MAJORITE_ALERTE_PAR_FORMAT = Object.freeze({ '5x5': '5 contre 3' });
+  /** Majorité bloquante du format : un joueur plus proche d'au moins ce nombre de villes (4×4 : 5, 5×5 : 6). */
+  function seuilMajorite(formatId) { return SEUIL_MAJORITE_PAR_FORMAT[formatId] || SEUIL_CINQ_CONTRE_DEUX; }
+  /** Majorité d'alerte du format (5×5 : 5), ou null s'il n'y en a pas (4×4). */
+  function seuilMajoriteAlerte(formatId) { return SEUIL_MAJORITE_ALERTE_PAR_FORMAT[formatId] || null; }
+  /** Libellé de la majorité bloquante (« 5 contre 2 », « 6 contre 2 »). */
+  function libelleMajorite(formatId) { return LIBELLE_MAJORITE_PAR_FORMAT[formatId] || LIBELLE_MAJORITE_PAR_FORMAT['4x4']; }
   var SEUIL_APPARITION_LOINTAINE = 7;
   var SEUIL_S = 5;                 // seuil de REJET du générateur, appliqué en 5×5 seulement (REJET_S de generateur.js) ; en 4×4, S n'est qu'un classement (docs/18, 2026-10-18 ; un plateau 4×4 généré reste à S <= 1)
   /** Seuils d'alerte et d'information de S, propres à chaque format (docs/18, décision 1 de 2026-10-18 après docs/60) : 4×4 et 5×5 alerte dès 5, information à 4
@@ -44,16 +65,21 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var SEUIL_S_INFORMATION_PAR_FORMAT = Object.freeze({ '4x4': 4, '5x5': 4 });
   var PORTS_VILLE_MIN = 3;         // 5×5 : ports minimum d'une jonction qui porte une ville ; en dessous, information seulement (docs/36) ; lu par le générateur et les outils
   var PORTS_JONCTION_MIN = G.MIN_PORTS_JONCTION; // ports minimum de toute jonction intérieure (condition ferme du générateur 5×5)
-  /** Villes du 5×5 en « 2-3-2 » (docs/18) : groupes de rangées de jonctions et nombre de villes dans chaque groupe. */
+  /**
+   * Villes du 5×5 en « 2-2-2-2 » (docs/18, décision 1 du 2026-10-19 ; docs/62) : 2 villes par rangée de jonctions, soit 4 par camp
+   * (j <= 2 vert, j >= 3 rouge). Groupes de rangées de jonctions et nombre de villes dans chaque groupe (1 296 placements).
+   * Avec le catalogue livré, seuls les deux damiers sont admissibles ; l'énumération reste générique (tuiles de l'utilisateur).
+   */
   var REPARTITION_VILLES_5X5 = Object.freeze([
     Object.freeze({ rangees: Object.freeze([1]), nb: 2 }),
-    Object.freeze({ rangees: Object.freeze([2, 3]), nb: 3 }),
+    Object.freeze({ rangees: Object.freeze([2]), nb: 2 }),
+    Object.freeze({ rangees: Object.freeze([3]), nb: 2 }),
     Object.freeze({ rangees: Object.freeze([4]), nb: 2 })
   ]);
-  var CONSEIL_5X5 = ' Outils > Placer les villes pose les 7 villes au meilleur placement admissible.';
+  var CONSEIL_5X5 = ' Avec le catalogue livré, les 8 villes se posent en damier (deux dispositions) : Outils > Placer les villes pose les 8 villes au meilleur placement admissible.';
   /**
    * Plateau très déséquilibré (docs/19, arbitrage de docs/20) : écart de plus de SEUIL_BLOCAGE_ECART pas à un
-   * rang de 1 à 7, ou « 5 contre 2 » si CINQ_CONTRE_DEUX_BLOQUANT. Seuils définitifs dans les deux formats
+   * rang de 1 à N, ou la majorité bloquante (« 5 contre 2 » en 4×4, « 6 contre 2 » en 5×5) si CINQ_CONTRE_DEUX_BLOQUANT. Seuils définitifs dans les deux formats
    * (docs/36) ; c'est une erreur sur un plateau complet (la pose reste permise).
    */
   var SEUIL_BLOCAGE_ECART = 3;
@@ -278,12 +304,12 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var estFini = function (x) { return x !== undefined && isFinite(x); };
 
   /**
-   * Conseil 5×5 (docs/60 § 5) : renvoi à « Placer les villes ». Vrai si les 7 villes ne forment pas déjà un placement admissible,
-   * c'est-à-dire si elles ne respectent pas le squelette 2-3-2, ou si une ville est sur une jonction à moins de 3 ports,
+   * Conseil 5×5 (docs/60 § 5, docs/62) : renvoi au damier et à « Placer les villes ». Vrai si les 8 villes ne forment pas déjà un placement
+   * admissible, c'est-à-dire si elles ne respectent pas le squelette 2-2-2-2, ou si une ville est sur une jonction à moins de 3 ports,
    * ou si deux villes sont à moins de 3 cases d'écart (g : graphe du document).
    */
   function conseil5x5Applicable(villes, g) {
-    if (villes.length !== NB_VILLES) return false;
+    if (villes.length !== nbVilles('5x5')) return false;
     var par = {};
     villes.forEach(function (v) { par[v.j] = (par[v.j] || 0) + 1; });
     var squelette = REPARTITION_VILLES_5X5.every(function (gr) {
@@ -297,31 +323,37 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   /**
    * Analyse d'équilibre d'un document (critère de docs/archives/16, seuils de docs/19).
-   * options : villesTraversables, jetons (voir construire), nbVilles (défaut 7), graphe (graphe déjà construit).
+   * options : villesTraversables, jetons (voir construire), nbVilles (défaut nbVilles du format : 7 en 4×4, 8 en 5×5), graphe (graphe déjà
+   * construit). N désigne ci-dessous ce nombre de villes.
    * Joueurs : 1 = vert, 2 = rouge (distances depuis la case d'apparition la plus proche de chaque camp).
    * Renvoie :
    *  - villes : [{id, i, j}] ; D : {1: [distances triées], 2: [...]} (villes inaccessibles exclues) ;
-   *  - parRang : [{rang, d1, d2, ecart, compte}] (compte = rang pris en compte dans S et l'écart, rangs 1 à 7) ;
+   *  - nbVilles : N ; parRang : [{rang, d1, d2, ecart, compte}] (compte = rang pris en compte dans S et l'écart, rangs 1 à N) ;
    *  - ecartRang : plus grand |D1(k) - D2(k)| aux rangs 1 à 4 (ancien D6, information sans alerte), ou null ;
-   *  - S, ecartMax7 : somme et maximum des écarts aux rangs 1 à 7 (docs/archives/16), null si un joueur a moins de
-   *    nbVilles distances (ville inaccessible ou manquante) ;
-   *  - cinqContreDeux : un joueur strictement plus proche de 5 villes ou plus (7 villes posées) ;
+   *  - S, ecartMax7 : somme et maximum des écarts aux rangs 1 à N (docs/archives/16 ; le nom ecartMax7 date du 7 villes et vaut
+   *    pour les N rangs), null si un joueur a moins de N distances (ville inaccessible ou manquante) ;
+   *  - cinqContreDeux : majorité bloquante, un joueur strictement plus proche de seuilMajorite(format) villes ou plus (N villes posées :
+   *    « 5 contre 2 » en 4×4, « 6 contre 2 » en 5×5 ; le nom date du 4×4) ; cinqContreTrois : majorité d'alerte du 5×5 (« 5 contre 3 »),
+   *    toujours faux en 4×4 ;
+   *  - partageSymetrique : autant de villes strictement plus proches de chaque joueur (p1 = p2 : 4/4/0 ou 3/3/2 en 5×5) ; en 5×5, un
+   *    partage non symétrique (N villes posées) est une information (code partage_asymetrique), jamais une alerte ;
    *  - premiereEgale : première ville à la même distance pour les deux joueurs (invariant d) ;
    *  - partage : {1, 2, egalite} (villes strictement plus proches du vert, du rouge, à égalité) ;
    *  - tempo : {1: {3, 4, 5}, 2: {3, 4, 5}} (villes atteignables en au plus 3, 4, 5 pas) ;
    *  - premiereVille : {1, 2, ecart} (distance de la ville la plus proche, null si aucune) ;
    *  - inaccessibles : {1: [{i, j}], 2: [{i, j}]} ; apparitions : {1, 2} (nombre de cases d'apparition) ;
-   *  - blocages : [{code, message}] (plateau très déséquilibré : « 5 contre 2 », écart > SEUIL_BLOCAGE_ECART) ;
+   *  - blocages : [{code, message}] (plateau très déséquilibré : majorité bloquante, écart > SEUIL_BLOCAGE_ECART) ;
    *    tresDesequilibre : blocages non vide ;
    *  - aSurveiller : S >= seuilS(format) (4×4 et 5×5 : 5) ; sInformation : S de seuilSInformation(format) à l'alerte exclue (4×4 et 5×5 : 4), sans alerte ;
-   *  - informations : [{code, message}] (5×5 : ville sur une jonction à moins de 3 ports, jamais une alerte) ;
-   *  - alertes : [{code, message}] ; lacunes : [texte] ; complet : booléen (7 villes, au moins une case
+   *  - informations : [{code, message}] (5×5 : ville sur une jonction à moins de 3 ports, partage non symétrique ; jamais une alerte) ;
+   *  - alertes : [{code, message}] ; lacunes : [texte] ; complet : booléen (N villes, au moins une case
    *    d'apparition par camp, toutes les tuiles posées avec un modèle présent dans la bibliothèque) ; partiel : !complet.
    * Ne lève pas d'exception sur un plateau incomplet.
    */
   function equilibre(doc, options) {
     options = options || {};
-    var nbVilles = options.nbVilles || NB_VILLES;
+    var formatId = M.formatDuDocument(doc).id;
+    var nbV = options.nbVilles || nbVilles(formatId);
     var g = options.graphe || construire(doc, options);
     var villes = g.jonctions.filter(function (j) { return j.type === 'ville'; });
     var lacunes = [];
@@ -334,10 +366,10 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var introuvables = tuilesPosees.filter(function (t) { return !M.modeleParId(doc, t.modeleId); }).length;
     if (tuilesPosees.length < attendues) lacunes.push('Il manque ' + (attendues - tuilesPosees.length) + ' tuile(s) sur ' + attendues + '.');
     if (introuvables) lacunes.push(introuvables + ' tuile(s) posée(s) dont le modèle est introuvable dans la bibliothèque : ignorée(s).');
-    if (villes.length !== nbVilles) {
-      lacunes.push(villes.length < nbVilles
-        ? 'Il manque ' + (nbVilles - villes.length) + ' ville(s) : ' + villes.length + ' posée(s) sur ' + nbVilles + '.'
-        : 'Il y a ' + villes.length + ' villes pour ' + nbVilles + ' prévues.');
+    if (villes.length !== nbV) {
+      lacunes.push(villes.length < nbV
+        ? 'Il manque ' + (nbV - villes.length) + ' ville(s) : ' + villes.length + ' posée(s) sur ' + nbV + '.'
+        : 'Il y a ' + villes.length + ' villes pour ' + nbV + ' prévues.');
     }
     [1, 2].forEach(function (p) {
       if (!g.apparitions[p].length) lacunes.push('Le joueur ' + NOM_JOUEUR[p] + ' n\'a aucune case d\'apparition.');
@@ -360,7 +392,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var parRang = [], ecartRang = null, nbRangs = Math.max(D[1].length, D[2].length);
     for (var k = 0; k < nbRangs; k++) {
       var d1 = k < D[1].length ? D[1][k] : null, d2 = k < D[2].length ? D[2][k] : null;
-      parRang.push({ rang: k + 1, d1: d1, d2: d2, ecart: d1 !== null && d2 !== null ? Math.abs(d1 - d2) : null, compte: k < nbVilles });
+      parRang.push({ rang: k + 1, d1: d1, d2: d2, ecart: d1 !== null && d2 !== null ? Math.abs(d1 - d2) : null, compte: k < nbV });
     }
     if (avecAppar) {
       for (var r = 0; r < RANGS_COMPARES; r++) {
@@ -370,10 +402,10 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     // Des villes inaccessibles ne sont pas une donnée manquante (tuiles, villes et apparitions sont là) :
     // pas de lacune, l'alerte ville_inaccessible les signale et S vaut null.
 
-    // Écart étendu aux rangs 1 à 7 et score S = somme des écarts, seulement si chaque joueur
-    // a ses nbVilles distances (sinon une ville est inaccessible ou manquante : pas de score trompeur)
+    // Écart étendu aux rangs 1 à N et score S = somme des écarts, seulement si chaque joueur
+    // a ses N distances (sinon une ville est inaccessible ou manquante : pas de score trompeur)
     var S = null, ecartMax7 = null;
-    if (avecAppar && Math.min(D[1].length, D[2].length) >= nbVilles) {
+    if (avecAppar && Math.min(D[1].length, D[2].length) >= nbV) {
       parRang.forEach(function (x) {
         if (x.ecart === null) return;
         S = (S === null ? 0 : S) + x.ecart;
@@ -391,16 +423,19 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var premiereVille = { 1: D[1].length ? D[1][0] : null, 2: D[2].length ? D[2][0] : null, ecart: null };
     if (premiereVille[1] !== null && premiereVille[2] !== null) premiereVille.ecart = Math.abs(premiereVille[1] - premiereVille[2]);
     var premiereEgale = premiereVille.ecart === 0;
-    var cinqContreDeux = villes.length === nbVilles && avecAppar && Math.max(partage[1], partage[2]) >= SEUIL_CINQ_CONTRE_DEUX;
+    var majoriteMax = Math.max(partage[1], partage[2]), seuilAlerteMaj = seuilMajoriteAlerte(formatId);
+    var cinqContreDeux = villes.length === nbV && avecAppar && majoriteMax >= seuilMajorite(formatId);
+    var cinqContreTrois = villes.length === nbV && avecAppar && !cinqContreDeux && seuilAlerteMaj !== null && majoriteMax >= seuilAlerteMaj;
+    var partageSymetrique = partage[1] === partage[2];
 
     var villesA4 = { 1: D[1].filter(function (x) { return x <= 4; }).length, 2: D[2].filter(function (x) { return x <= 4; }).length, ecart: null };
     villesA4.ecart = Math.abs(villesA4[1] - villesA4[2]);
 
     // Plateau très déséquilibré (blocages) puis alertes
     var blocages = [], alertes = [], informations = [];
-    var est5x5 = M.formatDuDocument(doc).id === '5x5';
+    var est5x5 = formatId === '5x5';
     var conseil5x5 = est5x5 && conseil5x5Applicable(villes, g) ? CONSEIL_5X5 : '';
-    var sAlerte = seuilS(M.formatDuDocument(doc).id), sInfo = seuilSInformation(M.formatDuDocument(doc).id);
+    var sAlerte = seuilS(formatId), sInfo = seuilSInformation(formatId);
     if (est5x5) {
       villes.forEach(function (v) {
         if (v.ports < PORTS_VILLE_MIN) {
@@ -410,18 +445,25 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     }
     if (cinqContreDeux) {
       var fort = partage[1] >= partage[2] ? 1 : 2;
-      var cinq = { code: 'cinq_contre_deux', message: 'Le joueur ' + NOM_JOUEUR[fort] + ' est plus proche de ' + partage[fort] + ' villes contre ' + partage[3 - fort] + ' pour le joueur ' + NOM_JOUEUR[3 - fort] + ' (« 5 contre 2 »).' +
+      var cinq = { code: 'cinq_contre_deux', message: 'Le joueur ' + NOM_JOUEUR[fort] + ' est plus proche de ' + partage[fort] + ' villes contre ' + partage[3 - fort] + ' pour le joueur ' + NOM_JOUEUR[3 - fort] + ' (« ' + libelleMajorite(formatId) + ' »).' +
         // conseil de pose à la main propre au 4×4 (docs/22 ; le générateur, lui, varie ses jonctions-cases) ; conseil conditionnel propre au 5×5 (docs/36)
-        (M.formatDuDocument(doc).id === '4x4' ? ' Conseil : placer les deux jonctions-cases (sans ville) dans la rangée centrale, par exemple (1, 2) et (3, 2).' : conseil5x5) };
+        (formatId === '4x4' ? ' Conseil : placer les deux jonctions-cases (sans ville) dans la rangée centrale, par exemple (1, 2) et (3, 2).' : conseil5x5) };
       (CINQ_CONTRE_DEUX_BLOQUANT ? blocages : alertes).push(cinq);
     }
+    if (cinqContreTrois) { // 5×5 (docs/18, décision 3 du 2026-10-19) : « 5 contre 3 » est une alerte
+      var fort3 = partage[1] >= partage[2] ? 1 : 2;
+      alertes.push({ code: 'cinq_contre_trois', message: 'Le joueur ' + NOM_JOUEUR[fort3] + ' est plus proche de ' + partage[fort3] + ' villes contre ' + partage[3 - fort3] + ' pour le joueur ' + NOM_JOUEUR[3 - fort3] + ' (« ' + LIBELLE_MAJORITE_ALERTE_PAR_FORMAT[formatId] + ' »).' + conseil5x5 });
+    }
+    if (est5x5 && villes.length === nbV && avecAppar && !partageSymetrique) { // 5×5 (docs/18, décision 2 du 2026-10-19) : information seulement
+      informations.push({ code: 'partage_asymetrique', message: 'Partage non symétrique : ' + partage[1] + ' ville(s) plus proche(s) du joueur vert, ' + partage[2] + ' du joueur rouge, ' + partage.egalite + ' à égalité (information ; le générateur et « Placer les villes » préfèrent un partage symétrique).' });
+    }
     if (ecartMax7 !== null && ecartMax7 > SEUIL_BLOCAGE_ECART) {
-      blocages.push({ code: 'ecart_bloquant', message: 'Un rang de villes (de 1 à 7) est à ' + ecartMax7 + ' pas d\'écart entre les deux joueurs (plus de ' + SEUIL_BLOCAGE_ECART + ').' });
+      blocages.push({ code: 'ecart_bloquant', message: 'Un rang de villes (de 1 à ' + nbV + ') est à ' + ecartMax7 + ' pas d\'écart entre les deux joueurs (plus de ' + SEUIL_BLOCAGE_ECART + ').' });
     } else if (ecartMax7 !== null && ecartMax7 > SEUIL_ECART) {
-      alertes.push({ code: 'ecart_rang_etendu', message: 'Un rang de villes (de 1 à 7) est à ' + ecartMax7 + ' pas d\'écart entre les deux joueurs (plus de ' + SEUIL_ECART + ').' });
+      alertes.push({ code: 'ecart_rang_etendu', message: 'Un rang de villes (de 1 à ' + nbV + ') est à ' + ecartMax7 + ' pas d\'écart entre les deux joueurs (plus de ' + SEUIL_ECART + ').' });
     }
     if (S !== null && S >= sAlerte) {
-      alertes.push({ code: 'score_s', message: 'Score S = ' + S + ' (somme des écarts sur les 7 rangs) : plateau à surveiller (à partir de ' + sAlerte + ').' + (cinqContreDeux ? '' : conseil5x5) });
+      alertes.push({ code: 'score_s', message: 'Score S = ' + S + ' (somme des écarts sur les ' + nbV + ' rangs) : plateau à surveiller (à partir de ' + sAlerte + ').' + (cinqContreDeux || cinqContreTrois ? '' : conseil5x5) });
     }
     if (premiereVille.ecart !== null && premiereVille.ecart !== 0) {
       alertes.push({ code: 'premiere_ville_inegale', message: 'La première ville est à ' + premiereVille[1] + ' pas du joueur vert et à ' + premiereVille[2] + ' pas du joueur rouge (elle devrait être à la même distance).' });
@@ -446,7 +488,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return {
       villes: villes.map(function (v) { return { id: v.id, i: v.i, j: v.j }; }),
       D: D, parRang: parRang, ecartRang: ecartRang, S: S, ecartMax7: ecartMax7, aSurveiller: S !== null && S >= sAlerte, sInformation: S !== null && S >= sInfo && S < sAlerte, villesA4: villesA4, partage: partage, alertes: alertes, informations: informations, tempo: tempo,
-      cinqContreDeux: cinqContreDeux, premiereEgale: premiereEgale, blocages: blocages, tresDesequilibre: blocages.length > 0,
+      nbVilles: nbV, cinqContreDeux: cinqContreDeux, cinqContreTrois: cinqContreTrois, partageSymetrique: partageSymetrique, premiereEgale: premiereEgale, blocages: blocages, tresDesequilibre: blocages.length > 0,
       apparitions: { 1: g.apparitions[1].length, 2: g.apparitions[2].length },
       premiereVille: premiereVille, inaccessibles: inaccessibles, lacunes: lacunes,
       complet: lacunes.length === 0, partiel: lacunes.length > 0,
@@ -859,6 +901,14 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     CONNEXIONS_FAIBLES: CONNEXIONS_FAIBLES,
     connexions: connexions,
     NB_VILLES: NB_VILLES,
+    NB_VILLES_PAR_FORMAT: NB_VILLES_PAR_FORMAT,
+    nbVilles: nbVilles,
+    SEUIL_MAJORITE_PAR_FORMAT: SEUIL_MAJORITE_PAR_FORMAT,
+    SEUIL_MAJORITE_ALERTE_PAR_FORMAT: SEUIL_MAJORITE_ALERTE_PAR_FORMAT,
+    seuilMajorite: seuilMajorite,
+    seuilMajoriteAlerte: seuilMajoriteAlerte,
+    libelleMajorite: libelleMajorite,
+    CONSEIL_5X5: CONSEIL_5X5,
     CHAINE_CIBLE: CHAINE_CIBLE,
     PORTS_VILLE_MIN: PORTS_VILLE_MIN,
     PORTS_JONCTION_MIN: PORTS_JONCTION_MIN,

@@ -21,7 +21,12 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   'use strict';
 
   var RAYON_JONCTION = 15;        // aimantation d'un jeton (D10)
-  var NB_VILLES = 7;              // villes de la composition (docs/18)
+  var NB_VILLES_PAR_FORMAT = { '4x4': 7, '5x5': 8 }; // villes de la composition par format (docs/18 ; 8 en 5×5 depuis les décisions du 2026-10-19)
+  /** Villes visées du document (PM.graphe.nbVilles si chargé, sinon la table locale, identique). */
+  function nbVillesDe(doc) {
+    var id = M().formatDuDocument(doc).id;
+    return PM.graphe && typeof PM.graphe.nbVilles === 'function' ? PM.graphe.nbVilles(id) : (NB_VILLES_PAR_FORMAT[id] || 7);
+  }
 
   function M() { return PM.modele; }
   function G() { return PM.geometrie; }
@@ -508,7 +513,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         clignote: clignote, surbrillance: ui.surbrillance
       });
       if (cleFocus) { var el = scene.querySelector('[data-cle="' + cleFocus + '"]'); if (el) el.focus(); }
-      compteur.textContent = 'Villes posées ' + compterJetons(doc) + '/' + NB_VILLES;
+      compteur.textContent = 'Villes posées ' + compterJetons(doc) + '/' + nbVillesDe(doc);
       var t = selection && M().tuileEn(doc, selection.col, selection.lig);
       if (ui.aPoser) consigne.textContent = 'Pose de « ' + ui.aPoser + ' » : cliquez une cellule éclairée (Échap pour annuler).';
       else if (t) consigne.textContent = 'Tuile (' + t.col + ',' + t.lig + ') sélectionnée : ' +

@@ -27,7 +27,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var CLE_AUTOSAVE = 'plateau-modulaire:autosave';
   /**
    * Plafonds à l'ouverture d'un fichier (audit de sécurité : un fichier hostile ne doit pas bloquer le
-   * navigateur). Très au-dessus de tout usage normal : 5×5 tuiles, 7 villes, une trentaine de modèles.
+   * navigateur). Très au-dessus de tout usage normal : 5×5 tuiles, 8 villes, une trentaine de modèles.
    */
   var LIMITES = { octets: 5e6, modeles: 500, cases: 64, chemins: 256, pivots: 8, passages: 16, tuiles: 64, jetons: 64, texte: 200, coordonnee: 1000, exemplaires: 999 };
   /** Intervalle minimal entre deux écritures dans localStorage (ms). */
@@ -291,6 +291,21 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
           return !!q && signatureModele(q) === signatureModele(m);
         });
       });
+    } catch (e) { return false; }
+  }
+
+  /**
+   * Ancien plateau 5×5 à 7 villes (docs/18, décision 5 du 2026-10-19 : le 5×5 compte désormais 8 villes) : document 5×5 dont les 25 tuiles
+   * sont posées et qui porte exactement 7 villes. Lecture seule ; le format de sauvegarde ne change pas (aucune migration des jetons).
+   * L'interface propose alors de régénérer le plateau (app.js).
+   */
+  function ancienPlateau5x5(doc) {
+    try {
+      var F = M.formatDuDocument(doc), p = doc && doc.plateau;
+      if (F.id !== '5x5' || !p || !Array.isArray(p.tuiles) || !Array.isArray(p.jetons)) return false;
+      var huit = PM.graphe && typeof PM.graphe.nbVilles === 'function' ? PM.graphe.nbVilles('5x5') : 8;
+      var villes = p.jetons.filter(function (j) { return j && j.type === 'capture'; }).length;
+      return villes === huit - 1 && p.tuiles.filter(Boolean).length === F.GRILLE.colonnes * F.GRILLE.lignes;
     } catch (e) { return false; }
   }
 
@@ -619,6 +634,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     fusionnerBibliotheque: fusionnerBibliotheque,
     bibliothequeVersion1: bibliothequeVersion1,
     bibliothequeCataloguePrecedent: bibliothequeCataloguePrecedent,
+    ancienPlateau5x5: ancienPlateau5x5,
     telecharger: telecharger,
     ouvrirFichier: ouvrirFichier,
     autosave: autosave,

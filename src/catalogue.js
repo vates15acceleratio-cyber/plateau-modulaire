@@ -7,7 +7,7 @@
  *      centrales Q1 « Trident à virage » (4 cases, 3 coins, 1 virage sans case ; ×4) et Q2 « Étoile à crochet » (5 cases, 4 coins,
  *      1 crochet ; ×3) ; bords B1 « Bord en V » (×8) et B8 « Bord à virage » (1 passage ; ×1) ; coins K2 (×4) et K4 (×1) ;
  *  - 5×5 (tuiles de 100 mm, tests/catalogue-5x5.test.js) : catalogue « très connecté » de docs/55 (décisions de docs/18, « 5×5 très
- *      connecté ») complété par les centrales de docs/58 (jeu « B3 ») : 2 cases par tuile au plus, ≈ 57 cases par plateau : 9 modèles,
+ *      connecté ») complété par les centrales de docs/58 (jeu « B3 ») : 2 cases par tuile au plus, ≈ 56 cases par plateau (8 villes) : 9 modèles,
  *      28 exemplaires dont 12 centrales pour 9 places (poids = exemplaires) : centrales LC1 « Pont et relais » (×2), LC2 « Pont et
  *      relais décalé » (×1, même topologie), LC3 « Pont et fourche » (T sans case ; ×3), LC4 « Deux ponts » (deux porteuses latérales
  *      opposées, murs E et O déclarés par `murs: [1, 3]` : 2 raccords morts par pose, en information ; ×1), LC5 « Pont et carrefour »
@@ -137,7 +137,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   /*
    * Catalogue 5×5 livré (version 5 du catalogue, docs/53 et docs/55, décisions de docs/18 « 5×5 très connecté ») : voie « porteuse
-   * latérale + relais », 2 cases par tuile au plus, ≈ 57 cases par plateau (48 ou 49 cases de tuiles + 9 jonctions-cases) ; LC5 à LC7 de docs/58. Coordonnées validées par
+   * latérale + relais », 2 cases par tuile au plus, ≈ 56 cases par plateau (48 ou 49 cases de tuiles + 8 jonctions-cases, 8 villes depuis docs/62) ; LC5 à LC7 de docs/58. Coordonnées validées par
    * l'advisor géométrie (docs/55, marges de 3,79 à 10,04 mm). Ids de docs/55 (préfixe L, « latérale ») : aucun n'existe dans les
    * catalogues précédents. Une PORTEUSE LATÉRALE (règle propre au 5×5, PM.modele) dessert les deux coins d'un même côté et porte le
    * raccord du milieu de ce côté ; la porteuse du coin (1 port) porte la paire basse (E2 / S0).

@@ -12,7 +12,7 @@
  * Les fonctions de calcul n'accèdent pas au DOM (testées sous Node) ; seules rasteriser(),
  * telecharger() et ouvrir() utilisent le navigateur.
  * Règles v2 : les tuiles sont imprimées neutres (case d'apparition en noir et blanc, une même tuile sert aux
- * deux camps) ; la planche de jetons porte 7 villes ; l'aperçu du plateau est refusé si le plateau complet est
+ * deux camps) ; la planche de jetons porte 8 villes pour tous les formats (docs/18, décision 4 du 2026-10-19 : 8 en 5×5, 7 et 1 de réserve en 4×4) ; l'aperçu du plateau est refusé si le plateau complet est
  * très déséquilibré (PM.graphe, docs/20).
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
@@ -351,8 +351,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     return enveloppeSvg(planche.largeur, planche.hauteur, corps);
   }
 
-  /** Jetons de la planche : 7 villes ('capture', seul type de jeton). */
-  var JETONS = ['capture', 'capture', 'capture', 'capture', 'capture', 'capture', 'capture'];
+  /** Jetons de la planche : 8 villes ('capture', seul type de jeton), une planche pour tous les formats (8 en 5×5 ; 7 et 1 de réserve en 4×4). */
+  var JETONS = ['capture', 'capture', 'capture', 'capture', 'capture', 'capture', 'capture', 'capture'];
   // Fond perdu des jetons : 1,5 mm autour du Ø 30 (33 mm), choix voulu et moindre que les 3 mm des tuiles. Le passer à 3 mm
   // (Ø 36, pas de 42 mm) fait sortir la rangée de 5 jetons des marges de l'A4 (bord à 3 mm, repères hors feuille) : avis prépresse, docs/26 § 13 (4 colonnes au pas de 44 le permettraient : choix laissé à l’utilisateur, docs/31 remarque 7).
   var PAS_JETON = 38, DIAMETRE_JETON_FP = 33, COLONNES_JETONS = 5;
@@ -366,14 +366,14 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     });
     var margeX = (f.largeur - 150) / 2;
     return {
-      format: 'A4', nom: 'plateau-jetons-A4', titre: 'Plateau modulaire - jetons A4 (7 villes)', numero: 1, total: 1,
+      format: 'A4', nom: 'plateau-jetons-A4', titre: 'Plateau modulaire - jetons A4 (8 villes ; 4×4 : 7 et 1 de réserve)', numero: 1, total: 1,
       largeur: f.largeur, hauteur: f.hauteur, rayonCoupe: rCoupe, rayonFondPerdu: rFp, jetons: jetons, margeX: margeX,
       barre: barreControle(f, margeX)
     };
   }
 
   /**
-   * SVG de la planche de jetons : 7 villes de 33 mm (30 mm + 1,5 mm de fond perdu), pas de 38 mm.
+   * SVG de la planche de jetons : 8 villes de 33 mm (30 mm + 1,5 mm de fond perdu), pas de 38 mm (5 puis 3 par rangée).
    * Repères : quatre petits traits radiaux hors fond perdu, qui pointent vers le cercle de coupe (Ø 30 mm).
    */
   function svgJetons() {
@@ -933,7 +933,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       });
     gPortee.appendChild(gExemplaires);
     gContenu.appendChild(gPortee);
-    var iJetons = ligne(gContenu, 'checkbox', 'jetons', 'jetons', 'Planche des jetons (A4 : 7 villes)', false);
+    var iJetons = ligne(gContenu, 'checkbox', 'jetons', 'jetons', 'Planche des jetons (A4 : 8 villes ; en 4×4, 7 et 1 de réserve)', false);
     var iApercu = ligne(gContenu, 'checkbox', 'apercu', 'apercu', 'Aperçu du plateau assemblé (A3, non imprimable)', false);
 
     var gFormat = groupe('Format de feuille pour les tuiles');
