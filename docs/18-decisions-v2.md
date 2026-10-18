@@ -129,3 +129,11 @@ Après les avis `28-avis-design-5x5.md` (design de jeu) et `29-avis-geometrie-5x
 ## Réponses de l'utilisateur à la revue de la branche `passages` (2026-10-18, `51`)
 - **Rejet de S au générateur** : comportement inchangé depuis la 3.04 : **5×5 : rejet de S ≥ 5 ; 4×4 : pas de rejet, classement des candidats par S** (sans effet pratique, S ≤ 1 sur les plateaux 4×4 générés). *Note de l'orchestrateur* : la phrase « le générateur continue de rejeter S ≥ 5 dans les deux formats » de la section précédente venait d'une question mal formulée par l'orchestrateur ; elle est remplacée par la présente.
 - **Format des documents** : un document dont un modèle a des passages ou des pivots est écrit en **`version: 3`** ; la 3.04 le refuse alors avec un message clair au lieu de perdre les passages sans prévenir. Les documents v1 et v2 s'ouvrent toujours.
+
+## Remarques de l'utilisateur après essai de la 4.00.0 (2026-10-18)
+- **5×5 seulement** (le 4×4 garde ses règles) :
+  - **plus de connexions par case, trois idéalement** : les cases à **deux connexions** doivent représenter **moins de 5 %** des cases (mesure de l'orchestrateur sur 40 plateaux générés en 4.00.0 : 62 % de nœuds à 2 voisins en 5×5, 58 % en 4×4) ;
+  - **plus d'interconnexions entre tuiles** ;
+  - **deux cases par tuile au maximum, sur toutes les tuiles** (coins et bords compris, case d'apparition comprise). Jugement de l'utilisateur sur le 5×5 actuel : « terrible ».
+- Connexions sans case supplémentaires dans l'éditeur : abandonné (« oublie ça »).
+- Conséquences à étudier par les advisors (non encore tranchées) : un coin à 2 cases ressemble au coin direct K1 retiré en v2 ; au plus 50 cases de tuiles + 9 jonctions-cases ≈ 59 cases (décision précédente : 78 à 81) ; règles R1 à R4 (écart d'au moins 3 cases entre villes) et « 3 accès aux villes » à confronter à l'objectif de degré 3.
