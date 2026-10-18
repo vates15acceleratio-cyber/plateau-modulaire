@@ -166,3 +166,11 @@ Après les avis `28-avis-design-5x5.md` (design de jeu) et `29-avis-geometrie-5x
 3. **Critères à 8 villes** : S sur 8 rangs (alerte 5, information 4), écart par rang inchangé (alerte > 2, blocage > 3), **« 6 contre 2 » bloquant, « 5 contre 3 » en alerte**. Le 4×4 garde 7 villes et ses critères.
 4. **Jetons : une planche de 8 pour tous les formats** (1 jeton de réserve en 4×4).
 5. **Anciens documents 5×5 à 7 villes : proposer de régénérer le plateau** à l'ouverture (refus : document inchangé, avec la lacune « il manque 1 ville » ; acceptation annulable par Ctrl+Z).
+
+## Nouvelle consigne de l'utilisateur sur les villes et les intersections (2026-10-19, image fournie)
+Remplace, pour le 5×5, les décisions « 8 villes en damier » de la section précédente (points 1 et 2).
+- **Position par défaut des 8 villes, toujours la même** (lecture de l'orchestrateur sur l'image, jonctions (colonne i, rangée j) de 1 à 4) : **(1,1), (4,1), (2,2), (3,2), (2,3), (3,3), (1,4), (4,4)** — les deux jonctions extrêmes des rangées 1 et 4 et le carré central ; 4 villes par camp, figure symétrique. Le générateur pose les villes à ces positions ; **l'utilisateur décide s'il veut les déplacer**.
+- **Alerte bloquante s'il y a plus de 8 villes** (pose de l'utilisateur).
+- **Les cases blanches aux intersections deviennent des « campements »** : une intersection est **soit un campement, soit une ville**. Positions prédéfinies par le générateur ; l'utilisateur les modifie s'il le souhaite. (Nouveau vocabulaire : « campement » remplace « jonction-case » dans l'interface et les textes.)
+- « Je ne pense pas que tu aies besoin de changer grand-chose. »
+- **À vérifier à la reprise (orchestrateur)** : avec ce motif fixe, (2,2)–(3,2) et (2,3)–(3,3) sont des jonctions voisines, que les porteuses latérales du catalogue B3 peuvent mettre à 2 pas ; le générateur doit donc orienter les centrales pour tenir l'écart d'au moins 3 cases et les 3 ports aux villes — à mesurer ; si c'est impossible ou trop rare, soumettre à l'utilisateur l'assouplissement de l'écart pour les villes par défaut. Critères à 8 villes (`62` § 2 ; « 6 contre 2 », « 5 contre 3 », S sur 8 rangs), planche de 8 jetons et proposition de régénérer les anciens 5×5 restent valables. Le travail partiel de `wip-8-villes` (placement générique en damier) est en grande partie dépassé.
