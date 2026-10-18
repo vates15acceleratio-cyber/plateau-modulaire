@@ -159,3 +159,10 @@ Après les avis `28-avis-design-5x5.md` (design de jeu) et `29-avis-geometrie-5x
 2. **Cases à ≤ 2 connexions : information** (pas d'alerte).
 3. **« 4 contre 3 » : 8 villes en 5×5, toujours 8**, « pour garder un jeu symétrique » (4 villes par camp). Le 4×4 garde 7 villes. À étudier par l'advisor design de jeu (placements, écart de 3 cases, critères d'équilibre à adapter) avant production ; il faut 8 jetons ville à imprimer en 5×5.
 4. **Goulets en 4×4 : la préférence anti-goulets s'étend au 4×4.**
+
+## Décisions de l'utilisateur sur les 8 villes en 5×5 (2026-10-19, `62`)
+1. **8 villes en damier** acceptées : avec le catalogue livré, deux dispositions seulement (« 2-2-2-2 », damiers pair et impair), 4 villes par camp (j ≤ 2 / j ≥ 3), symétrie par demi-tour. Énumération générique conservée (des tuiles de l'utilisateur peuvent rendre d'autres placements admissibles).
+2. **Partage non symétrique (4/3/1) : préférence seulement** au générateur (pas de rejet) ; information dans l'éditeur ; « Placer les villes » préfère un partage symétrique.
+3. **Critères à 8 villes** : S sur 8 rangs (alerte 5, information 4), écart par rang inchangé (alerte > 2, blocage > 3), **« 6 contre 2 » bloquant, « 5 contre 3 » en alerte**. Le 4×4 garde 7 villes et ses critères.
+4. **Jetons : une planche de 8 pour tous les formats** (1 jeton de réserve en 4×4).
+5. **Anciens documents 5×5 à 7 villes : proposer de régénérer le plateau** à l'ouverture (refus : document inchangé, avec la lacune « il manque 1 ville » ; acceptation annulable par Ctrl+Z).
