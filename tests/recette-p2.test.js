@@ -333,7 +333,7 @@ test('export : étiquette longue (60 caractères) reste dans la feuille et ne re
 test('export : SVG bien formé (analyseur XML), taille en mm égale au viewBox, une tuile = un clipPath', { skip: SANS_PYMUPDF }, () => {
   const doc = docCatalogue();
   const sortie = E.preparerSorties(doc, { format: 'A3', jetons: true, apercu: true });
-  assert.strictEqual(sortie.feuilles.length, 6);
+  assert.strictEqual(sortie.feuilles.length, 7); // 4 planches A3, jetons recto et verso, aperçu
   const analyses = analyseXml(sortie.feuilles.map((f) => f.svg), 'cat');
   analyses.forEach((a, k) => {
     assert.ok(a.ok, 'SVG mal formé (' + sortie.feuilles[k].nom + ') : ' + a.erreur);
@@ -492,29 +492,39 @@ test('export : PDF A4 du catalogue (11 pages 210 x 297) et PDF de la bibliothèq
   assert.ok(!texte.includes('C3') && texte.includes('K2-2') && !texte.some((t) => t.startsWith('K2-3')));
 });
 
-test('export : PDF des jetons (A4) et de l\'aperçu (A3) : tailles, texte, repères', { skip: SANS_PYMUPDF }, () => {
+test('export : PDF des jetons recto-verso (2 pages A4) et de l\'aperçu (A3) : tailles, texte, repères', { skip: SANS_PYMUPDF }, () => {
   const sortie = E.preparerSorties(plateau('export-2').doc, { tuiles: false, jetons: true, apercu: true });
-  assert.strictEqual(sortie.feuilles.length, 2);
+  assert.strictEqual(sortie.feuilles.length, 3);
   const pdf = E.pdfDepuisPlanches(sortie.feuilles);
   const r = analysePdf(pdf, 'jetons-apercu', []);
-  assert.strictEqual(r.n, 2);
+  assert.strictEqual(r.n, 3);
   assert.strictEqual(r['reparé'], false);
-  assert.ok(Math.abs(r.tailles[0][0] - 210) < 0.1 && Math.abs(r.tailles[0][1] - 297) < 0.1);
-  assert.ok(Math.abs(r.tailles[1][0] - 297) < 0.1 && Math.abs(r.tailles[1][1] - 420) < 0.1);
-  assert.ok(r.textes[0].includes('100 mm') && r.textes[0].includes('jetons'));
-  assert.ok(r.textes[1].includes('non imprimable'), 'aperçu marqué « non imprimable »');
-  assert.ok(r.textes[1].includes('réduit à 56'), 'texte accentué de l\'aperçu : ' + JSON.stringify(r.textes[1]));
-  // jetons : 8 villes et 8 campements de Ø 33 mm au pas de 38 mm, une planche pour tous les formats (docs/18, 2026-10-19)
-  const j = E.planchesJetons();
-  assert.strictEqual(j.jetons.length, 16);
-  assert.strictEqual(j.jetons.filter((x) => x.type === 'capture').length, 8);
-  assert.strictEqual(j.jetons.filter((x) => x.type === 'campement').length, 8);
-  j.jetons.forEach((x) => assert.ok(x.cx - 16.5 >= 5 && x.cx + 16.5 <= 205 && x.cy - 16.5 >= 5 && x.cy + 16.5 <= 292, 'jeton hors feuille'));
-  for (let a = 0; a < j.jetons.length; a++) for (let b = a + 1; b < j.jetons.length; b++) {
-    const d = Math.hypot(j.jetons[a].cx - j.jetons[b].cx, j.jetons[a].cy - j.jetons[b].cy);
-    assert.ok(d >= 33 - 1e-9, 'jetons qui se chevauchent');
+  for (const k of [0, 1]) assert.ok(Math.abs(r.tailles[k][0] - 210) < 0.1 && Math.abs(r.tailles[k][1] - 297) < 0.1);
+  assert.ok(Math.abs(r.tailles[2][0] - 297) < 0.1 && Math.abs(r.tailles[2][1] - 420) < 0.1);
+  assert.ok(r.textes[0].includes('100 mm') && r.textes[0].includes('page 1/2 : recto (16 campements)'));
+  assert.ok(r.textes[1].includes('page 2/2 : verso (16 villes)') && !r.textes[1].includes('100 mm'));
+  for (const k of [0, 1]) {
+    assert.ok(r.textes[k].includes('recto-verso, retournement bord long'), 'consigne recto-verso page ' + (k + 1));
+    assert.ok(!r.textes[k].includes('?'), 'caractère hors WinAnsi page ' + (k + 1) + ' : ' + JSON.stringify(r.textes[k]));
   }
-  assert.ok(Math.abs(j.rayonCoupe * 2 - 30) < 1e-9 && Math.abs(j.rayonFondPerdu * 2 - 33) < 1e-9);
+  assert.ok(r.textes[0].includes('Découper de ce côté'), 'texte accentué du recto : ' + JSON.stringify(r.textes[0]));
+  assert.ok(r.textes[2].includes('non imprimable'), 'aperçu marqué « non imprimable »');
+  assert.ok(r.textes[2].includes('réduit à 56'), 'texte accentué de l\'aperçu : ' + JSON.stringify(r.textes[2]));
+  // 16 jetons Ø 30 au pas de 38 mm, une grille pour tous les formats (docs/18, 2026-10-19) ; verso en miroir, Ø 36 noir
+  const j = E.planchesJetons(), v = j.verso;
+  assert.strictEqual(j.jetons.length, 16);
+  assert.strictEqual(v.jetons.length, 16);
+  assert.ok(j.jetons.every((x) => x.type === 'campement') && v.jetons.every((x) => x.type === 'capture'));
+  [j, v].forEach((page) => {
+    const rf = page.rayonFondPerdu;
+    page.jetons.forEach((x) => assert.ok(x.cx - rf >= 5 && x.cx + rf <= 205 && x.cy - rf >= 5 && x.cy + rf <= 292, 'jeton hors feuille'));
+    for (let a = 0; a < page.jetons.length; a++) for (let b = a + 1; b < page.jetons.length; b++) {
+      const d = Math.hypot(page.jetons[a].cx - page.jetons[b].cx, page.jetons[a].cy - page.jetons[b].cy);
+      assert.ok(d >= 2 * rf - 1e-9, 'jetons qui se chevauchent');
+    }
+  });
+  v.jetons.forEach((x, k) => assert.ok(Math.abs(x.cx + j.jetons[k].cx - 210) < 1e-9 && x.cy === j.jetons[k].cy, 'miroir ' + k));
+  assert.ok(Math.abs(j.rayonCoupe * 2 - 30) < 1e-9 && Math.abs(v.rayonFondPerdu * 2 - 36) < 1e-9);
 });
 
 test('export : injection, identifiants hostiles dans le PDF (échappement, texte relu tel quel, aucune action active)', { skip: SANS_PYMUPDF }, () => {

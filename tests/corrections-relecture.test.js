@@ -139,13 +139,14 @@ test('jetons : fond perdu de 1,5 mm (Ø 33 pour Ø 30), tous les jetons dans les
   const p = X.planchesJetons();
   assert.equal(p.rayonCoupe, 15);
   assert.equal(p.rayonFondPerdu, 16.5);
-  assert.equal(p.jetons.length, 16); // 8 villes et 8 campements (docs/18, 2026-10-19)
+  assert.equal(p.jetons.length, 16); // 16 jetons recto-verso, campements au recto (docs/18, 2026-10-19)
   for (const j of p.jetons) {
     assert.ok(j.cx - 16.5 >= 3 - 1e-9 && j.cx + 16.5 <= p.largeur - 3 + 1e-9, 'marge latérale ' + j.cx);
     assert.ok(j.cy - 16.5 >= 3 - 1e-9 && j.cy + 16.5 <= p.hauteur - 3 + 1e-9, 'marge verticale ' + j.cy);
   }
   assert.ok(Math.abs(p.jetons[1].cx - p.jetons[0].cx - 38) < 1e-9);
-  assert.ok((X.svgJetons().match(/r="16\.5"/g) || []).length >= 7);
+  // fond perdu noir imprimé au verso seulement (villes), 3 mm contre le décalage recto-verso : Ø 36
+  assert.equal((X.svgJetons('verso').match(/r="18" fill=/g) || []).length, 16);
 });
 
 /* ---------- migration v1 (cases Ø 24) ---------- */

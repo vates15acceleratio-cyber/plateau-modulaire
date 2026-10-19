@@ -260,33 +260,52 @@ test('SVG de planche A3 : dimensions en mm, viewBox, balises équilibrées, une 
   assert.match(E.svgPlanche(doc, E.calepiner(doc, { format: 'A4' })[0]), /width="210mm" height="297mm" viewBox="0 0 210 297"/);
 });
 
-test('SVG de la planche des jetons, une pour tous les formats : 8 villes et 8 campements au pas de 38 mm, ville = disque noir de 33 mm', () => {
-  const svg = E.svgJetons();
-  assert.match(svg, /width="210mm" height="297mm" viewBox="0 0 210 297"/);
-  equilibre(svg);
-  const p = E.planchesJetons();
+test('SVG des jetons recto-verso, un jeu pour tous les formats : 16 campements au recto, 16 villes en miroir au verso', () => {
+  const recto = E.svgJetons(), verso = E.svgJetons('verso');
+  assert.equal(E.svgJetons('recto'), recto);
+  [recto, verso].forEach(svg => { assert.match(svg, /width="210mm" height="297mm" viewBox="0 0 210 297"/); equilibre(svg); });
+  const p = E.planchesJetons(), v = p.verso;
   assert.equal(p.jetons.length, 16);
-  const villes = p.jetons.filter(j => j.type === 'capture'), camps = p.jetons.filter(j => j.type === 'campement');
-  assert.equal(villes.length, 8);
-  assert.equal(camps.length, 8);
-  assert.match(p.titre, /8 villes, 8 campements\)$/);
-  assert.deepEqual(p.sections.map(s => [s.type, s.nombre]), [['capture', 8], ['campement', 8]]);
-  p.sections.forEach(s => assert.ok(svg.includes('>' + s.texte + '</text>'), s.texte));
-  assert.equal((svg.match(/<circle [^>]*r="15" fill="none" stroke="#000000"/g) || []).length, 16, 'cercle de coupe par jeton');
-  assert.ok(Math.abs(villes[1].cx - villes[0].cx - 38) < 1e-9);
-  assert.ok(Math.abs(villes[5].cy - villes[0].cy - 38) < 1e-9);
-  assert.ok(Math.abs(camps[5].cy - camps[0].cy - 38) < 1e-9);
-  // fond perdu noir pour les villes seulement (campement : papier blanc)
-  assert.equal((svg.match(/r="16\.5"/g) || []).length, 8);
-  assert.ok(svg.includes(R.contenuJeton('capture', villes[0].cx, villes[0].cy)));
-  assert.ok(svg.includes(R.contenuJeton('campement', camps[0].cx, camps[0].cy)));
-  // deux sections sans chevauchement : repères de la dernière rangée de villes au-dessus du titre des campements
-  const basVilles = Math.max(...villes.map(j => j.cy)) + 16.5 + 4, titreCamp = p.sections[1].y - 3;
-  assert.ok(basVilles < titreCamp, basVilles + ' < ' + titreCamp);
-  assert.ok(p.sections[0].y < Math.min(...villes.map(j => j.cy)) - 16.5 - 4);
-  assert.ok(Math.min(...camps.map(j => j.cy)) - 16.5 - 4 > p.sections[1].y);
-  // chaque jeton, fond perdu compris, tient dans la zone imprimable
-  p.jetons.forEach(j => assert.ok(j.cx - 16.5 >= 5 && j.cx + 16.5 <= 205 && j.cy + 16.5 <= 292));
+  assert.equal(v.jetons.length, 16);
+  assert.ok(p.jetons.every(j => j.type === 'campement') && v.jetons.every(j => j.type === 'capture'));
+  assert.match(p.titre, /page 1\/2 : recto \(16 campements\)$/);
+  assert.match(v.titre, /page 2\/2 : verso \(16 villes\)$/);
+  // miroir du retournement bord long : la ville n au dos du campement n, en (210 - cx, cy)
+  v.jetons.forEach((j, k) => {
+    assert.equal(j.numero, p.jetons[k].numero);
+    assert.ok(Math.abs(j.cx - (210 - p.jetons[k].cx)) < 1e-9 && Math.abs(j.cy - p.jetons[k].cy) < 1e-9, 'miroir ' + k);
+  });
+  // grille 4 x 4 au pas de 38, centrée dans les deux sens (mêmes positions en retournement bord court)
+  assert.ok(Math.abs(p.jetons[1].cx - p.jetons[0].cx - 38) < 1e-9 && Math.abs(p.jetons[4].cy - p.jetons[0].cy - 38) < 1e-9);
+  const cles = js => js.map(j => j.cx.toFixed(6) + ',' + j.cy.toFixed(6)).sort().join(';');
+  assert.equal(cles(p.jetons), cles(p.jetons.map(j => ({ cx: 210 - j.cx, cy: 297 - j.cy }))));
+  // recto : contenu de PM.rendu, cercle de coupe et 4 repères par jeton, barre de 100 mm ; pas de fond perdu imprimé
+  assert.ok(recto.includes(R.contenuJeton('campement', p.jetons[0].cx, p.jetons[0].cy)));
+  assert.equal((recto.match(/<circle [^>]*r="15" fill="none" stroke="#000000"/g) || []).length, 16, 'cercle de coupe par jeton');
+  assert.equal((recto.match(/<line /g) || []).length, 16 * 4 + 12, 'repères + barre (trait + 11 graduations)');
+  assert.ok(!/r="1[68](\.5)?" fill="#/.test(recto));
+  assert.ok(recto.includes('>100 mm</text>'));
+  // verso : disque noir de fond perdu Ø 36 sous chaque ville, aucun repère ni cercle de coupe, pas de barre
+  assert.equal(v.rayonFondPerdu, 18);
+  assert.equal((verso.match(new RegExp('r="18" fill="' + R.COULEURS.noir + '"', 'g')) || []).length, 16);
+  assert.ok(verso.includes(R.contenuJeton('capture', v.jetons[0].cx, v.jetons[0].cy)));
+  assert.equal((verso.match(/<line /g) || []).length, 0);
+  assert.equal((verso.match(/fill="none"/g) || []).length, 0);
+  // 3 mm de fond perdu au verso contre un décalage recto-verso de 2 mm et 0,3 mm de découpe ; disques du verso disjoints
+  assert.ok(v.rayonFondPerdu - p.rayonCoupe >= 2 + 0.3);
+  assert.ok(p.pas >= 2 * v.rayonFondPerdu);
+  // consignes : sur les deux pages, sans caractère hors WinAnsi (’ deviendrait « ? » dans le PDF), dans la largeur utile
+  [p, v].forEach((page, k) => {
+    const svg = k ? verso : recto;
+    page.textes.concat([{ texte: page.titre }]).forEach(t => {
+      assert.ok(svg.includes('>' + t.texte + '</text>'), t.texte);
+      assert.ok([...t.texte].every(c => c.charCodeAt(0) <= 255), t.texte);
+    });
+    assert.ok(page.textes.some(t => /recto-verso, retournement bord long/.test(t.texte)));
+    page.textes.forEach(t => assert.ok(E.largeurTexte(t.texte, t.taille) <= 150, t.texte));
+  });
+  // tout tient dans la zone imprimable, repères du recto et fond perdu du verso compris
+  p.jetons.forEach(j => assert.ok(j.cx - 22 >= 5 && j.cx + 22 <= 205 && j.cy - 22 > 40 && j.cy + 22 <= 280));
 });
 
 test('SVG de l\'aperçu : A3, marqué non imprimable, sans repères de coupe', () => {
@@ -492,10 +511,27 @@ test('preparerSorties : planches, jetons, aperçu ; rien de coché = aucune feui
   const doc = doc20();
   const s = E.preparerSorties(doc, { format: 'A3', jetons: true, apercu: true });
   assert.ok(s.feuilles.find(f => f.type === 'apercu').svg.includes('Aperçu'));
-  assert.deepEqual(s.feuilles.map(f => f.nom), ['plateau-tuiles-A3-1', 'plateau-tuiles-A3-2', 'plateau-tuiles-A3-3', 'plateau-tuiles-A3-4', 'plateau-jetons-A4', 'plateau-apercu-A3']);
+  assert.deepEqual(s.feuilles.map(f => f.nom), ['plateau-tuiles-A3-1', 'plateau-tuiles-A3-2', 'plateau-tuiles-A3-3', 'plateau-tuiles-A3-4', 'plateau-jetons-recto-A4', 'plateau-jetons-verso-A4', 'plateau-apercu-A3']);
   assert.equal(s.nbTuiles, 20);
   assert.equal(E.preparerSorties(doc, { tuiles: false }).feuilles.length, 0);
   assert.equal(E.preparerSorties(doc, { portee: 'posees' }).feuilles.length, 0); // rien de posé
+});
+
+test('PDF des jetons : recto et verso toujours dans le même fichier, page 1 recto, page 2 verso', async () => {
+  const doc = doc20();
+  const seuls = E.preparerSorties(doc, { tuiles: false, jetons: true }).feuilles;
+  assert.deepEqual(seuls.map(f => [f.nom, f.groupe]), [['plateau-jetons-recto-A4', 'plateau-jetons-recto-verso-A4'], ['plateau-jetons-verso-A4', 'plateau-jetons-recto-verso-A4']]);
+  assert.equal(seuls[0].svg, E.svgJetons('recto'));
+  assert.equal(seuls[1].svg, E.svgJetons('verso'));
+  const commun = await E.produireFichiers(seuls, 'pdf', false);
+  assert.deepEqual(commun.map(f => f.nom), ['plateau-jetons-recto-verso-A4.pdf']);
+  // « un fichier par planche » : les tuiles séparées, les deux faces des jetons gardées ensemble
+  const tout = E.preparerSorties(doc, { format: 'A3', jetons: true, apercu: true }).feuilles;
+  const separes = await E.produireFichiers(tout, 'pdf', true);
+  assert.deepEqual(separes.map(f => f.nom), ['plateau-tuiles-A3-1.pdf', 'plateau-tuiles-A3-2.pdf', 'plateau-tuiles-A3-3.pdf', 'plateau-tuiles-A3-4.pdf',
+    'plateau-jetons-recto-verso-A4.pdf', 'plateau-apercu-A3.pdf']);
+  const pdf = Buffer.from(await separes[4].blob.arrayBuffer()).toString('latin1');
+  assert.match(pdf, /\/Count 2 /);
 });
 
 test('le catalogue réel (comptes globaux) : 24 tuiles, 4 planches A3, 12 planches A4, conversion PDF complète', () => {

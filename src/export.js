@@ -1,5 +1,5 @@
 /*
- * export.js : export pour impression (planches de tuiles, planche de jetons, aperçu du plateau).
+ * export.js : export pour impression (planches de tuiles, jetons recto-verso, aperçu du plateau).
  * Voir docs/archives/6-avis-prepresse.md. Unité interne : le millimètre.
  *
  * Architecture : une seule source, le SVG.
@@ -12,7 +12,7 @@
  * Les fonctions de calcul n'accèdent pas au DOM (testées sous Node) ; seules rasteriser(),
  * telecharger() et ouvrir() utilisent le navigateur.
  * Règles v2 : les tuiles sont imprimées neutres (case d'apparition en noir et blanc, une même tuile sert aux
- * deux camps) ; la planche de jetons porte 8 villes et 8 campements (un campement = intersection sans ville) ; l'aperçu du plateau est refusé si le plateau complet est
+ * deux camps) ; les jetons sont 16 jetons recto-verso, campement au recto et ville au verso (deux pages A4) ; l'aperçu du plateau est refusé si le plateau complet est
  * très déséquilibré (PM.graphe, docs/20).
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
@@ -351,55 +351,76 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     return enveloppeSvg(planche.largeur, planche.hauteur, corps);
   }
 
-  /**
-   * Sections de la planche de jetons, une planche pour tous les formats (docs/18, 2026-10-19) : 8 villes ('capture' ;
-   * 8 en 5×5, 7 en 4×4 et 1 de réserve) et 8 campements ('campement', dessin seulement : une intersection sans ville ;
-   * 16 − 8 = 8 en 5×5, 9 − 7 = 2 en 4×4 et 6 de réserve). `y` : centre de la première rangée (mm).
+  /*
+   * Jetons recto-verso, un seul jeu pour tous les formats (docs/18, 2026-10-19) : 16 jetons Ø 30, campement (feu de
+   * bois, disque blanc) au recto, ville (couronne, disque noir) au verso ; un même jeton sert de ville ou de campement
+   * selon la face posée. Deux pages A4 à imprimer en recto-verso, retournement bord long : en A4 portrait, le point
+   * (x, y) du recto a pour dos le point (largeur - x, y) du verso, d’où les villes placées en miroir.
+   * Décalage recto-verso des imprimantes courantes : 1 à 2 mm (plus 0,3 mm de découpe). On découpe côté recto, sur
+   * les cercles (seule page à repères) : l’anneau du campement, à 1,2 mm de la coupe, reste concentrique. Le fond du
+   * recto est le papier blanc (rien à prolonger) ; le verso, noir jusqu’au bord, a un fond perdu noir de 3 mm (Ø 36),
+   * plus large que le décalage : aucun croissant blanc côté ville, seule la couronne peut être excentrée de 1 à 2 mm.
+   * Grille 4 x 4 au pas de 38 mm, centrée sur la feuille dans les deux sens : les positions sont les mêmes après un
+   * retournement bord long ou bord court (une erreur de réglage ne décale donc pas les faces).
    */
-  var SECTIONS_JETONS = [
-    { type: 'capture', nombre: 8, y: 44, titre: 'Villes : 8 (5x5 : 8 ; 4x4 : 7 et 1 de réserve)' },
-    { type: 'campement', nombre: 8, y: 137, titre: 'Campements : 8 (5x5 : 16 intersections - 8 villes ; 4x4 : 9 - 7 = 2 et 6 de réserve)' }
-  ];
-  // Fond perdu des jetons : 1,5 mm autour du Ø 30 (33 mm), choix voulu et moindre que les 3 mm des tuiles. Le passer à 3 mm
-  // (Ø 36, pas de 42 mm) fait sortir la rangée de 5 jetons des marges de l'A4 (bord à 3 mm, repères hors feuille) : avis prépresse, docs/26 § 13 (4 colonnes au pas de 44 le permettraient : choix laissé à l’utilisateur, docs/31 remarque 7).
-  var PAS_JETON = 38, DIAMETRE_JETON_FP = 33, COLONNES_JETONS = 5;
+  var PAS_JETON = 38, COLONNES_JETONS = 4, RANGEES_JETONS = 4;
+  // Recto : zone réservée autour de la coupe (papier blanc, rien n’y est imprimé), les repères commencent 1,5 mm au-delà
+  var DIAMETRE_JETON_FP = 33;
+  // Verso : fond perdu noir de 3 mm autour du Ø 30 (2 mm de décalage + 0,3 mm de découpe, avec de la marge)
+  var DIAMETRE_JETON_FP_VERSO = G.DIAMETRE_JETON + 2 * FOND_PERDU;
+  var CONSIGNE_RECTO_VERSO = 'Imprimer ces 2 pages seules, en recto-verso, retournement bord long, taille réelle (100 %).';
 
   /**
-   * Géométrie de la planche de jetons (A4) : centres, rayon de coupe, textes. `jetons` : villes puis campements,
-   * chacun { type, cx, cy } ; `sections` : titre de chaque section et sa position.
+   * Géométrie des deux pages de jetons (A4). Le premier niveau décrit le recto : `jetons` = 16 campements
+   * { type, cx, cy, numero }, `rayonCoupe`, `rayonFondPerdu`, `textes`, `barre` ; `verso` décrit la page 2 :
+   * 16 villes, la ville `numero` en (largeur - cx, cy) du campement de même numéro, `rayonFondPerdu` 18 mm.
    */
   function planchesJetons() {
-    var f = FORMATS.A4, rCoupe = G.DIAMETRE_JETON / 2, rFp = DIAMETRE_JETON_FP / 2;
-    var largeurGrille = (COLONNES_JETONS - 1) * PAS_JETON + DIAMETRE_JETON_FP, x0 = (f.largeur - largeurGrille) / 2 + rFp;
-    var margeX = (f.largeur - 150) / 2, jetons = [], sections = [];
-    SECTIONS_JETONS.forEach(function (sec) {
-      // titre de section au-dessus des repères de la première rangée (repère le plus haut : rFp + 4 mm au-dessus du centre)
-      sections.push({ type: sec.type, nombre: sec.nombre, texte: sec.titre, x: margeX, y: sec.y - rFp - 6.5 });
-      for (var k = 0; k < sec.nombre; k++) {
-        jetons.push({ type: sec.type, cx: x0 + (k % COLONNES_JETONS) * PAS_JETON, cy: sec.y + Math.floor(k / COLONNES_JETONS) * PAS_JETON });
-      }
-    });
+    var f = FORMATS.A4, rCoupe = G.DIAMETRE_JETON / 2, margeX = (f.largeur - 150) / 2;
+    var x0 = f.largeur / 2 - (COLONNES_JETONS - 1) * PAS_JETON / 2, y0 = f.hauteur / 2 - (RANGEES_JETONS - 1) * PAS_JETON / 2;
+    var recto = [], verso = [];
+    for (var k = 0; k < COLONNES_JETONS * RANGEES_JETONS; k++) {
+      var cx = x0 + (k % COLONNES_JETONS) * PAS_JETON, cy = y0 + Math.floor(k / COLONNES_JETONS) * PAS_JETON;
+      recto.push({ type: 'campement', cx: cx, cy: cy, numero: k + 1 });
+      verso.push({ type: 'capture', cx: f.largeur - cx, cy: cy, numero: k + 1 });
+    }
+    function textes(lignes) {
+      return lignes.map(function (t, i) { return { texte: t, x: margeX, y: 18 + 5 * i, taille: 3, ancre: 'start', gras: false }; });
+    }
     return {
-      format: 'A4', nom: 'plateau-jetons-A4', titre: 'Plateau modulaire - jetons A4 (8 villes, 8 campements)', numero: 1, total: 1,
-      largeur: f.largeur, hauteur: f.hauteur, rayonCoupe: rCoupe, rayonFondPerdu: rFp, jetons: jetons, sections: sections, margeX: margeX,
-      barre: barreControle(f, margeX)
+      format: 'A4', nom: 'plateau-jetons-recto-A4', groupe: 'plateau-jetons-recto-verso-A4', face: 'recto', numero: 1, total: 2,
+      titre: 'Plateau modulaire - jetons recto-verso A4, page 1/2 : recto (16 campements)',
+      largeur: f.largeur, hauteur: f.hauteur, pas: PAS_JETON, rayonCoupe: rCoupe, rayonFondPerdu: DIAMETRE_JETON_FP / 2, jetons: recto,
+      textes: textes(['Jetons recto-verso : 16 (campement / ville), pour tous les formats.', CONSIGNE_RECTO_VERSO,
+        'Découper de ce côté, sur les cercles (Ø 30 mm) : les repères de coupe sont sur cette page seulement.']),
+      margeX: margeX, barre: barreControle(f, margeX),
+      verso: {
+        format: 'A4', nom: 'plateau-jetons-verso-A4', groupe: 'plateau-jetons-recto-verso-A4', face: 'verso', numero: 2, total: 2,
+        titre: 'Plateau modulaire - jetons recto-verso A4, page 2/2 : verso (16 villes)',
+        largeur: f.largeur, hauteur: f.hauteur, pas: PAS_JETON, rayonCoupe: rCoupe, rayonFondPerdu: DIAMETRE_JETON_FP_VERSO / 2, jetons: verso,
+        textes: textes(['Jetons recto-verso : 16 (campement / ville), pour tous les formats.', CONSIGNE_RECTO_VERSO,
+          'Villes placées en miroir : chaque ville tombe au dos de son campement.',
+          'Fond perdu noir de 3 mm contre le décalage recto-verso ; ne pas découper de ce côté.']),
+        margeX: margeX
+      }
     };
   }
 
   /**
-   * SVG de la planche de jetons : 8 villes et 8 campements de 33 mm (30 mm + 1,5 mm de fond perdu), pas de 38 mm.
-   * Fond perdu noir pour la ville (disque noir), blanc (papier) pour le campement.
-   * Repères : quatre petits traits radiaux hors fond perdu, qui pointent vers le cercle de coupe (Ø 30 mm).
+   * SVG d'une page de jetons, `face` = 'recto' (par défaut) ou 'verso'.
+   * Recto : 16 campements, cercle de coupe (Ø 30 mm) en trait fin et quatre petits traits radiaux hors de la zone
+   * réservée, qui pointent vers lui ; barre de contrôle de 100 mm. Verso : 16 villes en miroir, chacune sur un disque
+   * noir de fond perdu (Ø 36), sans repère (des traits décalés de 1 à 2 mm du recto tromperaient la découpe).
    */
-  function svgJetons() {
-    var p = planchesJetons(), corps = '';
-    p.sections.forEach(function (s) { corps += svgTexte({ texte: s.texte, x: s.x, y: s.y, taille: 3, ancre: 'start', gras: true }); });
-    p.jetons.forEach(function (j) {
-      if (j.type === 'capture') {
-        corps += '<circle cx="' + nb(j.cx) + '" cy="' + nb(j.cy) + '" r="' + p.rayonFondPerdu + '" fill="' + R.COULEURS.noir + '"/>';
+  function svgJetons(face) {
+    var p = planchesJetons(), page = face === 'verso' ? p.verso : p, corps = '';
+    page.jetons.forEach(function (j) {
+      if (page === p.verso) {
+        corps += '<circle cx="' + nb(j.cx) + '" cy="' + nb(j.cy) + '" r="' + nb(page.rayonFondPerdu) + '" fill="' + R.COULEURS.noir + '"/>';
+        corps += R.contenuJeton(j.type, j.cx, j.cy);
+        return;
       }
       corps += R.contenuJeton(j.type, j.cx, j.cy);
-      // Cercle de coupe (Ø 30 mm), trait fin sans remplissage.
       corps += '<circle cx="' + nb(j.cx) + '" cy="' + nb(j.cy) + '" r="' + p.rayonCoupe + '" fill="none" stroke="' + NOIR_REPERAGE + '" stroke-width="' + EPAISSEUR_REPERE + '"/>';
       for (var a = 0; a < 4; a++) {
         var dx = Math.round(Math.cos(a * Math.PI / 2)), dy = Math.round(Math.sin(a * Math.PI / 2));
@@ -407,10 +428,13 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         corps += svgLigne(j.cx + dx * r1, j.cy + dy * r1, j.cx + dx * r2, j.cy + dy * r2, EPAISSEUR_REPERE, NOIR_REPERAGE);
       }
     });
-    corps += svgBarre(p.barre);
-    corps += svgTexte({ texte: p.titre, x: p.margeX, y: 10, taille: 3.5, ancre: 'start', gras: true });
-    corps += svgTexte({ texte: '100 mm', x: p.barre.x + p.barre.longueur + 2, y: p.barre.y + 0.9, taille: 2.5, ancre: 'start', gras: false });
-    return enveloppeSvg(p.largeur, p.hauteur, corps);
+    corps += svgTexte({ texte: page.titre, x: page.margeX, y: 10, taille: 3.5, ancre: 'start', gras: true });
+    page.textes.forEach(function (t) { corps += svgTexte(t); });
+    if (page === p) {
+      corps += svgBarre(p.barre);
+      corps += svgTexte({ texte: '100 mm', x: p.barre.x + p.barre.longueur + 2, y: p.barre.y + 0.9, taille: 2.5, ancre: 'start', gras: false });
+    }
+    return enveloppeSvg(page.largeur, page.hauteur, corps);
   }
 
   /** Aperçu du plateau assemblé (48 x 48 cm en 4×4) mis à l'échelle sur A3, sans repères : non imprimable. */
@@ -816,7 +840,13 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         feuilles.push({ nom: p.nom, type: 'tuiles', largeur: p.largeur, hauteur: p.hauteur, svg: svgPlanche(doc, p), planche: p });
       });
     }
-    if (c.jetons) feuilles.push({ nom: 'plateau-jetons-A4', type: 'jetons', largeur: FORMATS.A4.largeur, hauteur: FORMATS.A4.hauteur, svg: svgJetons() });
+    if (c.jetons) {
+      // recto puis verso, à la suite : les deux pages d’une même feuille imprimée en recto-verso
+      var pj = planchesJetons();
+      [pj, pj.verso].forEach(function (page) {
+        feuilles.push({ nom: page.nom, type: 'jetons', groupe: page.groupe, largeur: page.largeur, hauteur: page.hauteur, svg: svgJetons(page.face) });
+      });
+    }
     if (c.apercu) feuilles.push({ nom: 'plateau-apercu-A3', type: 'apercu', largeur: FORMATS.A3.largeur, hauteur: FORMATS.A3.hauteur, svg: svgApercuPlateau(doc) });
     return { feuilles: feuilles, exclus: exclus, nbTuiles: nbTuiles };
   }
@@ -866,6 +896,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   function nomPdfCommun(feuilles) {
     if (feuilles.length === 1) return feuilles[0].nom;
     if (feuilles.every(function (f) { return f.type === 'tuiles'; })) return 'plateau-tuiles-' + feuilles[0].planche.format;
+    if (feuilles[0].groupe && feuilles.every(function (f) { return f.groupe === feuilles[0].groupe; })) return feuilles[0].groupe;
     return 'plateau-impression';
   }
 
@@ -875,8 +906,16 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       if (!unParFeuille) {
         return Promise.resolve([{ nom: nomPdfCommun(feuilles) + '.pdf', blob: new Blob([pdfDepuisPlanches(feuilles)], { type: 'application/pdf' }) }]);
       }
-      return Promise.resolve(feuilles.map(function (f) {
-        return { nom: f.nom + '.pdf', blob: new Blob([pdfDepuisPlanches([f])], { type: 'application/pdf' }) };
+      // un fichier par planche, sauf les pages d’un même groupe (recto et verso des jetons), gardées ensemble
+      var lots = [], parGroupe = {};
+      feuilles.forEach(function (f) {
+        if (f.groupe && parGroupe[f.groupe]) { parGroupe[f.groupe].push(f); return; }
+        var lot = [f];
+        if (f.groupe) parGroupe[f.groupe] = lot;
+        lots.push(lot);
+      });
+      return Promise.resolve(lots.map(function (lot) {
+        return { nom: nomPdfCommun(lot) + '.pdf', blob: new Blob([pdfDepuisPlanches(lot)], { type: 'application/pdf' }) };
       }));
     }
     if (format === 'svg') {
@@ -958,7 +997,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       });
     gPortee.appendChild(gExemplaires);
     gContenu.appendChild(gPortee);
-    var iJetons = ligne(gContenu, 'checkbox', 'jetons', 'jetons', 'Planche des jetons (A4 : 8 villes, 8 campements)', false);
+    var iJetons = ligne(gContenu, 'checkbox', 'jetons', 'jetons', 'Jetons recto-verso : 16 (campement / ville), 2 pages A4', false);
     var iApercu = ligne(gContenu, 'checkbox', 'apercu', 'apercu', 'Aperçu du plateau assemblé (A3, non imprimable)', false);
 
     var gFormat = groupe('Format de feuille pour les tuiles');
