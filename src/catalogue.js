@@ -8,12 +8,13 @@
  *      1 crochet ; ×3) ; bords B1 « Bord en V » (×8) et B8 « Bord à virage » (1 passage ; ×1) ; coins K2 (×4) et K4 (×1) ;
  *  - 5×5 (tuiles de 100 mm, tests/catalogue-5x5.test.js) : catalogue « très connecté » de docs/55 (décisions de docs/18, « 5×5 très
  *      connecté ») complété par les centrales de docs/58 et les « ponts » de docs/66 (catalogue « P », décisions de docs/18 du
- *      2026-10-19 : 8 villes à positions fixes) : 2 cases par tuile au plus, ≈ 57 cases par plateau : 10 modèles, 30 exemplaires dont
- *      14 centrales pour 9 places (poids = exemplaires) : centrales LC1 « Pont et relais » (×1), LC3 « Pont et fourche » (T sans case ;
+ *      2026-10-19 : 8 villes à positions fixes) : 2 cases par tuile au plus, ≈ 57 cases par plateau : 11 modèles, 31 exemplaires dont
+ *      14 centrales tirables pour 9 places (poids = exemplaires), plus LE1 hors tirage : centrales LC1 « Pont et relais » (×1), LC3 « Pont et fourche » (T sans case ;
  *      ×4), LC4 « Deux ponts » (deux porteuses latérales opposées, murs E et O déclarés par `murs: [1, 3]` : 2 raccords morts par pose,
  *      en information ; ×1), LC5 « Pont et carrefour » (une case, T sans case ; ×1), LC6 « Pont et fourche libres » (×1), LC7 « Pont et
  *      relais libres » (×1), LC11 « Coins opposés » (deux porteuses à 1 port en diagonale ; ×2), LC12 « Deux ponts ouverts » (deux
- *      porteuses latérales opposées, 4 raccords ; ×3) ; bord LB2 « Bord à pont » (×12) ; coin LK2 « Coin à porteuse » (×4). LC2 « Pont
+ *      porteuses latérales opposées, 4 raccords ; ×3) ; LE1 « Étoile » (relais central, 4 raccords, 4 cases de diagonale à 1 port chacune :
+ *      5 cases, EXCEPTION NOMMÉE à « 2 cases par tuile » ; 1 exemplaire, `horsTirage: true` : pose à la main, jamais tirée) ; bord LB2 « Bord à pont » (×12) ; coin LK2 « Coin à porteuse » (×4). LC2 « Pont
  *      et relais décalé » du jeu « B3 » est retiré.
  * Les nombres de modèle écrits ci-dessous (« ×4 », « ×5 »…) sont les POIDS de tirage (champ `poids`) ; le stock à imprimer (`exemplaires`)
  * vient de STOCK (B8 ×3 et K4 ×2 en 4×4 ; en 5×5 il vaut les poids, le générateur tirant 9 des 14 centrales par quotas), pour que 90 % au
@@ -147,9 +148,10 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * raccord du milieu de ce côté ; la porteuse du coin (1 port) porte la paire basse (E2 / S0).
    */
   function construire5() {
-    function m5(id, nom, gabarit, ex, cases, chemins, pivots, passages, murs) {
+    function m5(id, nom, gabarit, ex, cases, chemins, pivots, passages, murs, horsTirage) {
       var m = modeleOrganique('5x5', id, nom, gabarit, ex, cases, chemins, pivots, passages);
       if (murs) m.murs = murs; // murs voulus déclarés (PM.modele.mursDuModele)
+      if (horsTirage) m.horsTirage = true; // pose à la main seulement : jamais tirée par le générateur (PM.generateur.modelesParGabarit)
       return m;
     }
     /** Porteuse latérale nord `c` : ports NO et NE, raccord N au milieu. */
@@ -190,6 +192,15 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         [kase('p', 33, 44), kase('q', 67, 56)],
         [port('p1', 'p', 0), port('p2', 'p', 3), raccord('ro', 'p', 3, 1), raccord('rn', 'p', 0, 1),
           port('p3', 'q', 1), port('p4', 'q', 2), raccord('re', 'q', 1, 1), raccord('rs', 'q', 2, 1)]),
+      // Étoile (croquis de l'utilisateur, docs/18 fin ; EXCEPTION NOMMÉE à « 2 cases par tuile au plus » : 5 cases) : un relais au centre
+      // tient les 4 raccords au milieu des côtés et les 4 cases des diagonales, chacune avec le port de SON coin (1 port par case).
+      // Un exemplaire, pose à la main seulement (horsTirage : le générateur ne la tire jamais).
+      m5('LE1', 'Étoile', 'centrale', 1,
+        [kase('r', 50, 50), kase('c1', 30, 30), kase('c2', 70, 30), kase('c3', 70, 70), kase('c4', 30, 70)], [
+          raccord('rn', 'r', 0, 1), raccord('re', 'r', 1, 1), raccord('rs', 'r', 2, 1), raccord('ro', 'r', 3, 1),
+          lien('h1', 'r', 'c1'), lien('h2', 'r', 'c2'), lien('h3', 'r', 'c3'), lien('h4', 'r', 'c4'),
+          port('p1', 'c1', 0), port('p2', 'c2', 1), port('p3', 'c3', 2), port('p4', 'c4', 3)
+        ], [], [], null, true),
       /* Bord (extérieur N) : apparition à raccourci E0 / O2 et paire basse E2 / O0 ; porteuse latérale sud (SE, SO, S au milieu) */
       m5('LB2', 'Bord à pont', 'bord', 12,
         [appar('a', 50, 48), kase('c', 50, 81)], [
@@ -423,12 +434,12 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * plateaux : mesures d'équilibre inchangées) ; les exemplaires sont ceux de ce tableau, relevés pour qu'au moins 90 % des plateaux
    * générés se montent avec la boîte imprimée (docs/47). Le stock ne limite jamais la pose.
    */
-  var STOCK = { '4x4': { Q1: 4, Q2: 3, B1: 8, B8: 3, K2: 4, K4: 2 }, '5x5': { LC1: 1, LC3: 4, LC4: 1, LC5: 1, LC6: 1, LC7: 1, LC11: 2, LC12: 3, LB2: 12, LK2: 4 } };
+  var STOCK = { '4x4': { Q1: 4, Q2: 3, B1: 8, B8: 3, K2: 4, K4: 2 }, '5x5': { LC1: 1, LC3: 4, LC4: 1, LC5: 1, LC6: 1, LC7: 1, LC11: 2, LC12: 3, LE1: 1, LB2: 12, LK2: 4 } };
   /** Stock du catalogue 5×5 de la version 4.00.0 (docs/47), gardé avec lui dans PM.catalogue.precedents['5x5']. */
   var STOCK_5X5_400 = { U1: 5, P3: 4, P5: 3, P1: 3, P2: 3, B1: 6, B7: 8, K2: 5 };
   function avecStock(liste, stock) {
     liste.forEach(function (m) {
-      m.poids = m.exemplaires;
+      if (!m.horsTirage) m.poids = m.exemplaires; // un modèle hors tirage (LE1) n'a pas de poids : le générateur l'ignore
       if (Object.prototype.hasOwnProperty.call(stock, m.id)) m.exemplaires = stock[m.id];
     });
     return liste;

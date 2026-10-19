@@ -298,12 +298,13 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
    * Modèles tirables par gabarit : [{id, poids, stock}], modèles complets seulement, ordre du document (stock : exemplaires, plafond
    * de B1 et des autres bords dans la composition 5×5).
    * Le poids est le champ `poids` du modèle s'il existe, sinon son nombre d'exemplaires (PM.modele.poidsTirage) ; un modèle à
-   * 0 exemplaire n'est jamais tiré. Le stock à imprimer (exemplaires) peut ainsi dépasser le poids sans changer les plateaux tirés.
+   * 0 exemplaire n'est jamais tiré, ni un modèle marqué `horsTirage: true`. Le stock à imprimer (exemplaires) peut ainsi dépasser le poids sans changer les plateaux tirés.
    */
   function modelesParGabarit(doc, F) {
     var res = { centrale: [], bord: [], coin: [] };
     (Array.isArray(doc.modeles) ? doc.modeles : []).forEach(function (m) {
       if (!m || !Object.prototype.hasOwnProperty.call(res, m.gabarit) || !M.validerModele(m, F).complet) return;
+      if (m.horsTirage === true) return; // pose à la main seulement (LE1 « Étoile » du 5×5) : jamais tirée
       if (M.exemplairesValides(m) > 0) res[m.gabarit].push({ id: m.id, poids: M.poidsTirage(m), stock: M.exemplairesValides(m) });
     });
     return res;

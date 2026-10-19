@@ -646,8 +646,8 @@ test('document 3.04 ou 4.00.0 conservé tel quel par l\'utilisateur (« Garder m
 
 /* ======================= F. export du jeu complet avec le nouveau stock ======================= */
 
-test('export du jeu complet : 24 tuiles en 4×4 (4 planches A3, 12 A4) et 30 en 5×5 (5 planches A3, 15 A4), exemplaires par modèle respectés', () => {
-  for (const [g, total, a3, a4] of [['4x4', 24, 4, 12], ['5x5', 30, 5, 15]]) {
+test('export du jeu complet : 24 tuiles en 4×4 (4 planches A3, 12 A4) et 31 en 5×5 (6 planches A3, 16 A4), exemplaires par modèle respectés', () => {
+  for (const [g, total, a3, a4] of [['4x4', 24, 4, 12], ['5x5', 31, 6, 16]]) {
     const doc = nouveau(g);
     assert.equal(doc.modeles.reduce((s, m) => s + m.exemplaires, 0), total);
     const liste = E.listeTuiles(doc, { portee: 'stock' });
@@ -668,10 +668,11 @@ test('export du jeu complet : 24 tuiles en 4×4 (4 planches A3, 12 A4) et 30 en 
   }
 });
 
-test('export du jeu complet : les 5 planches A3 du 5×5 sont pleines (30 = 5 × 6) ; le SVG de chaque planche est produit ; le document n\'est pas modifié', () => {
+test('export du jeu complet : les 5 premières planches A3 du 5×5 sont pleines (31 = 5 × 6 + 1, la 6e porte l’Étoile) ; le SVG de chaque planche est produit ; le document n\'est pas modifié', () => {
   const doc = nouveau('5x5'), avant = JSON.stringify(doc);
   const planches = E.calepiner(doc, { format: 'A3', portee: 'stock' });
-  assert.equal(planches[planches.length - 1].tuiles.length, 6);
+  assert.equal(planches.length, 6);
+  assert.equal(planches[planches.length - 1].tuiles.length, 1);
   assert.equal(planches[0].tuiles.length, 6);
   planches.forEach((p) => { const svg = p.svg; assert.match(svg, /^<svg|^<\?xml/); assert.ok(svg.length > 1000); });
   assert.equal(JSON.stringify(doc), avant);
@@ -706,7 +707,7 @@ test('export du jeu complet : stock modifié (0 exemplaire, modèle supprimé, t
 });
 
 test('export du jeu complet : après acceptation du nouveau catalogue, le jeu exporté est celui du nouveau stock (et non de l\'ancien)', () => {
-  for (const [g, total] of [['4x4', 24], ['5x5', 30]]) {
+  for (const [g, total] of [['4x4', 24], ['5x5', 31]]) {
     const etat = PM.etat.creer(precedent(g));
     const avant = E.listeTuiles(etat.doc(), { portee: 'stock' }).tuiles.length;
     accepter(etat);

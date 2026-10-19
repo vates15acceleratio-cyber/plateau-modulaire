@@ -21,7 +21,7 @@ const racine = path.join(__dirname, '..', 'src');
 const PM = globalThis.PM;
 const M = PM.modele, GR = PM.graphe, GEN = PM.generateur, CAT = PM.catalogue;
 /** Ids des centrales du catalogue livré (LC1 à LC7). */
-const IDS_CENTRALES = CAT.modelesParGrille['5x5'].filter((m) => m.gabarit === 'centrale').map((m) => m.id);
+const IDS_CENTRALES = CAT.modelesParGrille['5x5'].filter((m) => m.gabarit === 'centrale' && !m.horsTirage).map((m) => m.id);
 
 /** Mesures d'un résultat de PM.generateur.generer (plateau 5×5 réussi). */
 function mesurerPlateau(r) {

@@ -558,7 +558,7 @@ test('G2 tuile de l\'utilisateur ajoutée à la bibliothèque 5×5 : copie de LC
   assert.ok(r.ok || (typeof r.raison === 'string' && r.raison.length > 20), r.raison);
   if (r.ok) assert.equal(M.validerPlateau(r.doc).erreurs.length, 0);
   // l'original n'est pas modifié
-  assert.equal(mauvaise.modeles.length, 11); // 10 modèles du catalogue « P » + U2
+  assert.equal(mauvaise.modeles.length, 12); // 11 modèles du catalogue « P » (dont l'Étoile LE1) + U2
 });
 
 test('G3 bibliothèque modifiée : plus de bord (LB2 à 0), plus de coin (LK2 supprimé), plus de centrale : refus explicite en une phrase, document intact', () => {
@@ -663,7 +663,7 @@ test('H3 acceptation (logique de proposerRemplacement, sans boîte de dialogue ;
     assert.equal(n.plateau.tuiles.length, 0);
     assert.equal(n.plateau.jetons.length, 0);
     assert.deepEqual(n.modeles.map((m) => m.id).sort(), C5.map((m) => m.id).sort());
-    assert.equal(n.modeles.reduce((s, m) => s + m.exemplaires, 0), 30);
+    assert.equal(n.modeles.reduce((s, m) => s + m.exemplaires, 0), 31);
     assert.equal(propose(n), false, 'plus de re-proposition');
     assert.equal(etat.peutAnnuler(), true);
     etat.annuler();
@@ -671,7 +671,7 @@ test('H3 acceptation (logique de proposerRemplacement, sans boîte de dialogue ;
     assert.equal(propose(etat.doc()), true);
     etat.retablir();
     assert.equal(etat.doc().plateau.tuiles.length, 0);
-    assert.equal(etat.doc().modeles.length, 10);
+    assert.equal(etat.doc().modeles.length, 11);
   }
 });
 
@@ -701,14 +701,14 @@ test('H5 bibliothèque : les identifiants des catalogues livrés et des deux cat
 
 /* ============================ I. export du jeu complet ============================ */
 
-test('I1 export du jeu complet 5×5 (30 tuiles) : tuiles et planches selon les exemplaires, y compris après modification (LC5 à 0, tuile utilisateur ajoutée, LC4 à 3)', () => {
+test('I1 export du jeu complet 5×5 (31 tuiles) : tuiles et planches selon les exemplaires, y compris après modification (LC5 à 0, tuile utilisateur ajoutée, LC4 à 3)', () => {
   const d = doc5();
-  assert.equal(E.listeTuiles(d, { portee: 'stock' }).tuiles.length, 30);
+  assert.equal(E.listeTuiles(d, { portee: 'stock' }).tuiles.length, 31);
   d.modeles.find((m) => m.id === 'LC5').exemplaires = 0;
   d.modeles.find((m) => m.id === 'LC4').exemplaires = 3;
   const u = lc('LC1'); u.id = 'U1'; u.exemplaires = 2; delete u.poids; d.modeles.push(u);
   const l = E.listeTuiles(d, { portee: 'stock' });
-  assert.equal(l.tuiles.length, 30 - 1 + 2 + 2);
+  assert.equal(l.tuiles.length, 31 - 1 + 2 + 2);
   assert.equal(l.tuiles.filter((t) => t.modeleId === 'LC5').length, 0);
   assert.equal(l.tuiles.filter((t) => t.modeleId === 'LC4').length, 3);
   assert.equal(l.tuiles.filter((t) => t.modeleId === 'U1').length, 2);

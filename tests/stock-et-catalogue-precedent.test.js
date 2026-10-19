@@ -219,7 +219,7 @@ test('catalogue précédent 4.00.0 (5×5) : accepter la proposition charge le ca
   const doc = S.depuisJSON(fs.readFileSync(path.join(__dirname, 'donnees', 'document-4.00-5x5.json'), 'utf8')).doc;
   const etat = PM.etat.creer(doc), avant = JSON.stringify(etat.doc());
   etat.remplacer(CAT.nouveauDocument('5x5'), 'nouveau catalogue'); // ce que fait le bouton « Charger le nouveau catalogue » (app.js)
-  assert.deepStrictEqual(etat.doc().modeles.map((m) => m.id), ['LC1', 'LC3', 'LC4', 'LC5', 'LC6', 'LC7', 'LC11', 'LC12', 'LB2', 'LK2']);
+  assert.deepStrictEqual(etat.doc().modeles.map((m) => m.id), ['LC1', 'LC3', 'LC4', 'LC5', 'LC6', 'LC7', 'LC11', 'LC12', 'LE1', 'LB2', 'LK2']);
   assert.deepStrictEqual(etat.doc().plateau, { tuiles: [], jetons: [] });
   assert.strictEqual(etat.doc().grille, '5x5');
   assert.strictEqual(S.bibliothequeCataloguePrecedent(etat.doc()), false, 'plus de proposition ensuite');

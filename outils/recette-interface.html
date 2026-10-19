@@ -920,7 +920,7 @@
       radio.checked = true;
       document.querySelector('#dialogue-contenu .pm-nouveau-creer').click();
       ctrl('vrai catalogue : Créer 5×5 ferme la boîte et crée un document 5×5 sans tuile', !$('dialogue').open && etat.doc().grille === '5x5' && nbTuiles() === 0);
-      ctrl('vrai catalogue : 10 vignettes en bibliothèque (LK2, LB2, LC1, LC3 à LC7, LC11, LC12)', document.querySelectorAll('.pm-biblio-vignette').length === 10 && ['LK2', 'LB2', 'LC1', 'LC3', 'LC4', 'LC5', 'LC6', 'LC7', 'LC11', 'LC12'].every(function (id) { return !!document.querySelector('[data-vignette="' + id + '"]'); }));
+      ctrl('vrai catalogue : 11 vignettes en bibliothèque (LK2, LB2, LC1, LC3 à LC7, LC11, LC12, LE1)', document.querySelectorAll('.pm-biblio-vignette').length === 11 && ['LK2', 'LB2', 'LC1', 'LC3', 'LC4', 'LC5', 'LC6', 'LC7', 'LC11', 'LC12', 'LE1'].every(function (id) { return !!document.querySelector('[data-vignette="' + id + '"]'); }));
       // une pose valide : coin LK2 en (0,0), bord LB2 en (1,0), centrale LC1 en (1,1)
       var g1 = glisser('LK2', 0, 0, 0), g2 = glisser('LB2', 1, 0, 0), g3 = glisser('LC1', 1, 1, 0);
       ctrl('vrai catalogue : pose d’un coin, d’un bord et d’une centrale', g1.demarre && g2.demarre && g3.demarre && nbTuiles() === 3, nbTuiles() + ' ' + msg());

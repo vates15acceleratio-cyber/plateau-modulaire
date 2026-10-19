@@ -183,7 +183,7 @@ test('parcours à l’état : Nouveau 5×5 (vrai catalogue), Générer, Applique
   const nouveau = PM.nouveau.documentPourGrille('5x5');
   assert.ok(nouveau.ok, nouveau.raison);
   assert.strictEqual(nouveau.doc.grille, '5x5');
-  assert.deepStrictEqual(nouveau.doc.modeles.map((m) => m.id).sort(), ['LB2', 'LC1', 'LC11', 'LC12', 'LC3', 'LC4', 'LC5', 'LC6', 'LC7', 'LK2']);
+  assert.deepStrictEqual(nouveau.doc.modeles.map((m) => m.id).sort(), ['LB2', 'LC1', 'LC11', 'LC12', 'LC3', 'LC4', 'LC5', 'LC6', 'LC7', 'LE1', 'LK2']);
   assert.deepStrictEqual(nouveau.doc.plateau, { tuiles: [], jetons: [] });
   const etat = PM.etat.creer(PM.nouveau.documentPourGrille('4x4').doc);
   etat.remplacer(nouveau.doc, 'nouveau plateau 5×5');
