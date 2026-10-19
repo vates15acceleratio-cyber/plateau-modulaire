@@ -191,3 +191,8 @@ Remplace, pour le 5×5, les décisions « 8 villes en damier » de la section pr
 - **Catalogue 5×5 « P », 30 tuiles** : LC1 ×1, LC3 ×4, LC4 ×1, LC5 ×1, LC6 ×1, LC7 ×1, **LC11 ×2, LC12 ×3**, LB2 ×12, LK2 ×4. LC2 sort. Motif des 8 villes fixes avec **l'écart de 3 cases partout** : la tolérance de 2 cases n'est plus utile. Le générateur choisit la place des centrales tirées.
 - **Campements en jetons à part, flamme noire.**
 - **16 jetons au total, recto-verso : ville au verso, campement (flamme) au recto.** Un même jeton sert de ville ou de campement selon la face posée.
+
+## Nouvelle tuile demandée par l'utilisateur (2026-10-19, croquis `docs/croquis/etoile-5x5-utilisateur.png`)
+- **Centrale 5×5 « Étoile »** : un relais central avec 4 raccords au milieu des côtés, et 4 cases sur les diagonales. Chacune est reliée au relais et porte le port de son coin. Le cercle rouge du croquis n'a pas de sens particulier.
+- **Exception nommée à la règle « 2 cases par tuile au plus »** : cette tuile a 5 cases.
+- **1 exemplaire, pose à la main seulement** : elle est dans la bibliothèque et imprimée, mais le générateur ne la tire pas. Les plateaux générés ne changent pas. « Ça peut toujours servir pour le centre. »
