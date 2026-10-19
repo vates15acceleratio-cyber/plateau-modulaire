@@ -28,11 +28,11 @@ function distPS(p, a, b) {
 
 /* ---------- DIAMETRE_CASE : une seule valeur partout ---------- */
 
-test('DIAMETRE_CASE : même valeur (20) dans les deux formats, catalogue, éditeur, exemples et jonction', () => {
+test('DIAMETRE_CASE : même valeur (20) dans les deux formats, catalogue, éditeur et exemples ; siège de campement Ø 30 (taille d’une ville)', () => {
   for (const g of GRILLES) {
     const F = G.format(g);
     assert.equal(F.DIAMETRE_CASE, 20, g);
-    assert.equal(F.DIAMETRE_CASE, F.DIAMETRE_CASE_JONCTION, g + ' = jonction');
+    assert.equal(F.DIAMETRE_CASE_JONCTION, F.DIAMETRE_JETON, g + ' : siège de campement = jeton ville (docs/18, 2026-10-19)');
     assert.ok(F.DIAMETRE_CASE <= F.DIAMETRE_CASE_MAX, g + ' <= Ø max');
     for (const m of M.copieExemples(g)) for (const c of m.cases) assert.equal(c.diametre, F.DIAMETRE_CASE, g + ' exemple ' + m.id + '/' + c.id);
   }
@@ -121,7 +121,7 @@ test('K4 : les deux routes de l’apparition à la case à port ont la même lon
 
 /* ---------- halo de coin ---------- */
 
-test('haloDe : le halo d’un coin enveloppe la case de jonction (rayon = Ø/2 + 3), 4 coins, 2 formats', () => {
+test('haloDe : le halo d’un coin enveloppe le siège du campement (rayon = Ø/2 + 3 = 18, dans la zone de coin de 20), 4 coins, 2 formats', () => {
   for (const g of GRILLES) {
     const F = G.format(g), m = M.copieExemples(g).find((x) => x.gabarit === 'coin');
     for (let k = 0; k < 4; k++) {
@@ -129,6 +129,7 @@ test('haloDe : le halo d’un coin enveloppe la case de jonction (rayon = Ø/2 +
       assert.equal(h.cercles.length, 1, g + ' coin ' + k);
       const p = F.pointCoin(k);
       assert.deepEqual(h.cercles[0], { x: p.x, y: p.y, r: F.DIAMETRE_CASE_JONCTION / 2 + 3 }, g + ' coin ' + k);
+      assert.ok(h.cercles[0].r === 18 && h.cercles[0].r <= F.RAYON_ZONE_COIN, g + ' halo dans la zone de coin');
     }
   }
 });
@@ -139,13 +140,14 @@ test('jetons : fond perdu de 1,5 mm (Ø 33 pour Ø 30), tous les jetons dans les
   const p = X.planchesJetons();
   assert.equal(p.rayonCoupe, 15);
   assert.equal(p.rayonFondPerdu, 16.5);
-  assert.equal(p.jetons.length, 7);
+  assert.equal(p.jetons.length, 16); // 16 jetons recto-verso, campements au recto (docs/18, 2026-10-19)
   for (const j of p.jetons) {
     assert.ok(j.cx - 16.5 >= 3 - 1e-9 && j.cx + 16.5 <= p.largeur - 3 + 1e-9, 'marge latérale ' + j.cx);
     assert.ok(j.cy - 16.5 >= 3 - 1e-9 && j.cy + 16.5 <= p.hauteur - 3 + 1e-9, 'marge verticale ' + j.cy);
   }
   assert.ok(Math.abs(p.jetons[1].cx - p.jetons[0].cx - 38) < 1e-9);
-  assert.ok((X.svgJetons().match(/r="16\.5"/g) || []).length >= 7);
+  // fond perdu noir imprimé au verso seulement (villes), 3 mm contre le décalage recto-verso : Ø 36
+  assert.equal((X.svgJetons('verso').match(/r="18" fill=/g) || []).length, 16);
 });
 
 /* ---------- migration v1 (cases Ø 24) ---------- */

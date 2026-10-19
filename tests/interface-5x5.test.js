@@ -162,7 +162,7 @@ test('pose sur un plateau 5×5 : rôle respecté (4 coins, 12 bords, 9 centrales
   assert.equal(M.peutPoserTuile(doc, 'ex-bord', 4, 3).ok, true, 'la colonne 4 existe en 5×5');
   const complet = plein5();
   assert.equal(complet.plateau.tuiles.length, 25);
-  assert.equal(complet.plateau.jetons.length, 7);
+  assert.equal(complet.plateau.jetons.length, 8); // 8 villes aux positions par défaut (docs/18, 2026-10-19)
 });
 
 /* ------------------------------------------------------------------ */
@@ -221,14 +221,15 @@ test('bibliothèque : le modèle de l\'autre grille est signalé (autreGrille), 
 /* Compteurs, contrôles, équilibre                                     */
 /* ------------------------------------------------------------------ */
 
-test('compteurs du 5×5 : 7 villes, 25 tuiles, ≈ 80 cases, 7 apparitions par camp, 50 × 50 cm', () => {
+test('compteurs du 5×5 : 8 villes, 25 tuiles, ≈ 57 cases, 7 apparitions par camp, 50 × 50 cm', () => {
   const r = C.calculer(plein5());
   const c = (cle) => r.compteurs.find((x) => x.cle === cle);
-  assert.equal(c('villes').valeur, 7);
-  assert.equal(c('villes').cible, 7);
+  assert.equal(c('villes').valeur, 8);
+  assert.equal(c('villes').cible, 8);
+  assert.equal(c('cases').libelle, 'Cases (tuiles et campements)');
   assert.equal(c('tuiles').valeur, 25);
   assert.equal(c('tuiles').cible, 25);
-  assert.equal(c('cases').cible, '≈ 80');
+  assert.equal(c('cases').cible, '≈ 57');
   assert.equal(c('apparitions_vert').valeur, 7);
   assert.equal(c('apparitions_vert').cible, 7);
   assert.equal(c('apparitions_rouge').valeur, 7);
@@ -306,22 +307,25 @@ test('export 5×5 : dimensions PNG à 300 dpi des feuilles, aperçu du plateau 5
 /* Générateur                                                          */
 /* ------------------------------------------------------------------ */
 
-test('générateur 5×5 : plateau complet valide, villes en 2-3-2, jonctions-cases par défaut, reproductible', () => {
+test('générateur 5×5 : plateau complet valide, 8 villes aux positions par défaut, campements, reproductible', () => {
   const F5 = PM.geometrie.format('5x5');
-  // 5×5 : 2016 placements 2-3-2 (9 jonctions-cases chacun), la même liste avec ou sans l'option « variées » (masquée en 5×5)
-  assert.equal(GEN.pairesJonctionsCases(F5, false).length, 2016);
-  assert.ok(GEN.pairesJonctionsCases(F5, false).every((p) => p.length === 9));
+  // 5×5 : 1296 placements libres 2-2-2-2 (8 campements chacun), la même liste avec ou sans l'option « variées » (masquée en 5×5)
+  assert.equal(GEN.pairesJonctionsCases(F5, false).length, 1296);
+  assert.ok(GEN.pairesJonctionsCases(F5, false).every((p) => p.length === 8));
   assert.deepEqual(GEN.pairesJonctionsCases(F5, true), GEN.pairesJonctionsCases(F5, false));
   assert.ok(GEN.pairesJonctionsCases(PM.geometrie.format('4x4'), false).length > 0);
-  const doc = doc5();
+  // le catalogue livré : le 5×5 demande des tuiles très connectées (les exemples n'en donnent pas, docs/18)
+  const avant = PM.catalogue; // ce fichier teste aussi l'interface sans catalogue : on le charge le temps de copier sa bibliothèque
+  require('../src/catalogue.js');
+  const doc = PM.catalogue.nouveauDocument('5x5');
+  PM.catalogue = avant;
   const r = GEN.generer(doc, { graine: 'essai-5x5', candidats: 30 });
   assert.equal(r.ok, true, r.raison);
   assert.equal(r.doc.grille, '5x5');
   assert.equal(r.doc.plateau.tuiles.length, 25);
-  assert.equal(r.doc.plateau.jetons.length, 7);
+  assert.equal(r.doc.plateau.jetons.length, 8);
   assert.ok(r.doc.plateau.jetons.every((j) => j.i >= 1 && j.i <= 4 && j.j >= 1 && j.j <= 4 && j.type === 'capture'));
-  const parRangee = [1, 2, 3, 4].map((rang) => r.doc.plateau.jetons.filter((j) => j.j === rang).length);
-  assert.deepEqual([parRangee[0], parRangee[1] + parRangee[2], parRangee[3]], [2, 3, 2], 'villes en 2-3-2');
+  assert.deepEqual(r.doc.plateau.jetons.map((j) => [j.i, j.j]), [[1, 1], [4, 1], [2, 2], [3, 2], [2, 3], [3, 3], [1, 4], [4, 4]], 'positions par défaut');
   assert.deepEqual(M.validerPlateau(r.doc).erreurs, []);
   const c = C.calculer(r.doc);
   assert.deepEqual(c.erreurs.map((e) => e.code), []);

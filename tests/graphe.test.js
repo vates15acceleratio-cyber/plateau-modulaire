@@ -219,9 +219,31 @@ test('seuils exportés (paramètres, docs/19 et arbitrages de docs/20)', () => {
   assert.strictEqual(GR.SEUIL_ECART, 2);
   assert.strictEqual(GR.SEUIL_S, 5); // seuil de rejet du générateur, commun aux deux formats
   // alerte et information de S propres à chaque format (docs/18 réponse du 2026-10-18, docs/48 § 4)
-  assert.deepStrictEqual(GR.SEUIL_S_PAR_FORMAT, { '4x4': 5, '5x5': 7 });
-  assert.deepStrictEqual(GR.SEUIL_S_INFORMATION_PAR_FORMAT, { '4x4': 4, '5x5': 5 });
-  assert.deepStrictEqual([GR.seuilS('4x4'), GR.seuilS('5x5'), GR.seuilSInformation('4x4'), GR.seuilSInformation('5x5')], [5, 7, 4, 5]);
+  assert.deepStrictEqual(GR.SEUIL_S_PAR_FORMAT, { '4x4': 5, '5x5': 5 });
+  assert.deepStrictEqual(GR.SEUIL_S_INFORMATION_PAR_FORMAT, { '4x4': 4, '5x5': 4 });
+  assert.deepStrictEqual([GR.seuilS('4x4'), GR.seuilS('5x5'), GR.seuilSInformation('4x4'), GR.seuilSInformation('5x5')], [5, 5, 4, 4]);
   assert.strictEqual(GR.NB_VILLES, 7);
   assert.deepStrictEqual(GR.NOM_JOUEUR, { 1: 'vert', 2: 'rouge' });
+});
+
+test('connexions par case (docs/53 § 1) : degré dans le graphe, une voisine comptée une fois, villes à part, jonction-case seulement entourée de ses 4 tuiles', () => {
+  const A2 = A.plateauComplet('4x4', true), g = GR.construire(A2, { villesTraversables: false }), c = GR.connexions(A2, g);
+  const jc = g.jonctions.filter((j) => j.type === 'case');
+  assert.strictEqual(c.cases, g.cases.size + jc.length);
+  let somme = 0, faibles = 0;
+  [...g.cases.keys()].concat(jc.map((j) => j.id)).forEach((id) => { const d = g.voisins.get(id).size; somme += d; if (d <= 2) faibles++; });
+  assert.strictEqual(c.faibles, faibles);
+  assert.ok(Math.abs(c.degreMoyen - somme / c.cases) < 1e-12);
+  assert.strictEqual(c.part, faibles / c.cases);
+  assert.strictEqual(c.conforme, c.part < GR.PART_CONNEXIONS_MAX);
+  assert.strictEqual(Object.values(c.parDegre).reduce((a, b) => a + b, 0), c.cases);
+  assert.ok(c.liste.every((id) => !g.villes.has(id)), 'les villes ne sont pas comptées');
+  // plateau partiel : une jonction dont les 4 tuiles ne sont pas posées n'est pas une case
+  const partiel = JSON.parse(JSON.stringify(A2));
+  partiel.plateau.tuiles = partiel.plateau.tuiles.filter((t) => !(t.col === 1 && t.lig === 1));
+  const cp = GR.connexions(partiel);
+  assert.ok(cp.cases < c.cases);
+  assert.ok(!cp.liste.includes('J1,1') && !cp.liste.includes('J2,2'));
+  // document vide : aucune case, part nulle, degré moyen absent
+  assert.deepStrictEqual([GR.connexions(M.nouveauDocument()).cases, GR.connexions(M.nouveauDocument()).degreMoyen], [0, null]);
 });

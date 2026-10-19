@@ -1,4 +1,4 @@
-# Travail restant et idées à étudier (mis à jour le 2026-10-18, après la revue de la branche `passages`, `docs/51`)
+# Travail restant et idées à étudier (mis à jour le 2026-10-19, après les décisions sur les villes et les ponts, `docs/64` à `docs/67`)
 
 L'utilisateur a marqué une pause ; il reprendra **après discussion**. Rien ne doit être lancé sans son accord. État au moment de l'arrêt : version 3.03.0 (voir `CHANGELOG.md`), tout est sur GitHub, `node --test` et les deux recettes navigateur passent.
 
@@ -25,7 +25,7 @@ L'utilisateur a marqué une pause ; il reprendra **après discussion**. Rien ne 
 - **Revue de la branche `passages` (`docs/51`, 2026-10-18)** : fait — rejet de S aligné (5×5 seulement), `version: 3` pour les documents à passages (la 3.04 les refuse), test de temps en temps processeur, recette du démarrage depuis une sauvegarde automatique 3.04 (`recette-interface`, S11, 4×4 et 5×5, Garder / Charger / Ctrl+Z / Ctrl+Y), `poids` en alerte (1 à 999), texte de la proposition v1 identique, commentaires et conseil 4×4 présenté comme conseil de pose à la main.
 - **Remarques de `docs/51` à reporter** (non traitées) :
   - 7 : la proposition du nouveau catalogue revient à chaque démarrage tant que l'utilisateur garde ses tuiles ; on pourrait retenir le refus pour la session ;
-  - 8 : les seuils de S dépendent du format, pas du catalogue (un document 5×5 au catalogue 3.04 passe aussi à l'alerte S ≥ 7) ; à mentionner dans le CHANGELOG ;
+  - 8 : les seuils de S dépendent du format, pas du catalogue (un document 5×5 au catalogue 3.04 passe aussi à l'alerte S ≥ 5 (7 avant la décision 1 de `docs/18` du 2026-10-18 après `docs/60`)) ; à mentionner dans le CHANGELOG ;
   - 9 : `casesParMoitie` (`graphe.js`) compte les jonctions posées même sans modèle trouvé, alors que le compteur « Cases » de `controles.js` les ignore ; réutiliser `M.portsJonction` ;
   - 10 : test des goulets à remplacer par une comparaison avec / sans le terme des articulations ; empreintes de `generateur-5x5.test.js` et `passages.test.js` à régénérer à chaque réglage du générateur ; stock testé sur 100 graines (cible mesurée sur 200) ;
   - 11 : conseil 4×4 « rangée centrale » (`graphe.js`, `equilibre.js`) devenu un conseil de pose à la main ; le générateur ne le suit plus par défaut ;
@@ -70,7 +70,32 @@ Proposée par l'utilisateur au moment de l'arrêt, **pas encore définie** : à 
 - **Reste à mesurer ou à vérifier** :
   - point 5 du `docs/28` § 6 : S selon la jonction de la 7e ville (seule la répartition des villes est mesurée) ;
   - point 8 du `docs/28` § 6 : distance entre apparitions verte et rouge par la rangée neutre ;
-  - conseil 5×5 « 3 villes du milieu sur une rangée » (`docs/36` point 5) : **à remesurer** sur le catalogue organique avant de le garder tel quel (l'alerte S n'apparaît plus qu'à partir de 7, donc le conseil est moins souvent affiché) ;
-  - 4×4 en « jonctions variées » : 1,5 % des plateaux générés (3 sur 200) ont un point d'articulation, la préférence n'est appliquée qu'en 5×5 ; à étendre au 4×4 si l'utilisateur le souhaite ;
+  - conseil 5×5 « 3 villes du milieu sur une rangée » (`docs/36` point 5) : **fait** (`docs/60`, décision 1 de `docs/18`) : remplacé par un renvoi à « Outils > Placer les villes », et seuil S du 5×5 revenu à 5 (information 4) ;
+  - 4×4 en « jonctions variées » : 2,0 % des plateaux générés (4 sur 200) avaient un point d'articulation ; **fait** (décision 4 de `docs/18`) : la préférence s'applique aussi au 4×4, 0 % sur 200 plateaux ;
   - villes au centre en 5×5 : 13,5 %, sous la cible de 20 % du `docs/38` (à reprendre avec les « régions thématiques »).
 - **Suite prévue** : relecteur, versionneur (numéro, étiquette, `CHANGELOG.md`), PR.
+
+## 5. 5×5 très connecté (branche `connexions-5x5`, 2026-10-18, `docs/53` à `docs/56`)
+- **Fait** (`docs/56`, `docs/58`, `docs/59`) : catalogue 5×5 « B3 » à 2 cases par tuile au plus (LC1 à LC7, LB2, LK2 ; 28 tuiles à imprimer dont 12 centrales pour 9 places, environ 57 cases par plateau ; murs déclarés seulement, `murs: [1, 3]` sur LC4), règles propres au 5×5 (porteuse latérale, paire basse du coin ; R2 et R4 gardées ; 4×4 inchangé), mesure `PM.graphe.connexions` (panneau et rapport d'équilibre), générateur 5×5 qui place les villes avant d'orienter les centrales (rejet au-delà de 5 % de cases à 2 connexions), aide « Placer les villes », proposition du nouveau catalogue aux documents 5×5 de la 4.00.0, mesures de contrôle sur 200 plateaux (`outils/mesures-5x5-connecte.js`).
+- **À soumettre à l'utilisateur** (`docs/56`) :
+  - **chaîne du rythme** : 4,7 en moyenne (3 à 5) en 5×5, au-dessus de la cible 3 (texte « au-dessus de la cible » au rapport) ; cible à revoir pour le 5×5 ?
+  - **composition** : réglée par le choix « B3 » (`docs/58`) : une trentaine de compositions de centrales sur 200 plateaux, 100 % de plateaux montables avec la boîte ;
+  - **documents gardés avec leurs anciennes tuiles 5×5** (3.04, 4.00.0) : ils s'ouvrent, mais le générateur 5×5 abandonne et conseille le nouveau catalogue ;
+  - **raccords morts** : 2 informations (murs de « Deux ponts ») sur les plateaux qui portent LC4 (environ 75 %), aucune alerte ;
+  - **placements de villes** : avec « B3 », 5,7 admissibles par plateau en moyenne (1 à 14), 48 placements différents sur 200 plateaux (8,3 et 47 avant) ; environ 63 % des candidats du générateur sont acceptés (rejets « villes_ports »), sans effet sur la réussite (100 %).
+- **Reste** : relecture, recette indépendante, versionneur ; l'ancien outil `outils/mesures-5x5.js` (`docs/35`) est historique ; prépresse des nouvelles tuiles (marges de 3,79 à 10,04 mm, `docs/55`) à faire contrôler à l'impression.
+
+## 6. Villes, campements et ponts (branche `connexions-5x5`, 2026-10-19)
+- **Fait** :
+  - campements : jeton Ø 30 mm à icône de feu de bois, siège Ø 30 mm aux coins, planche de 8 villes et 8 campements (`docs/65`) ;
+  - jetons recto-verso : 16 jetons, campement au recto, ville au verso, deux pages A4 en miroir (`docs/67`) ;
+  - décisions de `docs/18` : motif des 8 villes confirmé, pas de tuile centrale dédiée, piste des ponts, R3 assouplie sur les centrales 5×5, catalogue « P » à 30 tuiles, campements dans les deux formats, 4×4 à 7 villes inchangé.
+- **En cours** : catalogue 5×5 « P » (LC2 retiré, LC11 et LC12 ajoutées), R3 assouplie, générateur 5×5 à 8 villes fixes avec choix de la place des centrales, écran Plateau (jeton campement, textes restants, `DIAMETRE_CASE_JONCTION`). Détail dans `docs/4-architecture.md`, « Chantier en cours ».
+- **À faire ensuite** : testeur, relecteur, versionneur (numéro, étiquette, `CHANGELOG.md`), PR.
+- **Points à valider** :
+  - advisor prépresse : jeton campement, marge de 4,97 mm de LC12 (`docs/66`), recto-verso (`docs/67`) ;
+  - impression réelle des jetons en recto-verso (tolérance de décalage mesurée à environ 2,6 mm, `docs/67`) ;
+  - emporte-pièce Ø 30 mm conseillé pour les campements ;
+  - repères de coupe en croix, peut-être inutiles pour une coupe ronde ;
+  - rythme en génération libre : chaîne moyenne de 1,75 (B3) à 2,95 avec le catalogue « P12 » (`docs/66` § 4), à soumettre à l'utilisateur.
+- **Mesures** : sur 200 plateaux au motif fixe, écart de 3 cases respecté avec « P12 » (200 réussis) et avec « P » (200 réussis) ; le catalogue « P » ajoute LC6 et une LC3 de plus (`docs/66` § 3). Les tests qui figent la composition B3 et la règle R3 sont à mettre à jour (`docs/66` § 4).

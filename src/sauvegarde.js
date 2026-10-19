@@ -27,7 +27,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var CLE_AUTOSAVE = 'plateau-modulaire:autosave';
   /**
    * Plafonds à l'ouverture d'un fichier (audit de sécurité : un fichier hostile ne doit pas bloquer le
-   * navigateur). Très au-dessus de tout usage normal : 5×5 tuiles, 7 villes, une trentaine de modèles.
+   * navigateur). Très au-dessus de tout usage normal : 5×5 tuiles, 8 villes, une trentaine de modèles.
    */
   var LIMITES = { octets: 5e6, modeles: 500, cases: 64, chemins: 256, pivots: 8, passages: 16, tuiles: 64, jetons: 64, texte: 200, coordonnee: 1000, exemplaires: 999 };
   /** Intervalle minimal entre deux écritures dans localStorage (ms). */
@@ -71,6 +71,16 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     if (typeof brut.role !== 'string') return '';
     if (brut.role === 'apparition') return 'bord';
     return GABARITS.indexOf(brut.role) >= 0 ? brut.role : brut.role.slice(0, LIMITES.texte);
+  }
+
+  /** Côtés de murs voulus : valeurs 0 à 3 sans doublon, dans l'ordre d'apparition, lues en un passage (masque de 4 bits ; docs/61 D1). */
+  function mursLus(liste) {
+    var masque = 0, res = [];
+    for (var k = 0; k < liste.length; k++) {
+      var c = liste[k];
+      if ((c === 0 || c === 1 || c === 2 || c === 3) && !(masque & (1 << c))) { masque |= 1 << c; res.push(c); if (res.length === 4) break; }
+    }
+    return res;
   }
 
   /**
@@ -157,6 +167,10 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     if (Array.isArray(brut.passages)) m.passages = passages;
     // poids de tirage du générateur : facultatif (absent : les exemplaires font le poids) ; une valeur invalide est ignorée
     if (estEntier(brut.poids) && brut.poids >= 1 && brut.poids <= LIMITES.exemplaires) m.poids = brut.poids;
+    // murs voulus : facultatif (liste de côtés 0 à 3, sans doublon ; lecture en un passage avec masque de 4 bits : temps linéaire, docs/61 D1) ; absent = aucun mur (PM.modele.mursDuModele)
+    if (Array.isArray(brut.murs)) m.murs = mursLus(brut.murs);
+    // hors tirage : facultatif, vrai seulement s'il est exactement `true` (pose à la main : le générateur ne tire jamais ce modèle)
+    if (brut.horsTirage === true) m.horsTirage = true;
     if (!M.validerModele(m, grille).complet) {
       alertes.push(erreur('modele_incomplet', 'Le modèle « ' + libelle + ' » est incomplet : conservé comme brouillon, non posable.'));
     }
@@ -244,33 +258,60 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return ids.indexOf('A1') >= 0 && ids.indexOf('A2') >= 0;
   }
 
-  /** Signature stable d'un modèle : clés triées, sans exemplaires, poids ni nom, sans tableau vide (un 3.04 enregistré n'a ni pivots ni passages). */
+  /** Signature stable d'un modèle : clés triées, sans exemplaires, poids, murs ni nom, sans tableau vide (un 3.04 enregistré n'a ni pivots ni passages). */
   function signatureModele(valeur) {
     if (Array.isArray(valeur)) return '[' + valeur.map(signatureModele).join(',') + ']';
     if (valeur && typeof valeur === 'object') {
       return '{' + Object.keys(valeur).sort().filter(function (k) {
         var v = valeur[k];
-        return k !== 'exemplaires' && k !== 'poids' && k !== 'nom' && v !== undefined && !(Array.isArray(v) && !v.length);
+        return k !== 'exemplaires' && k !== 'poids' && k !== 'horsTirage' && k !== 'murs' && k !== 'nom' && v !== undefined && !(Array.isArray(v) && !v.length);
       }).map(function (k) { return JSON.stringify(k) + ':' + signatureModele(valeur[k]); }).join(',') + '}';
     }
     return JSON.stringify(valeur);
   }
 
+  /** Listes de modèles des catalogues précédents de la grille `g` : PM.catalogue.precedents[g] (3.04, 5×5 : 3.04 et 4.00.0), à défaut PM.catalogue.precedent[g]. */
+  function cataloguesPrecedents(C, g) {
+    if (C && C.precedents && Array.isArray(C.precedents[g])) return C.precedents[g].map(function (x) { return x && x.modeles; }).filter(Array.isArray);
+    return C && C.precedent && Array.isArray(C.precedent[g]) ? [C.precedent[g]] : [];
+  }
+
   /**
-   * Bibliothèque du catalogue précédent (version 3.04, PM.catalogue.precedent) : mêmes modèles, mêmes tracés, aux exemplaires et aux
-   * noms près. Un modèle modifié, ajouté ou retiré par l'utilisateur donne faux : le nouveau catalogue n'est alors pas proposé
-   * (il remplacerait un travail personnel). Faux aussi pour un catalogue de la version 1 ou pour le catalogue courant.
+   * Bibliothèque d'un catalogue précédent (PM.catalogue.precedents : version 3.04 ; en 5×5, aussi le catalogue organique de la
+   * version 4.00.0) : mêmes modèles, mêmes tracés, aux exemplaires, aux poids et aux noms près. Un modèle modifié, ajouté ou retiré par
+   * l'utilisateur donne faux : le nouveau catalogue n'est alors pas proposé (il remplacerait un travail personnel). Faux aussi pour
+   * un catalogue de la version 1 ou pour le catalogue courant.
    */
   function bibliothequeCataloguePrecedent(doc) {
     try {
       var C = PM.catalogue, g = M.formatDuDocument(doc).id;
-      if (!C || !C.precedent || !C.precedent[g] || !Array.isArray(doc.modeles)) return false;
-      var ref = C.precedent[g];
-      if (doc.modeles.length !== ref.length) return false;
-      return ref.every(function (m) {
-        var q = doc.modeles.filter(function (x) { return x && x.id === m.id; })[0];
-        return !!q && signatureModele(q) === signatureModele(m);
+      if (!C || !Array.isArray(doc.modeles)) return false;
+      return cataloguesPrecedents(C, g).some(function (ref) {
+        if (doc.modeles.length !== ref.length) return false;
+        return ref.every(function (m) {
+          var q = doc.modeles.filter(function (x) { return x && x.id === m.id; })[0];
+          return !!q && signatureModele(q) === signatureModele(m);
+        });
       });
+    } catch (e) { return false; }
+  }
+
+  /**
+   * Ancien plateau 5×5 à 7 villes (docs/18, décision 5 du 2026-10-19 : le 5×5 compte désormais 8 villes) : document 5×5 dont les 25 tuiles
+   * sont posées et qui porte exactement 7 villes. Lecture seule ; le format de sauvegarde ne change pas (aucune migration des jetons).
+   * Seul un document produit par une version antérieure compte : sa bibliothèque 5×5 est celle de l'ancien catalogue (ni LC11 ni LC12,
+   * ou présence de LC2). Une ville retirée à la main d'un plateau au catalogue actuel ne déclenche donc rien.
+   * L'interface propose alors de régénérer le plateau (app.js).
+   */
+  function ancienPlateau5x5(doc) {
+    try {
+      var F = M.formatDuDocument(doc), p = doc && doc.plateau;
+      if (F.id !== '5x5' || !p || !Array.isArray(p.tuiles) || !Array.isArray(p.jetons) || !Array.isArray(doc.modeles)) return false;
+      var ids = doc.modeles.map(function (m) { return m && m.id; });
+      if (!((ids.indexOf('LC11') < 0 && ids.indexOf('LC12') < 0) || ids.indexOf('LC2') >= 0)) return false;
+      var huit = PM.graphe && typeof PM.graphe.nbVilles === 'function' ? PM.graphe.nbVilles('5x5') : 8;
+      var villes = p.jetons.filter(function (j) { return j && j.type === 'capture'; }).length;
+      return villes === huit - 1 && p.tuiles.filter(Boolean).length === F.GRILLE.colonnes * F.GRILLE.lignes;
     } catch (e) { return false; }
   }
 
@@ -599,6 +640,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     fusionnerBibliotheque: fusionnerBibliotheque,
     bibliothequeVersion1: bibliothequeVersion1,
     bibliothequeCataloguePrecedent: bibliothequeCataloguePrecedent,
+    ancienPlateau5x5: ancienPlateau5x5,
     telecharger: telecharger,
     ouvrirFichier: ouvrirFichier,
     autosave: autosave,

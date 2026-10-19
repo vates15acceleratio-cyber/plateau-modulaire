@@ -10,7 +10,7 @@
  *  - pose : chaque modèle se pose autant de fois qu'on veut (les exemplaires ne servent qu'à l'impression et au
  *    générateur), mais le rôle est respecté (coin dans un coin, bord sur le pourtour, centrale au centre) ;
  *    rotation libre, rotation suggérée pour un bord ou un coin sur le pourtour ;
- *  - jetons : villes seulement ('capture') ; une jonction sans ville est une case chemin (voir graphe.js).
+ *  - jetons : villes seulement ('capture') ; une jonction sans ville est un campement (voir graphe.js).
  *
  * Passages sans case (docs/18 fin, docs/39) : tableaux facultatifs `pivots` [{id, x, y}] et `passages` [{id, a, b, courbe?}]
  * (extrémités case, raccord ou pivot) ; absents = vides, les anciens modèles sont inchangés. Leurs raccords entrent dans le masque.
@@ -268,7 +268,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     if (!estId(m.id)) e.push(err('id_modele', 'Le modèle doit avoir un identifiant (texte non vide).', refModele(m)));
     if (m.nom !== undefined && typeof m.nom !== 'string') e.push(err('nom_invalide', 'Le nom du modèle doit être un texte.', refModele(m)));
     if (!gabaritConnu(m.gabarit)) {
-      e.push(alerte('gabarit_inconnu', 'Gabarit non déclaré (centrale, bord ou coin) : pas de rotation suggérée ni de quart de case de jonction imprimé.', refModele(m)));
+      e.push(alerte('gabarit_inconnu', 'Gabarit non déclaré (centrale, bord ou coin) : pas de rotation suggérée ni de quart de siège de campement imprimé.', refModele(m)));
     }
     if (m.grille !== undefined && m.grille !== F.id) {
       e.push(err('grille_modele', 'Cette tuile est dessinée pour la grille ' + String(m.grille) + ' : elle ne va pas sur une grille ' + F.id + '.', refModele(m)));
@@ -433,7 +433,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
         for (var s = 0; s + 1 < t.pts.length; s++) {
           if (t.type === 'port' && t.coin === k && s === 0) continue;
           if (distancePointSegment(K, t.pts[s], t.pts[s + 1]) < F.RAYON_ZONE_COIN + demiLargeur - EPS) {
-            e.push(err('amorce_zone', 'Ce chemin entre dans la zone du coin ' + nomCoin(k) + ' (réservée au jeton et à la case de jonction).', refChemin(t)));
+            e.push(err('amorce_zone', 'Ce chemin entre dans la zone du coin ' + nomCoin(k) + ' (réservée au jeton : ville ou campement).', refChemin(t)));
             return;
           }
         }
@@ -449,19 +449,67 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return e;
   });
 
-  // Ports et raccords : alertes R1 à R4 (docs/19) et extrémités sur un bord extérieur du gabarit
-  regles.push(function (m) {
-    var e = [], sorties = sortiesDesCases(m), gabarit = gabaritConnu(m.gabarit);
-    var portsParCase = dict(), raccordsParCase = dict(), typeCase = dict();
+  /**
+   * Règles propres au 5×5 (docs/53, docs/55 point 7 ; décisions de docs/18 « 5×5 très connecté ») : R1 levée pour la PORTEUSE
+   * LATÉRALE et R3 levée en partie. Pour une case porteuse (au moins un port de coin) d'un modèle 5×5, `coins` étant ses coins,
+   * renvoie ce qui lui est permis :
+   *  - 2 ports sur les coins k et k + 1 (les deux coins du côté k) : porteuse latérale, seul raccord permis (k, milieu) ;
+   *  - 1 port sur le coin k, sur un modèle de gabarit coin : raccords permis (k − 1, fin) et (k, début), la « paire basse »
+   *    qui longe ce coin (porteuse du coin) ;
+   *  - R3 ASSOUPLIE sur les CENTRALES (docs/18, réponses du 2026-10-19 ; docs/66 § 2) : une porteuse à 1 port sur le coin k peut porter
+   *    les raccords au milieu des deux côtés qui encadrent ce coin, (k − 1, milieu) et (k, milieu) ; une porteuse latérale du côté k
+   *    peut porter son raccord (k, milieu) plus le milieu d'UN côté voisin, (k − 1) ou (k + 1) : 2 raccords au plus (`max`), un seul
+   *    côté voisin (`voisinsMax`) ;
+   *  - sinon (2 ports en diagonale, 3 ports ou plus, 1 port sur un bord) : aucun raccord, et l'alerte R1 (comme en 4×4).
+   * Renvoie { laterale (vrai si 2 ports d'un même côté), raccords: [clés « côté:pos »], max (facultatif : raccords au plus),
+   * voisins (facultatif : clés des côtés voisins, dont voisinsMax au plus) }. R2 (aucune autre porteuse reliée), R4
+   * (aucun port sur l'apparition) et « une porteuse ne touche jamais un passage » restent des alertes dans les deux formats.
+   */
+  function porteuse5x5(coins, gabarit) {
+    var c = coins.slice().sort(function (a, b) { return a - b; });
+    if (c.length === 1) {
+      if (gabarit === 'coin') return { laterale: false, raccords: [((c[0] + 3) % 4) + ':2', c[0] + ':0'] };
+      if (gabarit === 'centrale') return { laterale: false, raccords: [((c[0] + 3) % 4) + ':1', c[0] + ':1'], max: 2 };
+      return { laterale: false, raccords: [] };
+    }
+    if (c.length === 2) {
+      var k = (c[0] + 1) % 4 === c[1] ? c[0] : ((c[1] + 1) % 4 === c[0] ? c[1] : -1);
+      if (k >= 0 && gabarit === 'centrale') {
+        var voisins = [((k + 1) % 4) + ':1', ((k + 3) % 4) + ':1'];
+        return { laterale: true, raccords: [k + ':1'].concat(voisins), max: 2, voisins: voisins, voisinsMax: 1 };
+      }
+      if (k >= 0) return { laterale: true, raccords: [k + ':1'] };
+    }
+    return { laterale: false, raccords: [] };
+  }
+
+  // Ports et raccords : alertes R1 à R4 (docs/19 ; R1 et R3 propres au 5×5 ci-dessus) et extrémités sur un bord extérieur du gabarit
+  regles.push(function (m, F) {
+    var e = [], sorties = sortiesDesCases(m), gabarit = gabaritConnu(m.gabarit), cinq = !!F && F.id === '5x5';
+    var portsParCase = dict(), raccordsParCase = dict(), typeCase = dict(), coinsParCase = dict(), racParCase = dict();
     tab(m.cases).forEach(function (c) { if (estObjet(c) && estId(c.id)) typeCase[c.id] = c.type; });
     sorties.forEach(function (s) {
       var table = s.type === 'coin' ? portsParCase : raccordsParCase;
       table[s.caseId] = (table[s.caseId] || 0) + 1;
+      if (s.type === 'coin') (coinsParCase[s.caseId] = coinsParCase[s.caseId] || []).push(s.autre.coin);
+      else (racParCase[s.caseId] = racParCase[s.caseId] || []).push(s.autre.raccord.cote + ':' + s.autre.raccord.pos);
     });
     function porteuse(id) { return !!portsParCase[id]; }
     Object.keys(portsParCase).forEach(function (id) {
-      if (portsParCase[id] > 1) e.push(alerte('ports_case', 'La case ' + id + ' porte plusieurs ports de coin : ' + RISQUE_ECART + '.', refCase(id)));
-      if (raccordsParCase[id]) e.push(alerte('raccord_porteuse', 'La case ' + id + ' porte un port et un raccord : ' + RISQUE_ECART + '.', refCase(id)));
+      var permis = cinq ? porteuse5x5(coinsParCase[id], gabarit) : { laterale: false, raccords: [] };
+      if (portsParCase[id] > 1 && !permis.laterale) {
+        e.push(alerte('ports_case', 'La case ' + id + ' porte plusieurs ports de coin' + (cinq ? ' qui ne sont pas les deux coins d’un même côté' : '') + ' : ' + RISQUE_ECART + '.', refCase(id)));
+      }
+      var rac = racParCase[id] || [], vus = dict(), refus = rac.filter(function (r) {
+        var double = vus[r]; vus[r] = true;
+        return double || permis.raccords.indexOf(r) < 0;
+      });
+      // R3 assouplie des centrales 5×5 : 2 raccords au plus, et un seul côté voisin pour une porteuse latérale
+      if (!refus.length && permis.max !== undefined && rac.length > permis.max) refus = rac.slice(permis.max);
+      if (!refus.length && permis.voisins && rac.filter(function (r) { return permis.voisins.indexOf(r) >= 0; }).length > permis.voisinsMax) refus = permis.voisins.slice();
+      if (refus.length) {
+        e.push(alerte('raccord_porteuse', 'La case ' + id + ' porte un port et un raccord' + (cinq ? ' que n’autorise pas la règle du 5×5 (porteuse latérale : le milieu de son côté, plus sur une centrale le milieu d’un côté voisin ; porteuse d’un coin : la paire qui longe ce coin, ou sur une centrale les milieux des deux côtés qui l’encadrent)' : '') + ' : ' + RISQUE_ECART + '.', refCase(id)));
+      }
       if (typeCase[id] === 'apparition') e.push(alerte('port_apparition', 'La case d\'apparition ' + id + ' porte un port de coin : ' + RISQUE_ECART + '.', refCase(id)));
     });
     tab(m.chemins).forEach(function (ch) {
@@ -582,7 +630,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
       for (var k = 0; k < 4; k++) {
         var K = F.pointCoin(k);
         if (Math.hypot(pv.x - K.x, pv.y - K.y) < F.RAYON_ZONE_COIN + demi - EPS) {
-          e.push(err('pivot_zone_coin', 'Le pivot ' + pv.id + ' est dans la zone du coin ' + nomCoin(k) + ' (réservée au jeton et à la case de jonction).', refPivot(pv.id)));
+          e.push(err('pivot_zone_coin', 'Le pivot ' + pv.id + ' est dans la zone du coin ' + nomCoin(k) + ' (réservée au jeton : ville ou campement).', refPivot(pv.id)));
           break;
         }
       }
@@ -657,7 +705,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
         segments(t, function (a, b) {
           if (distancePointSegment(K, a, b) < F.RAYON_ZONE_COIN + demi - EPS) { zone = true; return false; }
         });
-        if (zone) e.push(err('passage_zone_coin', 'Ce passage entre dans la zone du coin ' + nomCoin(k) + ' (réservée au jeton et à la case de jonction).', refPassage(t)));
+        if (zone) e.push(err('passage_zone_coin', 'Ce passage entre dans la zone du coin ' + nomCoin(k) + ' (réservée au jeton : ville ou campement).', refPassage(t)));
       }
       cases.forEach(function (c) {
         if (t.cases.indexOf(c) >= 0) return;
@@ -988,12 +1036,28 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   /** Le modèle porte-t-il au moins une case d'apparition ? */
   function aUneApparition(m) { return tab(m && m.cases).some(function (c) { return estObjet(c) && c.type === 'apparition'; }); }
 
-  /** Masques d'une tuile posée, après rotation : { raccords, portsCoin }. */
+  /**
+   * Murs voulus d'un modèle (docs/18, réponse 3 sur le 5×5 très connecté réalisé ; docs/57, arbitrage) : masque de 4 bits (bit c = côté c
+   * dans le repère du modèle, N E S O) des côtés VOLONTAIREMENT fermés, sans aucun raccord. Un raccord de la voisine qui leur fait face
+   * est une information (« mur voulu »), non une alerte.
+   *  - SEULS les côtés listés par le champ facultatif `murs` (côtés 0 à 3) comptent, et seulement s'ils n'ont aucun raccord ;
+   *  - sans le champ, ou avec `murs: []` : aucun mur (plus de détection par défaut : un côté sans raccord d'une centrale de l'utilisateur
+   *    reste une alerte, comme celui de « Étoile fermée » de la 3.04) ; le catalogue 5×5 déclare `murs: [1, 3]` sur « Deux ponts ».
+   */
+  function mursDuModele(m) {
+    if (!m || typeof m !== 'object') return 0;
+    var racc = masquesDuModele(m).raccords, murs = 0, k;
+    if (Array.isArray(m.murs)) m.murs.forEach(function (c) { if (c === 0 || c === 1 || c === 2 || c === 3) murs |= 1 << c; });
+    for (k = 0; k < 4; k++) if (G.triplet(racc, k) !== 0) murs &= ~(1 << k);
+    return murs;
+  }
+
+  /** Masques d'une tuile posée, après rotation : { raccords, portsCoin, murs }. */
   function masquesTuilePosee(doc, tuile) {
     var m = modeleParId(doc, tuile.modeleId);
-    if (!m) return { raccords: 0, portsCoin: 0 };
+    if (!m) return { raccords: 0, portsCoin: 0, murs: 0 };
     var mm = masquesDuModele(m);
-    return { raccords: G.tournerRaccords(mm.raccords, tuile.rot), portsCoin: G.tournerPorts(mm.portsCoin, tuile.rot) };
+    return { raccords: G.tournerRaccords(mm.raccords, tuile.rot), portsCoin: G.tournerPorts(mm.portsCoin, tuile.rot), murs: G.tournerPorts(mursDuModele(m), tuile.rot) };
   }
 
   /** Phrase de refus quand le rôle (gabarit) du modèle ne correspond pas à la cellule. */
@@ -1133,7 +1197,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     return nouveau;
   }
 
-  /** Case chemin -> ville -> case chemin (pure). Lève une Error si la pose de la ville est refusée. */
+  /** Campement -> ville -> campement (pure). Lève une Error si la pose de la ville est refusée. */
   function cyclerJeton(doc, i, j) {
     return jetonEn(doc, i, j) ? retirerJeton(doc, i, j) : poserJeton(doc, i, j, 'capture');
   }
@@ -1159,7 +1223,8 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   /**
    * Raccords sans vis-à-vis : [{ col, lig, cote, pos, raison }] (côté dans le repère du plateau).
    * raison : 'absent' = cellule voisine pas encore posée ; 'vide' = bord du plateau ;
-   * 'mort' = voisin posé sans raccord en face.
+   * 'mort' = voisin posé sans raccord en face ; `mur: true` quand ce côté de la voisine est un mur voulu (mursDuModele) : le raccord
+   * est alors une simple information (validerPlateau), pas une alerte.
    */
   function raccordsMorts(doc) {
     var res = [], F = formatDuDocument(doc);
@@ -1168,16 +1233,18 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
       for (var cote = 0; cote < 4; cote++) {
         if (G.triplet(mA, cote) === 0) continue;
         var d = G.coteVoisin(cote), vc = t.col + d.dc, vl = t.lig + d.dl;
-        var v = tuileEn(doc, vc, vl), morts, raison;
+        var v = tuileEn(doc, vc, vl), morts, raison, mur = false;
         if (v) {
-          morts = G.apparier(mA, cote, masquesTuilePosee(doc, v).raccords).mortsA;
+          var mV = masquesTuilePosee(doc, v);
+          morts = G.apparier(mA, cote, mV.raccords).mortsA;
           raison = 'mort';
+          mur = G.triplet(mV.raccords, (cote + 2) % 4) === 0 && ((mV.murs >> ((cote + 2) % 4)) & 1) === 1;
         } else {
           morts = G.triplet(mA, cote);
           raison = dansGrille(vc, vl, F) ? 'absent' : 'vide';
         }
         for (var pos = 0; pos < 3; pos++) {
-          if ((morts >> pos) & 1) res.push({ col: t.col, lig: t.lig, cote: cote, pos: pos, raison: raison });
+          if ((morts >> pos) & 1) res.push({ col: t.col, lig: t.lig, cote: cote, pos: pos, raison: raison, mur: mur });
         }
       }
     });
@@ -1309,12 +1376,13 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
 
   /**
    * Revalide tout le plateau : { erreurs, alertes }, éléments { code, message, ref }.
-   * erreurs : tuiles (verifierTuilePosee), exemplaires dépassés, jetons invalides.
+   * erreurs : tuiles (verifierTuilePosee), jetons invalides (les poses ne sont pas limitées par les exemplaires, docs/46).
    * alertes : place des tuiles, raccords morts ou face au vide, ports vers le pourtour, jonctions mal reliées
    * (n'empêchent rien).
+   * informations : les raccords sans vis-à-vis qui font face à un mur voulu (code 'raccord_mur', raccordsMorts / mursDuModele).
    */
   function validerPlateau(doc) {
-    var erreurs = [], alertes = [];
+    var erreurs = [], alertes = [], informations = [];
     doc.plateau.tuiles.forEach(function (t) {
       erreurs = erreurs.concat(verifierTuilePosee(doc, t));
       alertes = alertes.concat(alertesTuilePosee(doc, t));
@@ -1324,18 +1392,22 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     });
     raccordsMorts(doc).forEach(function (r) {
       if (r.raison === 'absent') return;
+      if (r.mur) {
+        informations.push(err('raccord_mur', 'Raccord face à un mur voulu de la tuile voisine.', { type: 'raccord', col: r.col, lig: r.lig, cote: r.cote, pos: r.pos }));
+        return;
+      }
       alertes.push(err('raccord_mort', r.raison === 'vide' ? 'Raccord face au vide.' : 'Raccord sans vis-à-vis.',
         { type: 'raccord', col: r.col, lig: r.lig, cote: r.cote, pos: r.pos }));
     });
     portsVersPourtour(doc).forEach(function (p) {
-      alertes.push(err('port_pourtour', 'Port de coin vers le bord du plateau : il n\'aboutit à aucune case de jonction.',
+      alertes.push(err('port_pourtour', 'Port de coin vers le bord du plateau : il n\'aboutit à aucun campement ni à aucune ville.',
         { type: 'coin', col: p.col, lig: p.lig, coin: p.coin, i: p.i, j: p.j }));
     });
     jonctionsMalReliees(doc).forEach(function (x) {
       alertes.push(err('jonction_ports', 'La jonction (' + x.i + ', ' + x.j + ') n\'est reliée que par ' + x.ports + ' port(s) : sa case est mal reliée au reste du plateau.',
         { type: 'jeton', i: x.i, j: x.j }));
     });
-    return { erreurs: erreurs, alertes: alertes };
+    return { erreurs: erreurs, alertes: alertes, informations: informations };
   }
 
   /** Ajoute un modèle (pure, copie). Lève une Error si l'id est invalide ou déjà pris. */
@@ -1404,6 +1476,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
     modeleParId: modeleParId,
     tuileEn: tuileEn,
     masquesTuilePosee: masquesTuilePosee,
+    mursDuModele: mursDuModele,
     peutPoserTuile: peutPoserTuile,
     poserTuile: poserTuile,
     retirerTuile: retirerTuile,

@@ -1,108 +1,74 @@
 'use strict';
 /*
- * Garde-fou léger des mesures 5×5 (outils/mesures-5x5.js, docs/35 ; catalogue livré de docs/46) : 50 plateaux tirés et orientés par le générateur, sans les 200 candidats.
- * Invariants seulement (cases, ports, écart entre jonctions, ports par jonction, placements admissibles) ; aucun pourcentage figé.
+ * Garde-fou léger des mesures de contrôle du 5×5 très connecté (outils/mesures-5x5-connecte.js, rapports docs/56 et docs/59 ; catalogue « P »
+ * de docs/66 : LC1, LC3 à LC7, LC11, LC12 ; 8 villes aux positions par défaut) : 12 plateaux du vrai générateur, mesurés par l'outil et recalculés ici indépendamment. Invariants seulement ; aucun
+ * pourcentage figé (les mesures sur 200 plateaux sont dans docs/56). L'ancien outil outils/mesures-5x5.js (docs/35) mesurait le
+ * catalogue de la 4.00.0 et n'est plus testé.
  */
 const test = require('node:test');
 const assert = require('node:assert');
 
-const MS = require('../outils/mesures-5x5.js');
+const MS = require('../outils/mesures-5x5-connecte.js');
 const PM = globalThis.PM;
-const GR = PM.graphe, CAT = PM.catalogue;
+const M = PM.modele, GR = PM.graphe, GEN = PM.generateur;
 
-const NB = 50;
-const jetonsDe = (v) => v.map((x) => ({ i: (x % 4) + 1, j: Math.floor(x / 4) + 1, type: 'capture' }));
-
-/** 50 plateaux traités (une seule fois pour tous les tests). */
 let CACHE = null;
-function plateaux() {
-  if (!CACHE) {
-    const prep = MS.preparer(MS.GRAINE_REF, false);
-    CACHE = [];
-    for (let n = 0; n < NB; n++) {
-      const e = MS.tirerEntreesF2(prep);
-      assert.ok(!e.cause, 'plateau ' + n + ' : ' + e.cause);
-      const b = MS.traiterPlateauF2(e.doc, prep.ctx, prep.rng);
-      b.b1 = e.b1;
-      CACHE.push({ doc: e.doc, b });
-    }
-  }
+function series() {
+  if (!CACHE) CACHE = MS.travailler('mt', 0, 12);
   return CACHE;
 }
 
-test('mesures 5×5 : cases = 72 + nB1 + nU1 (78 à 81, docs/46), ports = cases − 38, au plus 6 B1', () => {
-  plateaux().forEach(({ b }, n) => {
-    const nU1 = b.props.modeles.U1 || 0;
-    assert.ok(b.b1 <= 6, 'plateau ' + n);
-    assert.strictEqual(b.props.modeles.B1 || 0, b.b1, 'plateau ' + n);
-    assert.strictEqual(b.props.cases, 72 + b.b1 + nU1, 'plateau ' + n);
-    assert.ok(b.props.cases >= 78 && b.props.cases <= 81, 'plateau ' + n + ' : ' + b.props.cases);
-    assert.strictEqual(b.props.ports, b.props.cases - 38, 'plateau ' + n);
-    assert.strictEqual(b.props.pj.reduce((a, c) => a + c, 0), b.props.ports);
+test('mesures 5×5 : chaque plateau est réussi, 57 ou 58 cases, 46 ports plus 2 par centrale à 4 ports, moins de 5 % de cases à 2 connexions, montable avec la boîte', () => {
+  series().forEach((x) => {
+    assert.ok(x.ok, 'mt' + x.k + ' : ' + x.raison);
+    // 50 cases de tuiles (49 avec LC5) + 8 campements ; ports : 28 au pourtour, 2 par centrale, 4 pour LC4 et LC12
+    const lc4 = x.composition.LC4 || 0, cases = 58 - (x.composition.LC5 || 0);
+    assert.strictEqual(x.cases, cases);
+    assert.strictEqual(x.casesConnexions, cases);
+    assert.strictEqual(x.portsTotal, 46 + 2 * (lc4 + (x.composition.LC12 || 0)));
+    assert.strictEqual(x.villes, '1,1 1,4 2,2 2,3 3,2 3,3 4,1 4,4', 'positions par défaut des 8 villes');
+    assert.strictEqual(x.ports.length, 16);
+    assert.ok(x.ports.every((p) => p >= 2));
+    assert.ok(x.part < 0.05 && x.faibles <= 2, 'mt' + x.k);
+    assert.strictEqual(x.montable, true);
+    assert.strictEqual(x.raccordsMorts, 2 * lc4); // les murs de LC4 : 2 raccords morts par pose (informations)
+    assert.strictEqual(x.villesProches, 0);
+    assert.strictEqual(x.cinq, false);
+    assert.ok(x.S < GR.SEUIL_S && x.admissibles >= 1);
   });
 });
 
-test('mesures 5×5 : chaque jonction a au moins 2 ports, au moins 8 jonctions en ont 3 (40 ports au moins), écart minimal entre jonctions >= 4 pas', () => {
-  plateaux().forEach(({ b }, n) => {
-    assert.strictEqual(b.props.pj.length, 16);
-    assert.ok(b.props.pj.every((p) => p >= 2), 'plateau ' + n + ' : ' + b.props.pj.join(','));
-    assert.ok(b.props.pj.filter((p) => p >= 3).length >= 8, 'plateau ' + n);
-    assert.ok(b.props.ecartMin >= 4, 'plateau ' + n + ' : ' + b.props.ecartMin);
+test('mesures 5×5 : les mesures de l\'outil sont celles de PM.graphe et du générateur (recalcul indépendant)', () => {
+  const doc = PM.catalogue.nouveauDocument('5x5');
+  series().slice(0, 4).forEach((x) => {
+    const r = GEN.generer(doc, { graine: 'mt' + x.k });
+    const m = MS.mesurerPlateau(r);
+    const g = GR.construire(r.doc, { villesTraversables: false });
+    let faibles = 0, somme = 0, n = 0;
+    g.cases.forEach((c, id) => { const d = g.voisins.get(id).size; n++; somme += d; if (d <= 2) faibles++; });
+    g.jonctions.forEach((jn) => { if (jn.type === 'case') { n++; somme += jn.ports; if (jn.ports <= 2) faibles++; } });
+    assert.deepStrictEqual([m.faibles, m.casesConnexions], [faibles, n]);
+    assert.ok(Math.abs(m.degreMoyen - somme / n) < 1e-9);
+    assert.strictEqual(m.S, GR.equilibre(r.doc).S);
+    assert.strictEqual(m.chaine, GR.rythme(r.doc, g).chaineMax);
+    assert.strictEqual(m.raccordsMorts, M.raccordsMorts(r.doc).length);
+    assert.strictEqual(m.admissibles, GEN.placementsAdmissibles5x5(r.doc));
+    for (const k of Object.keys(m)) assert.deepStrictEqual(x[k], m[k], k); // la série (fils de calcul) donne les mêmes mesures
   });
 });
 
-test('mesures 5×5 : placements admissibles = 7 villes en 2-3-2 sur des jonctions à 3 ports au moins', () => {
-  plateaux().forEach(({ b }, n) => {
-    // il peut n'y avoir aucun placement admissible (rejet « villes_ports » du générateur) : ce n'est pas une erreur de la mesure
-    assert.strictEqual(b.configs.length, b.nbAdm, 'plateau ' + n);
-    b.configs.forEach((c) => {
-      assert.strictEqual(c.v.length, 7);
-      assert.ok(c.v.every((x) => b.props.pj[x] >= 3), 'plateau ' + n);
-      const rangees = [0, 0, 0, 0];
-      c.v.forEach((x) => { rangees[Math.floor(x / 4)]++; });
-      assert.deepStrictEqual([rangees[0], rangees[1] + rangees[2], rangees[3]], [2, 3, 2], 'plateau ' + n);
-    });
-  });
-});
-
-test('mesures 5×5 : la mesure rapide donne les mêmes S, écart max, partage et distances que PM.graphe.equilibre', () => {
-  plateaux().forEach(({ doc, b }, n) => {
-    b.configs.slice(0, 2).forEach((c) => {
-      if (c.f === 'I') return;
-      const d = { version: doc.version, grille: '5x5', modeles: doc.modeles, plateau: { tuiles: doc.plateau.tuiles, jetons: jetonsDe(c.v) } };
-      const e = GR.equilibre(d, { graphe: GR.construire(d, {}) });
-      const m = MS.deriver(c);
-      assert.deepStrictEqual(c.t1, e.D[1], 'plateau ' + n);
-      assert.deepStrictEqual(c.t2, e.D[2], 'plateau ' + n);
-      assert.strictEqual(m.S, e.S);
-      assert.strictEqual(m.em, e.ecartMax7);
-      assert.deepStrictEqual(c.pa, [e.partage[1], e.partage[2], e.partage.egalite]);
-      assert.strictEqual(m.cinq, e.cinqContreDeux);
-    });
-  });
-});
-
-test('mesures 5×5 : le placement retenu (avec rejet de S >= seuil) passe tous les filtres et vaut le meilleur S', () => {
-  plateaux().forEach(({ b }, n) => {
-    if (b.selAvec < 0) { assert.ok(b.configs.every((c) => c.f !== 'o'), 'plateau ' + n); return; }
-    const c = b.configs[b.selAvec];
-    assert.strictEqual(c.f, 'o', 'plateau ' + n);
-    const S = MS.deriver(c).S;
-    b.configs.filter((x) => x.f === 'o').forEach((x) => assert.ok(MS.deriver(x).S >= S, 'plateau ' + n));
-    assert.ok(S < GR.SEUIL_S);
-  });
-});
-
-test('mesures 5×5 : le contrefactuel « B1 libres » garde les mêmes invariants de cases et de ports', () => {
-  const prep = MS.preparer(MS.GRAINE_REF, true);
-  for (let n = 0; n < 10; n++) {
-    const e = MS.tirerEntreesF2(prep);
-    if (e.cause) continue;
-    const doc = e.doc, nb = (id) => doc.plateau.tuiles.filter((t) => t.modeleId === id).length, nB1 = nb('B1');
-    assert.ok(nB1 <= 6);
-    const g0 = GR.construire(doc, { jetons: [] });
-    assert.strictEqual(MS.proprietesPlateau(doc, g0).cases, 72 + nB1 + nb('U1'));
-  }
-  // la préparation du contrefactuel ne modifie pas le contexte du générateur : même catalogue, même format
-  assert.strictEqual(CAT.nouveauDocument('5x5').grille, '5x5');
+test('mesures 5×5 : stock minimal pour une part donnée (recherche exhaustive), résumé lisible', () => {
+  const comps = [{ LC1: 3, LC3: 3 }, { LC1: 4, LC3: 2 }, { LC1: 2, LC3: 4 }, { LC1: 3, LC3: 3 }];
+  assert.deepStrictEqual(MS.stockMinimal(comps, 0.5, ['LC1', 'LC3']), { total: 6, stock: { LC1: 3, LC3: 3 }, part: 0.5 });
+  assert.deepStrictEqual(MS.stockMinimal(comps, 1, ['LC1', 'LC3']).total, 8);
+  const texte = MS.resume(series());
+  assert.match(texte, /^Plateaux : 12 ; réussis : 12 \(100 %\)/);
+  assert.match(texte, /Montable avec la boîte : 100 %/);
+  assert.match(texte, /Composition LC7 : /);
+  // positions des villes fixes : deux graines peuvent donner le même plateau (variété des tuiles seulement)
+  const differents = +texte.match(/plateaux différents : (\d+)/)[1];
+  assert.ok(differents >= 10, texte);
+  assert.match(texte, /Placements de villes différents : 1\n/);
+  assert.deepStrictEqual(MS.IDS_CENTRALES, ['LC1', 'LC3', 'LC4', 'LC5', 'LC6', 'LC7', 'LC11', 'LC12']);
+  assert.match(texte, /Cases à 2 connexions ou moins : moyenne/);
 });

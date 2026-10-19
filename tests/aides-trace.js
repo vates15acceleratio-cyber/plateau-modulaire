@@ -112,7 +112,9 @@ function reseauxDePassages(m) {
  *  - une case porteuse ne touche jamais un passage ;
  *  - bords et coins : un réseau de passages au plus, jamais depuis la case d'apparition ;
  *  - centrale 4×4 : un passage au plus (docs/18) ; centrale 5×5 : un T au plus (un pivot) ;
- *  - aucun mur sur une centrale : chaque côté a un raccord (de chemin ou de passage) au milieu.
+ *  - aucun mur sur une centrale : chaque côté a un raccord (de chemin ou de passage) au milieu ; en 5×5, sauf « Deux ponts » (deux murs
+ *    opposés sur une centrale à deux porteuses latérales opposées non reliées, docs/18) ;
+ *  - R1 et R3 : un port par case et aucun raccord sur une porteuse ; en 5×5, règles de la porteuse latérale (docs/55 point 7).
  */
 function reglesPassages(m, format) {
   const pb = [], ps = m.passages || [], port = new Set(porteuses(m));
@@ -127,14 +129,56 @@ function reglesPassages(m, format) {
       if (e['case'] !== undefined && appar.has(e['case'])) pb.push(`${m.id} ${p.id} : part de la case d'apparition`);
     }
   }
-  // une porteuse ne touche pas non plus un passage par un chemin vers un raccord qui ferait face à un passage : R3 (aucun raccord latéral)
-  for (const ch of m.chemins) if (ch.b.raccord && port.has(ch.a['case'])) pb.push(`${m.id} ${ch.id} : raccord sur une porteuse`);
+  // une porteuse ne touche pas non plus un passage par un chemin vers un raccord qui ferait face à un passage : R3 (aucun raccord latéral) ;
+  // 5×5 (docs/55 point 7) : une porteuse latérale (2 ports, coins k et k + 1) porte le raccord (k, 1) ; une porteuse à 1 port (coin k)
+  // d'un coin peut porter la paire basse qui longe ce coin, (k − 1, 2) et (k, 0) ;
+  // R3 assouplie sur les centrales 5×5 (docs/18, 2026-10-19 ; docs/66 § 2) : porteuse à 1 port (coin k) : milieux (k − 1, 1) et (k, 1) ;
+  // porteuse latérale du côté k : (k, 1) plus le milieu d'UN côté voisin ; 2 raccords au plus sur une porteuse de centrale
+  const coinsDe = (id) => m.chemins.filter((ch) => ch.a['case'] === id && ch.b.coin !== undefined).map((ch) => ch.b.coin).sort((a, b) => a - b);
+  const coteLateral = (id) => {
+    const coins = coinsDe(id);
+    if (format !== '5x5' || coins.length !== 2) return -1;
+    return (coins[0] + 1) % 4 === coins[1] ? coins[0] : ((coins[1] + 1) % 4 === coins[0] ? coins[1] : -1);
+  };
+  // porteuse latérale : 2 ports sur les deux coins d'un même côté (indicateur à part de permis, qui rend plusieurs raccords sur une centrale)
+  const laterale = (id) => coteLateral(id) >= 0;
+  const centrale = m.gabarit === 'centrale';
+  const permis = (id) => {
+    if (format !== '5x5') return [];
+    const coins = coinsDe(id), k = coteLateral(id);
+    if (coins.length === 1) return m.gabarit === 'coin' ? [`${(coins[0] + 3) % 4}:2`, `${coins[0]}:0`] : (centrale ? [`${(coins[0] + 3) % 4}:1`, `${coins[0]}:1`] : []);
+    if (k < 0) return [];
+    return centrale ? [`${k}:1`, `${(k + 1) % 4}:1`, `${(k + 3) % 4}:1`] : [`${k}:1`];
+  };
+  for (const ch of m.chemins) {
+    if (!ch.b.raccord || !port.has(ch.a['case'])) continue;
+    if (!permis(ch.a['case']).includes(`${ch.b.raccord.cote}:${ch.b.raccord.pos}`)) pb.push(`${m.id} ${ch.id} : raccord sur une porteuse`);
+  }
+  for (const id of port) {
+    const rac = m.chemins.filter((ch) => ch.a['case'] === id && ch.b.raccord).map((ch) => `${ch.b.raccord.cote}:${ch.b.raccord.pos}`);
+    if (format === '5x5' && centrale && rac.length > 2) pb.push(`${m.id} ${id} : plus de 2 raccords sur une porteuse`);
+    const k = coteLateral(id);
+    if (format === '5x5' && centrale && k >= 0 && rac.includes(`${(k + 1) % 4}:1`) && rac.includes(`${(k + 3) % 4}:1`)) pb.push(`${m.id} ${id} : deux côtés voisins sur une porteuse latérale`);
+  }
+  // 5×5 : une porteuse a au plus 2 ports, ceux d'un même côté (porteuse latérale) ; ailleurs, un seul (R1)
+  for (const id of port) {
+    const n = coinsDe(id).length;
+    if (n > 1 && !(format === '5x5' && n === 2 && laterale(id))) pb.push(`${m.id} ${id} : plusieurs ports hors d'une porteuse latérale`);
+  }
   if (m.gabarit !== 'centrale' && reseauxDePassages(m).length > 1) pb.push(`${m.id} : plus d'un passage sur un ${m.gabarit}`);
   if (m.gabarit === 'centrale' && format === '4x4' && ps.length > 1) pb.push(`${m.id} : plus d'un passage sur une centrale 4×4`);
   if (m.gabarit === 'centrale' && (m.pivots || []).length > 1) pb.push(`${m.id} : plus d'un T`);
   if (m.gabarit === 'centrale') {
     const rac = M.masquesDuModele(m).raccords;
-    for (let cote = 0; cote < 4; cote++) if (G.triplet(rac, cote) !== 0b010) pb.push(`${m.id} : côté ${cote} sans raccord au milieu (mur) ou hors du milieu`);
+    // 5×5 (« Deux ponts », docs/18) : deux murs opposés permis sur une centrale à deux porteuses latérales opposées non reliées
+    const deuxPonts = format === '5x5' && port.size === 2 && [...port].every((id) => laterale(id)) &&
+      !m.chemins.some((ch) => ch.b['case'] !== undefined) && !(m.passages || []).length;
+    for (let cote = 0; cote < 4; cote++) {
+      const t = G.triplet(rac, cote);
+      if (t === 0b010) continue;
+      if (deuxPonts && t === 0 && G.triplet(rac, (cote + 2) % 4) === 0) continue;
+      pb.push(`${m.id} : côté ${cote} sans raccord au milieu (mur) ou hors du milieu`);
+    }
   }
   return pb;
 }

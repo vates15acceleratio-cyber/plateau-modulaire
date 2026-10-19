@@ -502,15 +502,13 @@ function rediger(stats, meta) {
 /* ---------------------------------------------------------------------- */
 
 /**
- * Tire `nb` tirages 5×5 du générateur, SANS filtre sur l'équilibre ni choix des villes : pour mesurer les placements de villes (les
- * 2016 placements 2-3-2 de PM.generateur.placementsVilles5x5(), à essayer sur chaque plateau comme PAIRES en 4×4), le « 5 contre 2 »,
- * le meilleur S atteignable, les plateaux sans placement valide (docs/28 § 6, points 4 et 12).
- * Renvoie { entrees: [{ doc, b1, jonctions3 }], sansOrientation, ms, generateur } :
- *  - entrees : plateaux dont les tuiles sont tirées (B1 imposés) puis orientées, sans ville (doc.plateau.jetons = []) ;
- *  - sansOrientation : tirages où aucune orientation ne relie chaque jonction par 2 ports (rejet « jonction_ports ») ;
- *  - generateur : { essais, acceptes, rejets (par cause) } du générateur complet, UN candidat par graine (villes comprises,
- *    donc ici les rejets d'équilibre et de placement sont comptés, et les plateaux acceptés dans `acceptes`).
- * mesurer() reste propre au 4×4 : l'étape « mesures sur 1000 plateaux » devra l'adapter (rangées, 36 paires).
+ * Tire `nb` tirages 5×5 du générateur (catalogue à 2 cases par tuile, docs/55), SANS filtre sur l'équilibre : composition, un placement
+ * de villes compatible tiré au hasard puis orientation des centrales pour ce placement (PM.generateur.tuilesOrientees5x5 : les villes
+ * d'abord, docs/53 § 3). Renvoie { entrees: [{ doc, villes, faibles }], sansOrientation, ms, generateur } :
+ *  - entrees : plateaux dont les tuiles sont tirées et orientées, SANS ville posée (doc.plateau.jetons = []) ; `villes` : le placement
+ *    pour lequel les centrales ont été orientées ; `faibles` : jonctions-cases à moins de 3 ports ;
+ *  - sansOrientation : tirages sans placement compatible ni orientation (rejet « villes_ports ») ;
+ *  - generateur : { essais, acceptes, rejets (par cause) } du générateur complet, UN candidat par graine.
  */
 function tirerPlateaux5x5(nb, graine) {
   const GEN = PM.generateur, t0 = Date.now(), rng = mulberry32(graine);
@@ -519,7 +517,7 @@ function tirerPlateaux5x5(nb, graine) {
     const doc = CAT.nouveauDocument('5x5');
     const t = GEN.tuilesOrientees5x5(GEN.contexteDocument5x5(doc), rng);
     if (t.cause) res.sansOrientation++;
-    else { doc.plateau.tuiles = t.tuiles; res.entrees.push({ doc, b1: t.b1, jonctions3: t.jonctions3 }); }
+    else { doc.plateau.tuiles = t.tuiles; res.entrees.push({ doc, villes: t.jetons, faibles: t.faibles }); }
     const r = GEN.generer(CAT.nouveauDocument('5x5'), { graine: 'mesure-' + graine + '-' + n, candidats: 1, essaisMax: 1 });
     res.generateur.essais += r.essais;
     if (r.ok) res.generateur.acceptes++;

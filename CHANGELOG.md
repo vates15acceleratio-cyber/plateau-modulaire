@@ -1,5 +1,36 @@
 # Journal des modifications
 
+## [5.00.0] - 2026-10-19
+
+Majeure
+
+Le 5×5 devient très connecté : catalogue entièrement refait (31 tuiles, deux cases par tuile), règles propres au 5×5, huit villes à positions fixes par défaut et un nouvel élément, le campement (jonction sans ville, marquée d'un feu de bois et de la taille d'une ville). Les documents 5×5 existants s'ouvrent toujours avec leur ancien catalogue ; l'application propose de le régénérer. Le format des fichiers ne change pas.
+
+### Ajouté
+- Catalogue 5×5 « très connecté » : 31 tuiles à imprimer (LC1, LC3 ×4, LC4, LC5, LC6, LC7, LC11 coins opposés ×2, LC12 deux ponts ouverts ×3, LE1, LB2 bord à pont ×12, LK2 coin à porteuse ×4). Chaque tuile centrale porte deux cases : une porteuse latérale et un relais.
+- Centrale 5×5 « Étoile » (LE1) : 5 cases, un seul exemplaire, hors tirage aléatoire ; elle se pose à la main.
+- Campements : une jonction sans ville est un campement, avec un jeton feu de bois Ø 30 mm, de la taille d'une ville.
+- Seize jetons recto-verso (campement ou ville), imprimés sur deux pages A4 en miroir.
+- Huit villes à positions fixes par défaut en 5×5, déplaçables à la main.
+- Alerte bloquante au-delà de 8 villes en 5×5.
+- Critères à 8 villes : « 6 contre 2 » est bloquant, « 5 contre 3 » est une alerte.
+- Mesure des connexions des cases en 5×5 (part des cases reliées à 2 cases ou moins) ; conseil « Placer les villes » en 5×5.
+- Proposition de régénérer un plateau 5×5 de l'ancien catalogue, pour le passer au nouveau.
+
+### Modifié
+- Catalogue 5×5 entièrement remplacé : les 37 tuiles de la 4.00.0 sont remplacées par les 31 tuiles ci-dessus.
+- Règles propres au 5×5 : la règle R3 est assouplie pour les centrales 5×5.
+- Rythme : toute jonction compte comme zone d'intérêt.
+- Murs : déclarés en information seulement, sans alerte.
+- Seuils S en 5×5 : alerte à partir de 5 et information à partir de 4, comme en 4×4 (la 4.00.0 alertait à partir de 7).
+- Le siège imprimé aux coins des tuiles passe de Ø 20 à Ø 30 mm, dans les deux formats, pour avoir la taille d'un campement.
+- Générateur 4×4 : évite les goulets (points d'articulation), comme en 5×5.
+- Le mot « case de jonction » devient « campement » dans l'application et les documents imprimés.
+- Documents 5×5 existants : leur ancien catalogue est conservé jusqu'à la régénération.
+
+### Supprimé
+- Tuile LC2 retirée du catalogue 5×5 (remplacée par LC11 et LC12).
+
 ## [4.00.0] - 2026-10-18
 
 Majeure

@@ -11,7 +11,7 @@
  * Règles v2 : grille pleine, poses illimitées (un modèle se pose autant de fois qu'on veut) mais rôle respecté (coin dans
  * un coin, bord sur le pourtour hors coins, centrale au centre : les autres cellules sont grisées pendant l'armement et le
  * glissement), rotation libre de toutes les tuiles (R), rotation suggérée pour un bord ou un coin sur le pourtour ;
- * clic droit sur une tuile posée = la retirer (annulable) ; jonction = case chemin ou ville.
+ * clic droit sur une tuile posée = la retirer (annulable) ; jonction = campement ou ville.
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
 
@@ -21,7 +21,12 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   'use strict';
 
   var RAYON_JONCTION = 15;        // aimantation d'un jeton (D10)
-  var NB_VILLES = 7;              // villes de la composition (docs/18)
+  var NB_VILLES_PAR_FORMAT = { '4x4': 7, '5x5': 8 }; // villes de la composition par format (docs/18 ; 8 en 5×5 depuis les décisions du 2026-10-19)
+  /** Villes visées du document (PM.graphe.nbVilles si chargé, sinon la table locale, identique). */
+  function nbVillesDe(doc) {
+    var id = M().formatDuDocument(doc).id;
+    return PM.graphe && typeof PM.graphe.nbVilles === 'function' ? PM.graphe.nbVilles(id) : (NB_VILLES_PAR_FORMAT[id] || 7);
+  }
 
   function M() { return PM.modele; }
   function G() { return PM.geometrie; }
@@ -243,7 +248,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /** Phrase après un clic sur la jonction (i, j) (pure) : ville posée ou retirée. */
   function messageJeton(apres, i, j) {
     var jt = apres.plateau.jetons.filter(function (x) { return x && x.i === i && x.j === j; })[0];
-    return { texte: jt ? 'Ville sur la jonction (' + i + ',' + j + ').' : 'Ville retirée : la jonction (' + i + ',' + j + ') redevient une case chemin.', niveau: 'info' };
+    return { texte: jt ? 'Ville sur la jonction (' + i + ',' + j + ').' : 'Ville retirée : la jonction (' + i + ',' + j + ') redevient un campement.', niveau: 'info' };
   }
 
   /* ------------------------------------------------------------------ */
@@ -268,7 +273,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   /**
    * Alertes à dessiner (pure), en mm dans le repère du plateau :
-   *  - raccords morts de raison 'vide' ou 'mort' (pas 'absent') : {type:'raccord', col, lig, cote, pos, raison, x, y, nx, ny} ;
+   *  - raccords morts de raison 'vide' ou 'mort' (pas 'absent') : {type:'raccord', col, lig, cote, pos, raison, mur, x, y, nx, ny} ;
+   *    `mur: true` = face à un mur voulu (information, dessinée sans triangle d'alerte) ;
    *  - ports de coin vers le bord du plateau : {type:'port', col, lig, coin, i, j, x, y, nx, ny}.
    * (x, y) = point sur la frontière ou au coin ; (nx, ny) = direction vers l'intérieur de la tuile.
    */
@@ -277,7 +283,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     M().raccordsMorts(doc).forEach(function (r) {
       if (r.raison === 'absent') return;
       var p = F.pointRaccord(r.cote, r.pos), n = NORMALE[r.cote];
-      res.push({ type: 'raccord', col: r.col, lig: r.lig, cote: r.cote, pos: r.pos, raison: r.raison,
+      res.push({ type: 'raccord', col: r.col, lig: r.lig, cote: r.cote, pos: r.pos, raison: r.raison, mur: !!r.mur,
         x: r.col * C + p.x, y: r.lig * C + p.y, nx: n.x, ny: n.y });
     });
     M().portsVersPourtour(doc).forEach(function (p) {
@@ -396,9 +402,15 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     // Alertes (raccords et ports morts)
     alertesPlateau(doc).forEach(function (a) {
       var lg = a.type === 'raccord' ? F.LARGEUR_CHEMIN + 2 : 24;
-      var titre = a.type === 'port' ? 'Port de coin vers le bord du plateau (aucune case de jonction)'
+      var titre = a.type === 'port' ? 'Port de coin vers le bord du plateau (aucun campement ni aucune ville)'
+        : a.mur ? 'Raccord face à un mur voulu de la tuile voisine (information)'
         : a.raison === 'vide' ? 'Raccord face au vide' : 'Raccord sans vis-à-vis';
       var ax = a.x + a.nx * 5, ay = a.y + a.ny * 5; // triangle légèrement à l'intérieur
+      if (a.mur) { // information : un trait gris discret, ni triangle ni point d'exclamation
+        s.push('<g class="pm-assemblage-mur" data-alerte="mur"><path class="pm-assemblage-mur-trait" d="M' + arrondi(a.x) + ' ' + arrondi(a.y) + ' L' +
+          arrondi(a.x + a.nx * lg) + ' ' + arrondi(a.y + a.ny * lg) + '"/><title>' + echapper(titre) + '</title></g>');
+        return;
+      }
       s.push('<g class="pm-assemblage-alerte" data-alerte="' + a.type + '">' +
         '<path class="pm-assemblage-alerte-trait" d="M' + arrondi(a.x) + ' ' + arrondi(a.y) + ' L' + arrondi(a.x + a.nx * lg) + ' ' + arrondi(a.y + a.ny * lg) + '"/>' +
         '<path class="pm-assemblage-alerte-triangle" d="M' + arrondi(ax) + ' ' + arrondi(ay - 9) + ' L' + arrondi(ax + 8) + ' ' + arrondi(ay + 5.5) +
@@ -413,20 +425,25 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         var kj = cle(i, j), cx = i * COTE, cy = j * COTE;
         var jeton = doc.plateau.jetons.filter(function (x) { return x && x.i === i && x.j === j; })[0];
         var test = jeton ? { ok: true } : M().peutPoserJeton(doc, i, j);
+        // campement (docs/18, 2026-10-19) : une intersection sans ville dont les 4 tuiles sont posées ; avant, un petit point
+        var campement = !jeton && M().portsJonction(doc, i, j).tuiles >= 4;
+        var nomJonction = (campement ? 'Campement (' : 'Jonction (') + i + ',' + j + ') : ';
         var cl = ['pm-assemblage-jonction'], info;
         if (jeton) {
           cl.push('pm-assemblage-jeton');
-          info = 'Ville en (' + i + ',' + j + ') : clic pour la retirer (la jonction redevient une case chemin)';
+          info = 'Ville en (' + i + ',' + j + ') : clic pour la retirer (la jonction redevient un campement)';
         } else if (!test.ok) {
           cl.push('pm-assemblage-refusee');
-          info = 'Case de jonction (' + i + ',' + j + ') : ' + test.raison;
+          info = nomJonction + test.raison;
         } else {
           cl.push('pm-assemblage-disponible');
-          info = 'Case de jonction (' + i + ',' + j + ') : clic pour y poser une ville';
+          info = nomJonction + 'clic pour y poser une ville';
         }
+        if (campement) cl.push('pm-assemblage-avec-campement');
         if (vue.clignote && vue.clignote.jonction === kj) cl.push('pm-assemblage-clignote');
         s.push('<g class="' + cl.join(' ') + '" data-jonction="' + kj + '" data-cle="j:' + kj + '" tabindex="0" role="button" aria-label="' + echapper(info) + '">');
         if (jeton) s.push(PM.rendu.contenuJeton(jeton.type, cx, cy, F));
+        else if (campement) s.push('<g class="pm-assemblage-campement">' + PM.rendu.contenuJeton('campement', cx, cy, F) + '</g>');
         else s.push('<circle class="pm-assemblage-point" cx="' + cx + '" cy="' + cy + '" r="' + (test.ok ? 9 : 6) + '"/>');
         s.push('<circle class="pm-assemblage-zone-jonction" cx="' + cx + '" cy="' + cy + '" r="' + RAYON_JONCTION + '"><title>' + echapper(info) + '</title></circle>');
         s.push('</g>');
@@ -501,12 +518,12 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         clignote: clignote, surbrillance: ui.surbrillance
       });
       if (cleFocus) { var el = scene.querySelector('[data-cle="' + cleFocus + '"]'); if (el) el.focus(); }
-      compteur.textContent = 'Villes posées ' + compterJetons(doc) + '/' + NB_VILLES;
+      compteur.textContent = 'Villes posées ' + compterJetons(doc) + '/' + nbVillesDe(doc);
       var t = selection && M().tuileEn(doc, selection.col, selection.lig);
       if (ui.aPoser) consigne.textContent = 'Pose de « ' + ui.aPoser + ' » : cliquez une cellule éclairée (Échap pour annuler).';
       else if (t) consigne.textContent = 'Tuile (' + t.col + ',' + t.lig + ') sélectionnée : ' +
         'R ou clic pour pivoter, Suppr ou clic droit pour retirer, glisser pour déplacer.';
-      else consigne.textContent = 'Clic sur une jonction : case chemin ou ville. Clic droit sur une tuile : la retirer.';
+      else consigne.textContent = 'Clic sur une jonction : campement ou ville. Clic droit sur une tuile : la retirer.';
     }
 
     function faireClignoter(c) {

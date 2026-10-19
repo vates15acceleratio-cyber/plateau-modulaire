@@ -129,3 +129,70 @@ Après les avis `28-avis-design-5x5.md` (design de jeu) et `29-avis-geometrie-5x
 ## Réponses de l'utilisateur à la revue de la branche `passages` (2026-10-18, `51`)
 - **Rejet de S au générateur** : comportement inchangé depuis la 3.04 : **5×5 : rejet de S ≥ 5 ; 4×4 : pas de rejet, classement des candidats par S** (sans effet pratique, S ≤ 1 sur les plateaux 4×4 générés). *Note de l'orchestrateur* : la phrase « le générateur continue de rejeter S ≥ 5 dans les deux formats » de la section précédente venait d'une question mal formulée par l'orchestrateur ; elle est remplacée par la présente.
 - **Format des documents** : un document dont un modèle a des passages ou des pivots est écrit en **`version: 3`** ; la 3.04 le refuse alors avec un message clair au lieu de perdre les passages sans prévenir. Les documents v1 et v2 s'ouvrent toujours.
+
+## Remarques de l'utilisateur après essai de la 4.00.0 (2026-10-18)
+- **5×5 seulement** (le 4×4 garde ses règles) :
+  - **plus de connexions par case, trois idéalement** : les cases à **deux connexions** doivent représenter **moins de 5 %** des cases (mesure de l'orchestrateur sur 40 plateaux générés en 4.00.0 : 62 % de nœuds à 2 voisins en 5×5, 58 % en 4×4) ;
+  - **plus d'interconnexions entre tuiles** ;
+  - **deux cases par tuile au maximum, sur toutes les tuiles** (coins et bords compris, case d'apparition comprise). Jugement de l'utilisateur sur le 5×5 actuel : « terrible ».
+- Connexions sans case supplémentaires dans l'éditeur : abandonné (« oublie ça »).
+- Conséquences à étudier par les advisors (non encore tranchées) : un coin à 2 cases ressemble au coin direct K1 retiré en v2 ; au plus 50 cases de tuiles + 9 jonctions-cases ≈ 59 cases (décision précédente : 78 à 81) ; règles R1 à R4 (écart d'au moins 3 cases entre villes) et « 3 accès aux villes » à confronter à l'objectif de degré 3.
+
+## Décisions de l'utilisateur pour le 5×5 très connecté (2026-10-18, `53`, `54`, `55`)
+- **Voie « porteuse latérale + relais »** (`53`, vérifiée en `55`) pour un **nouveau catalogue 5×5 à 2 cases par tuile, 59 cases par plateau**, qui remplace entièrement le catalogue 5×5 de la 4.00.0 (le 4×4 ne change pas). Conséquences acceptées avec ce choix : R1 levée (une case peut porter 2 ports, sur les deux coins d'un même côté) et R3 levée en partie, en règles **propres au 5×5** ; R2 assouplie, R4 gardée ; paire basse (E2 / O0) sur le pourtour ; coin à deux cases (première ville à 2 pas de l'apparition, comme l'ancien K1).
+- **« Deux ponts » (LC4) gardé avec ses murs** (2 raccords morts par pose acceptés).
+- **« Pont et fourche » (LC3) gardé sur quelques tuiles** (environ 3 centrales sur 9), pour le côté organique.
+- **Écart d'au moins 3 cases entre villes maintenu**, garanti par le placement des villes (générateur ; aide au placement et alerte dans l'éditeur), plus par les tuiles.
+
+## Réponses de l'utilisateur sur le 5×5 très connecté réalisé (2026-10-18, `56`)
+1. **Rythme** : « chaque intersection sera un point d'intérêt désormais, les règles ont été un peu révisées » : toute **jonction** (ville ou jonction-case) compte comme zone d'intérêt dans la mesure du rythme. Lecture de l'orchestrateur : dans les deux formats (c'est une règle de jeu), la cible de chaîne reste 3.
+2. **Composition 5×5** : bords et coins gardent leur composition ; **plus de choix dans les tuiles centrales** qu'aujourd'hui (nouveaux modèles de centrales, dans les règles du 5×5 très connecté ; tirage plus varié des centrales, stock à recalculer).
+3. **Murs voulus** (« Deux ponts ») : les raccords morts face à un mur voulu passent **en information**, plus en alerte ; les autres raccords morts restent des alertes.
+4. **« Placer les villes »** : gardé dans les deux formats.
+
+## Choix de l'utilisateur sur les nouvelles centrales 5×5 (2026-10-18, `58`)
+- **Jeu « B3 »** : centrales LC1 ×2, LC2 ×1, LC3 ×3, LC4 ×1, **LC5 Pont et carrefour ×2, LC6 Pont et fourche libres ×1, LC7 Pont et relais libres ×2** (12 centrales, 28 tuiles au total, 5 planches A3). LC8 à LC10 non retenues.
+- **Environ 57 cases par plateau** acceptées (LC5 n'a qu'une case).
+
+## Réponses de l'utilisateur aux mesures définitives du 5×5 très connecté (2026-10-18, `60`)
+1. **Seuil S en 5×5 : alerte à 5, information à S = 4** (comme en 4×4 et comme le rejet du générateur ; revient sur la décision 1 du `48`, qui tenait au catalogue 4.00.0). Le conseil « 3 villes du milieu » (périmé) est remplacé par un renvoi à « Outils > Placer les villes ».
+2. **Cases à ≤ 2 connexions : information** (pas d'alerte).
+3. **« 4 contre 3 » : 8 villes en 5×5, toujours 8**, « pour garder un jeu symétrique » (4 villes par camp). Le 4×4 garde 7 villes. À étudier par l'advisor design de jeu (placements, écart de 3 cases, critères d'équilibre à adapter) avant production ; il faut 8 jetons ville à imprimer en 5×5.
+4. **Goulets en 4×4 : la préférence anti-goulets s'étend au 4×4.**
+
+## Décisions de l'utilisateur sur les 8 villes en 5×5 (2026-10-19, `62`)
+1. **8 villes en damier** acceptées : avec le catalogue livré, deux dispositions seulement (« 2-2-2-2 », damiers pair et impair), 4 villes par camp (j ≤ 2 / j ≥ 3), symétrie par demi-tour. Énumération générique conservée (des tuiles de l'utilisateur peuvent rendre d'autres placements admissibles).
+2. **Partage non symétrique (4/3/1) : préférence seulement** au générateur (pas de rejet) ; information dans l'éditeur ; « Placer les villes » préfère un partage symétrique.
+3. **Critères à 8 villes** : S sur 8 rangs (alerte 5, information 4), écart par rang inchangé (alerte > 2, blocage > 3), **« 6 contre 2 » bloquant, « 5 contre 3 » en alerte**. Le 4×4 garde 7 villes et ses critères.
+4. **Jetons : une planche de 8 pour tous les formats** (1 jeton de réserve en 4×4).
+5. **Anciens documents 5×5 à 7 villes : proposer de régénérer le plateau** à l'ouverture (refus : document inchangé, avec la lacune « il manque 1 ville » ; acceptation annulable par Ctrl+Z).
+
+## Nouvelle consigne de l'utilisateur sur les villes et les intersections (2026-10-19, image fournie)
+Remplace, pour le 5×5, les décisions « 8 villes en damier » de la section précédente (points 1 et 2).
+- **Position par défaut des 8 villes, toujours la même** (lecture de l'orchestrateur sur l'image, jonctions (colonne i, rangée j) de 1 à 4) : **(1,1), (4,1), (2,2), (3,2), (2,3), (3,3), (1,4), (4,4)** — les deux jonctions extrêmes des rangées 1 et 4 et le carré central ; 4 villes par camp, figure symétrique. Le générateur pose les villes à ces positions ; **l'utilisateur décide s'il veut les déplacer**.
+- **Alerte bloquante s'il y a plus de 8 villes** (pose de l'utilisateur).
+- **Les cases blanches aux intersections deviennent des « campements »** : une intersection est **soit un campement, soit une ville**. Positions prédéfinies par le générateur ; l'utilisateur les modifie s'il le souhaite. (Nouveau vocabulaire : « campement » remplace « jonction-case » dans l'interface et les textes.)
+- « Je ne pense pas que tu aies besoin de changer grand-chose. »
+- **À vérifier à la reprise (orchestrateur)** : avec ce motif fixe, (2,2)–(3,2) et (2,3)–(3,3) sont des jonctions voisines, que les porteuses latérales du catalogue B3 peuvent mettre à 2 pas ; le générateur doit donc orienter les centrales pour tenir l'écart d'au moins 3 cases et les 3 ports aux villes — à mesurer ; si c'est impossible ou trop rare, soumettre à l'utilisateur l'assouplissement de l'écart pour les villes par défaut. Critères à 8 villes (`62` § 2 ; « 6 contre 2 », « 5 contre 3 », S sur 8 rangs), planche de 8 jetons et proposition de régénérer les anciens 5×5 restent valables. Le travail partiel de `wip-8-villes` (placement générique en damier) est en grande partie dépassé.
+- **Apparence des campements** (complément du 2026-10-19) : un campement a **la même taille qu'une ville** (jeton Ø 30) et porte une **icône de feu de bois** (à dessiner dans la palette d'impression, lisible sans la couleur ; à faire valider par l'advisor prépresse).
+
+## Réponses de l'utilisateur à la reprise (2026-10-19)
+- **Campements dans les deux formats** : le mot « campement » et le jeton de la taille d'une ville avec une icône de feu de bois s'appliquent aussi au 4×4.
+- **4×4 inchangé pour les villes** : 7 villes, positions choisies par le générateur comme aujourd'hui.
+- **Si l'écart de 3 cases ne tient pas assez souvent** entre les villes voisines du carré central du 5×5 ((2,2)–(3,2) et (2,3)–(3,3), puis les paires verticales) : **assouplir à 2 cases pour ces villes du carré central seulement** ; l'écart d'au moins 3 cases reste la règle partout ailleurs.
+
+## Réponse de l'utilisateur à la faisabilité des 8 villes fixes (2026-10-19, `64`)
+- **Motif confirmé** : (1,1) (4,1) (2,2) (3,2) (2,3) (3,3) (1,4) (4,4).
+- **Pas de tuile réservée au centre** : les joueurs peuvent déplacer les villes ou en réduire le nombre (le maximum de 8 est voulu pour l'équilibre) ; une tuile purement centrale n'aurait pas de sens.
+- **Piste de l'utilisateur** : utiliser les tuiles qui créent des **ponts** (quitte à en créer d'autres), pour respecter l'écart voulu. Les nouvelles tuiles doivent rester des centrales ordinaires, utilisables à n'importe quelle place.
+
+## Réponses de l'utilisateur sur les ponts et les campements (2026-10-19, `65`, `66`)
+- **R3 assouplie en 5×5, sur les centrales seulement** (formulation du `66` § 2). Une porteuse à 1 port sur le coin k peut porter les raccords au milieu des deux côtés qui encadrent ce coin. Une porteuse latérale peut porter son raccord, plus le milieu d'un côté voisin.
+- **Catalogue 5×5 « P », 30 tuiles** : LC1 ×1, LC3 ×4, LC4 ×1, LC5 ×1, LC6 ×1, LC7 ×1, **LC11 ×2, LC12 ×3**, LB2 ×12, LK2 ×4. LC2 sort. Motif des 8 villes fixes avec **l'écart de 3 cases partout** : la tolérance de 2 cases n'est plus utile. Le générateur choisit la place des centrales tirées.
+- **Campements en jetons à part, flamme noire.**
+- **16 jetons au total, recto-verso : ville au verso, campement (flamme) au recto.** Un même jeton sert de ville ou de campement selon la face posée.
+
+## Nouvelle tuile demandée par l'utilisateur (2026-10-19, croquis `docs/croquis/etoile-5x5-utilisateur.png`)
+- **Centrale 5×5 « Étoile »** : un relais central avec 4 raccords au milieu des côtés, et 4 cases sur les diagonales. Chacune est reliée au relais et porte le port de son coin. Le cercle rouge du croquis n'a pas de sens particulier.
+- **Exception nommée à la règle « 2 cases par tuile au plus »** : cette tuile a 5 cases.
+- **1 exemplaire, pose à la main seulement** : elle est dans la bibliothèque et imprimée, mais le générateur ne la tire pas. Les plateaux générés ne changent pas. « Ça peut toujours servir pour le centre. »

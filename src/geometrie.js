@@ -30,7 +30,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   var COMMUNES = {
     RAYON_ZONE_COIN: 20,
     DIAMETRE_CASE: 20,               // Ø d'une case (catalogue, cases neuves de l'éditeur, exemples) ; docs/18, « Taille des cases »
-    DIAMETRE_CASE_JONCTION: 20,
+    DIAMETRE_CASE_JONCTION: 30,      // Ø du siège imprimé aux coins des tuiles : un campement a la taille d'une ville (jeton Ø 30 ; docs/18, docs/65)
     DIAMETRE_JETON: 30,
     MARGE_COUPE_CASE: 4,             // bord du disque à >= 4 mm du bord de tuile
     LARGEUR_CHEMIN: 8,
@@ -180,7 +180,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   /**
    * Gabarits de tuile déclarés (docs/20 D2), orientation canonique : côtés extérieurs (au bord du plateau
    * quand la tuile est à sa place) et coins intérieurs (qui touchent une jonction du plateau, où l'on imprime
-   * un quart de case de jonction). Indépendant du format.
+   * un quart du siège de campement). Indépendant du format.
    */
   var GABARITS = Object.freeze({
     centrale: Object.freeze({ cotesExterieurs: Object.freeze([]), coinsInterieurs: Object.freeze([0, 1, 2, 3]) }),

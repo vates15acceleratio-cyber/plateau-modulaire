@@ -95,7 +95,8 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   /**
    * Identifiants des modèles du catalogue livré pour la grille du document : PM.catalogue.modelesParGrille[grille] si le
    * catalogue la fournit, sinon PM.catalogue.modeles pour la grille 4×4 (repli quand le catalogue ne fournit pas modelesParGrille), sinon rien ;
-   * plus ceux du catalogue précédent de la même grille (PM.catalogue.precedent, version 3.04 : C1 à C8, B3 à B7m…), pour qu'un document
+   * plus ceux des catalogues précédents de la même grille (PM.catalogue.precedents : version 3.04, C1 à C8, B3 à B7m… ; en 5×5 aussi
+   * la version 4.00.0, U1, P1 à P5, B1, B7, K2), pour qu'un document
    * enregistré avant le changement de catalogue garde ses tuiles livrées protégées comme avant (docs/46).
    * Sans catalogue chargé (tests Node qui ne le chargent pas), aucun modèle n'est du catalogue : tous sont supprimables.
    */
@@ -105,7 +106,9 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     var grille = PM.modele.formatDuDocument(doc).id, liste;
     if (C.modelesParGrille && Array.isArray(C.modelesParGrille[grille])) liste = C.modelesParGrille[grille];
     else liste = grille === '4x4' && Array.isArray(C.modeles) ? C.modeles : [];
-    if (C.precedent && Array.isArray(C.precedent[grille])) liste = liste.concat(C.precedent[grille]);
+    if (C.precedents && Array.isArray(C.precedents[grille])) {
+      C.precedents[grille].forEach(function (x) { if (x && Array.isArray(x.modeles)) liste = liste.concat(x.modeles); });
+    } else if (C.precedent && Array.isArray(C.precedent[grille])) liste = liste.concat(C.precedent[grille]);
     return liste.map(function (m) { return m && m.id; });
   }
 

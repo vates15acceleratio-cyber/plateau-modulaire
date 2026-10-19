@@ -46,8 +46,8 @@ const IDS_ATTENDUS = {
   coin: ['K2', 'K4']        // K2 inchangé (docs/18, réponse 6)
 };
 
-test('catalogue : version 3, 6 modèles, ids attendus et uniques, gabarit et grille 4×4', () => {
-  assert.strictEqual(CAT.version, 3);
+test('catalogue : version 4 (le 4×4 inchangé depuis la version 3), 6 modèles, ids attendus et uniques, gabarit et grille 4×4', () => {
+  assert.strictEqual(CAT.version, 4);
   assert.strictEqual(CAT.modeles.length, 6);
   assert.strictEqual(new Set(CAT.modeles.map((m) => m.id)).size, 6);
   for (const g of Object.keys(IDS_ATTENDUS)) {

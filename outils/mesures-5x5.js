@@ -1,6 +1,8 @@
 'use strict';
 /*
  * mesures-5x5.js : mesures d'équilibre du catalogue 5×5 (docs/28 § 6, docs/34 « Arbitrages ») ; rapport docs/35-mesures-5x5.md.
+ * HISTORIQUE : écrit pour les catalogues 5×5 de la 3.04 et de la 4.00.0 (nombre de B1, orientation sans ville) ; il ne vaut plus pour le
+ * catalogue à 2 cases par tuile ni pour le générateur qui place les villes avant d'orienter : voir outils/mesures-5x5-connecte.js (docs/56).
  *
  * Deux temps, pour ne pas refaire les calculs quand on retouche le rapport :
  *   1. collecte (longue) : node outils/mesures-5x5.js collecte <famille> <debut> <fin> <fichier.json> [graine]

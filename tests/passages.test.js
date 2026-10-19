@@ -376,7 +376,9 @@ test('format : un document à passages ou pivots est écrit en version 3 et se r
 
 /** Empreintes [plateau : équilibre] du générateur sur un ancien document, graines s0 à s2 (recalculées en docs/46). */
 const EMPREINTES_ANCIENS = {
-  '4x4': ['4e7c5295164b:22674eb713f6', 'aedb663958ba:43b2a937ac55', 'b31ff25cddc0:a50e00bd63b1'],
+  // seconde moitié : empreinte de PM.graphe.equilibre, dont la forme a changé avec les 8 villes du 5×5 (champs nbVilles, cinqContreTrois,
+  // partageSymetrique ; conseil « campements ») ; les plateaux (première moitié) sont inchangés
+  '4x4': ['4e7c5295164b:12ecb3f80cc4', 'aedb663958ba:59684720bef8', 'b31ff25cddc0:a0498532cf5e'],
   '5x5': ['55db3a27e119:d46f86ada847', '21f5f7d21dc7:6496cfc04542', '03268fea0577:274abe1fc9b8']
 };
 
@@ -427,18 +429,23 @@ test('anciens documents (catalogue précédent) : un plateau complet 4×4 et 5×
   assert.deepEqual(M.validerPlateau(d5).alertes, []);
 });
 
-test('anciens documents (catalogue précédent) : générateurs 4×4 et 5×5 à graine donnée, mêmes plateaux (empreintes du générateur de docs/46)', () => {
+test('anciens documents (catalogue précédent) : générateur 4×4 à graine donnée, mêmes plateaux (empreintes de docs/46) ; 5×5 : abandon expliqué', () => {
   // le générateur a changé avec le branchement des catalogues « centrales ouvertes » (moitiés égales, orientation 4×4, cible de cases,
   // affinage du rythme) : un ancien document s'ouvre à l'identique, mais un nouveau tirage y donne un autre plateau qu'en version 3.04
   const h = (o) => crypto.createHash('sha1').update(JSON.stringify(o)).digest('hex').slice(0, 12);
   const attendu = EMPREINTES_ANCIENS;
-  for (const g of ['4x4', '5x5']) {
+  for (const g of ['4x4']) {
     const obtenu = [0, 1, 2].map((k) => {
       const r = PM.generateur.generer(docPrecedent(g), { graine: 's' + k, candidats: 8, jonctionsVariees: false }); // 4×4 : option décochée (le défaut est « variées » depuis docs/48)
       return h(r.doc) + ':' + h(GR.equilibre(r.doc));
     });
     assert.deepEqual(obtenu, attendu[g], g);
   }
+  // 5×5 (docs/18, « 5×5 très connecté ») : les tuiles 3.04 laissent bien plus de 5 % de cases à 2 connexions ; le générateur abandonne
+  // et conseille le catalogue livré (le document lui-même s'ouvre toujours à l'identique, test précédent)
+  const r5 = PM.generateur.generer(docPrecedent('5x5'), { graine: 's0', candidats: 8 });
+  assert.equal(r5.ok, false);
+  assert.match(r5.raison, /Abandon après 25 échecs consécutifs.*Le catalogue 5×5 livré/);
 });
 
 /* ---------- Éditeur : fonctions pures ---------- */
