@@ -371,11 +371,11 @@ test('raccords du milieu 5×5 : bord face à centrale et centrale face à centra
 
 /* ================================ nouveauDocument et API ================================ */
 
-test('API : modeles reste le 4×4 ; modelesParGrille gelé { 4x4, 5x5 } ; precedent et precedents gelés ; version 4', () => {
+test('API : modeles reste le 4×4 ; modelesParGrille gelé { 4x4, 5x5, hex19 } ; precedent et precedents gelés ; version 4', () => {
   assert.equal(CAT.version, 4);
   assert.equal(CAT.modeles.length, 6);
   assert.equal(CAT.modelesParGrille['4x4'], CAT.modeles);
-  assert.deepEqual(Object.keys(CAT.modelesParGrille), ['4x4', '5x5']);
+  assert.deepEqual(Object.keys(CAT.modelesParGrille), ['4x4', '5x5', 'hex19']);
   assert.ok(Object.isFrozen(CAT.modelesParGrille) && Object.isFrozen(C5));
   assert.ok(Object.isFrozen(modele('LC1').cases[0]) && Object.isFrozen(modele('LC1').chemins[0].b) && Object.isFrozen(modele('LC3').pivots[0]));
   assert.ok(CAT.modeles.every((m) => m.grille === '4x4'));

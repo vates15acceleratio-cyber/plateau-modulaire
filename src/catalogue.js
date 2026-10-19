@@ -19,6 +19,10 @@
  * Les nombres de modèle écrits ci-dessous (« ×4 », « ×5 »…) sont les POIDS de tirage (champ `poids`) ; le stock à imprimer (`exemplaires`)
  * vient de STOCK (B8 ×3 et K4 ×2 en 4×4 ; en 5×5 il vaut les poids, le générateur tirant 9 des 14 centrales par quotas), pour que 90 % au
  * moins des plateaux générés se montent (docs/47 ; 100 % en 5×5).
+
+ * Hexagonal 'hex19' (docs/72, docs/75, tests/catalogue-hex.test.js) : 4 modèles, 30 pièces imprimées (19 + 11 de réserve) : intérieures HC2 « Deux ponts et
+ * traverse » (×8, poids 6) et HC3 « Carrefour » (×7, poids 5), bord HB1 (×8), coin HK1 (×7), sans mur ni raccord mort.
+ *
  * Les catalogues précédents restent lisibles, gelés : PM.catalogue.precedent (version 3.04 : 4×4 C1 à C6, B1, B3 à B6, K2, K4 ; 5×5 C7,
  * C8, B1, B7, B7m, K2) et PM.catalogue.precedents (toutes les versions par grille ; en 5×5 aussi le catalogue organique de la 4.00.0 :
  * U1, P1, P2, P3, P5, B1, B7, K2). Un document enregistré porte ses propres copies de modèles et s'ouvre sans changement ; ces champs
@@ -213,6 +217,43 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
           raccord('r1', 'a', 1, 0), raccord('r2', 'a', 2, 2), lien('h1', 'a', 'c'),
           port('p1', 'c', 2), raccord('r3', 'c', 1, 2), raccord('r4', 'c', 2, 0)
         ])
+    ];
+  }
+
+
+  /*
+   * Catalogue hexagonal 'hex19' (docs/72 : intérieures HC2 et HC3 sans HC1 ; docs/75 : coordonnées du catalogue candidat, repère local centré,
+   * x vers l'est, y vers le sud, tuile pointe en haut de côté 54 mm). Côtés 0 = NE, 1 = E, 2 = SE, 3 = SO, 4 = O, 5 = NO ; coins 0 = N, 1 = NE,
+   * 2 = SE, 3 = S, 4 = SO, 5 = NO ; un seul raccord par côté (pos 0, au milieu). Orientation canonique : bord à côtés extérieurs [5, 0],
+   * coin à côtés extérieurs [0, 1, 2]. Règles propres à l'hexagonal (PM.modele) : jusqu'à 3 ports par case sur des coins consécutifs (H1),
+   * tous les coins intérieurs portés (H2), passages traversants et touchant une porteuse permis, pivot à 4 branches. Aucun mur, aucun
+   * raccord mort, aucune paire miroir. Les passages à courbe imposée reprennent les points de contrôle du script du candidat.
+   */
+  function construireHex() {
+    function rh(cote) { return R(cote, 0); }
+    function mh(id, nom, gabarit, ex, cases, chemins, pivots, passages) { return modeleOrganique('hex19', id, nom, gabarit, ex, cases, chemins, pivots, passages); }
+    function portsA() { return [port('p5', 'a', 5), port('p0', 'a', 0), port('p1', 'a', 1), raccord('r5', 'a', 5, 0), raccord('r0', 'a', 0, 0)]; }
+    function portsB() { return [port('p2', 'b', 2), port('p3', 'b', 3), port('p4', 'b', 4), raccord('r2', 'b', 2, 0), raccord('r3', 'b', 3, 0)]; }
+    function casesAB() { return [kase('a', 0, -20.7), kase('b', 0, 20.7)]; }
+    return [
+      /* Intérieures (centre et couronne) : deux demi-tuiles 3 + 3 non reliées (a : coins 5, 0, 1 ; b : coins 2, 3, 4) */
+      // Deux ponts et traverse : un passage sans case relie les côtés E et O entre les deux demi-tuiles (contrôle (0, 4) au lieu de (0, 6) du candidat : à (0, 6) le trait frôlait la case b à 17,7 mm au lieu de 18 mm, r + 4 + demi-largeur)
+      mh('HC2', 'Deux ponts et traverse', 'centrale', 6, casesAB(), portsA().concat(portsB()), [],
+        [passage('t1', rh(1), rh(4), { x: 0, y: 4 })]),
+      // Carrefour : un T sans case au centre relie E, O, a et b (pivot à 4 branches)
+      mh('HC3', 'Carrefour', 'centrale', 5, casesAB(), portsA().concat(portsB()), [pivot('v', 0, 0)],
+        [passage('t1', rh(1), V('v'), { x: 20, y: -4 }), passage('t2', rh(4), V('v'), { x: -20, y: 4 }),
+          passage('t3', C('a'), V('v'), { x: 3, y: -10 }), passage('t4', C('b'), V('v'), { x: -3, y: 10 })]),
+      /* Bord (extérieurs 5 et 0) : apparition à l'anneau E–O, porteuse à 3 ports (coins 2, 3, 4) */
+      mh('HB1', 'Bord', 'bord', 6, [appar('a', 0, -30), kase('p', 0, 20.7)], [
+        raccord('r1', 'a', 1, 0), raccord('r4', 'a', 4, 0), lien('h1', 'a', 'p'),
+        port('p2', 'p', 2), port('p3', 'p', 3), port('p4', 'p', 4), raccord('r2', 'p', 2, 0), raccord('r3', 'p', 3, 0)
+      ]),
+      /* Coin (extérieurs 0, 1, 2) : apparition à l'anneau NO–SO, porteuse à 2 ports (coins 4 et 5) */
+      mh('HK1', 'Coin', 'coin', 6, [appar('a', 10, 0), kase('p', -22, 0)], [
+        raccord('r3', 'a', 3, 0), raccord('r5', 'a', 5, 0), lien('h1', 'a', 'p'),
+        port('p4', 'p', 4), port('p5', 'p', 5), raccord('r4', 'p', 4, 0)
+      ])
     ];
   }
 
@@ -434,7 +475,9 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * plateaux : mesures d'équilibre inchangées) ; les exemplaires sont ceux de ce tableau, relevés pour qu'au moins 90 % des plateaux
    * générés se montent avec la boîte imprimée (docs/47). Le stock ne limite jamais la pose.
    */
-  var STOCK = { '4x4': { Q1: 4, Q2: 3, B1: 8, B8: 3, K2: 4, K4: 2 }, '5x5': { LC1: 1, LC3: 4, LC4: 1, LC5: 1, LC6: 1, LC7: 1, LC11: 2, LC12: 3, LE1: 1, LB2: 12, LK2: 4 } };
+  var STOCK = { '4x4': { Q1: 4, Q2: 3, B1: 8, B8: 3, K2: 4, K4: 2 }, '5x5': { LC1: 1, LC3: 4, LC4: 1, LC5: 1, LC6: 1, LC7: 1, LC11: 2, LC12: 3, LE1: 1, LB2: 12, LK2: 4 },
+    // hex19 (docs/72, docs/75) : 30 pièces imprimées (19 + 11 de réserve) : 7 places intérieures pour 15 pièces (HC2 ×8, HC3 ×7), 6 bords pour 8, 6 coins pour 7
+    'hex19': { HC2: 8, HC3: 7, HB1: 8, HK1: 7 } };
   /** Stock du catalogue 5×5 de la version 4.00.0 (docs/47), gardé avec lui dans PM.catalogue.precedents['5x5']. */
   var STOCK_5X5_400 = { U1: 5, P3: 4, P5: 3, P1: 3, P2: 3, B1: 6, B7: 8, K2: 5 };
   function avecStock(liste, stock) {
@@ -447,7 +490,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   var MODELES = geler(avecStock(construire4(), STOCK['4x4']));
   var MODELES_5X5 = geler(avecStock(construire5(), STOCK['5x5']));
-  var PAR_GRILLE = geler({ '4x4': MODELES, '5x5': MODELES_5X5 });
+  var MODELES_HEX = geler(avecStock(construireHex(), STOCK['hex19']));
+  var PAR_GRILLE = geler({ '4x4': MODELES, '5x5': MODELES_5X5, 'hex19': MODELES_HEX });
   var PRECEDENT = geler({ '4x4': construirePrecedent4(), '5x5': construirePrecedent5() });
   /*
    * Tous les catalogues précédents, du plus ancien au plus récent, par grille : 4×4 : 3.04 ; 5×5 : 3.04 puis 4.00.0 (organique à
@@ -461,7 +505,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   /**
    * Document neuf de la grille demandée ('4x4' par défaut) contenant une copie modifiable de ses modèles
-   * (6 en 4×4, 10 en 5×5). Lève une Error pour une grille inconnue.
+   * (6 en 4×4, 11 en 5×5, 4 en hexagonal). Lève une Error pour une grille inconnue.
    */
   function nouveauDocument(grille) {
     var g = grille === undefined || grille === null ? '4x4' : grille;
@@ -474,7 +518,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   PM.catalogue = {
     version: 4,                       // 4 : 5×5 à 2 cases par tuile (docs/55) ; 3 : catalogues « organiques » (docs/46) ; 2 : version 3.04
     modeles: MODELES,                 // tableau gelé (lecture seule) : catalogue 4×4, gardé pour la compatibilité
-    modelesParGrille: PAR_GRILLE,     // { '4x4': [...], '5x5': [...] } gelé
+    modelesParGrille: PAR_GRILLE,     // { '4x4': [...], '5x5': [...], 'hex19': [...] } gelé
     precedent: PRECEDENT,             // { '4x4': [...], '5x5': [...] } gelé : catalogues de la version 3.04 (compatibilité, tests)
     precedents: PRECEDENTS,           // { grille: [{ version, modeles }] } gelé : tous les catalogues précédents (3.04 ; 5×5 : aussi 4.00.0)
     nouveauDocument: nouveauDocument
