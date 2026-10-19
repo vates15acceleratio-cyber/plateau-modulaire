@@ -26,3 +26,7 @@
 - **Découpe au cutter et à la règle** : traits de coupe imprimés sur les 6 côtés ; disposition qui partage les lignes droites quand c'est possible.
 - Questions encore ouvertes : liaison des apparitions le long du bord, disposition des villes, règle des ports (jusqu'à 3 par case), nombre de jetons (24 intersections).
 - **Bord droit** (2026-10-19) : l'utilisateur pensait que le bord plat des hexagones formerait le bord du plateau. Or un grand hexagone de tuiles hexagonales a toujours un bord en dents de scie ou en créneaux. Choix retenu : **les 12 tuiles du pourtour (bords et coins) ont un côté extérieur droit**, qui comble les creux. Le plateau est un vrai hexagone à 6 côtés droits ; le centre et la couronne restent des hexagones. Le principe de jeu ne change pas (graphe, intersections, camps).
+- **Apparitions reliées le long du bord, comme en carré** : l'anneau du pourtour est gardé, malgré les 2 pas d'une apparition verte à une rouge par le coin neutre. À mesurer, et à signaler si l'équilibre en souffre.
+- **Disposition des villes** : « trèfle » par défaut (jonctions 0, 4, 8 / 15, 19, 23, numérotation de `camps.png`). Le générateur peut aussi tirer parmi les dispositions symétriques admissibles.
+- **H1 et H2 acceptées** : une case porte jusqu'à 3 ports sur des coins consécutifs, et tous les coins des tuiles intérieures desservent leur intersection.
+- **24 jetons recto-verso** (ville / campement) pour tous les formats, au lieu de 16.
