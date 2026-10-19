@@ -175,3 +175,8 @@ Remplace, pour le 5×5, les décisions « 8 villes en damier » de la section pr
 - « Je ne pense pas que tu aies besoin de changer grand-chose. »
 - **À vérifier à la reprise (orchestrateur)** : avec ce motif fixe, (2,2)–(3,2) et (2,3)–(3,3) sont des jonctions voisines, que les porteuses latérales du catalogue B3 peuvent mettre à 2 pas ; le générateur doit donc orienter les centrales pour tenir l'écart d'au moins 3 cases et les 3 ports aux villes — à mesurer ; si c'est impossible ou trop rare, soumettre à l'utilisateur l'assouplissement de l'écart pour les villes par défaut. Critères à 8 villes (`62` § 2 ; « 6 contre 2 », « 5 contre 3 », S sur 8 rangs), planche de 8 jetons et proposition de régénérer les anciens 5×5 restent valables. Le travail partiel de `wip-8-villes` (placement générique en damier) est en grande partie dépassé.
 - **Apparence des campements** (complément du 2026-10-19) : un campement a **la même taille qu'une ville** (jeton Ø 30) et porte une **icône de feu de bois** (à dessiner dans la palette d'impression, lisible sans la couleur ; à faire valider par l'advisor prépresse).
+
+## Réponses de l'utilisateur à la reprise (2026-10-19)
+- **Campements dans les deux formats** : le mot « campement » et le jeton de la taille d'une ville avec une icône de feu de bois s'appliquent aussi au 4×4.
+- **4×4 inchangé pour les villes** : 7 villes, positions choisies par le générateur comme aujourd'hui.
+- **Si l'écart de 3 cases ne tient pas assez souvent** entre les villes voisines du carré central du 5×5 ((2,2)–(3,2) et (2,3)–(3,3), puis les paires verticales) : **assouplir à 2 cases pour ces villes du carré central seulement** ; l'écart d'au moins 3 cases reste la règle partout ailleurs.
