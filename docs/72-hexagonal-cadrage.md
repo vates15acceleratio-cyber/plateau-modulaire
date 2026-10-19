@@ -30,3 +30,10 @@
 - **Disposition des villes** : « trèfle » par défaut (jonctions 0, 4, 8 / 15, 19, 23, numérotation de `camps.png`). Le générateur peut aussi tirer parmi les dispositions symétriques admissibles.
 - **H1 et H2 acceptées** : une case porte jusqu'à 3 ports sur des coins consécutifs, et tous les coins des tuiles intérieures desservent leur intersection.
 - **24 jetons recto-verso** (ville / campement) pour tous les formats, au lieu de 16.
+
+## Réponses de l'utilisateur au catalogue candidat (2026-10-19, `75`)
+- **Intérieures : HC2 « Deux ponts et traverse » et HC3 « Carrefour »**, sans HC1 : aucun mur, aucun raccord mort. Exception aux règles du carré, pour l'hexagonal seulement : un passage peut traverser la tuile (E–O) et toucher une porteuse.
+- **Plateau fini de 498,8 × 432 mm** (hexagone régulier de 249,4 mm de côté).
+- **Coupes partagées** : tuiles jointives en nid d'abeille, 3 planches A3 (19 tuiles et 11 de réserve).
+- Arbitrage de l'orchestrateur : apparitions imprimées neutres, comme en carré.
+- **Suite prévue** : production en lots Sonnet (géométrie du format hex, modèle et graphe, rendu et export, catalogue, générateur, interface), testeur, relecteur, versionneur, PR.
