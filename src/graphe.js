@@ -7,6 +7,8 @@
  *  - une case par case de tuile posée (id global « col,lig:idLocal », voir PM.modele.tuileEnPlateau) ;
  *  - un nœud « J<i>,<j> » par jonction intérieure (9 en 4×4, 16 en 5×5), avec ou sans jeton : une ville si un
  *    jeton 'capture' y est posé, sinon un campement (ancienne « case chemin », docs/20 D1 ; docs/18 du 2026-10-19), qui compte comme une case.
+ *    Format hexagonal 'hex19' (docs/77) : un nœud « J<siège>,0 » par siège (24 : 6 villes au plus, le reste en campements), le siège
+ *    touchant 3 tuiles ; 6 villes (3 par camp), majorité bloquante « 4 contre 2 », S à 6 rangs (alerte dès 4, information dès 3).
  * Arêtes : chemins internes à une tuile, raccords connectés face à face entre deux tuiles,
  * jonction <-> cases porteuses d'un port de coin. Le graphe est symétrique (non orienté).
  *
@@ -27,9 +29,9 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   var M = PM.modele;
 
   /** Seuil d'alerte de S du format (« 4x4 » ou « 5x5 ») ; le rejet du générateur (5×5 seulement) reste SEUIL_S. */
-  function seuilS(formatId) { return SEUIL_S_PAR_FORMAT[formatId] || SEUIL_S; }
+  function seuilS(formatId) { return formatId === 'hex19' ? SEUIL_S_HEX.alerte : (SEUIL_S_PAR_FORMAT[formatId] || SEUIL_S); }
   /** Seuil à partir duquel S est une simple information (jusqu'au seuil d'alerte exclu). */
-  function seuilSInformation(formatId) { return SEUIL_S_INFORMATION_PAR_FORMAT[formatId] || SEUIL_S_INFORMATION_PAR_FORMAT['4x4']; }
+  function seuilSInformation(formatId) { return formatId === 'hex19' ? SEUIL_S_HEX.information : (SEUIL_S_INFORMATION_PAR_FORMAT[formatId] || SEUIL_S_INFORMATION_PAR_FORMAT['4x4']); }
 
   /**
    * Nombre de villes et seuils (constantes uniques, lues aussi par controles.js, assemblage.js et generateur.js).
@@ -37,7 +39,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * MOTIF_VILLES_5X5, consigne du 2026-10-19). NB_VILLES garde la valeur du 4×4 (ancienne constante unique) ; tout calcul passe par nbVilles(formatId).
    */
   var NB_VILLES = 7;
-  var NB_VILLES_PAR_FORMAT = Object.freeze({ '4x4': 7, '5x5': 8 });
+  var NB_VILLES_PAR_FORMAT = Object.freeze({ '4x4': 7, '5x5': 8, 'hex19': M.NB_VILLES_HEX });
   /** Nombre de villes du format (« 4x4 » : 7, « 5x5 » : 8) ; format inconnu : 7. */
   function nbVilles(formatId) { return NB_VILLES_PAR_FORMAT[formatId] || NB_VILLES; }
   var RANGS_COMPARES = 4;       // ancien D6 : écart aux rangs 1 à 4 (champ ecartRang, information seulement)
@@ -47,9 +49,9 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * Majorités (docs/18, décision 3 du 2026-10-19) : un joueur strictement plus proche d'au moins N − 2 villes est un blocage
    * (« 5 contre 2 » en 4×4, « 6 contre 2 » en 5×5) ; en 5×5, 5 villes (« 5 contre 3 ») sont une alerte. Le 4×4 n'a pas d'alerte de majorité.
    */
-  var SEUIL_MAJORITE_PAR_FORMAT = Object.freeze({ '4x4': 5, '5x5': 6 });
+  var SEUIL_MAJORITE_PAR_FORMAT = Object.freeze({ '4x4': 5, '5x5': 6, 'hex19': 4 }); // hexagonal : N − 2 = « 4 contre 2 » (docs/73), pas d'alerte intermédiaire
   var SEUIL_MAJORITE_ALERTE_PAR_FORMAT = Object.freeze({ '5x5': 5 });
-  var LIBELLE_MAJORITE_PAR_FORMAT = Object.freeze({ '4x4': '5 contre 2', '5x5': '6 contre 2' });
+  var LIBELLE_MAJORITE_PAR_FORMAT = Object.freeze({ '4x4': '5 contre 2', '5x5': '6 contre 2', 'hex19': '4 contre 2' });
   var LIBELLE_MAJORITE_ALERTE_PAR_FORMAT = Object.freeze({ '5x5': '5 contre 3' });
   /** Majorité bloquante du format : un joueur plus proche d'au moins ce nombre de villes (4×4 : 5, 5×5 : 6). */
   function seuilMajorite(formatId) { return SEUIL_MAJORITE_PAR_FORMAT[formatId] || SEUIL_CINQ_CONTRE_DEUX; }
@@ -63,6 +65,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    *  (comme le rejet du générateur ; avec le catalogue très connecté, le 95e centile de la pose libre 5×5 est à 5). Les tables restent séparées : les formats peuvent diverger. */
   var SEUIL_S_PAR_FORMAT = Object.freeze({ '4x4': 5, '5x5': 5 });
   var SEUIL_S_INFORMATION_PAR_FORMAT = Object.freeze({ '4x4': 4, '5x5': 4 });
+  /** Hexagonal (6 rangs, docs/73, à recalibrer sur 1000 plateaux) : alerte dès S = 4, information dès 3. Tables à part : celles du carré restent figées. */
+  var SEUIL_S_HEX = Object.freeze({ alerte: 4, information: 3 });
   var PORTS_VILLE_MIN = 3;         // 5×5 : ports minimum d'une jonction qui porte une ville ; en dessous, information seulement (docs/36) ; lu par le générateur et les outils
   var PORTS_JONCTION_MIN = G.MIN_PORTS_JONCTION; // ports minimum de toute jonction intérieure (condition ferme du générateur 5×5)
   /**
@@ -82,6 +86,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * pose les villes à ces positions ; l'utilisateur peut les déplacer. Ordre de lecture (j puis i).
    */
   var MOTIF_VILLES_5X5 = Object.freeze([[1, 1], [4, 1], [2, 2], [3, 2], [2, 3], [3, 3], [1, 4], [4, 4]].map(function (p) { return Object.freeze({ i: p[0], j: p[1] }); }));
+  /** Villes par défaut du format hexagonal : le « trèfle » (sièges 0, 4, 8 au nord, 15, 19, 23 au sud ; docs/72), jetons { i: siège, j: 0, type }. */
+  var MOTIF_VILLES_HEX = Object.freeze(G.format('hex19').TREFLE.map(function (s) { return Object.freeze({ i: s, j: 0, type: 'capture' }); }));
   var CONSEIL_5X5 = ' Outils > Placer les villes pose les 8 villes aux positions par défaut si elles conviennent, sinon au meilleur placement admissible.';
   /**
    * Plateau très déséquilibré (docs/19, arbitrage de docs/20) : écart de plus de SEUIL_BLOCAGE_ECART pas à un
@@ -109,7 +115,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * aboutit à un raccord qui fait face à un passage. Les cases attachées à une même composante forment une clique.
    * Sans passage, ne fait rien : le graphe est strictement celui d'avant.
    */
-  function relierPassages(elems, voisins, lier) {
+  function relierPassages(elems, voisins, lier, F) {
     var parent = new Map(), attaches = [];
     function racine(x) {
       if (!parent.has(x)) parent.set(x, x);
@@ -118,7 +124,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     }
     function emplacement(t, cote, pos) { return 'R ' + t.col + ',' + t.lig + ',' + cote + ',' + pos; }
     function enFace(t, cote, pos) {
-      var d = G.coteVoisin(cote), f = G.raccordEnFace(cote, pos);
+      var d = F.coteVoisin(cote), f = F.raccordEnFace(cote, pos);
       return emplacement({ col: t.col + d.dc, lig: t.lig + d.dl }, f.cote, f.pos);
     }
     var emplacements = [];
@@ -209,32 +215,38 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     });
     elems.forEach(function (x) {
       x.e.raccords.forEach(function (r) {
-        var d = G.coteVoisin(r.cote), f = G.raccordEnFace(r.cote, r.pos);
+        var d = F.coteVoisin(r.cote), f = F.raccordEnFace(r.cote, r.pos);
         var autre = parRaccord.get((x.t.col + d.dc) + ',' + (x.t.lig + d.dl) + ',' + f.cote + ',' + f.pos);
         // Un modèle invalide peut désigner une case absente : on ignore ce raccord (audit v2, M1).
         if (autre && voisins.has(r.caseId) && voisins.has(autre)) lier(r.caseId, autre);
       });
       x.e.ports.forEach(function (p) {
+        if (p.i === null || p.i === undefined) return; // hexagonal : coin du pourtour, aucun siège
         var id = idJonction(p.i, p.j);
         if (!portsParJonction.has(id)) portsParJonction.set(id, []);
         portsParJonction.get(id).push(p.caseId);
       });
     });
 
-    relierPassages(elems, voisins, lier);
+    relierPassages(elems, voisins, lier, F);
 
     // Villes : jetons 'capture' (le premier jeton d'une jonction compte)
     var villes = new Set();
     jetons.forEach(function (jeton) { if (jeton && jeton.type === 'capture') villes.add(idJonction(jeton.i, jeton.j)); });
     // Toutes les jonctions intérieures : nœud relié aux cases porteuses des ports qui y aboutissent
+    function jonction(i, j) {
+      var id = idJonction(i, j), portees = portsParJonction.get(id) || [], ville = villes.has(id);
+      noeud(id);
+      portees.forEach(function (c) { lier(id, c); });
+      g.jonctions.push({ id: id, i: i, j: j, type: ville ? 'ville' : 'case', ports: portees.length, cases: portees.slice() });
+      if (ville) g.villes.add(id);
+    }
+    if (F.nbCotes === 6) { // hexagonal : les 24 sièges (i = numéro du siège, j = 0)
+      for (var s = 0; s < F.sieges.length; s++) jonction(s, 0);
+      return g;
+    }
     for (var j = 1; j < F.GRILLE.lignes; j++) {
-      for (var i = 1; i < F.GRILLE.colonnes; i++) {
-        var id = idJonction(i, j), portees = portsParJonction.get(id) || [], ville = villes.has(id);
-        noeud(id);
-        portees.forEach(function (c) { lier(id, c); });
-        g.jonctions.push({ id: id, i: i, j: j, type: ville ? 'ville' : 'case', ports: portees.length, cases: portees.slice() });
-        if (ville) g.villes.add(id);
-      }
+      for (var i = 1; i < F.GRILLE.colonnes; i++) jonction(i, j);
     }
     return g;
   }
@@ -365,8 +377,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var lacunes = [];
 
     // Ce qui manque
-    var plateau = (doc && doc.plateau) || {}, grille = M.formatDuDocument(doc).GRILLE;
-    var attendues = grille.colonnes * grille.lignes;
+    var plateau = (doc && doc.plateau) || {}, formatDoc = M.formatDuDocument(doc), grille = formatDoc.GRILLE;
+    var attendues = formatDoc.nbCotes === 6 ? formatDoc.cellules.length : grille.colonnes * grille.lignes; // hexagonal : 19 cellules
     var tuilesPosees = Array.isArray(plateau.tuiles) ? plateau.tuiles.filter(Boolean) : [];
     // une tuile dont le modèle est introuvable est ignorée par le graphe : elle ne compte pas comme posée
     var introuvables = tuilesPosees.filter(function (t) { return !M.modeleParId(doc, t.modeleId); }).length;
@@ -439,10 +451,10 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
     // Plateau très déséquilibré (blocages) puis alertes
     var blocages = [], alertes = [], informations = [];
-    var est5x5 = formatId === '5x5';
+    var est5x5 = formatId === '5x5', infosVilles = est5x5 || formatId === 'hex19'; // informations « peu de ports » et « partage non symétrique » : 5×5 et hexagonal
     var conseil5x5 = est5x5 && conseil5x5Applicable(villes, g) ? CONSEIL_5X5 : '';
     var sAlerte = seuilS(formatId), sInfo = seuilSInformation(formatId);
-    if (est5x5) {
+    if (infosVilles) {
       villes.forEach(function (v) {
         if (v.ports < PORTS_VILLE_MIN) {
           informations.push({ code: 'ville_peu_de_ports', message: 'La ville (' + v.i + ', ' + v.j + ') est sur une jonction à ' + v.ports + ' port(s), moins de ' + PORTS_VILLE_MIN + ' (information, sans alerte).' });
@@ -460,7 +472,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       var fort3 = partage[1] >= partage[2] ? 1 : 2;
       alertes.push({ code: 'cinq_contre_trois', message: 'Le joueur ' + NOM_JOUEUR[fort3] + ' est plus proche de ' + partage[fort3] + ' villes contre ' + partage[3 - fort3] + ' pour le joueur ' + NOM_JOUEUR[3 - fort3] + ' (« ' + LIBELLE_MAJORITE_ALERTE_PAR_FORMAT[formatId] + ' »).' + conseil5x5 });
     }
-    if (est5x5 && villes.length === nbV && avecAppar && !partageSymetrique) { // 5×5 (docs/18, décision 2 du 2026-10-19) : information seulement
+    if (infosVilles && villes.length === nbV && avecAppar && !partageSymetrique) { // 5×5 (docs/18, décision 2 du 2026-10-19) et hexagonal : information seulement
       informations.push({ code: 'partage_asymetrique', message: 'Partage non symétrique : ' + partage[1] + ' ville(s) plus proche(s) du joueur vert, ' + partage[2] + ' du joueur rouge, ' + partage.egalite + ' à égalité (information ; le générateur et « Placer les villes » préfèrent un partage symétrique).' });
     }
     if (ecartMax7 !== null && ecartMax7 > SEUIL_BLOCAGE_ECART) {
@@ -599,6 +611,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function flancs(doc, options) {
     options = options || {};
     var F = M.formatDuDocument(doc), grille = F.GRILLE;
+    if (F.nbCotes === 6) return []; // hexagonal : pas de flancs (mesure propre aux grilles carrées)
     var jetons = [];
     for (var j = 1; j < grille.lignes; j++) for (var i = 1; i < grille.colonnes; i++) jetons.push({ i: i, j: j, type: 'capture' });
     var flanc = function (t) {
@@ -639,7 +652,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       return x;
     }
     function emp(t, c, p) { return 'R ' + t.col + ',' + t.lig + ',' + c + ',' + p; }
-    function enFace(t, c, p) { var d = G.coteVoisin(c), f = G.raccordEnFace(c, p); return emp({ col: t.col + d.dc, lig: t.lig + d.dl }, f.cote, f.pos); }
+    var F = M.formatDuDocument(doc);
+    function enFace(t, c, p) { var d = F.coteVoisin(c), f = F.raccordEnFace(c, p); return emp({ col: t.col + d.dc, lig: t.lig + d.dl }, f.cote, f.pos); }
     var plateau = (doc && doc.plateau) || {}, elems = [];
     (Array.isArray(plateau.tuiles) ? plateau.tuiles : []).forEach(function (t) { if (!t) return; var e = M.tuileEnPlateau(doc, t); if (e) elems.push({ t: t, e: e }); });
     var attaches = [], emplacements = [], types = new Map(), econ = [];
@@ -693,15 +707,31 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return res;
   }
 
+  /** Cellules autour d'une jonction du graphe : [{ col, lig }] (4 en carré, les 3 d'un siège en hexagonal). */
+  function cellulesDeJonction(F, jn) {
+    if (F.nbCotes === 6) { var sg = F.sieges[jn.i]; return sg ? sg.tuiles : []; }
+    return [{ col: jn.i - 1, lig: jn.j - 1 }, { col: jn.i, lig: jn.j - 1 }, { col: jn.i - 1, lig: jn.j }, { col: jn.i, lig: jn.j }];
+  }
+  /** Ensemble des cellules posées { 'col,lig': true } d'un document. */
+  function cellulesPosees(doc) {
+    var posees = doc && doc.plateau && Array.isArray(doc.plateau.tuiles) ? doc.plateau.tuiles : [], pose = {};
+    posees.forEach(function (t) { if (t) pose[t.col + ',' + t.lig] = true; });
+    return pose;
+  }
+  /** Toutes les tuiles autour de la jonction `jn` sont-elles posées ? */
+  function jonctionComplete(pose, F, jn) {
+    var cs = cellulesDeJonction(F, jn);
+    return cs.length > 0 && cs.every(function (c) { return pose[c.col + ',' + c.lig]; });
+  }
+
   /**
-   * Jonctions-cases COMPLÈTES (jonction sans ville dont les 4 tuiles sont posées) : avec les villes, ce sont les jonctions
-   * du plateau, zones d'intérêt du rythme (docs/18, réponse 1 sur le 5×5 très connecté réalisé).
+   * Jonctions-cases COMPLÈTES (jonction sans ville dont toutes les tuiles sont posées : 4 en carré, 3 par siège hexagonal) : avec les villes,
+   * ce sont les jonctions du plateau, zones d'intérêt du rythme (docs/18, réponse 1 sur le 5×5 très connecté réalisé).
    */
   function jonctionsCompletes(doc, g) {
-    var posees = doc && doc.plateau && Array.isArray(doc.plateau.tuiles) ? doc.plateau.tuiles : [], pose = {}, res = [];
-    posees.forEach(function (t) { if (t) pose[t.col + ',' + t.lig] = true; });
+    var F = M.formatDuDocument(doc), pose = cellulesPosees(doc), res = [];
     g.jonctions.forEach(function (jn) {
-      if (jn.type !== 'ville' && pose[(jn.i - 1) + ',' + (jn.j - 1)] && pose[jn.i + ',' + (jn.j - 1)] && pose[(jn.i - 1) + ',' + jn.j] && pose[jn.i + ',' + jn.j] && g.voisins.has(jn.id)) res.push(jn.id);
+      if (jn.type !== 'ville' && jonctionComplete(pose, F, jn) && g.voisins.has(jn.id)) res.push(jn.id);
     });
     return res;
   }
@@ -776,11 +806,16 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * Zone d'un nœud pour l'équilibre des accès et les cases par moitié (docs/45) : 'vert', 'rouge' ou 'milieu'.
    *  - case d'une tuile : camp de sa cellule ; rangée neutre du 5×5 = 'milieu' ;
    *  - jonction (i, j) : 4×4 j = 1 vert, j = 2 milieu, j = 3 rouge ; 5×5 j = 1 vert, j = 2 et 3 milieu (elles bordent la rangée
-   *    neutre), j = 4 rouge.
+   *    neutre), j = 4 rouge ; hexagonal : siège « milieu » s'il touche une tuile de la rangée neutre, sinon vert (nord) ou rouge (sud).
    */
   function zoneDuNoeud(id, F) {
     var N = F.GRILLE.lignes, demi = Math.floor(N / 2);
     var m = /^J(\d+),(\d+)$/.exec(id);
+    if (m && F.nbCotes === 6) { // siège : 'milieu' s'il touche une tuile de la rangée neutre, sinon camp du siège (vert au nord, rouge au sud)
+      var sg = F.sieges[+m[1]];
+      if (!sg) return 'milieu';
+      return sg.tuiles.some(function (t) { return F.campCellule(t.col, t.lig) === null; }) ? 'milieu' : sg.camp;
+    }
     if (m) { var j = +m[2]; return j < demi ? 'vert' : (j > N - demi ? 'rouge' : 'milieu'); }
     var t = tuileDuNoeud(id);
     return (t && F.campCellule(t.col, t.lig)) || 'milieu';
@@ -856,10 +891,9 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var F = M.formatDuDocument(doc), tuiles = { vert: 0, rouge: 0, neutre: 0 }, jonctions = { vert: 0, rouge: 0, milieu: 0 };
     g.cases.forEach(function (c, id) { var t = tuileDuNoeud(id), camp = t && F.campCellule(t.col, t.lig); tuiles[camp || 'neutre']++; });
     // comme compteursDuPlateau (controles.js) : une jonction-case ne compte que si ses 4 tuiles sont posées (docs/49)
-    var posees = doc && doc.plateau && Array.isArray(doc.plateau.tuiles) ? doc.plateau.tuiles : [];
-    function tuilePosee(col, lig) { return posees.some(function (t) { return t && t.col === col && t.lig === lig; }); }
+    var pose = cellulesPosees(doc);
     g.jonctions.forEach(function (jn) {
-      if (jn.type !== 'ville' && tuilePosee(jn.i - 1, jn.j - 1) && tuilePosee(jn.i, jn.j - 1) && tuilePosee(jn.i - 1, jn.j) && tuilePosee(jn.i, jn.j)) jonctions[zoneDuNoeud(jn.id, F)]++;
+      if (jn.type !== 'ville' && jonctionComplete(pose, F, jn)) jonctions[zoneDuNoeud(jn.id, F)]++;
     });
     var vert = tuiles.vert + jonctions.vert, rouge = tuiles.rouge + jonctions.rouge;
     return { tuiles: tuiles, jonctions: jonctions, vert: vert, rouge: rouge, ecart: vert - rouge };
@@ -879,12 +913,11 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    */
   function connexions(doc, g) {
     g = g || construire(doc, { villesTraversables: false });
-    var posees = doc && doc.plateau && Array.isArray(doc.plateau.tuiles) ? doc.plateau.tuiles : [], pose = {};
-    posees.forEach(function (t) { if (t) pose[t.col + ',' + t.lig] = true; });
+    var F = M.formatDuDocument(doc), pose = cellulesPosees(doc);
     var ids = [], jonc = {};
     g.cases.forEach(function (c, id) { ids.push(id); });
     g.jonctions.forEach(function (jn) {
-      if (jn.type !== 'ville' && pose[(jn.i - 1) + ',' + (jn.j - 1)] && pose[jn.i + ',' + (jn.j - 1)] && pose[(jn.i - 1) + ',' + jn.j] && pose[jn.i + ',' + jn.j]) {
+      if (jn.type !== 'ville' && jonctionComplete(pose, F, jn)) {
         ids.push(jn.id); jonc[jn.id] = jn;
       }
     });
@@ -916,6 +949,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     libelleMajorite: libelleMajorite,
     CONSEIL_5X5: CONSEIL_5X5,
     MOTIF_VILLES_5X5: MOTIF_VILLES_5X5,
+    MOTIF_VILLES_HEX: MOTIF_VILLES_HEX,
     CHAINE_CIBLE: CHAINE_CIBLE,
     PORTS_VILLE_MIN: PORTS_VILLE_MIN,
     PORTS_JONCTION_MIN: PORTS_JONCTION_MIN,
@@ -926,6 +960,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     SEUIL_S: SEUIL_S,
     SEUIL_S_PAR_FORMAT: SEUIL_S_PAR_FORMAT,
     SEUIL_S_INFORMATION_PAR_FORMAT: SEUIL_S_INFORMATION_PAR_FORMAT,
+    SEUIL_S_HEX: SEUIL_S_HEX,
     seuilS: seuilS,
     seuilSInformation: seuilSInformation,
     SEUIL_BLOCAGE_ECART: SEUIL_BLOCAGE_ECART,
