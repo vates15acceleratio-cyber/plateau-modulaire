@@ -37,3 +37,8 @@
 - **Coupes partagées** : tuiles jointives en nid d'abeille, 3 planches A3 (19 tuiles et 11 de réserve).
 - Arbitrage de l'orchestrateur : apparitions imprimées neutres, comme en carré.
 - **Suite prévue** : production en lots Sonnet (géométrie du format hex, modèle et graphe, rendu et export, catalogue, générateur, interface), testeur, relecteur, versionneur, PR.
+
+## Décisions pendant la production (2026-10-19)
+- **Bouton « Orienter les tuiles »** pour la pose à la main en hexagonal : accepté (recherche des rotations des intérieures qui écartent les villes, environ 1 s, annulable par Ctrl+Z).
+- Arbitrage de l'orchestrateur : rejet du générateur hexagonal à **S ≥ 3** (`80` § 4), au lieu de 4 (`81`) ; sans effet pratique (S vaut 0 ou 1).
+- En attente de confirmation de l'utilisateur (appliqués provisoirement) : critères à 6 villes de `80` (« 4 contre 2 » bloquant, S alerte 4 / information 3), 10 dispositions variées, répartition des 30 pièces de `79`.
