@@ -9,8 +9,9 @@
  *  - chemin vers un port de coin : amorce de 28 mm sur la bissectrice depuis le coin, puis segment vers la case.
  * Sur la tuile imprimée, raccords et ports sont prolongés jusqu'au bord (et dans le fond perdu).
  * Passages sans case : courbes (M L Q C) en vert comme les chemins, même largeur (voir tracesPassages et cheminPassage) ; les chemins restent droits.
- * Quart de case de jonction (docs/20 D1) : quart de disque Ø 20 centré sur chaque coin intérieur du gabarit,
- * fond blanc, contour noir sur l'arc seulement, par-dessus l'amorce du port.
+ * Siège du campement (docs/20 D1, docs/18 du 2026-10-19) : quart de disque de la taille d'un jeton (Ø 30) centré sur
+ * chaque coin intérieur du gabarit, fond blanc, contour noir sur l'arc seulement, par-dessus l'amorce du port. Les
+ * quatre quarts forment, plateau assemblé, le cercle où l'on pose un jeton campement ou un jeton ville.
  * Case d'apparition (docs/20 D3) : carré inscrit dans le disque, noir et blanc à l'impression ; à l'écran,
  * option `camp` : couleur du camp ET forme distincte (triangle vers le nord pour le vert, vers le sud pour le
  * rouge, carré en tirets pour une case neutre).
@@ -26,7 +27,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
 
   var AMORCE_RACCORD = G.AMORCE_RACCORD; // valeurs du format 4×4, gardées pour l'API
   var AMORCE_PORT = G.AMORCE_PORT;
-  /** Nombre de segments du polygone qui approche l'arc d'un quart de case de jonction. */
+  /** Nombre de segments du polygone qui approche l'arc d'un quart de siège de campement. */
   var SEGMENTS_ARC = 16;
 
   /** Palette d'impression (docs/archives/6-avis-prepresse.md) ; `neutre` sert seulement à l'écran. */
@@ -88,11 +89,11 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   function echapper(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
   /**
-   * Quart de case de jonction du coin k (repère local, tuile tournée de `rot`) : polygone blanc (le quart de
-   * disque, prolongé de `fp` dans le fond perdu) puis l'arc seul en noir.
+   * Quart de siège de campement du coin k (repère local, tuile tournée de `rot`) : polygone blanc (le quart de
+   * disque Ø DIAMETRE_JETON, prolongé de `fp` dans le fond perdu) puis l'arc seul en noir.
    */
   function quartJonction(k, rot, fp, F) {
-    var r = F.DIAMETRE_CASE_JONCTION / 2, e = Math.min(fp, r - 1), b = Math.sqrt(r * r - e * e);
+    var r = F.DIAMETRE_JETON / 2, e = Math.min(fp, r - 1), b = Math.sqrt(r * r - e * e);
     var a1 = Math.atan2(b, -e), a2 = Math.atan2(-e, b), arc = [];
     for (var n = 0; n <= SEGMENTS_ARC; n++) {
       var a = a1 + (a2 - a1) * n / SEGMENTS_ARC;
@@ -126,7 +127,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
    * Contenu SVG (sans balise <svg>) d'une tuile dans le repère local 0..COTE (120 mm en 4×4), tournée de `rot`.
    * options : { rot = 0, camp = null (écran seulement : 'vert' | 'rouge' | 'neutre' pour les cases d'apparition ;
    *   absent = rendu d'impression noir et blanc), fondPerdu = 0 (mm, prolonge le fond, les chemins et les quarts
-   *   de case de jonction au-delà du bord), contour = true (trait de coupe fin), identifiant = null (texte),
+   *   de siège de campement au-delà du bord), contour = true (trait de coupe fin), identifiant = null (texte),
    *   format = 4×4 (objet de PM.geometrie.format ou identifiant) }.
    */
   function contenuTuile(m, options) {
@@ -161,7 +162,7 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
       var p = F.tournerPoint({ x: pv.x, y: pv.y }, rot);
       s.push('<circle cx="' + f(p.x) + '" cy="' + f(p.y) + '" r="' + f(L / 2) + '" fill="' + COULEURS.vert + '" data-pivot="' + echapper(pv.id) + '"/>');
     });
-    // Quarts de case de jonction sur les coins intérieurs du gabarit déclaré, même sans port
+    // Quarts de siège de campement sur les coins intérieurs du gabarit déclaré, même sans port
     var gabarit = m && Object.prototype.hasOwnProperty.call(G.GABARITS, m.gabarit) ? G.GABARITS[m.gabarit] : null;
     if (gabarit) gabarit.coinsInterieurs.forEach(function (k) { s.push(quartJonction(k, rot, fp, F)); });
     (m && Array.isArray(m.cases) ? m.cases : []).forEach(function (c) {
@@ -191,11 +192,43 @@ if (!PM.geometrie && typeof require === 'function') require('./geometrie.js'); /
   }
 
   /**
-   * Contenu SVG d'une ville (jeton 'capture', seul type de jeton) centrée en (cx, cy) : disque noir + couronne
-   * crénelée blanche. `format` : 4×4 par défaut (diamètre du jeton).
+   * Jeton campement centré en (cx, cy), même taille qu'une ville : disque blanc, anneau noir rentré de 1,6 mm (la coupe
+   * à ± 0,3 mm ne le rend pas inégal), feu de bois noir (deux bûches croisées à bouts ronds, cernes blancs aux bouts
+   * avant, flamme pleine à deux pointes cernée de blanc, cœur blanc). Noir et blanc seulement : lisible sans la couleur,
+   * neutre (ni vert ni rouge, couleurs des camps) et symétrique de la ville (couronne blanche sur disque noir).
+   * Primitives limitées au sous-ensemble du convertisseur PDF de export.js (circle, path M L C Z).
+   */
+  function contenuCampement(cx, cy, r) {
+    var N = COULEURS.noir, B = COULEURS.blanc, k = r / 15, s = [];
+    function P(dx, dy) { return f(cx + dx * k) + ' ' + f(cy + dy * k); }
+    s.push('<circle cx="' + f(cx) + '" cy="' + f(cy) + '" r="' + f(r) + '" fill="' + B + '"/>');
+    s.push('<circle cx="' + f(cx) + '" cy="' + f(cy) + '" r="' + f(r - 1.6 * k) + '" fill="none" stroke="' + N + '" stroke-width="' + f(0.8 * k) + '"/>');
+    // Bûches : deux traits de 3,2 mm inclinés de ± 20°, croisés sous la flamme
+    var yb = 6.2, dx = 7.2 * Math.cos(Math.PI / 9), dy = 7.2 * Math.sin(Math.PI / 9);
+    [1, -1].forEach(function (sg) {
+      s.push('<path d="M' + P(-dx, yb - sg * dy) + ' L' + P(dx, yb + sg * dy) + '" fill="none" stroke="' + N + '" stroke-width="' + f(3.2 * k) +
+        '" stroke-linecap="round" data-campement="buche"/>');
+      s.push('<circle cx="' + f(cx + sg * dx * k) + '" cy="' + f(cy + (yb + dy) * k) + '" r="' + f(0.7 * k) + '" fill="' + B + '"/>');
+    });
+    // Flamme : goutte à deux pointes (la grande à droite), cernée de blanc pour se détacher des bûches
+    s.push('<path d="M' + P(0, 5.2) + ' C' + P(-4.6, 5.2) + ' ' + P(-6, 1) + ' ' + P(-4.2, -2.6) + ' C' + P(-3.4, -4.3) + ' ' + P(-2.6, -5.4) + ' ' +
+      P(-2.2, -7.4) + ' C' + P(-1, -5.6) + ' ' + P(-0.4, -4.6) + ' ' + P(0, -3.6) + ' C' + P(0.6, -6.4) + ' ' + P(1.6, -9) + ' ' + P(0.8, -11.2) +
+      ' C' + P(4.4, -8.4) + ' ' + P(6.2, -3.4) + ' ' + P(5, 0.8) + ' C' + P(4.4, 3.6) + ' ' + P(2.6, 5.2) + ' ' + P(0, 5.2) + ' Z" fill="' + N +
+      '" stroke="' + B + '" stroke-width="' + f(0.7 * k) + '" stroke-linejoin="round" data-campement="flamme"/>');
+    // Cœur de la flamme, en blanc
+    s.push('<path d="M' + P(0, 4) + ' C' + P(-2.4, 4) + ' ' + P(-2.8, 1.2) + ' ' + P(-1.6, -0.8) + ' C' + P(-1, -1.8) + ' ' + P(-0.2, -2.6) + ' ' +
+      P(0.2, -4.4) + ' C' + P(1.8, -2.6) + ' ' + P(2.8, -0.4) + ' ' + P(2.4, 1.6) + ' C' + P(2.1, 3.2) + ' ' + P(1.2, 4) + ' ' + P(0, 4) + ' Z" fill="' + B + '"/>');
+    return s.join('');
+  }
+
+  /**
+   * Contenu SVG d'un jeton centré en (cx, cy) : ville ('capture') = disque noir + couronne crénelée blanche ;
+   * campement ('campement') = disque blanc + feu de bois noir (voir contenuCampement). Tout autre type est dessiné
+   * comme une ville. `format` : 4×4 par défaut (diamètre du jeton, Ø 30 dans les deux formats).
    */
   function contenuJeton(type, cx, cy, format) {
     var r = leFormat(format).DIAMETRE_JETON / 2, s = [];
+    if (type === 'campement') return contenuCampement(cx, cy, r);
     s.push('<circle cx="' + f(cx) + '" cy="' + f(cy) + '" r="' + r + '" fill="' + COULEURS.noir + '"/>');
     var w = 14, h = 9, x0 = cx - w / 2, y0 = cy - h / 2 + 1, cr = 'M' + f(x0) + ' ' + f(y0 + h);
     cr += ' L' + f(x0) + ' ' + f(y0) + ' L' + f(x0 + 3.5) + ' ' + f(y0 + 3.5) + ' L' + f(cx) + ' ' + f(y0 - 1.5) +

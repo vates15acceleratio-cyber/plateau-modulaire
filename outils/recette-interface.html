@@ -240,6 +240,22 @@
       ctrl('cases d\'apparition aux couleurs (et formes) de leur camp à l\'écran', document.querySelectorAll('#assemblage [data-apparition="vert"]').length === 6 && document.querySelectorAll('#assemblage [data-apparition="rouge"]').length === 6);
       AV2.VILLES['4x4'].forEach(function (v) { cliquerJonction(v[0], v[1]); });
       ctrl('7 villes posées en un clic chacune', etat.doc().plateau.jetons.length === 7 && etat.doc().plateau.jetons.every(function (x) { return x.type === 'capture'; }), J(etat.doc().plateau.jetons));
+      // Apparence des campements (docs/18, 2026-10-19) : siège de la taille d’un jeton (Ø 30) aux 9 intersections, légende « campement »
+      (function () {
+        var arcs = document.querySelectorAll('#assemblage [data-quart-jonction]'), ecart = 0;
+        Array.prototype.forEach.call(arcs, function (a) {
+          (a.getAttribute('d').match(/-?[\d.]+ -?[\d.]+/g) || []).forEach(function (pt) {
+            var xy = pt.split(' ').map(Number), dx = Math.min(xy[0], 120 - xy[0]), dy = Math.min(xy[1], 120 - xy[1]);
+            ecart = Math.max(ecart, Math.abs(Math.hypot(dx, dy) - 15));
+          });
+        });
+        ctrl('écran : 36 quarts de siège de campement (9 intersections × 4), rayon 15 mm (jeton Ø 30)', arcs.length === 36 && ecart < 0.01, arcs.length + ' quarts, écart ' + ecart);
+        var titres = Array.prototype.map.call($('aide').querySelectorAll('li[title]'), function (li) { return li.title; }).join(' | ');
+        ctrl('légende « Commandes » : clic sur un campement ou une ville (l’intersection redevient un campement)', /Clic sur un campement ou une ville : .*redevient un campement/.test(titres) && !/case chemin|jonction/.test(titres), titres.slice(0, 160));
+        var feu = PM.rendu.contenuJeton('campement', 0, 0);
+        ctrl('jeton campement : feu de bois (2 bûches, 1 flamme), noir et blanc seulement', (feu.match(/data-campement="buche"/g) || []).length === 2 &&
+          /data-campement="flamme"/.test(feu) && (feu.match(/#[0-9A-F]{6}/gi) || []).every(function (c) { return c === '#111111' || c === '#FFFFFF'; }));
+      })();
       cp = compteurs();
       var pasOk = Object.keys(cp).filter(function (k) { return !cp[k].ok; }).map(function (k) { return k + '=' + cp[k].v; });
       ctrl('tous les compteurs à « ok »', pasOk.length === 0, pasOk.join(', '));
@@ -1184,15 +1200,15 @@
       det.open = true;
       ctrl('Commandes : une ligne illustrée par commande (souris SVG, touches kbd, badge ×2)', document.querySelectorAll('#aide .pm-aide-ligne').length > 10 && !!document.querySelector('#aide svg.pm-aide-souris') && !!document.querySelector('#aide kbd') && !!document.querySelector('#aide .pm-aide-badge'));
       ctrl('Commandes : onglet Plateau — souris et clavier dans le même bloc', aideOnglet() === 'plateau' && !!document.querySelector('#aide [data-groupe="souris"]') && !!document.querySelector('#aide [data-groupe="clavier"]'));
-      ctrl('Commandes (Plateau) : ville / case chemin, retirer la tuile, alerte, ✕, Annuler et touche Ctrl',
-        /Ville \/ case chemin/.test(aideTexte()) && /Retirer la tuile/.test(aideTexte()) && /alerte/.test(aideTexte()) && /✕/.test(aideTexte()) && /Annuler/.test(aideTexte()) && /Ctrl/.test(aideTexte()));
+      ctrl('Commandes (Plateau) : ville / campement, retirer la tuile, alerte, ✕, Annuler et touche Ctrl',
+        /Ville \/ campement/.test(aideTexte()) && /Retirer la tuile/.test(aideTexte()) && /alerte/.test(aideTexte()) && /✕/.test(aideTexte()) && /Annuler/.test(aideTexte()) && /Ctrl/.test(aideTexte()));
       ctrl('Commandes (Plateau) : ni déplacement de case ni gestes de l\'éditeur',!/Déplacer la case/.test(aideTexte()) && !/Ajouter une case/.test(aideTexte()));
       ouvrirOnglet('tuiles');
       ctrl('Commandes : le contenu change avec l\'onglet Tuiles', aideOnglet() === 'tuiles' && /Ajouter une case/.test(aideTexte()) && /Changer le type/.test(aideTexte()) && /Déplacer la case/.test(aideTexte()) && /Dupliquer la tuile/.test(aideTexte()) && /Annuler/.test(aideTexte()));
-      ctrl('Commandes (Tuiles) : plus de geste propre au plateau', !/Ville \/ case chemin/.test(aideTexte()) && !/Montrer l’alerte/.test(aideTexte()));
+      ctrl('Commandes (Tuiles) : plus de geste propre au plateau', !/Ville \/ campement/.test(aideTexte()) && !/Montrer l’alerte/.test(aideTexte()));
       ctrl('Commandes : le <details> n\'a pas été recréé au changement d\'onglet', document.querySelector('#aide details') === det);
       ouvrirOnglet('plateau');
-      ctrl('Commandes : retour à l\'onglet Plateau', aideOnglet() === 'plateau' && /Ville \/ case chemin/.test(aideTexte()));
+      ctrl('Commandes : retour à l\'onglet Plateau', aideOnglet() === 'plateau' && /Ville \/ campement/.test(aideTexte()));
       return attendre(40).then(function () {
         det.open = false;
         return attendre(40);

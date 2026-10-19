@@ -274,7 +274,7 @@ test('libelleCible et coteCourte : cotes en cm, extérieur expliqué', () => {
   const m = exemple('bord');
   assert.match(E.libelleCible(m, { type: 'raccord', cote: 1, pos: 1, exterieur: false }), /est.*6 cm/);
   assert.match(E.libelleCible(m, { type: 'raccord', cote: 0, pos: 1, exterieur: true }), /face au vide/);
-  assert.match(E.libelleCible(m, { type: 'coin', coin: 2, exterieur: false }), /case de jonction/);
+  assert.match(E.libelleCible(m, { type: 'coin', coin: 2, exterieur: false }), /au campement \(ou à la ville\)/);
   assert.match(E.libelleCible(m, { type: 'coin', coin: 1, exterieur: true }), /extérieur/);
   assert.match(E.libelleCible(m, { type: 'case', id: 'c3' }), /apparition.*6 ; 4 cm/);
   assert.equal(E.libelleCible(m, null), '');

@@ -504,10 +504,11 @@ test('export : PDF des jetons (A4) et de l\'aperçu (A3) : tailles, texte, repè
   assert.ok(r.textes[0].includes('100 mm') && r.textes[0].includes('jetons'));
   assert.ok(r.textes[1].includes('non imprimable'), 'aperçu marqué « non imprimable »');
   assert.ok(r.textes[1].includes('réduit à 56'), 'texte accentué de l\'aperçu : ' + JSON.stringify(r.textes[1]));
-  // jetons : 7 villes de Ø 33 mm au pas de 38 mm (plus de carrefour en version 2)
+  // jetons : 8 villes et 8 campements de Ø 33 mm au pas de 38 mm, une planche pour tous les formats (docs/18, 2026-10-19)
   const j = E.planchesJetons();
-  assert.strictEqual(j.jetons.length, 7);
-  assert.ok(j.jetons.every((x) => x.type === 'capture'));
+  assert.strictEqual(j.jetons.length, 16);
+  assert.strictEqual(j.jetons.filter((x) => x.type === 'capture').length, 8);
+  assert.strictEqual(j.jetons.filter((x) => x.type === 'campement').length, 8);
   j.jetons.forEach((x) => assert.ok(x.cx - 16.5 >= 5 && x.cx + 16.5 <= 205 && x.cy - 16.5 >= 5 && x.cy + 16.5 <= 292, 'jeton hors feuille'));
   for (let a = 0; a < j.jetons.length; a++) for (let b = a + 1; b < j.jetons.length; b++) {
     const d = Math.hypot(j.jetons[a].cx - j.jetons[b].cx, j.jetons[a].cy - j.jetons[b].cy);

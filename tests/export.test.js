@@ -260,19 +260,31 @@ test('SVG de planche A3 : dimensions en mm, viewBox, balises équilibrées, une 
   assert.match(E.svgPlanche(doc, E.calepiner(doc, { format: 'A4' })[0]), /width="210mm" height="297mm" viewBox="0 0 210 297"/);
 });
 
-test('SVG de la planche des jetons : 7 villes au pas de 38 mm, ville = disque noir de 33 mm', () => {
+test('SVG de la planche des jetons, une pour tous les formats : 8 villes et 8 campements au pas de 38 mm, ville = disque noir de 33 mm', () => {
   const svg = E.svgJetons();
   assert.match(svg, /width="210mm" height="297mm" viewBox="0 0 210 297"/);
   equilibre(svg);
   const p = E.planchesJetons();
-  assert.equal(p.jetons.length, 7);
-  assert.ok(p.jetons.every(j => j.type === 'capture'));
-  assert.match(p.titre, /7 villes\)$/);
-  assert.equal((svg.match(/<circle [^>]*r="15" fill="none"/g) || []).length, 7, 'cercle de coupe par jeton');
-  assert.ok(Math.abs(p.jetons[1].cx - p.jetons[0].cx - 38) < 1e-9);
-  assert.ok(Math.abs(p.jetons[5].cy - p.jetons[0].cy - 38) < 1e-9);
-  assert.equal((svg.match(/r="16\.5"/g) || []).length, 7);
-  assert.ok(svg.includes(R.contenuJeton('capture', p.jetons[0].cx, p.jetons[0].cy)));
+  assert.equal(p.jetons.length, 16);
+  const villes = p.jetons.filter(j => j.type === 'capture'), camps = p.jetons.filter(j => j.type === 'campement');
+  assert.equal(villes.length, 8);
+  assert.equal(camps.length, 8);
+  assert.match(p.titre, /8 villes, 8 campements\)$/);
+  assert.deepEqual(p.sections.map(s => [s.type, s.nombre]), [['capture', 8], ['campement', 8]]);
+  p.sections.forEach(s => assert.ok(svg.includes('>' + s.texte + '</text>'), s.texte));
+  assert.equal((svg.match(/<circle [^>]*r="15" fill="none" stroke="#000000"/g) || []).length, 16, 'cercle de coupe par jeton');
+  assert.ok(Math.abs(villes[1].cx - villes[0].cx - 38) < 1e-9);
+  assert.ok(Math.abs(villes[5].cy - villes[0].cy - 38) < 1e-9);
+  assert.ok(Math.abs(camps[5].cy - camps[0].cy - 38) < 1e-9);
+  // fond perdu noir pour les villes seulement (campement : papier blanc)
+  assert.equal((svg.match(/r="16\.5"/g) || []).length, 8);
+  assert.ok(svg.includes(R.contenuJeton('capture', villes[0].cx, villes[0].cy)));
+  assert.ok(svg.includes(R.contenuJeton('campement', camps[0].cx, camps[0].cy)));
+  // deux sections sans chevauchement : repères de la dernière rangée de villes au-dessus du titre des campements
+  const basVilles = Math.max(...villes.map(j => j.cy)) + 16.5 + 4, titreCamp = p.sections[1].y - 3;
+  assert.ok(basVilles < titreCamp, basVilles + ' < ' + titreCamp);
+  assert.ok(p.sections[0].y < Math.min(...villes.map(j => j.cy)) - 16.5 - 4);
+  assert.ok(Math.min(...camps.map(j => j.cy)) - 16.5 - 4 > p.sections[1].y);
   // chaque jeton, fond perdu compris, tient dans la zone imprimable
   p.jetons.forEach(j => assert.ok(j.cx - 16.5 >= 5 && j.cx + 16.5 <= 205 && j.cy + 16.5 <= 292));
 });
@@ -284,6 +296,27 @@ test('SVG de l\'aperçu : A3, marqué non imprimable, sans repères de coupe', (
   equilibre(svg);
   assert.match(svg, /Aperçu, non imprimable/);
   assert.equal((svg.match(/<line /g) || []).length, 0);
+});
+
+test('SVG de l\'aperçu : chaque intersection à 4 tuiles porte une ville (jeton du document) ou un campement, 4×4 et 5×5', () => {
+  const buches = (svg) => (svg.match(/data-campement="buche"/g) || []).length / 2;
+  for (const [g, n] of [['4x4', 9], ['5x5', 16]]) {
+    const doc = M.nouveauDocument(g), cotes = M.formatDuDocument(doc).GRILLE.colonnes;
+    assert.equal(buches(E.svgApercuPlateau(doc)), 0, g + ' sans tuile : aucun campement');
+    // les 4 tuiles autour de l'intersection (1,1) seulement : 1 campement
+    doc.plateau.tuiles = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([col, lig]) => ({ modeleId: 'absent', col, lig, rot: 0 }));
+    assert.equal(buches(E.svgApercuPlateau(doc)), 1, g + ' : 4 tuiles, 1 campement');
+    doc.plateau.tuiles = [];
+    for (let lig = 0; lig < cotes; lig++) for (let col = 0; col < cotes; col++) doc.plateau.tuiles.push({ modeleId: 'absent', col, lig, rot: 0 });
+    assert.equal(buches(E.svgApercuPlateau(doc)), n, g + ' plein, sans ville : ' + n + ' campements');
+    doc.plateau.jetons = [{ i: 1, j: 1, type: 'capture' }, { i: 2, j: 2, type: 'capture' }];
+    const svg = E.svgApercuPlateau(doc);
+    assert.equal(buches(svg), n - 2, g + ' : 2 villes, ' + (n - 2) + ' campements');
+    const C = M.formatDuDocument(doc).COTE;
+    assert.ok(svg.includes(R.contenuJeton('capture', C, C, g)));
+    assert.ok(!svg.includes(R.contenuJeton('campement', C, C, g)));
+    assert.ok(svg.includes(R.contenuJeton('campement', 2 * C, C, g)));
+  }
 });
 
 test('absence d\'injection : un nom ou un identifiant de modèle hostile est neutralisé', () => {

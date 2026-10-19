@@ -139,7 +139,7 @@ test('jetons : fond perdu de 1,5 mm (Ø 33 pour Ø 30), tous les jetons dans les
   const p = X.planchesJetons();
   assert.equal(p.rayonCoupe, 15);
   assert.equal(p.rayonFondPerdu, 16.5);
-  assert.equal(p.jetons.length, 7);
+  assert.equal(p.jetons.length, 16); // 8 villes et 8 campements (docs/18, 2026-10-19)
   for (const j of p.jetons) {
     assert.ok(j.cx - 16.5 >= 3 - 1e-9 && j.cx + 16.5 <= p.largeur - 3 + 1e-9, 'marge latérale ' + j.cx);
     assert.ok(j.cy - 16.5 >= 3 - 1e-9 && j.cy + 16.5 <= p.hauteur - 3 + 1e-9, 'marge verticale ' + j.cy);

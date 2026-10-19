@@ -50,7 +50,7 @@ test('lignesAide : le contenu dépend de l’onglet, souris et clavier réunis d
   assert.ok(p.souris.length > 0 && p.clavier.length > 0);
   assert.ok(t.souris.length > 0 && t.clavier.length > 0);
   var gestes = function (l) { return l.souris.concat(l.clavier).map(function (c) { return c.geste; }); };
-  assert.ok(gestes(p).indexOf('Clic sur une jonction') >= 0 && gestes(t).indexOf('Clic sur une jonction') < 0);
+  assert.ok(gestes(p).indexOf('Clic sur un campement ou une ville') >= 0 && gestes(t).indexOf('Clic sur un campement ou une ville') < 0);
   assert.ok(gestes(t).indexOf('Clic droit sur une case') >= 0 && gestes(p).indexOf('Clic droit sur une case') < 0);
   assert.ok(gestes(t).indexOf('Flèches') >= 0 && gestes(p).indexOf('Flèches') < 0, 'pas de flèches sur le plateau');
   assert.ok(gestes(p).indexOf('R') >= 0 && gestes(t).indexOf('R') < 0);
@@ -62,10 +62,10 @@ test('lignesAide : le contenu dépend de l’onglet, souris et clavier réunis d
   assert.deepEqual(A.lignesAide('autre'), { souris: [], clavier: [] });
 });
 
-test('la légende cite les commandes demandées (souris : pose, glisser, double-clic, clic droit, jonction, alerte, ✕ ; clavier : annuler, rétablir, enregistrer, R, Suppr, Échap, E, A, flèches, Ctrl+D)', function () {
+test('la légende cite les commandes demandées (souris : pose, glisser, double-clic, clic droit, campement, alerte, ✕ ; clavier : annuler, rétablir, enregistrer, R, Suppr, Échap, E, A, flèches, Ctrl+D)', function () {
   var tout = A.COMMANDES.map(function (c) { return c.geste; }).join(' | ');
   ['Clic sur une tuile de la bibliothèque', 'Glisser une tuile de la bibliothèque', 'Double-clic', 'Clic droit sur une tuile posée',
-    'Clic sur une jonction', 'Clic sur une alerte', '✕', 'Ctrl+Z', 'Ctrl+Y', 'Ctrl+S', 'R', 'Suppr', 'Échap', 'E sur', 'A', 'Flèches', 'Ctrl+D']
+    'Clic sur un campement ou une ville', 'Clic sur une alerte', '✕', 'Ctrl+Z', 'Ctrl+Y', 'Ctrl+S', 'R', 'Suppr', 'Échap', 'E sur', 'A', 'Flèches', 'Ctrl+D']
     .forEach(function (g) { assert.ok(tout.indexOf(g) >= 0, g); });
 });
 

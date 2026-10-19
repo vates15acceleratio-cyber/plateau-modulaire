@@ -12,7 +12,7 @@
  * Les fonctions de calcul n'accèdent pas au DOM (testées sous Node) ; seules rasteriser(),
  * telecharger() et ouvrir() utilisent le navigateur.
  * Règles v2 : les tuiles sont imprimées neutres (case d'apparition en noir et blanc, une même tuile sert aux
- * deux camps) ; la planche de jetons porte 7 villes ; l'aperçu du plateau est refusé si le plateau complet est
+ * deux camps) ; la planche de jetons porte 8 villes et 8 campements (un campement = intersection sans ville) ; l'aperçu du plateau est refusé si le plateau complet est
  * très déséquilibré (PM.graphe, docs/20).
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
@@ -351,33 +351,49 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     return enveloppeSvg(planche.largeur, planche.hauteur, corps);
   }
 
-  /** Jetons de la planche : 7 villes ('capture', seul type de jeton). */
-  var JETONS = ['capture', 'capture', 'capture', 'capture', 'capture', 'capture', 'capture'];
+  /**
+   * Sections de la planche de jetons, une planche pour tous les formats (docs/18, 2026-10-19) : 8 villes ('capture' ;
+   * 8 en 5×5, 7 en 4×4 et 1 de réserve) et 8 campements ('campement', dessin seulement : une intersection sans ville ;
+   * 16 − 8 = 8 en 5×5, 9 − 7 = 2 en 4×4 et 6 de réserve). `y` : centre de la première rangée (mm).
+   */
+  var SECTIONS_JETONS = [
+    { type: 'capture', nombre: 8, y: 44, titre: 'Villes : 8 (5x5 : 8 ; 4x4 : 7 et 1 de réserve)' },
+    { type: 'campement', nombre: 8, y: 137, titre: 'Campements : 8 (5x5 : 16 intersections - 8 villes ; 4x4 : 9 - 7 = 2 et 6 de réserve)' }
+  ];
   // Fond perdu des jetons : 1,5 mm autour du Ø 30 (33 mm), choix voulu et moindre que les 3 mm des tuiles. Le passer à 3 mm
   // (Ø 36, pas de 42 mm) fait sortir la rangée de 5 jetons des marges de l'A4 (bord à 3 mm, repères hors feuille) : avis prépresse, docs/26 § 13 (4 colonnes au pas de 44 le permettraient : choix laissé à l’utilisateur, docs/31 remarque 7).
   var PAS_JETON = 38, DIAMETRE_JETON_FP = 33, COLONNES_JETONS = 5;
 
-  /** Géométrie de la planche de jetons (A4) : centres, rayon de coupe, textes. */
+  /**
+   * Géométrie de la planche de jetons (A4) : centres, rayon de coupe, textes. `jetons` : villes puis campements,
+   * chacun { type, cx, cy } ; `sections` : titre de chaque section et sa position.
+   */
   function planchesJetons() {
     var f = FORMATS.A4, rCoupe = G.DIAMETRE_JETON / 2, rFp = DIAMETRE_JETON_FP / 2;
-    var largeurGrille = (COLONNES_JETONS - 1) * PAS_JETON + DIAMETRE_JETON_FP, x0 = (f.largeur - largeurGrille) / 2 + rFp, y0 = 40;
-    var jetons = JETONS.map(function (type, k) {
-      return { type: type, cx: x0 + (k % COLONNES_JETONS) * PAS_JETON, cy: y0 + Math.floor(k / COLONNES_JETONS) * PAS_JETON };
+    var largeurGrille = (COLONNES_JETONS - 1) * PAS_JETON + DIAMETRE_JETON_FP, x0 = (f.largeur - largeurGrille) / 2 + rFp;
+    var margeX = (f.largeur - 150) / 2, jetons = [], sections = [];
+    SECTIONS_JETONS.forEach(function (sec) {
+      // titre de section au-dessus des repères de la première rangée (repère le plus haut : rFp + 4 mm au-dessus du centre)
+      sections.push({ type: sec.type, nombre: sec.nombre, texte: sec.titre, x: margeX, y: sec.y - rFp - 6.5 });
+      for (var k = 0; k < sec.nombre; k++) {
+        jetons.push({ type: sec.type, cx: x0 + (k % COLONNES_JETONS) * PAS_JETON, cy: sec.y + Math.floor(k / COLONNES_JETONS) * PAS_JETON });
+      }
     });
-    var margeX = (f.largeur - 150) / 2;
     return {
-      format: 'A4', nom: 'plateau-jetons-A4', titre: 'Plateau modulaire - jetons A4 (7 villes)', numero: 1, total: 1,
-      largeur: f.largeur, hauteur: f.hauteur, rayonCoupe: rCoupe, rayonFondPerdu: rFp, jetons: jetons, margeX: margeX,
+      format: 'A4', nom: 'plateau-jetons-A4', titre: 'Plateau modulaire - jetons A4 (8 villes, 8 campements)', numero: 1, total: 1,
+      largeur: f.largeur, hauteur: f.hauteur, rayonCoupe: rCoupe, rayonFondPerdu: rFp, jetons: jetons, sections: sections, margeX: margeX,
       barre: barreControle(f, margeX)
     };
   }
 
   /**
-   * SVG de la planche de jetons : 7 villes de 33 mm (30 mm + 1,5 mm de fond perdu), pas de 38 mm.
+   * SVG de la planche de jetons : 8 villes et 8 campements de 33 mm (30 mm + 1,5 mm de fond perdu), pas de 38 mm.
+   * Fond perdu noir pour la ville (disque noir), blanc (papier) pour le campement.
    * Repères : quatre petits traits radiaux hors fond perdu, qui pointent vers le cercle de coupe (Ø 30 mm).
    */
   function svgJetons() {
     var p = planchesJetons(), corps = '';
+    p.sections.forEach(function (s) { corps += svgTexte({ texte: s.texte, x: s.x, y: s.y, taille: 3, ancre: 'start', gras: true }); });
     p.jetons.forEach(function (j) {
       if (j.type === 'capture') {
         corps += '<circle cx="' + nb(j.cx) + '" cy="' + nb(j.cy) + '" r="' + p.rayonFondPerdu + '" fill="' + R.COULEURS.noir + '"/>';
@@ -416,9 +432,18 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         '<clipPath id="' + id + '"><rect x="0" y="0" width="' + C + '" height="' + C + '"/></clipPath>' +
         R.contenuTuile(modele, { rot: t.rot || 0, fondPerdu: 0, contour: true, format: F }) + '</g>';
     });
-    tab(doc && doc.plateau && doc.plateau.jetons).forEach(function (j) {
-      if (j && j.type === 'capture') corps += R.contenuJeton(j.type, j.i * C, j.j * C, F);
-    });
+    // Une intersection porte une ville (jeton du document) ou, à défaut, un campement ; elle n'existe que si ses 4 tuiles sont posées
+    var villes = tab(doc && doc.plateau && doc.plateau.jetons).filter(function (j) { return j && j.type === 'capture'; });
+    var posees = {};
+    tab(doc && doc.plateau && doc.plateau.tuiles).forEach(function (t) { if (t) posees[t.col + ',' + t.lig] = true; });
+    for (var jj = 1; jj < F.GRILLE.lignes; jj++) {
+      for (var ii = 1; ii < F.GRILLE.colonnes; ii++) {
+        var ville = villes.some(function (v) { return v.i === ii && v.j === jj; });
+        var complete = posees[(ii - 1) + ',' + (jj - 1)] && posees[ii + ',' + (jj - 1)] && posees[(ii - 1) + ',' + jj] && posees[ii + ',' + jj];
+        if (ville) corps += R.contenuJeton('capture', ii * C, jj * C, F);
+        else if (complete) corps += R.contenuJeton('campement', ii * C, jj * C, F);
+      }
+    }
     corps += '<rect x="0" y="0" width="' + cote + '" height="' + cote + '" fill="none" stroke="' + R.COULEURS.noir + '" stroke-width="0.8"/></g>';
     corps += svgTexte({ texte: 'Aperçu, non imprimable', x: f.largeur / 2, y: 28, taille: 9, ancre: 'middle', gras: true });
     corps += svgTexte({ texte: 'Plateau assemblé ' + (cote / 10) + ' x ' + (C * F.GRILLE.lignes / 10) + ' cm, réduit à ' + Math.round(echelle * 100) +
@@ -933,7 +958,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       });
     gPortee.appendChild(gExemplaires);
     gContenu.appendChild(gPortee);
-    var iJetons = ligne(gContenu, 'checkbox', 'jetons', 'jetons', 'Planche des jetons (A4 : 7 villes)', false);
+    var iJetons = ligne(gContenu, 'checkbox', 'jetons', 'jetons', 'Planche des jetons (A4 : 8 villes, 8 campements)', false);
     var iApercu = ligne(gContenu, 'checkbox', 'apercu', 'apercu', 'Aperçu du plateau assemblé (A3, non imprimable)', false);
 
     var gFormat = groupe('Format de feuille pour les tuiles');

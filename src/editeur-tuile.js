@@ -95,7 +95,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     var g = gabaritDe(gabarit);
     return !!g && g.cotesExterieurs.indexOf(cote) >= 0;
   }
-  /** Le coin est-il extérieur pour ce gabarit ? (un port n'y aboutirait à aucune jonction : alerte, pas de refus) */
+  /** Le coin est-il extérieur pour ce gabarit ? (un port n'y aboutirait à aucun campement ni aucune ville : alerte, pas de refus) */
   function coinExterieur(gabarit, k) {
     var g = gabaritDe(gabarit);
     return !!g && g.coinsInterieurs.indexOf(k) < 0;
@@ -515,8 +515,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         (c.exterieur ? ' Côté extérieur pour ce gabarit : un raccord y sera face au vide.' : '');
     }
     if (c.type === 'coin') {
-      return 'Coin ' + NOMS_COINS[c.coin] + (c.exterieur ? ' : coin extérieur pour ce gabarit, un port n\'y mènerait à aucune jonction.'
-        : ' : un port relie une case à la case de jonction (ou à la ville) de ce coin.');
+      return 'Coin ' + NOMS_COINS[c.coin] + (c.exterieur ? ' : coin extérieur pour ce gabarit, un port n’y mènerait à aucun campement ni aucune ville.'
+        : ' : un port relie une case au campement (ou à la ville) de ce coin.');
     }
     if (c.type === 'case') {
       var k = caseParId(modele, c.id);
