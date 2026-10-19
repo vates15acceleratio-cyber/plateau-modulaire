@@ -18,3 +18,10 @@
 - **Documentation, CHANGELOG, versionneur** : Haiku.
 - **L'orchestrateur** tranche, consigne, et soumet à l'utilisateur les décisions de règle et les images.
 - Les décisions propres à l'hexagonal sont consignées ici (`72`), puis dans les documents suivants.
+
+## Réponses de l'utilisateur aux avis 73 et 74 (2026-10-19)
+- **6 villes, 3 par camp** ; 18 campements.
+- **Rangée du milieu neutre** (5 tuiles) : 5 apparitions par camp, coins E et O neutres. Tuiles pointe en haut, grand hexagone à côté plat face à chaque joueur.
+- **Tuiles de 54 mm de côté** : plateau de 468 × 432 mm, 3 planches A3 (10 en A4).
+- **Découpe au cutter et à la règle** : traits de coupe imprimés sur les 6 côtés ; disposition qui partage les lignes droites quand c'est possible.
+- Questions encore ouvertes : liaison des apparitions le long du bord, disposition des villes, règle des ports (jusqu'à 3 par case), nombre de jetons (24 intersections).
