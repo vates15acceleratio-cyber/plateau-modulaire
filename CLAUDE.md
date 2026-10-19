@@ -14,12 +14,12 @@ Toujours répondre à l'utilisateur **en français**. Code, identifiants et comm
 6. Historique de la version 1 (pour le contexte seulement) : `docs/0-brief.md`, `docs/archives/3-synthese.md`, `docs/archives/` (avis, mesures et revues de la version 1).
 
 ## Interdits et règles fermes
-- **Format hexagonal : ne rien faire, pas même préparer**, tant que l'utilisateur n'a pas donné son feu vert.
+- **Format hexagonal : feu vert donné le 2026-10-19** (cadrage et choix de l’utilisateur : `docs/72-hexagonal-cadrage.md`, branche `hexagonal`).
 - Commits avec l'**adresse anonyme GitHub** de l'utilisateur (déjà réglée dans la configuration locale du dépôt) ; ne jamais publier son adresse personnelle. Dépôt public sans licence (tous droits réservés) : https://github.com/vates15acceleratio-cyber/plateau-modulaire
 - Ne pas affaiblir la politique CSP de `index.html` (pas de script, style ou attribut `style=` en ligne ; utiliser des classes CSS).
 
 ## Méthode de travail voulue par l'utilisateur
-- Équipe d'agents du brief (`docs/0-brief.md` §8) : advisors en lecture seule, sous-agents de production avec un périmètre de fichiers précis, puis **testeur** et **relecteur** après chaque module, puis **versionneur** (numéro `X.xx.x`, étiquette git sans « v », entrée dans `CHANGELOG.md`).
+- Équipe d'agents (réorganisée le 2026-10-19, `docs/72`) : **advisors Opus** en lecture seule (géométrie, design de jeu, prépresse ; mesures et images avant tout code) ; **production, testeur et relecteur en Sonnet**, périmètre de fichiers précis, en parallèle si les fichiers sont distincts ; **documentation et versionneur en Haiku** (numéro `X.xx.x`, étiquette git sans « v », entrée dans `CHANGELOG.md`).
 - L'orchestrateur consigne chaque rapport d'agent dans `docs/`, tranche les points ouverts et soumet à l'utilisateur les décisions qui lui reviennent (règles de jeu, publication, licence…).
 - Avant de déclarer un travail fini : `node --test` (0 échec) et les deux recettes navigateur à 0 échec.
 
