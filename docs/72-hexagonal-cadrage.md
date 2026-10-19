@@ -25,3 +25,4 @@
 - **Tuiles de 54 mm de côté** : plateau de 468 × 432 mm, 3 planches A3 (10 en A4).
 - **Découpe au cutter et à la règle** : traits de coupe imprimés sur les 6 côtés ; disposition qui partage les lignes droites quand c'est possible.
 - Questions encore ouvertes : liaison des apparitions le long du bord, disposition des villes, règle des ports (jusqu'à 3 par case), nombre de jetons (24 intersections).
+- **Bord droit** (2026-10-19) : l'utilisateur pensait que le bord plat des hexagones formerait le bord du plateau. Or un grand hexagone de tuiles hexagonales a toujours un bord en dents de scie ou en créneaux. Choix retenu : **les 12 tuiles du pourtour (bords et coins) ont un côté extérieur droit**, qui comble les creux. Le plateau est un vrai hexagone à 6 côtés droits ; le centre et la couronne restent des hexagones. Le principe de jeu ne change pas (graphe, intersections, camps).
