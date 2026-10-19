@@ -185,3 +185,9 @@ Remplace, pour le 5×5, les décisions « 8 villes en damier » de la section pr
 - **Motif confirmé** : (1,1) (4,1) (2,2) (3,2) (2,3) (3,3) (1,4) (4,4).
 - **Pas de tuile réservée au centre** : les joueurs peuvent déplacer les villes ou en réduire le nombre (le maximum de 8 est voulu pour l'équilibre) ; une tuile purement centrale n'aurait pas de sens.
 - **Piste de l'utilisateur** : utiliser les tuiles qui créent des **ponts** (quitte à en créer d'autres), pour respecter l'écart voulu. Les nouvelles tuiles doivent rester des centrales ordinaires, utilisables à n'importe quelle place.
+
+## Réponses de l'utilisateur sur les ponts et les campements (2026-10-19, `65`, `66`)
+- **R3 assouplie en 5×5, sur les centrales seulement** (formulation du `66` § 2). Une porteuse à 1 port sur le coin k peut porter les raccords au milieu des deux côtés qui encadrent ce coin. Une porteuse latérale peut porter son raccord, plus le milieu d'un côté voisin.
+- **Catalogue 5×5 « P », 30 tuiles** : LC1 ×1, LC3 ×4, LC4 ×1, LC5 ×1, LC6 ×1, LC7 ×1, **LC11 ×2, LC12 ×3**, LB2 ×12, LK2 ×4. LC2 sort. Motif des 8 villes fixes avec **l'écart de 3 cases partout** : la tolérance de 2 cases n'est plus utile. Le générateur choisit la place des centrales tirées.
+- **Campements en jetons à part, flamme noire.**
+- **16 jetons au total, recto-verso : ville au verso, campement (flamme) au recto.** Un même jeton sert de ville ou de campement selon la face posée.
