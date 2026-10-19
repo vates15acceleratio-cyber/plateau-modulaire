@@ -196,3 +196,15 @@ Remplace, pour le 5×5, les décisions « 8 villes en damier » de la section pr
 - **Centrale 5×5 « Étoile »** : un relais central avec 4 raccords au milieu des côtés, et 4 cases sur les diagonales. Chacune est reliée au relais et porte le port de son coin. Le cercle rouge du croquis n'a pas de sens particulier.
 - **Exception nommée à la règle « 2 cases par tuile au plus »** : cette tuile a 5 cases.
 - **1 exemplaire, pose à la main seulement** : elle est dans la bibliothèque et imprimée, mais le générateur ne la tire pas. Les plateaux générés ne changent pas. « Ça peut toujours servir pour le centre. »
+
+## Règles de jeu V2.3 : décisions qui touchent le plateau (2026-10-19, `regles/Bannerlord_Regles_V2.3.pdf`)
+Les règles de jeu sont rédigées dans `regles/` (source HTML et PDF de 2 pages, au format des règles V2.0). Le périmètre de l'outil reste le plateau ; seules les décisions qui le concernent sont reprises ici.
+- **Format de jeu : le 5×5 est celui que l'utilisateur jouera « sûrement »** ; la position des 7 villes du 4×4 est laissée de côté (pas de règle de pose écrite pour ce format).
+- **Villes** : on s'arrête dans une ville, elle ne se traverse jamais. **Campements** : un bataillon peut les traverser ; il pioche une carte Campement quand il **s'arrête** dessus (action gratuite, carte jouée aussitôt, **une seule carte par bataillon**).
+- **Renforts et formation** : un bataillon se renforce **uniquement sur une case de déploiement (case d'apparition) ou sur une ville contrôlée**. Un bataillon se forme sur une case de déploiement, jamais sur une ville.
+- **Combat** : il n'a lieu que si un joueur **attaque** (1 action, bataillon **adjacent** seulement, aucune portée à 2 cases). Le contact ne déclenche plus de combat.
+- **Victoire à la Gloire (15 points)** : +1 par bataillon éliminé, +1 pour plus de dégâts infligés (les deux joueurs marquent en cas d'égalité), **+2 par ville neutre capturée**, **reprise d'une ville ennemie : +2 pour soi, l'adversaire en perd 2 (jamais sous 0)**. Plus de domination (5 villes sur 7), plus de Troupes données par les villes.
+- **4 bataillons par joueur** ; puces pouvoir, Troupes de zone, Engins de siège et pièce de monnaie retirés.
+- **Montage du plateau** : **d'abord le pourtour** (4 coins puis les tuiles de bord), **ensuite les tuiles centrales** ; tuiles tirées ou choisies librement, orientées pour raccorder les chemins ; « le plateau est équilibré par lui-même ». Puis les jetons aux croisements : 8 villes en 5×5 (les 4 croisements centraux et les 2 extrêmes de la première et de la dernière rangée), campements ailleurs.
+- **Premier joueur** : celui qui a visité un château ou une forteresse le plus récemment (à égalité, le plus âgé).
+- **Non décidé** (idées seulement) : comme les campements donnent une carte, un critère d'accès équitable aux campements pourrait compléter le rapport d'équilibre ; rien n'est demandé à l'outil pour l'instant.

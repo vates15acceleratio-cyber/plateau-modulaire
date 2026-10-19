@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Bannerlord – Règles de test V2.3</title>
+<style>
+@page { size: A4 landscape; margin: 0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body { font-family: Helvetica, Arial, sans-serif; font-size: 8.2pt; line-height: 1.2; color: #000; }
+.page { width: 297mm; height: 210mm; padding: 8mm 8mm 7mm 8mm; page-break-after: always; overflow: hidden; }
+.page:last-child { page-break-after: auto; }
+.entete { display: flex; align-items: baseline; gap: 14mm; border-bottom: 0.6pt solid #2b3a55; padding-bottom: 1.5mm; margin-bottom: 3mm; }
+.titre { font-weight: bold; font-size: 14pt; color: #2b3a55; }
+.sous { color: #808080; font-size: 8.5pt; margin-left: -10mm; }
+.leg { font-size: 8pt; }
+.colonnes { column-count: 3; column-gap: 7mm; column-fill: auto; height: 180mm; }
+h2 { background: #2b3a55; color: #fff; font-size: 9.6pt; font-weight: bold; margin: 2.2mm 0 1.2mm 0; padding: 0.8mm 1.5mm; break-after: avoid; }
+h2:first-child { margin-top: 0; }
+h2.saut { break-before: column; margin-top: 0; }
+h3 { font-size: 8.2pt; color: #2b3a55; margin: 1mm 0 0.5mm 0; break-after: avoid; }
+ul, ol { margin: 0; padding-left: 3.6mm; }
+li { margin: 0 0 0.7mm 0; }
+p { margin: 0 0 0.8mm 0; }
+.o { color: #d9480f; }
+em { font-style: italic; }
+table { width: 100%; border-collapse: collapse; font-size: 8pt; margin: 0.5mm 0 1.5mm 0; }
+th { text-align: left; border-bottom: 0.6pt solid #2b3a55; padding: 0.4mm 0.8mm; }
+td { border-bottom: 0.3pt solid #ccc; padding: 0.4mm 0.8mm; vertical-align: top; }
+td.t { text-align: center; font-weight: bold; width: 5mm; }
+.encadre { border: 0.6pt solid #2b3a55; padding: 1mm 1.8mm; margin: 0.5mm 0 1.5mm 0; break-inside: avoid; }
+.encadre p { margin: 0 0 0.6mm 0; }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="entete">
+    <span class="titre">BANNERLORD</span>
+    <span class="sous">Règles de test V2.3 (recto)</span>
+    <span class="leg"><b class="o">Orange</b> : à définir</span>
+  </div>
+  <div class="colonnes">
+
+    <h2>1. BUT DU JEU</h2>
+    <ul>
+      <li>Le premier joueur qui atteint <b>15 points de Gloire</b> gagne, tout de suite, même au milieu d’un tour.</li>
+      <li>On gagne de la Gloire de quatre façons :
+        <ul>
+          <li><b>+1</b> quand on élimine un bataillon ennemi ;</li>
+          <li><b>+1</b> quand on inflige plus de dégâts que l’adversaire dans un combat, même si son bataillon est éliminé. En cas d’égalité, <b>les deux joueurs</b> marquent 1 ;</li>
+          <li><b>+2</b> quand on capture une ville <b>neutre</b> (qui n’appartient encore à personne) ;</li>
+          <li><b>+2</b> quand on reprend une ville à l’adversaire, même si on la lui avait perdue : on les lui <b>vole</b>, il en perd 2, ou son seul point s’il n’en a qu’un.</li>
+        </ul>
+      </li>
+      <li>La Gloire ne descend jamais sous 0.</li>
+      <li>Perdre tous ses bataillons n’est pas une défaite : on peut en former de nouveaux.</li>
+    </ul>
+
+    <h2>2. MATÉRIEL</h2>
+    <ul>
+      <li><b>Le plateau</b> : des tuiles carrées (coins, bords et centrales) et 16 jetons recto-verso : une <b>ville</b> d’un côté, un <b>campement</b> (feu de bois) de l’autre.</li>
+      <li><b>Pour chaque joueur</b> : 4 pions Bataillon numérotés de 1 à 4, un compteur de Gloire et un deck de Troupes.</li>
+      <li><b>En commun</b> : des dés à 6 faces, des marqueurs de dégâts (valeur 1 et valeur 3) et la pioche Campement.</li>
+    </ul>
+
+    <h2>3. VOCABULAIRE</h2>
+    <ul>
+      <li><b>Troupe</b> : une carte de votre deck. Elle indique son <b>moral</b>, sa <b>Puissance</b>, son <b>nombre de dés</b> et ses <b>effets</b>.</li>
+      <li><b>Bataillon</b> : un pion numéroté et les 1 à 3 Troupes posées devant vous à côté de son numéro.</li>
+      <li><b>Moral</b> : la résistance d’une Troupe. Chaque marqueur de dégâts le fait baisser. À 0, la Troupe est éliminée (morte, en déroute ou prisonnière) et va dans la défausse.</li>
+      <li><b>Adjacent</b> : deux cases reliées directement par un chemin.</li>
+      <li><b>Ville</b> : un site à capturer. <b>Campement</b> : un site où l’on pioche une carte Campement.</li>
+      <li><b>Case de déploiement</b> : une case du pourtour, de votre côté du plateau, où l’on forme un bataillon.</li>
+    </ul>
+
+    <h2>4. MISE EN PLACE</h2>
+    <h3>A. Le plateau (4×4 ou 5×5 tuiles)</h3>
+    <ol>
+      <li><b>D’abord le pourtour.</b> Posez les 4 coins, puis les tuiles de bord entre eux (8 en 4×4, 12 en 5×5). Tirées ou choisies librement, elles sont tournées pour que leurs chemins rejoignent ceux des voisines.</li>
+      <li><b>Ensuite le centre.</b> Remplissez avec les tuiles centrales (4 en 4×4, 9 en 5×5), tirées ou choisies et orientées de la même façon.</li>
+      <li><b>Les jetons.</b> Posez un jeton sur chaque croisement de 4 tuiles : côté <b>ville</b> pour 8 croisements en 5×5 (les 4 du centre et les 2 extrêmes de la première et de la dernière rangée), côté <b>campement</b> pour les autres. <em>(4×4 : 7 villes.)</em></li>
+      <li><b>Les camps.</b> Le joueur vert s’assoit au nord, le rouge au sud. Les 2 rangées de tuiles les plus proches de chacun sont son côté ; en 5×5 la rangée du milieu est neutre.</li>
+    </ol>
+    <h3>B. Les joueurs</h3>
+    <ol>
+      <li>Chacun mélange son deck et pioche 2 cartes. Si un joueur n’a aucune Troupe, les deux remettent leurs cartes dans leur deck, mélangent et piochent à nouveau 2 cartes. Recommencez si nécessaire.</li>
+      <li>Mettez les compteurs de Gloire à 0 et mélangez la pioche Campement. Tous les pions Bataillon sont en réserve.</li>
+      <li><b>Premier joueur</b> : celui qui a visité un château ou une forteresse le plus récemment ; à égalité, le plus âgé.</li>
+    </ol>
+
+    <h2>5. LE TOUR DE JEU</h2>
+    <ol>
+      <li><b>Piochez 1 carte</b>, dès le premier tour. Pioche vide : mélangez votre défausse pour en refaire une pioche.</li>
+      <li>Faites <b>2 actions</b> (section 6). Une attaque <b>termine votre tour</b> après le combat, même s’il vous restait une action.</li>
+    </ol>
+
+    <h2>6. LES ACTIONS</h2>
+    <ul>
+      <li><b>Former</b> : jouez 1 Troupe de votre main et posez un pion Bataillon libre sur une case de déploiement libre. Jamais directement sur une ville.</li>
+      <li><b>Renforcer</b> : ajoutez 1 Troupe de votre main à l’un de vos bataillons (3 Troupes au maximum). Ce bataillon doit être sur <b>une case de déploiement ou sur une ville que vous contrôlez</b>. Une seule carte par bataillon et par tour. Un bataillon renforcé ce tour-ci ne peut pas attaquer.</li>
+      <li><b>Déplacer</b> : avancez un bataillon d’une case libre adjacente, une seule fois par bataillon et par tour. Une case occupée est interdite. <b>On s’arrête dans une ville</b> sans la traverser ; <b>on peut traverser un campement</b>.</li>
+      <li><b>Attaquer</b> : un de vos bataillons attaque un bataillon ennemi <b>adjacent</b>. Le combat a lieu aussitôt (section 7).</li>
+      <li><b>Renouveler ses cartes</b> (coûte vos 2 actions) : défaussez toute votre main, puis piochez autant de cartes.</li>
+    </ul>
+
+    <h2>7. LE COMBAT</h2>
+    <p>Le joueur qui attaque est l’<b>attaquant</b>, l’autre est le <b>défenseur</b>. Pas de retraite, pas d’avancée.</p>
+    <ol>
+      <li><b>Lancez les dés.</b> <b>Toutes les Troupes</b> du bataillon lancent le nombre de dés écrit sur leur carte, en même temps : cela peut faire beaucoup de dés. L’attaquant lance d’abord.</li>
+      <li><b>Appliquez les effets.</b> Chaque carte a 1 ou 2 effets, dont les conditions de dés sont écrites sur la carte. Un effet de chaque carte est : « Infligez la Puissance de cette carte au bataillon ennemi ».</li>
+      <li><b>Comptez les dégâts.</b> Chaque joueur additionne les dégâts qu’il inflige. Les deux totaux sont comptés <b>avant</b> de poser le moindre marqueur.</li>
+      <li><b>Posez les marqueurs.</b> Le défenseur reçoit d’abord les dégâts de l’attaquant, puis l’attaquant reçoit les siens. On pose <b>tous les dégâts</b> sur autant de Troupes que l’on veut, avec les marqueurs que l’on veut (les marqueurs de 3 servent seulement à aller plus vite). Une Troupe peut encaisser autant de marqueurs que son moral : elle est alors éliminée et le reste des marqueurs se répartit sur les autres Troupes.</li>
+      <li><b>Éliminez.</b> Une Troupe dont le moral tombe à 0 est défaussée. Si les dégâts atteignent ou dépassent le moral restant de tout le bataillon, <b>le bataillon est éliminé</b>, sauf effet qui le sauve. Un combat peut finir sans perte, ou par l’élimination des deux bataillons.</li>
+      <li><b>Marquez la Gloire</b> (section 1).</li>
+    </ol>
+    <p>Les marqueurs <b>restent</b> sur les Troupes après le combat. Une Troupe blessée inflige tous ses dégâts. Seul un effet de Troupe peut en retirer.</p>
+
+    <h2>8. CAPTURE DES VILLES</h2>
+    <ul>
+      <li>Placez un bataillon sur la ville, puis <b>laissez-le y passer un tour complet</b> : le tour d’arrivée ne compte pas, et la ville est capturée à la fin de votre tour suivant.</li>
+      <li>Si le bataillon quitte la ville ou est éliminé avant la fin, la capture est à refaire.</li>
+      <li>Une ville capturée reste à vous même vide. Seul un adversaire qui termine à son tour une capture en devient propriétaire.</li>
+      <li>Ville neutre : +2 Gloire. Ville ennemie : vous volez 2 Gloire à l’adversaire (section 1).</li>
+    </ul>
+
+    <h2>9. CAMPEMENTS</h2>
+    <ul>
+      <li>Quand un de vos bataillons <b>s’arrête</b> sur un campement, piochez gratuitement 1 carte Campement (pas une action) et <b>jouez-la aussitôt</b> : c’est un événement à résolution immédiate. Mettez-la ensuite dans la défausse Campement ; quand la pioche Campement est vide, remélangez cette défausse.</li>
+      <li><b>Un bataillon ne pioche qu’une seule carte Campement.</b> S’il est éliminé, un nouveau bataillon peut en piocher une.</li>
+    </ul>
+
+  </div>
+</div>
+
+<div class="page">
+  <div class="entete">
+    <span class="titre">BANNERLORD</span>
+    <span class="sous">Annexes (verso)</span>
+    <span class="leg"><b class="o">Orange</b> : à définir</span>
+  </div>
+  <div class="colonnes">
+
+    <h2>RÉSUMÉ D’UN TOUR</h2>
+    <div class="encadre">
+      <p><b>1.</b> Piochez 1 carte.</p>
+      <p><b>2.</b> Faites 2 actions : <b>Former</b>, <b>Renforcer</b>, <b>Déplacer</b>, <b>Attaquer</b> ou <b>Renouveler ses cartes</b> (2 actions).</p>
+      <p><b>3.</b> Une attaque met fin à votre tour.</p>
+      <p><b>Gloire</b> : +1 bataillon éliminé · +1 plus de dégâts (les deux joueurs à égalité) · +2 ville neutre · +2 volés pour une ville reprise. <b>15 = victoire.</b></p>
+    </div>
+
+    <h2>PRÉCISIONS SUR LES CARTES</h2>
+    <ul>
+      <li><b>Main limitée à 5 cartes.</b> Si vous avez 5 cartes et devez piocher, aucune pioche ne s’effectue, quelle qu’en soit la raison (début de tour, effet de carte).</li>
+      <li><b>Plusieurs effets.</b> Une carte qui a deux effets les résout <b>dans l’ordre où ils sont écrits</b>. Les deux effets sont indépendants l’un de l’autre.</li>
+      <li><b>Effet impossible.</b> Si un effet ne peut pas être appliqué en entier (pas assez de cartes, par exemple), on en fait autant que possible et on ignore le reste.</li>
+      <li><b>Pioche vide</b> pendant un effet : mélangez votre défausse pour en refaire une pioche, puis continuez.</li>
+    </ul>
+    <div class="encadre">
+      <p><em>Exemple :</em> Événement – « Piochez 2 cartes. Défaussez 1 carte de votre main. » D’abord vous piochez 2 cartes, puis vous défaussez 1 carte.</p>
+    </div>
+
+    <h2>EXEMPLE DE COMBAT</h2>
+    <div class="encadre">
+      <p><em>Les chiffres sont fictifs.</em> Vous attaquez. Après les dés et les effets, vous infligez 4 dégâts et l’adversaire en inflige 2.</p>
+      <p><b>1.</b> L’adversaire a deux Troupes : A (moral 3) et B (moral 2). Il pose vos 4 dégâts comme il veut : par exemple 3 sur A (A est éliminée) et 1 sur B (B reste à 1 de moral) ; ou 2 sur A et 2 sur B (B est éliminée, A reste à 1).</p>
+      <p><b>2.</b> Avec 5 dégâts ou plus, tout son bataillon aurait été éliminé.</p>
+      <p><b>3.</b> Vous recevez ensuite ses 2 dégâts, répartis sur vos Troupes comme vous le souhaitez.</p>
+      <p><b>4.</b> Vous avez infligé plus de dégâts : <b>+1 Gloire</b>, même si votre bataillon a été éliminé. Un bataillon éliminé rapporte aussi +1 à son adversaire.</p>
+    </div>
+
+    <h2 class="saut">ANNEXE 1 : TROUPES</h2>
+    <p class="o">Liste complète à venir. Chaque carte Troupe indiquera : son nom, son moral, sa Puissance, son nombre de dés et ses effets (les conditions de dés sont écrites sur la carte). Remonter le moral ou sauver un bataillon sont des effets de Troupe.</p>
+
+    <h2>ANNEXE 2 : CARTES CAMPEMENT (15)</h2>
+    <p class="o">Effets à valider ; les noms viendront ensuite. Les effets 5, 6, 11, 14 et 15 sont de nouvelles propositions. Tous se résolvent aussitôt. <b>+</b> avantageux · <b>=</b> neutre · <b>−</b> pénalisant. Aucun n’agit sur les Troupes en jeu.</p>
+    <table>
+      <tr><th>N°</th><th></th><th>Effet</th></tr>
+      <tr><td class="t">1</td><td class="t">+</td><td>Piochez 1 carte.</td></tr>
+      <tr><td class="t">2</td><td class="t">+</td><td>Regardez les 3 premières cartes de votre pioche, prenez-en 1 en main, remettez les 2 autres dessus dans l’ordre de votre choix.</td></tr>
+      <tr><td class="t">3</td><td class="t">+</td><td>Reprenez en main la carte du dessus de votre défausse.</td></tr>
+      <tr><td class="t">4</td><td class="t">+</td><td>Prenez au hasard 1 carte de la main adverse et mettez-la dans sa défausse.</td></tr>
+      <tr><td class="t">5</td><td class="t">+</td><td>Piochez 2 cartes. Défaussez 1 carte de votre main.</td></tr>
+      <tr><td class="t">6</td><td class="t">+</td><td>L’adversaire défausse 1 carte de son choix dans sa main.</td></tr>
+      <tr><td class="t">7</td><td class="t">=</td><td>Chaque joueur pioche 1 carte.</td></tr>
+      <tr><td class="t">8</td><td class="t">=</td><td>Défaussez autant de cartes de votre main que vous voulez, puis piochez autant de cartes.</td></tr>
+      <tr><td class="t">9</td><td class="t">=</td><td>Mélangez votre défausse dans votre pioche.</td></tr>
+      <tr><td class="t">10</td><td class="t">=</td><td>Lancez 1 dé. De 1 à 3 : défaussez 1 carte de votre main. De 4 à 6 : piochez 2 cartes.</td></tr>
+      <tr><td class="t">11</td><td class="t">=</td><td>Chaque joueur défausse 1 carte de son choix dans sa main.</td></tr>
+      <tr><td class="t">12</td><td class="t">−</td><td>Défaussez 1 carte de votre choix.</td></tr>
+      <tr><td class="t">13</td><td class="t">−</td><td>Mettez 1 carte de votre main sous votre pioche.</td></tr>
+      <tr><td class="t">14</td><td class="t">−</td><td>Défaussez la première carte de votre pioche.</td></tr>
+      <tr><td class="t">15</td><td class="t">−</td><td>Remettez toute votre main dans votre pioche, mélangez, puis piochez 2 cartes.</td></tr>
+    </table>
+
+  </div>
+</div>
+
+</body>
+</html>
