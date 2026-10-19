@@ -1,4 +1,4 @@
-# Travail restant et idées à étudier (mis à jour le 2026-10-18, après la revue de la branche `passages`, `docs/51`)
+# Travail restant et idées à étudier (mis à jour le 2026-10-19, après les décisions sur les villes et les ponts, `docs/64` à `docs/67`)
 
 L'utilisateur a marqué une pause ; il reprendra **après discussion**. Rien ne doit être lancé sans son accord. État au moment de l'arrêt : version 3.03.0 (voir `CHANGELOG.md`), tout est sur GitHub, `node --test` et les deux recettes navigateur passent.
 
@@ -84,3 +84,18 @@ Proposée par l'utilisateur au moment de l'arrêt, **pas encore définie** : à 
   - **raccords morts** : 2 informations (murs de « Deux ponts ») sur les plateaux qui portent LC4 (environ 75 %), aucune alerte ;
   - **placements de villes** : avec « B3 », 5,7 admissibles par plateau en moyenne (1 à 14), 48 placements différents sur 200 plateaux (8,3 et 47 avant) ; environ 63 % des candidats du générateur sont acceptés (rejets « villes_ports »), sans effet sur la réussite (100 %).
 - **Reste** : relecture, recette indépendante, versionneur ; l'ancien outil `outils/mesures-5x5.js` (`docs/35`) est historique ; prépresse des nouvelles tuiles (marges de 3,79 à 10,04 mm, `docs/55`) à faire contrôler à l'impression.
+
+## 6. Villes, campements et ponts (branche `connexions-5x5`, 2026-10-19)
+- **Fait** :
+  - campements : jeton Ø 30 mm à icône de feu de bois, siège Ø 30 mm aux coins, planche de 8 villes et 8 campements (`docs/65`) ;
+  - jetons recto-verso : 16 jetons, campement au recto, ville au verso, deux pages A4 en miroir (`docs/67`) ;
+  - décisions de `docs/18` : motif des 8 villes confirmé, pas de tuile centrale dédiée, piste des ponts, R3 assouplie sur les centrales 5×5, catalogue « P » à 30 tuiles, campements dans les deux formats, 4×4 à 7 villes inchangé.
+- **En cours** : catalogue 5×5 « P » (LC2 retiré, LC11 et LC12 ajoutées), R3 assouplie, générateur 5×5 à 8 villes fixes avec choix de la place des centrales, écran Plateau (jeton campement, textes restants, `DIAMETRE_CASE_JONCTION`). Détail dans `docs/4-architecture.md`, « Chantier en cours ».
+- **À faire ensuite** : testeur, relecteur, versionneur (numéro, étiquette, `CHANGELOG.md`), PR.
+- **Points à valider** :
+  - advisor prépresse : jeton campement, marge de 4,97 mm de LC12 (`docs/66`), recto-verso (`docs/67`) ;
+  - impression réelle des jetons en recto-verso (tolérance de décalage mesurée à environ 2,6 mm, `docs/67`) ;
+  - emporte-pièce Ø 30 mm conseillé pour les campements ;
+  - repères de coupe en croix, peut-être inutiles pour une coupe ronde ;
+  - rythme en génération libre : chaîne moyenne de 1,75 (B3) à 2,95 avec le catalogue « P12 » (`docs/66` § 4), à soumettre à l'utilisateur.
+- **Mesures** : sur 200 plateaux au motif fixe, écart de 3 cases respecté avec « P12 » (200 réussis) et avec « P » (200 réussis) ; le catalogue « P » ajoute LC6 et une LC3 de plus (`docs/66` § 3). Les tests qui figent la composition B3 et la règle R3 sont à mettre à jour (`docs/66` § 4).
