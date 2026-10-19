@@ -21,7 +21,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   'use strict';
 
   var RAYON_JONCTION = 15;        // aimantation d'un jeton (D10)
-  var NB_VILLES_PAR_FORMAT = { '4x4': 7, '5x5': 8 }; // villes de la composition par format (docs/18 ; 8 en 5×5 depuis les décisions du 2026-10-19)
+  var NB_VILLES_PAR_FORMAT = { '4x4': 7, '5x5': 8, 'hex19': 6 }; // villes de la composition par format (docs/18 ; 8 en 5×5 depuis les décisions du 2026-10-19)
   /** Villes visées du document (PM.graphe.nbVilles si chargé, sinon la table locale, identique). */
   function nbVillesDe(doc) {
     var id = M().formatDuDocument(doc).id;
@@ -40,9 +40,13 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   /** Zone visible du SVG (mm) : plateau de 0 à colonnes × COTE, marges pour les camps et les dimensions. */
   function vuePour(format) {
-    var F = leFormat(format), w = F.GRILLE.colonnes * F.COTE, h = F.GRILLE.lignes * F.COTE;
+    var F = leFormat(format);
+    if (estHex(F)) return { x: -F.PLATEAU.largeur / 2 - 40, y: -F.PLATEAU.hauteur / 2 - 52, w: F.PLATEAU.largeur + 80, h: F.PLATEAU.hauteur + 120 }; // hexagonal : plateau centré sur l'origine
+    var w = F.GRILLE.colonnes * F.COTE, h = F.GRILLE.lignes * F.COTE;
     return { x: -40, y: -52, w: w + 80, h: h + 120 };
   }
+  /** Format hexagonal (6 côtés, repère centré : l'origine est le centre du plateau) ? */
+  function estHex(F) { return !!F && F.nbCotes === 6; }
 
   // Valeurs du format 4×4, gardées pour l'API (les calculs passent par le format du document).
   var COTE = PM.geometrie.COTE;     // côté d'une cellule (mm)
@@ -95,6 +99,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function celluleSous(x, y, format) {
     if (typeof x !== 'number' || typeof y !== 'number' || !isFinite(x) || !isFinite(y)) return null;
     var F = leFormat(format), C = F.COTE;
+    if (estHex(F)) return celluleHexSous(x, y, F);
     var col = Math.floor(x / C), lig = Math.floor(y / C);
     if (col < 0 || col >= F.GRILLE.colonnes || lig < 0 || lig >= F.GRILLE.lignes) return null;
     var cx = col * C + C / 2, cy = lig * C + C / 2;
@@ -102,10 +107,36 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return { col: col, lig: lig };
   }
 
-  /** Jonction intérieure la plus proche d'un point (mm), si elle est à 15 mm au plus ; sinon null. */
+  var POLYGONES_HEX = Object.create(null); // polygones absolus des cellules hexagonales, par format
+  /** Polygones absolus (mm, repère centré) des 19 cellules du format hexagonal : [{ col, lig, pts }], calculés une fois. */
+  function polygonesHex(F) {
+    if (!POLYGONES_HEX[F.id]) POLYGONES_HEX[F.id] = F.cellules.map(function (c) { return { col: c.col, lig: c.lig, pts: F.formeCellule(c.col, c.lig) }; });
+    return POLYGONES_HEX[F.id];
+  }
+  function dansPolygone(x, y, pts) {
+    var dedans = false;
+    for (var i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      var a = pts[i], b = pts[j];
+      if ((a.y > y) !== (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) dedans = !dedans;
+    }
+    return dedans;
+  }
+  /** Cellule hexagonale sous un point (mm, repère centré) : la première dont le polygone le contient, sinon null (hors plateau). */
+  function celluleHexSous(x, y, F) {
+    var liste = polygonesHex(F);
+    for (var k = 0; k < liste.length; k++) if (dansPolygone(x, y, liste[k].pts)) return { col: liste[k].col, lig: liste[k].lig };
+    return null;
+  }
+
+  /** Jonction intérieure la plus proche d'un point (mm), si elle est à 15 mm au plus ; sinon null. Hexagonal : le siège le plus proche, { i: numéro, j: 0 }. */
   function jonctionSous(x, y, format) {
     if (typeof x !== 'number' || typeof y !== 'number' || !isFinite(x) || !isFinite(y)) return null;
     var F = leFormat(format), C = F.COTE;
+    if (estHex(F)) {
+      var sg = null, dmin = RAYON_JONCTION;
+      F.sieges.forEach(function (q) { var d = Math.hypot(x - q.x, y - q.y); if (d <= dmin) { dmin = d; sg = q; } });
+      return sg ? { i: sg.id, j: 0 } : null;
+    }
     var i = Math.round(x / C), j = Math.round(y / C);
     if (i < 1 || i > F.GRILLE.colonnes - 1 || j < 1 || j > F.GRILLE.lignes - 1) return null;
     if (Math.hypot(x - i * C, y - j * C) > RAYON_JONCTION) return null;
@@ -119,6 +150,13 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /** Cellules où le modèle peut être posé maintenant : [{col, lig, rot}]. */
   function cellulesCompatibles(doc, modeleId) {
     var res = [], F = formatDoc(doc);
+    if (estHex(F)) { // 19 cellules (la grille hexagonale n'est pas un rectangle)
+      F.cellules.forEach(function (c) {
+        var th = M().peutPoserTuile(doc, modeleId, c.col, c.lig);
+        if (th.ok) res.push({ col: c.col, lig: c.lig, rot: th.rot });
+      });
+      return res;
+    }
     for (var lig = 0; lig < F.GRILLE.lignes; lig++) {
       for (var col = 0; col < F.GRILLE.colonnes; col++) {
         var t = M().peutPoserTuile(doc, modeleId, col, lig);
@@ -141,7 +179,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * (bord ou coin sur le pourtour, 0 sinon). Pure, une seule étape d'historique. Lève une Error si refus.
    */
   function poserTuileTournee(doc, modeleId, col, lig, quarts) {
-    var q = quarts === null || quarts === undefined ? undefined : ((quarts % 4) + 4) % 4;
+    var nbc = formatDoc(doc).nbCotes || 4; // hexagonal : la rotation compte des pas de 60°
+    var q = quarts === null || quarts === undefined ? undefined : ((quarts % nbc) + nbc) % nbc;
     return M().poserTuile(doc, modeleId, col, lig, q);
   }
 
@@ -176,16 +215,20 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var t = M().tuileEn(doc, de.col, de.lig);
     if (!t) throw new Error('Aucune tuile dans cette cellule.');
     if (de.col === vers.col && de.lig === vers.lig) return M().clonerDocument(doc);
-    var sans = M().retirerTuile(doc, de.col, de.lig);
-    return poserTuileTournee(sans, t.modeleId, vers.col, vers.lig, t.rot);
+    var sans = M().retirerTuile(doc, de.col, de.lig), rot = t.rot, F = formatDoc(doc);
+    if (estHex(F)) { // hexagonal : un bord ou un coin déplacé sur le pourtour prend la rotation imposée de sa nouvelle cellule (sa forme l’exige) ; le carré garde la rotation
+      var m = M().modeleParId(doc, t.modeleId), g = M().gabaritCellule(vers.col, vers.lig, F), r = m && g && g !== 'centrale' && m.gabarit === g ? M().rotationDeduite(vers.col, vers.lig, g, F) : null;
+      if (r !== null && r !== undefined) rot = r;
+    }
+    return poserTuileTournee(sans, t.modeleId, vers.col, vers.lig, rot);
   }
 
   /** Raison courte pour laquelle la jonction (i, j) ne porte plus de ville dans `doc`. */
   function raisonCourteJonction(doc, i, j) {
-    var p = M().portsJonction(doc, i, j);
-    if (p.tuiles < 4) return 'la jonction (' + i + ',' + j + ') n\'a plus 4 tuiles';
+    var p = M().portsJonction(doc, i, j), hex = estHex(formatDoc(doc)), nom = hex ? 'le siège ' + i : 'la jonction (' + i + ',' + j + ')';
+    if (p.tuiles < (hex ? 3 : 4)) return nom + ' n\'a plus ' + (hex ? 3 : 4) + ' tuiles';
     var r = M().peutPoserJeton(doc, i, j).raison;
-    return 'la jonction (' + i + ',' + j + ') : ' + (r || 'jeton invalide').replace(/\.$/, '').toLowerCase();
+    return nom + ' : ' + (r || 'jeton invalide').replace(/\.$/, '').toLowerCase();
   }
 
   /**
@@ -248,6 +291,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /** Phrase après un clic sur la jonction (i, j) (pure) : ville posée ou retirée. */
   function messageJeton(apres, i, j) {
     var jt = apres.plateau.jetons.filter(function (x) { return x && x.i === i && x.j === j; })[0];
+    if (estHex(formatDoc(apres))) return { texte: jt ? 'Ville sur le siège ' + i + '.' : 'Ville retirée : le siège ' + i + ' redevient un campement.', niveau: 'info' };
     return { texte: jt ? 'Ville sur la jonction (' + i + ',' + j + ').' : 'Ville retirée : la jonction (' + i + ',' + j + ') redevient un campement.', niveau: 'info' };
   }
 
@@ -279,17 +323,21 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * (x, y) = point sur la frontière ou au coin ; (nx, ny) = direction vers l'intérieur de la tuile.
    */
   function alertesPlateau(doc) {
-    var res = [], F = formatDoc(doc), C = F.COTE;
+    var res = [], F = formatDoc(doc), C = F.COTE, hex = estHex(F);
+    // origine de la cellule : coin NO en carré, centre de la cellule en hexagonal (normales et bissectrices propres au format)
+    function origine(col, lig) { return hex ? F.positionCellule(col, lig) : { x: col * C, y: lig * C }; }
     M().raccordsMorts(doc).forEach(function (r) {
       if (r.raison === 'absent') return;
-      var p = F.pointRaccord(r.cote, r.pos), n = NORMALE[r.cote];
+      var p = F.pointRaccord(r.cote, r.pos), n = (hex ? F.NORMALE : NORMALE)[r.cote], o = origine(r.col, r.lig);
+      if (!o || !p || !n) return; // fichier hostile : tuile hors des 19 cellules (rien à dessiner, l’erreur hors_grille est signalée ailleurs)
       res.push({ type: 'raccord', col: r.col, lig: r.lig, cote: r.cote, pos: r.pos, raison: r.raison, mur: !!r.mur,
-        x: r.col * C + p.x, y: r.lig * C + p.y, nx: n.x, ny: n.y });
+        x: o.x + p.x, y: o.y + p.y, nx: n.x, ny: n.y });
     });
     M().portsVersPourtour(doc).forEach(function (p) {
-      var k = F.pointCoin(p.coin), b = BISSECTRICE[p.coin];
+      var k = F.pointCoin(p.coin), b = (hex ? F.BISSECTRICE : BISSECTRICE)[p.coin], o = origine(p.col, p.lig);
+      if (!o || !k || !b) return;
       res.push({ type: 'port', col: p.col, lig: p.lig, coin: p.coin, i: p.i, j: p.j,
-        x: p.col * C + k.x, y: p.lig * C + k.y, nx: b.x, ny: b.y });
+        x: o.x + k.x, y: o.y + k.y, nx: b.x, ny: b.y });
     });
     return res;
   }
@@ -302,6 +350,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function cibleSurbrillance(s, doc) {
     if (!s || typeof s !== 'object') return [];
     var F = formatDoc(doc), COTE = F.COTE;
+    if (estHex(F)) return cibleSurbrillanceHex(s, doc, F);
     function cellule(col, lig) { return { forme: 'rect', x: col * COTE, y: lig * COTE, w: COTE, h: COTE }; }
     function tuilesDuModele(id) {
       return doc.plateau.tuiles.filter(function (t) { return t && t.modeleId === id; }).map(function (t) { return cellule(t.col, t.lig); });
@@ -327,15 +376,159 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     }
   }
 
+  /** Surbrillance hexagonale : formes en mm (repère centré) ; une cellule est un polygone { forme: 'poly', pts } (sa forme réelle, pourtour à bord droit compris). */
+  function cibleSurbrillanceHex(s, doc, F) {
+    function cellule(col, lig) { var pts = F.estCellule(col, lig) ? F.formeCellule(col, lig) : null; return pts ? [{ forme: 'poly', pts: pts }] : []; }
+    function tuilesDuModele(id) {
+      var res = [];
+      doc.plateau.tuiles.forEach(function (t) { if (t && t.modeleId === id) res = res.concat(cellule(t.col, t.lig)); });
+      return res;
+    }
+    function centre(col, lig) { return F.estCellule(col, lig) ? F.positionCellule(col, lig) : null; }
+    switch (s.type) {
+      case 'tuile': return typeof s.col === 'number' ? cellule(s.col, s.lig) : [];
+      case 'raccord': {
+        var o = typeof s.col === 'number' ? centre(s.col, s.lig) : null;
+        if (!o) return [];
+        if (typeof s.cote !== 'number') return cellule(s.col, s.lig);
+        var p = F.pointRaccord(s.cote, s.pos || 0);
+        return [{ forme: 'cercle', x: o.x + p.x, y: o.y + p.y, r: 12 }];
+      }
+      case 'port': case 'coin': {
+        var oc = typeof s.col === 'number' ? centre(s.col, s.lig) : null;
+        if (!oc) return [];
+        var k = F.pointCoin(typeof s.coin === 'number' ? s.coin : s.id);
+        if (!k) return cellule(s.col, s.lig);
+        return [{ forme: 'cercle', x: oc.x + k.x, y: oc.y + k.y, r: 14 }];
+      }
+      case 'jonction': case 'jeton': {
+        var sg = typeof s.i === 'number' ? F.sieges[s.i] : null;
+        return sg ? [{ forme: 'cercle', x: sg.x, y: sg.y, r: 22 }] : [];
+      }
+      case 'case': case 'chemin': return tuilesDuModele(s.modeleId);
+      case 'modele': return tuilesDuModele(s.id);
+      default: return [];
+    }
+  }
+
   /* ------------------------------------------------------------------ */
   /* Dessin SVG (chaînes, sans DOM)                                      */
   /* ------------------------------------------------------------------ */
 
   /** Repère N d'une tuile (nord canonique du modèle, tourné de `rot`), coordonnées locales 0..COTE. */
   function repereNord(rot, F) {
-    var p = F.tournerPoint({ x: F.COTE / 2, y: 9 }, rot);
+    var p = F.tournerPoint(estHex(F) ? { x: 0, y: -(F.COTE - 9) } : { x: F.COTE / 2, y: 9 }, rot); // hexagonal : près du coin nord (repère centré)
     return '<g class="pm-assemblage-nord"><circle cx="' + arrondi(p.x) + '" cy="' + arrondi(p.y) + '" r="4.2"/>' +
       '<text x="' + arrondi(p.x) + '" y="' + arrondi(p.y + 2.2) + '" text-anchor="middle">N</text></g>';
+  }
+
+  /** Alertes visuelles (raccords et ports morts, murs voulus) du plateau : chaîne SVG, communes au carré et à l'hexagonal. */
+  function svgAlertes(doc, F) {
+    var s = [];
+    alertesPlateau(doc).forEach(function (a) {
+      var lg = a.type === 'raccord' ? F.LARGEUR_CHEMIN + 2 : 24;
+      var titre = a.type === 'port' ? 'Port de coin vers le bord du plateau (aucun campement ni aucune ville)'
+        : a.mur ? 'Raccord face à un mur voulu de la tuile voisine (information)'
+        : a.raison === 'vide' ? 'Raccord face au vide' : 'Raccord sans vis-à-vis';
+      var ax = a.x + a.nx * 5, ay = a.y + a.ny * 5; // triangle légèrement à l'intérieur
+      if (a.mur) { // information : un trait gris discret, ni triangle ni point d'exclamation
+        s.push('<g class="pm-assemblage-mur" data-alerte="mur"><path class="pm-assemblage-mur-trait" d="M' + arrondi(a.x) + ' ' + arrondi(a.y) + ' L' +
+          arrondi(a.x + a.nx * lg) + ' ' + arrondi(a.y + a.ny * lg) + '"/><title>' + echapper(titre) + '</title></g>');
+        return;
+      }
+      s.push('<g class="pm-assemblage-alerte" data-alerte="' + a.type + '">' +
+        '<path class="pm-assemblage-alerte-trait" d="M' + arrondi(a.x) + ' ' + arrondi(a.y) + ' L' + arrondi(a.x + a.nx * lg) + ' ' + arrondi(a.y + a.ny * lg) + '"/>' +
+        '<path class="pm-assemblage-alerte-triangle" d="M' + arrondi(ax) + ' ' + arrondi(ay - 9) + ' L' + arrondi(ax + 8) + ' ' + arrondi(ay + 5.5) +
+          ' L' + arrondi(ax - 8) + ' ' + arrondi(ay + 5.5) + ' Z"/>' +
+        '<text class="pm-assemblage-alerte-signe" x="' + arrondi(ax) + '" y="' + arrondi(ay + 4.2) + '" text-anchor="middle">!</text>' +
+        '<title>' + echapper(titre) + '</title></g>');
+    });
+    return s.join('');
+  }
+
+  function pointsPoly(pts, dx, dy) { return pts.map(function (p) { return arrondi(p.x - dx) + ',' + arrondi(p.y - dy); }).join(' '); }
+
+  /**
+   * SVG du plateau hexagonal (19 cellules, repère centré sur le centre du plateau) : cellules aux formes de `formeCellule` (pourtour à bord
+   * droit), sièges de jetons (ville, campement ou point), camps vert au nord et rouge au sud, rangée du milieu neutre. Mêmes attributs
+   * data-cellule / data-jonction que le carré (siège i : data-jonction="i,0").
+   */
+  function svgPlateauHex(doc, vue) {
+    var s = [], F = formatDoc(doc), PL = F.PLATEAU, V = vuePour(F), demiH = PL.hauteur / 2, demiL = PL.largeur / 2;
+    var dimensions = String(Math.round(PL.largeur) / 10).replace('.', ',') + ' × ' + String(Math.round(PL.hauteur) / 10).replace('.', ',') + ' cm';
+    s.push('<svg class="pm-assemblage-svg pm-assemblage-svg-hex" xmlns="http://www.w3.org/2000/svg" viewBox="' + arrondi(V.x) + ' ' + arrondi(V.y) + ' ' + arrondi(V.w) + ' ' + arrondi(V.h) +
+      '" role="group" aria-label="Plateau hexagonal de ' + F.cellules.length + ' tuiles, ' + dimensions + '">');
+    s.push('<text class="pm-assemblage-camp pm-assemblage-camp-j1" x="0" y="' + arrondi(-demiH - 26) + '" text-anchor="middle">Camp vert (nord)</text>');
+    s.push('<text class="pm-assemblage-camp pm-assemblage-camp-j2" x="0" y="' + arrondi(demiH + 32) + '" text-anchor="middle">Camp rouge (sud)</text>');
+    s.push('<text class="pm-assemblage-dimensions" x="0" y="' + arrondi(demiH + 56) + '" text-anchor="middle">' + dimensions + '</text>');
+    s.push('<polygon class="pm-assemblage-cadre" points="' + pointsPoly(F.contourPlateau(), 0, 0) + '"/>');
+    s.push('<g class="pm-assemblage-neutre" data-rangee-neutre="2"><text class="pm-assemblage-etiquette-neutre" x="' + arrondi(demiL + 4) + '" y="4">Neutre</text></g>');
+
+    F.cellules.forEach(function (c) {
+      var col = c.col, lig = c.lig, k = cle(col, lig), t = M().tuileEn(doc, col, lig), classes = ['pm-assemblage-cellule'];
+      var etiquette = etiquetteCellule(col, lig, F), camp = F.campCellule(col, lig) || 'neutre', nom;
+      classes.push(t ? 'pm-assemblage-occupee' : 'pm-assemblage-libre');
+      if (vue.compatibles) classes.push(vue.compatibles[k] ? 'pm-assemblage-compatible' : 'pm-assemblage-estompee');
+      if (vue.cible && vue.cible.col === col && vue.cible.lig === lig) classes.push('pm-assemblage-cible');
+      if (vue.clignote && vue.clignote.cellule === k) classes.push('pm-assemblage-clignote');
+      if (vue.selection && vue.selection.col === col && vue.selection.lig === lig) classes.push('pm-assemblage-selection');
+      var m = t ? M().modeleParId(doc, t.modeleId) : null, forme = pointsPoly(F.formeCellule(col, lig), c.x, c.y);
+      nom = t ? 'Tuile ' + t.modeleId + ' en (' + col + ',' + lig + '), R pour pivoter' : 'Cellule libre (' + col + ',' + lig + ') : ' + etiquette;
+      s.push('<g class="' + classes.join(' ') + '" data-cellule="' + k + '" data-cle="c:' + k + '" transform="translate(' + arrondi(c.x) + ' ' + arrondi(c.y) + ')"' +
+        ' tabindex="0" role="button" aria-label="' + echapper(nom) + '">');
+      if (t) {
+        if (m) {
+          s.push(PM.rendu.contenuTuile(m, { rot: t.rot, camp: camp, format: F }));
+          s.push(repereNord(t.rot, F));
+        } else {
+          s.push('<polygon class="pm-assemblage-absent" points="' + forme + '"/><text class="pm-assemblage-etiquette pm-assemblage-etiquette-hex" x="0" y="4" text-anchor="middle">Modèle absent</text>');
+        }
+      } else {
+        var morceaux = (etiquette || '').split(', ');
+        s.push('<polygon class="pm-assemblage-silhouette pm-assemblage-silhouette-' + camp + '" points="' + forme + '"/>' +
+          '<text class="pm-assemblage-etiquette pm-assemblage-etiquette-hex" x="0" y="' + (morceaux.length > 1 ? -2 : 4) + '" text-anchor="middle">' + echapper(morceaux[0]) + '</text>' +
+          (morceaux.length > 1 ? '<text class="pm-assemblage-etiquette pm-assemblage-etiquette-hex" x="0" y="11" text-anchor="middle">' + echapper(morceaux.slice(1).join(', ')) + '</text>' : ''));
+      }
+      s.push('<polygon class="pm-assemblage-zone" points="' + forme + '"><title>' + echapper(nom) + '</title></polygon>');
+      s.push('</g>');
+    });
+
+    s.push(svgAlertes(doc, F));
+
+    // Sièges : une ville, un campement (3 tuiles posées) ou un point
+    F.sieges.forEach(function (sg) {
+      var i = sg.id, kj = cle(i, 0), cx = sg.x, cy = sg.y;
+      var jeton = doc.plateau.jetons.filter(function (x) { return x && x.i === i && x.j === 0; })[0];
+      var test = jeton ? { ok: true } : M().peutPoserJeton(doc, i, 0);
+      var campement = !jeton && M().portsJonction(doc, i, 0).tuiles >= 3;
+      var nomJonction = 'Siège ' + i + ' : ';
+      var cl = ['pm-assemblage-jonction', 'pm-assemblage-siege'], info;
+      if (jeton) {
+        cl.push('pm-assemblage-jeton');
+        info = 'Ville sur le siège ' + i + ' : clic pour la retirer (le siège redevient un campement)';
+      } else if (!test.ok) {
+        cl.push('pm-assemblage-refusee');
+        info = nomJonction + test.raison;
+      } else {
+        cl.push('pm-assemblage-disponible');
+        info = (campement ? 'Campement, siège ' + i : 'Siège ' + i) + ' : clic pour y poser une ville';
+      }
+      if (campement) cl.push('pm-assemblage-avec-campement');
+      if (vue.clignote && vue.clignote.jonction === kj) cl.push('pm-assemblage-clignote');
+      s.push('<g class="' + cl.join(' ') + '" data-jonction="' + kj + '" data-cle="j:' + kj + '" tabindex="0" role="button" aria-label="' + echapper(info) + '">');
+      if (jeton) s.push(PM.rendu.contenuJeton(jeton.type, cx, cy, F));
+      else if (campement) s.push('<g class="pm-assemblage-campement">' + PM.rendu.contenuJeton('campement', cx, cy, F) + '</g>');
+      else s.push('<circle class="pm-assemblage-point" cx="' + arrondi(cx) + '" cy="' + arrondi(cy) + '" r="' + (test.ok ? 9 : 6) + '"/>');
+      s.push('<circle class="pm-assemblage-zone-jonction" cx="' + arrondi(cx) + '" cy="' + arrondi(cy) + '" r="' + RAYON_JONCTION + '"><title>' + echapper(info) + '</title></circle>');
+      s.push('</g>');
+    });
+
+    cibleSurbrillance(vue.surbrillance, doc).forEach(function (f) {
+      s.push(f.forme === 'poly' ? '<polygon class="pm-assemblage-surbrillance" points="' + pointsPoly(f.pts, 0, 0) + '"/>'
+        : '<circle class="pm-assemblage-surbrillance" cx="' + arrondi(f.x) + '" cy="' + arrondi(f.y) + '" r="' + f.r + '"/>');
+    });
+    s.push('</svg>');
+    return s.join('');
   }
 
   /**
@@ -346,6 +539,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function svgPlateau(doc, vue) {
     verifierDocument(doc);
     vue = vue || {};
+    if (estHex(formatDoc(doc))) return svgPlateauHex(doc, vue);
     var s = [];
     var F = formatDoc(doc), COTE = F.COTE, NC = F.GRILLE.colonnes, NL = F.GRILLE.lignes, V = vuePour(F);
     var larg = NC * COTE, haut = NL * COTE, milieu = larg / 2, demi = COTE / 2;
@@ -400,24 +594,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     }
 
     // Alertes (raccords et ports morts)
-    alertesPlateau(doc).forEach(function (a) {
-      var lg = a.type === 'raccord' ? F.LARGEUR_CHEMIN + 2 : 24;
-      var titre = a.type === 'port' ? 'Port de coin vers le bord du plateau (aucun campement ni aucune ville)'
-        : a.mur ? 'Raccord face à un mur voulu de la tuile voisine (information)'
-        : a.raison === 'vide' ? 'Raccord face au vide' : 'Raccord sans vis-à-vis';
-      var ax = a.x + a.nx * 5, ay = a.y + a.ny * 5; // triangle légèrement à l'intérieur
-      if (a.mur) { // information : un trait gris discret, ni triangle ni point d'exclamation
-        s.push('<g class="pm-assemblage-mur" data-alerte="mur"><path class="pm-assemblage-mur-trait" d="M' + arrondi(a.x) + ' ' + arrondi(a.y) + ' L' +
-          arrondi(a.x + a.nx * lg) + ' ' + arrondi(a.y + a.ny * lg) + '"/><title>' + echapper(titre) + '</title></g>');
-        return;
-      }
-      s.push('<g class="pm-assemblage-alerte" data-alerte="' + a.type + '">' +
-        '<path class="pm-assemblage-alerte-trait" d="M' + arrondi(a.x) + ' ' + arrondi(a.y) + ' L' + arrondi(a.x + a.nx * lg) + ' ' + arrondi(a.y + a.ny * lg) + '"/>' +
-        '<path class="pm-assemblage-alerte-triangle" d="M' + arrondi(ax) + ' ' + arrondi(ay - 9) + ' L' + arrondi(ax + 8) + ' ' + arrondi(ay + 5.5) +
-          ' L' + arrondi(ax - 8) + ' ' + arrondi(ay + 5.5) + ' Z"/>' +
-        '<text class="pm-assemblage-alerte-signe" x="' + arrondi(ax) + '" y="' + arrondi(ay + 4.2) + '" text-anchor="middle">!</text>' +
-        '<title>' + echapper(titre) + '</title></g>');
-    });
+    s.push(svgAlertes(doc, F));
 
     // Jonctions et jetons
     for (var j = 1; j < NL; j++) {
@@ -463,6 +640,15 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /* ------------------------------------------------------------------ */
   /* Montage (DOM)                                                       */
   /* ------------------------------------------------------------------ */
+
+  /** Côté de la boîte carrée qui contient une tuile : COTE en carré, 2 × COTE (diamètre de l'hexagone) en hexagonal. */
+  function tailleTuile(F) { return estHex(F) ? 2 * rayonMaxHex(F) : F.COTE; }
+  /** Rayon (mm, entier) du plus petit cercle centré sur l’origine de la tuile qui contient toutes les formes hexagonales (hexagone, bord, coin : 72 mm). */
+  function rayonMaxHex(F) {
+    var r = 0;
+    ['centrale', 'bord', 'coin'].forEach(function (g) { F.forme(g).forEach(function (p) { r = Math.max(r, Math.hypot(p.x, p.y)); }); });
+    return Math.ceil(r);
+  }
 
   var instance = null; // instance montée (pour le glissement lancé par la bibliothèque)
 
@@ -523,7 +709,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       if (ui.aPoser) consigne.textContent = 'Pose de « ' + ui.aPoser + ' » : cliquez une cellule éclairée (Échap pour annuler).';
       else if (t) consigne.textContent = 'Tuile (' + t.col + ',' + t.lig + ') sélectionnée : ' +
         'R ou clic pour pivoter, Suppr ou clic droit pour retirer, glisser pour déplacer.';
-      else consigne.textContent = 'Clic sur une jonction : campement ou ville. Clic droit sur une tuile : la retirer.';
+      else consigne.textContent = estHex(formatDoc(doc)) ? 'Clic sur un siège : campement ou ville. R : tourner de 60°. Clic droit sur une tuile : la retirer.'
+        : 'Clic sur une jonction : campement ou ville. Clic droit sur une tuile : la retirer.';
     }
 
     function faireClignoter(c) {
@@ -577,7 +764,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       var doc = etat.doc(), t = selection && M().tuileEn(doc, selection.col, selection.lig);
       if (!t) return;
       appliquerAvecEffets(function (d) { return M().tournerTuile(d, t.col, t.lig, 1); }, 'rotation',
-        'Tuile (' + t.col + ',' + t.lig + ') pivotée d\'un quart de tour.');
+        'Tuile (' + t.col + ',' + t.lig + ') pivotée ' + (estHex(formatDoc(doc)) ? 'd\'un pas de 60°.' : 'd\'un quart de tour.'));
     }
 
     function retirerSelection() {
@@ -635,16 +822,16 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     function dessinerFantome() {
       if (!glissement) { fantome.hidden = true; fantome.innerHTML = ''; return; }
       var m = M().modeleParId(etat.doc(), glissement.modeleId), F = formatCourant();
-      var taille = F.COTE * cadrage(rectSvg(), vuePour(F)).echelle;
+      var cote = tailleTuile(F), taille = cote * cadrage(rectSvg(), vuePour(F)).echelle;
       fantome.style.width = taille + 'px';
       fantome.style.height = taille + 'px';
-      fantome.innerHTML = '<svg viewBox="0 0 ' + F.COTE + ' ' + F.COTE + '" width="100%" height="100%" aria-hidden="true">' +
+      fantome.innerHTML = '<svg viewBox="' + (estHex(F) ? (-cote / 2) + ' ' + (-cote / 2) : '0 0') + ' ' + cote + ' ' + cote + '" width="100%" height="100%" aria-hidden="true">' +
         PM.rendu.contenuTuile(m, { rot: glissement.rot || 0, format: F }) + '</svg>';
       fantome.hidden = false;
     }
 
     function placerFantome(ev) {
-      var F = formatCourant(), taille = F.COTE * cadrage(rectSvg(), vuePour(F)).echelle;
+      var F = formatCourant(), taille = tailleTuile(F) * cadrage(rectSvg(), vuePour(F)).echelle;
       fantome.style.transform = 'translate(' + (ev.clientX - taille / 2) + 'px,' + (ev.clientY - taille / 2) + 'px)';
     }
 
@@ -762,7 +949,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       var k = ev.key;
       if (k === 'r' || k === 'R') {
         if (glissement) {
-          glissement.rot = ((glissement.rot || 0) + 1) % 4;
+          glissement.rot = ((glissement.rot || 0) + 1) % (formatCourant().nbCotes || 4);
           dessinerFantome();
           ev.preventDefault();
         } else if (selection) { pivoterSelection(); ev.preventDefault(); }
@@ -801,6 +988,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     celluleSous: celluleSous,
     jonctionSous: jonctionSous,
     cellulesCompatibles: cellulesCompatibles,
+    tailleTuile: tailleTuile,
     cellulesCompatiblesDeplacement: cellulesCompatiblesDeplacement,
     poserTuileTournee: poserTuileTournee,
     testerDeplacement: testerDeplacement,

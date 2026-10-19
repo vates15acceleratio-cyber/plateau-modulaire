@@ -25,7 +25,7 @@
     </nav>
     <span id="indicateur-grille" class="pm-grille" title="Format de grille de ce document"></span>
     <div class="pm-actions">
-      <button type="button" id="btn-nouveau" title="Nouveau plateau : choisir la grille (4×4 ou 5×5)">Nouveau</button>
+      <button type="button" id="btn-nouveau" title="Nouveau plateau : choisir la grille (4×4, 5×5 ou hexagonal)">Nouveau</button>
       <button type="button" id="btn-annuler" title="Annuler (Ctrl+Z)">↶ Annuler</button>
       <button type="button" id="btn-retablir" title="Rétablir (Ctrl+Y)">Rétablir ↷</button>
       <button type="button" id="btn-ouvrir" title="Ouvrir un fichier JSON">Ouvrir</button>
@@ -97,6 +97,7 @@
   <script src="../src/graphe.js"></script>
   <script src="../src/equilibre.js"></script>
   <script src="../src/generateur.js"></script>
+  <script src="../src/export.js"></script>
   <script src="../src/controles.js"></script>
   <script src="../src/bibliotheque.js"></script>
   <script src="../src/assemblage.js"></script>
@@ -855,7 +856,7 @@
         ctrl('indicateur de grille en 4×4', $('indicateur-grille').textContent === 'Grille 4×4 · 48 × 48 cm', $('indicateur-grille').textContent);
         $('btn-nouveau').click();
         var cont = $('dialogue-contenu'), radios = cont.querySelectorAll('input[name="pm-nouveau-grille"]');
-        ctrl('Nouveau : la boîte de dialogue s\'ouvre avec deux choix, 4×4 coché', dialogueOuvert() && radios.length === 2 && radios[0].value === '4x4' && radios[0].checked && !radios[1].checked);
+        ctrl('Nouveau : la boîte de dialogue s\'ouvre avec trois choix (4×4, 5×5, hexagonal), 4×4 coché', dialogueOuvert() && radios.length === 3 && radios[0].value === '4x4' && radios[0].checked && !radios[1].checked && !radios[2].checked);
         ctrl('Nouveau : dimensions et tuiles de chaque grille', /48 × 48 cm, tuiles de 12 cm/.test(cont.textContent) && /50 × 50 cm, tuiles de 10 cm/.test(cont.textContent), cont.textContent);
         ctrl('Nouveau : avertissement de remplacement et Ctrl+Z', /seront remplacés/.test(cont.textContent) && /Ctrl\+Z/.test(cont.textContent));
         // catalogue qui ne connaît pas encore le 5×5 : il renvoie du 4×4
@@ -1449,11 +1450,229 @@
       });
     }
 
+    /* ============================================================== */
+    /** S12 : format hexagonal (lot 6, docs/72 à 81) : Nouveau → Hexagonal (19 tuiles), pose par glisser-déposer et par clic, rotation par 60° (R),
+     *  rotation du pourtour, clic droit, Plateau aléatoire (boîte : graine, Générer, Appliquer, Ctrl+Z), sièges (ville ↔ campement, 7e ville),
+     *  Orienter les tuiles (Ctrl+Z / Ctrl+Y), Placer les villes, export, sauvegarde, éditeur de tuile hexagonal. */
+    function s12_hexagonal() {
+      titre('S12 format hexagonal (19 tuiles) : Nouveau, pose, rotation, Plateau aléatoire, sièges, Orienter, Placer les villes, export, éditeur');
+      var FH = G.format('hex19');
+      function dialogueOuvert() { return $('dialogue').open; }
+      function pc(c) { return ecranMm(c.x, c.y); }
+      function glisserHex(id, col, lig, pas) {
+        var img = document.querySelector('.pm-biblio-image[data-glisser="' + id + '"]');
+        if (!img) return { demarre: false };
+        var r = img.getBoundingClientRect(), x0 = r.left + r.width / 2, y0 = r.top + r.height / 2;
+        ptr('pointerdown', img, x0, y0);
+        ptr('pointermove', document, x0 + 12, y0);
+        var demarre = !!document.querySelector('.pm-assemblage-glisse');
+        var p = pc(FH.cellule(col, lig));
+        ptr('pointermove', document, p.x, p.y);
+        for (var k = 0; k < (pas || 0); k++) touche('r');
+        ptr('pointerup', document, p.x, p.y);
+        return { demarre: demarre };
+      }
+      function cliquerHex(col, lig) {
+        var z = document.querySelector('[data-cellule="' + col + ',' + lig + '"] .pm-assemblage-zone'), p = pc(FH.cellule(col, lig));
+        ptr('pointerdown', z, p.x, p.y); ptr('pointerup', document, p.x, p.y);
+      }
+      function cliquerSiege(i) {
+        var z = document.querySelector('[data-jonction="' + i + ',0"] .pm-assemblage-zone-jonction'), p = pc(FH.sieges[i]);
+        ptr('pointerdown', z, p.x, p.y); ptr('pointerup', document, p.x, p.y);
+      }
+      function clicDroit(col, lig) {
+        var p = pc(FH.cellule(col, lig)), z = document.querySelector('[data-cellule="' + col + ',' + lig + '"] .pm-assemblage-zone');
+        z.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: p.x, clientY: p.y }));
+      }
+      function bouton(texte) { return Array.prototype.filter.call(document.querySelectorAll('#controles button'), function (b) { return b.textContent === texte; })[0]; }
+      function boutonDans(zone, texte) { return Array.prototype.filter.call(zone.querySelectorAll('button'), function (b) { return b.textContent.indexOf(texte) === 0; })[0]; }
+      function groupes() { return Array.prototype.map.call(document.querySelectorAll('#controles .pm-controles-sommaire-libelle'), function (e) { return e.textContent; }); }
+      function groupe(libelle) {
+        var s = Array.prototype.filter.call(document.querySelectorAll('#controles .pm-controles-sommaire'), function (e) { return e.querySelector('.pm-controles-sommaire-libelle').textContent === libelle; })[0];
+        return s ? Number(s.querySelector('.pm-controles-nombre').textContent) : 0;
+      }
+      function tuileHex(col, lig) { return M.tuileEn(etat.doc(), col, lig); }
+      var centre0 = FH.cellules.filter(function (c) { return c.role === 'centre'; })[0];
+      var nordB = FH.cellules.filter(function (c) { return c.role === 'bord' && c.lig === 0; })[0];
+      var propre = null;
+
+      /* --- Nouveau → Hexagonal --- */
+      reset(docExemples('4x4'));
+      $('btn-nouveau').click();
+      var cont = $('dialogue-contenu'), radios = cont.querySelectorAll('input[name="pm-nouveau-grille"]');
+      ctrl('Nouveau : trois choix (4×4, 5×5, hex19), 4×4 coché', dialogueOuvert() && radios.length === 3 && radios[0].value === '4x4' && radios[1].value === '5x5' && radios[2].value === 'hex19' && radios[0].checked, radios.length);
+      ctrl('Nouveau : « Hexagonal (19 tuiles) », dimensions, tuiles hexagonales de 5,4 cm de côté, rangée centrale neutre',
+        /Hexagonal \(19 tuiles\)/.test(cont.textContent) && /49,9 × 43,2 cm, tuiles hexagonales de 5,4 cm de côté, rangée centrale neutre/.test(cont.textContent), cont.textContent);
+      radios[2].checked = true;
+      document.querySelector('#dialogue-contenu .pm-nouveau-creer').click();
+      ctrl('Créer hexagonal : boîte fermée, document hex19 sans tuile', !dialogueOuvert() && etat.doc().grille === 'hex19' && nbTuiles() === 0);
+      ctrl('indicateur de grille hexagonal', $('indicateur-grille').textContent === 'Grille Hexagonal (19 tuiles) · 49,9 × 43,2 cm', $('indicateur-grille').textContent);
+      ctrl('plateau hexagonal : 19 cellules, 24 sièges, camps nord / sud, aucun attribut style',
+        document.querySelectorAll('[data-cellule]').length === 19 && document.querySelectorAll('[data-jonction]').length === 24 &&
+        /Camp vert \(nord\)/.test($('assemblage').textContent) && /Camp rouge \(sud\)/.test($('assemblage').textContent) && !document.querySelector('#assemblage .pm-assemblage-scene [style]'));
+      ctrl('bibliothèque hexagonale : 4 vignettes HC2, HC3, HB1, HK1', document.querySelectorAll('.pm-biblio-vignette').length === 4 && ['HC2', 'HC3', 'HB1', 'HK1'].every(function (id) { return !!document.querySelector('[data-vignette="' + id + '"]'); }));
+      ctrl('vignettes hexagonales : la boîte (viewBox) contient toute la forme du gabarit, coin et bord compris', ['HC2', 'HB1', 'HK1'].every(function (id) {
+        var m = M.modeleParId(etat.doc(), id), vb = document.querySelector('[data-vignette="' + id + '"] svg').getAttribute('viewBox').split(' ').map(Number);
+        return FH.forme(m.gabarit).every(function (p) { return p.x >= vb[0] && p.x <= vb[0] + vb[2] && p.y >= vb[1] && p.y <= vb[1] + vb[3]; });
+      }));
+      ctrl('compteurs hexagonaux : Villes 0 / 6, Tuiles posées 0 / 19, Apparitions 0 / 5', (function () { var c = compteurs(); return c['Villes'].v === '0 / 6' && c['Tuiles posées'].v === '0 / 19' && c['Apparitions vert'].v === '0 / 5' && c['Apparitions rouge'].v === '0 / 5'; })(), J(compteurs()));
+      ctrl('compteur « Villes posées 0/6 » du plateau', /Villes posées 0\/6/.test($('assemblage').textContent), $('assemblage').textContent.slice(0, 60));
+      ctrl('« Orienter les tuiles » visible en hexagonal', !!bouton('Orienter les tuiles') && !bouton('Orienter les tuiles').closest('li').hidden);
+
+      /* --- pose : glisser-déposer, rotation par 60°, clic --- */
+      var g1 = glisserHex('HC2', centre0.col, centre0.lig, 2);
+      ctrl('glisser-déposer d’une centrale au centre, R×2 pendant le glissement : posée avec la rotation 2', g1.demarre && nbTuiles() === 1 && tuileHex(centre0.col, centre0.lig).rot === 2, nbTuiles() + ' ' + msg());
+      touche('r');
+      ctrl('R sur la tuile sélectionnée : +60° (rotation 3), message « pas de 60° »', tuileHex(centre0.col, centre0.lig).rot === 3 && /pas de 60°/.test(msg()), msg());
+      for (var k = 0; k < 3; k++) touche('r');
+      ctrl('six pas de 60° ramènent la rotation d’origine (0)', tuileHex(centre0.col, centre0.lig).rot === 0, tuileHex(centre0.col, centre0.lig).rot);
+      var couronne0 = FH.cellules.filter(function (c) { return c.role === 'couronne'; })[0];
+      var refus = glisserHex('HK1', couronne0.col, couronne0.lig, 0);
+      ctrl('un coin lâché sur une cellule intérieure est refusé avec la phrase du rôle', refus.demarre && nbTuiles() === 1 && niveau() === 'erreur' && /coin/.test(msg()), msg());
+      document.querySelector('.pm-biblio-vignette[data-vignette="HB1"] [data-action="armer"]').click();
+      ctrl('clic sur une vignette : cellules du pourtour éclairées (6 compatibles)', document.querySelectorAll('.pm-assemblage-compatible').length === 6 && document.querySelectorAll('.pm-assemblage-estompee').length === 13, document.querySelectorAll('.pm-assemblage-compatible').length);
+      cliquerHex(nordB.col, nordB.lig);
+      ctrl('clic sur une cellule du bord : bord posé avec la rotation imposée du pourtour', nbTuiles() === 2 && tuileHex(nordB.col, nordB.lig).rot === FH.rotationImposee(nordB.col, nordB.lig), J(etat.doc().plateau.tuiles));
+      ctrl('aucune alerte de rotation sur ce bord', groupe('Tuiles du pourtour mal tournées') === 0, J(groupes()));
+      touche('r');
+      ctrl('bord tourné de 60° : alerte « Tuiles du pourtour mal tournées » (rotation_pourtour) affichée', groupe('Tuiles du pourtour mal tournées') === 1, J(groupes()));
+      var al = Array.prototype.filter.call(document.querySelectorAll('#controles .pm-controles-alerte'), function (b) { return /pas de 60°/.test(b.textContent); })[0];
+      ctrl('le message de l’alerte nomme la rotation attendue', !!al && new RegExp('tournée de ' + FH.rotationImposee(nordB.col, nordB.lig) + ' pas de 60').test(al.textContent), al && al.textContent);
+      al.click();
+      ctrl('clic sur l’alerte : la tuile est mise en surbrillance (polygone)', !!document.querySelector('#assemblage polygon.pm-assemblage-surbrillance'));
+      clicDroit(nordB.col, nordB.lig);
+      ctrl('clic droit : le bord est retiré, l’alerte disparaît', nbTuiles() === 1 && !tuileHex(nordB.col, nordB.lig) && groupe('Tuiles du pourtour mal tournées') === 0, nbTuiles());
+      ctrlZ();
+      ctrl('Ctrl+Z rend le bord retiré', nbTuiles() === 2);
+
+      /* --- déplacer un bord entre deux cellules du pourtour : la rotation imposée de la cellule d’arrivée est appliquée --- */
+      var sudB = FH.cellules.filter(function (c) { return c.role === 'bord' && c.lig === 4; })[0];
+      var vers = document.querySelector('[data-cellule="' + sudB.col + ',' + sudB.lig + '"] .pm-assemblage-zone');
+      var pd = pc(FH.cellule(nordB.col, nordB.lig)), pa = pc(sudB);
+      ptr('pointerdown', document.querySelector('[data-cellule="' + nordB.col + ',' + nordB.lig + '"] .pm-assemblage-zone'), pd.x, pd.y, 11);
+      ptr('pointermove', document, pd.x + 12, pd.y + 6, 11);
+      ptr('pointermove', document, pa.x, pa.y, 11);
+      ptr('pointerup', document, pa.x, pa.y, 11);
+      ctrl('glisser un bord du nord au sud : déplacé, tourné comme sa nouvelle cellule (aucune alerte de rotation)',
+        !!tuileHex(sudB.col, sudB.lig) && !tuileHex(nordB.col, nordB.lig) && tuileHex(sudB.col, sudB.lig).rot === FH.rotationImposee(sudB.col, sudB.lig) && groupe('Tuiles du pourtour mal tournées') === 0,
+        J(etat.doc().plateau.tuiles) + ' ' + msg());
+      void vers;
+
+      /* --- Plateau aléatoire par la boîte de dialogue (graine, Générer, Appliquer, Ctrl+Z) --- */
+      reset(PM.catalogue.nouveauDocument('hex19'));
+      var bg = bouton('Plateau aléatoire');
+      ctrl('panneau : « Plateau aléatoire » existe et est actif en hexagonal', !!bg && !bg.disabled);
+      bg.click();
+      var dlg = $('dialogue-contenu');
+      ctrl('boîte « Plateau aléatoire » : graine, Générer, case « Dispositions variées », Appliquer désactivé',
+        dialogueOuvert() && !!dlg.querySelector('.pm-generateur-graine') && !!boutonDans(dlg, 'Générer') && /dispositions variées/i.test(dlg.textContent) && !!boutonDans(dlg, 'Appliquer') && boutonDans(dlg, 'Appliquer').disabled, dlg.textContent.slice(0, 160));
+      dlg.querySelector('.pm-generateur-graine').value = 'recette-hex-ui';
+      boutonDans(dlg, 'Générer').click();
+      return attendre(80).then(function () {
+        var d2 = $('dialogue-contenu'), res = d2.querySelector('.pm-generateur-resume');
+        ctrl('Générer : aperçu et résumé affichés (graine rendue, 6 villes), Appliquer actif, plateau intact',
+          !!res && /recette-hex-ui/.test(res.textContent) && /6 villes/.test(res.textContent) && !!d2.querySelector('.pm-generateur-apercu svg') && !boutonDans(d2, 'Appliquer').disabled && nbTuiles() === 0, res && res.textContent.slice(0, 160));
+        boutonDans(d2, 'Appliquer').click();
+        ctrl('Appliquer : boîte fermée, 19 tuiles, 6 villes, message avec la graine', !dialogueOuvert() && nbTuiles() === 19 && etat.doc().plateau.jetons.length === 6 && /Plateau aléatoire appliqué \(graine recette-hex-ui\)/.test(msg()), nbTuiles() + ' ' + msg());
+        ctrl('plateau généré : « Villes posées 6/6 », aucune erreur ni alerte, plateau complet',
+          /Villes posées 6\/6/.test($('assemblage').textContent) && groupes().length === 0 && /Plateau complet/.test(pastille()), pastille() + ' ' + J(groupes()));
+        ctrl('plateau généré : compteurs au vert (6 / 6, 19 / 19, 5 / 5)', (function () { var c = compteurs(); return c['Villes'].ok && c['Tuiles posées'].ok && c['Apparitions vert'].ok && c['Apparitions rouge'].ok && c['Villes'].v === '6 / 6'; })(), J(compteurs()));
+        ctrl('plateau généré : 18 campements dessinés et 6 villes', document.querySelectorAll('.pm-assemblage-avec-campement').length === 18 && document.querySelectorAll('.pm-assemblage-jeton').length === 6, document.querySelectorAll('.pm-assemblage-avec-campement').length);
+        ctrlZ();
+        ctrl('Ctrl+Z annule le plateau appliqué en une étape (plateau vide)', nbTuiles() === 0 && etat.doc().plateau.jetons.length === 0);
+        ctrlY();
+        ctrl('Ctrl+Y le rétablit', nbTuiles() === 19 && etat.doc().plateau.jetons.length === 6);
+        propre = docJ();
+
+        /* --- sièges : ville ↔ campement, 7e ville --- */
+        var libre = FH.sieges.filter(function (s) { return !etat.doc().plateau.jetons.some(function (j) { return j.i === s.id; }); })[0].id;
+        cliquerSiege(libre);
+        ctrl('clic sur un campement : ville posée (7 villes), erreur « Trop de villes » affichée une seule fois',
+          etat.doc().plateau.jetons.length === 7 && groupe('Trop de villes (6 au plus)') === 1 && groupes().filter(function (g) { return /Trop de villes/.test(g); }).length === 1 && niveau() !== 'erreur', J(groupes()) + ' ' + msg());
+        cliquerSiege(libre);
+        ctrl('second clic : ville retirée, le siège redevient un campement', etat.doc().plateau.jetons.length === 6 && groupe('Trop de villes (6 au plus)') === 0 && /redevient un campement/.test(msg()), msg());
+
+        /* --- Orienter les tuiles --- */
+        var casse = JSON.parse(propre);
+        casse.plateau.tuiles.forEach(function (t) { if (FH.cellule(t.col, t.lig).gabarit === 'centrale') t.rot = (t.rot + 1) % 6; });
+        etat.appliquer(function () { return casse; }, 'rotations dérangées (recette)');
+        var derange = docJ();
+        bouton('Orienter les tuiles').click();
+        ctrl('Orienter les tuiles : des tuiles tournées pour tenir l’écart, avec S dans le message', docJ() !== derange && /tuile\(s\) tournée\(s\) pour tenir l’écart entre les villes \(S = \d/.test(msg()) && niveau() === 'info', msg());
+        ctrl('après Orienter : aucune alerte « Villes trop proches »', groupe('Villes trop proches') === 0 && PM.graphe.villesProches(PM.graphe.construire(etat.doc(), { villesTraversables: false })).length === 0, J(groupes()));
+        ctrlZ();
+        ctrl('Ctrl+Z (une seule étape) rend les rotations dérangées', docJ() === derange, msg());
+        ctrlY();
+        ctrl('Ctrl+Y refait l’orientation', docJ() !== derange);
+        ctrlZ();
+        // refus expliqué : plateau sans tuile intérieure
+        reset(PM.catalogue.nouveauDocument('hex19'));
+        var avantRefus = docJ(), annulableAvant = etat.peutAnnuler();
+        bouton('Orienter les tuiles').click();
+        ctrl('Orienter sur un plateau vide : refus expliqué en une phrase dans la barre d’état, document et historique intacts',
+          niveau() === 'alerte' && /Aucune tuile intérieure/.test(msg()) && uneSeulePhrase(msg()) && docJ() === avantRefus && etat.peutAnnuler() === annulableAvant, msg());
+
+        /* --- Placer les villes --- */
+        etat.remplacer(JSON.parse(propre));
+        var sansVilles = JSON.parse(propre);
+        sansVilles.plateau.jetons = [];
+        etat.appliquer(function () { return sansVilles; }, 'villes retirées (recette)');
+        ctrl('villes retirées : Villes 0 / 6', compteurs()['Villes'].v === '0 / 6');
+        ctrl('« Placer les villes » : aide hexagonale (3 par camp, trèfle)', /3 par camp/.test(bouton('Placer les villes').title) && /trèfle/.test(bouton('Placer les villes').title), bouton('Placer les villes').title);
+        bouton('Placer les villes').click();
+        ctrl('Placer les villes : 6 villes posées en trèfle, message, aucune alerte de villes proches',
+          etat.doc().plateau.jetons.length === 6 && /6 villes placées en trèfle/.test(msg()) && groupe('Villes trop proches') === 0, msg());
+        ctrlZ();
+        ctrl('Ctrl+Z retire les 6 villes en une étape', etat.doc().plateau.jetons.length === 0);
+
+        /* --- export --- */
+        etat.remplacer(JSON.parse(propre));
+        $('btn-exporter').click();
+        var resume = document.querySelector('#dialogue-contenu .pm-export-resume');
+        ctrl('export hexagonal : la boîte s’ouvre avec un résumé de feuilles (A3, pièces jointives)', dialogueOuvert() && !!resume && /feuille\(s\)/.test(resume.textContent), resume && resume.textContent);
+        var img = document.querySelector('#dialogue-contenu img.pm-export-apercu');
+        ctrl('export hexagonal : aperçu en image (blob)', !!img && /^blob:/.test(img.src), img && img.src.slice(0, 20));
+        PM.dialogue.fermer();
+
+        /* --- sauvegarde : aller-retour JSON --- */
+        var texte = PM.sauvegarde.versJSON(etat.doc()), lu = PM.sauvegarde.depuisJSON(texte);
+        ctrl('sauvegarde : version 3, grille hex19, relecture identique sans alerte', JSON.parse(texte).version === 3 && JSON.parse(texte).grille === 'hex19' && lu.ok && CJ(lu.doc.plateau) === CJ(etat.doc().plateau) && lu.alertes.length === 0, J(lu.alertes));
+
+        /* --- éditeur de tuile hexagonal --- */
+        etat.majUi({ modeleSelectionne: 'HC2', onglet: 'tuiles' });
+        var svgEd = document.querySelector('#editeur svg.pm-editeur-canevas');
+        ctrl('éditeur hexagonal : canevas centré (viewBox -62 -62 124 124)', !!svgEd && svgEd.getAttribute('viewBox') === '-62 -62 124 124', svgEd && svgEd.getAttribute('viewBox'));
+        ctrl('éditeur hexagonal : 6 raccords au milieu des côtés et 6 coins', document.querySelectorAll('#editeur [data-raccord]').length === 6 && document.querySelectorAll('#editeur .pm-editeur-coin').length === 6);
+        ctrl('éditeur hexagonal : aperçu des 6 rotations', document.querySelectorAll('#editeur .pm-editeur-vignette').length === 6 && /6 rotations/.test($('editeur').textContent) && /300°/.test($('editeur').textContent));
+        ctrl('éditeur hexagonal : HC2 est complet', /Complet : posable/.test($('editeur').textContent));
+        etat.majUi({ modeleSelectionne: 'HK1' });
+        var svgCoin = document.querySelector('#editeur svg.pm-editeur-canevas'), vbc = svgCoin.getAttribute('viewBox').split(' ').map(Number);
+        ctrl('éditeur hexagonal : le canevas du coin contient toute la forme du coin (plus haute et plus large que l’hexagone)',
+          FH.forme('coin').every(function (p) { return p.x >= vbc[0] && p.x <= vbc[0] + vbc[2] && p.y >= vbc[1] && p.y <= vbc[1] + vbc[3]; }), svgCoin.getAttribute('viewBox'));
+        var nouveauBord = Array.prototype.filter.call(document.querySelectorAll('#editeur .pm-editeur-boutons-roles button'), function (b) { return b.textContent === 'Bord'; })[0];
+        nouveauBord.click();
+        var mid = etat.ui().modeleSelectionne, mn = M.modeleParId(etat.doc(), mid);
+        ctrl('éditeur hexagonal : « Nouveau > Bord » crée un bord hexagonal de 3 cases, incomplet (cases isolées)', !!mn && mn.gabarit === 'bord' && mn.grille === 'hex19' && mn.cases.length === 3 && /Incomplet/.test($('editeur').textContent), mn && J(mn.cases));
+        var svgBord = document.querySelector('#editeur svg.pm-editeur-canevas');
+        var pe = E.mmVersEcran(-30, 20, svgBord.getBoundingClientRect(), E.vuePour(FH, 'bord'));
+        ptr('pointerdown', svgBord, pe.x, pe.y, 9); ptr('pointerup', svgBord, pe.x, pe.y, 9);
+        var mn2 = M.modeleParId(etat.doc(), mid);
+        ctrl('éditeur hexagonal : clic sur le fond = nouvelle case aimantée dans la forme du bord', mn2.cases.length === 4 && mn2.cases[3].x % 10 === 0 && mn2.cases[3].y % 10 === 0, J(mn2.cases[3]));
+        etat.majUi({ onglet: 'plateau', modeleSelectionne: null });
+        ctrl('le modèle utilisateur incomplet est badgé et non posable dans la bibliothèque', !!document.querySelector('.pm-biblio-vignette[data-vignette="' + mid + '"].pm-biblio-incomplet'));
+
+        /* --- retour au carré : non-régression --- */
+        reset(docExemples('4x4'));
+        ctrl('retour 4×4 : 16 cellules, 9 jonctions, « Orienter les tuiles » masqué',
+          document.querySelectorAll('[data-cellule]').length === 16 && document.querySelectorAll('[data-jonction]').length === 9 && bouton('Orienter les tuiles').closest('li').hidden === true);
+      });
+    }
+
     var chaine = Promise.resolve();
     function etape(f) { chaine = chaine.then(function () { try { return f(); } catch (e) { nEchec++; rapportEl.textContent += 'ÉCHEC  exception dans ' + f.name + ' : ' + (e && e.stack || e) + '\n'; } }); }
     if (!etat) { rapportEl.textContent = 'ÉCHEC  application non démarrée (PM.app.etat absent)\n'; nEchec++; }
     else {
-      [s0_chargement, s1_assemblage, s2_refus, s2b_clic_droit, s3_historique, s4_editeur, s5_controles, s7_raccourcis, robustesse, s8_nouveau5x5, s8b_catalogue5x5_reel, s8c_generateur5x5_parcours, s9_suppression_aide, s10_passages, s6_sauvegarde, s11_demarrage_304].forEach(etape);
+      [s0_chargement, s1_assemblage, s2_refus, s2b_clic_droit, s3_historique, s4_editeur, s5_controles, s7_raccourcis, robustesse, s8_nouveau5x5, s8b_catalogue5x5_reel, s8c_generateur5x5_parcours, s9_suppression_aide, s10_passages, s12_hexagonal, s6_sauvegarde, s11_demarrage_304].forEach(etape);
     }
     chaine.then(function () {
       var nErr = (document.getElementById('erreurs').textContent.match(/ERREUR JS/g) || []).length;

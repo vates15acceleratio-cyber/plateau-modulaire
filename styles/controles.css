@@ -36,3 +36,4 @@
 .pm-controles-avenir-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .pm-controles-avenir-bouton { flex: 1; min-width: 0; min-height: 44px; text-align: left; }
 .pm-controles-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #eceee9; color: var(--pm-discret); white-space: nowrap; }
+.pm-controles-avenir-item[hidden] { display: none; }

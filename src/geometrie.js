@@ -23,7 +23,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     '4x4': { COTE: 120, POSITIONS_RACCORD: [30, 60, 90], DIAMETRE_CASE_MAX: 30, GRILLE: { colonnes: 4, lignes: 4 } },
     '5x5': { COTE: 100, POSITIONS_RACCORD: [30, 50, 70], DIAMETRE_CASE_MAX: 24, GRILLE: { colonnes: 5, lignes: 5 } }
   };
-  var IDS_FORMATS = ['4x4', '5x5'];                 // formats carrés, proposés par l'interface (FORMATS)
+  var IDS_FORMATS = ['4x4', '5x5'];                 // formats carrés
   var ID_HEX = 'hex19';
   var IDS_TOUS = IDS_FORMATS.concat([ID_HEX]);      // tous les formats connus de format(id) (FORMATS_TOUS)
   var FORMAT_DEFAUT = '4x4';
@@ -682,8 +682,8 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   PM.geometrie.cleExtremitePassage = cleExtremitePassage;
   PM.geometrie.aplatirCommandes = aplatirCommandes;
   PM.geometrie.rayonMinimal = rayonMinimal;
-  PM.geometrie.FORMATS = Object.freeze(IDS_FORMATS.slice());           // formats carrés seulement (inchangé)
-  PM.geometrie.FORMATS_TOUS = Object.freeze(IDS_TOUS.slice());         // + 'hex19'
+  PM.geometrie.FORMATS = Object.freeze(IDS_TOUS.slice());               // formats proposés par l'interface : 4×4, 5×5 et 'hex19' (lot 6)
+  PM.geometrie.FORMATS_TOUS = PM.geometrie.FORMATS;                       // alias gardé (lots 1 à 5)
   PM.geometrie.ID_HEX = ID_HEX;
   PM.geometrie.FORMAT_DEFAUT = FORMAT_DEFAUT;
   PM.geometrie.format = format;

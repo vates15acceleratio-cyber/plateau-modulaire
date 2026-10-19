@@ -26,7 +26,9 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   }
 
   /** « 4×4 » à partir de l'identifiant de grille « 4x4 ». */
-  function nomGrille(id) { return String(id).replace('x', '×'); }
+  function nomGrille(id) { return id === 'hex19' ? 'hexagonale' : String(id).replace('x', '×'); }
+  /** Nom d’une grille après « un plateau » : « 4×4 », « hexagonal ». */
+  function nomPlateau(id) { return id === 'hex19' ? 'hexagonal' : nomGrille(id); }
 
   /**
    * Le modèle est-il dessiné pour une autre grille que celle du document ? (un document = une grille : pas de mélange)
@@ -36,7 +38,20 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     if (!modele || typeof modele !== 'object' || modele.grille === undefined) return '';
     var F = PM.modele.formatDuDocument(doc);
     if (modele.grille === F.id) return '';
-    return 'Cette tuile est dessinée pour la grille ' + nomGrille(modele.grille) + ' : elle ne se pose pas sur un plateau ' + nomGrille(F.id) + '.';
+    return 'Cette tuile est dessinée pour la grille ' + nomGrille(modele.grille) + ' : elle ne se pose pas sur un plateau ' + nomPlateau(F.id) + '.';
+  }
+
+  /**
+   * viewBox de la vignette d’un modèle hexagonal (repère centré) : carré de côté constant (le plus grand rayon des formes, hexagone, bord et coin,
+   * plus 3 mm de marge de chaque côté : même échelle pour toute la bibliothèque) centré sur la boîte englobante de la forme du gabarit du modèle.
+   */
+  function boiteVignetteHex(m, F) {
+    var r = 0;
+    GABARITS.forEach(function (g) { F.forme(g).forEach(function (p) { r = Math.max(r, Math.hypot(p.x, p.y)); }); });
+    var cote = 2 * (Math.ceil(r) + 3), P = F.forme(GABARITS.indexOf(m && m.gabarit) >= 0 ? m.gabarit : 'centrale');
+    var xs = P.map(function (p) { return p.x; }), ys = P.map(function (p) { return p.y; });
+    var cx = (Math.min.apply(null, xs) + Math.max.apply(null, xs)) / 2, cy = (Math.min.apply(null, ys) + Math.max.apply(null, ys)) / 2;
+    return (Math.round((cx - cote / 2) * 100) / 100) + ' ' + (Math.round((cy - cote / 2) * 100) / 100) + ' ' + cote + ' ' + cote;
   }
 
   function nbPosees(doc, id) {
@@ -240,8 +255,8 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       var m = PM.modele.modeleParId(etat.doc(), v.id), F = PM.modele.formatDuDocument(etat.doc());
       // vignette à l'échelle de la grille du modèle (100 mm en 5×5, 120 mm en 4×4), pour ne pas rogner un modèle d'une autre grille
       if (v.autreGrille && PM.geometrie.FORMATS.indexOf(m.grille) >= 0) F = PM.geometrie.format(m.grille);
-      var t = F.COTE + 6;
-      var svg = '<svg class="pm-biblio-svg" viewBox="-3 -3 ' + t + ' ' + t + '" aria-hidden="true">' +
+      var t = F.COTE + 6, vb = F.nbCotes === 6 ? boiteVignetteHex(m, F) : '-3 -3 ' + t + ' ' + t;
+      var svg = '<svg class="pm-biblio-svg" viewBox="' + vb + '" aria-hidden="true">' +
         PM.rendu.contenuTuile(m, { rot: 0, format: F }) + '</svg>';
       var classes = ['pm-biblio-vignette'];
       if (!v.complet) classes.push('pm-biblio-incomplet');
@@ -364,6 +379,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     supprimerTuileUtilisateur: supprimerTuileUtilisateur,
     demanderSuppression: demanderSuppression,
     phraseAutreGrille: phraseAutreGrille,
+    boiteVignetteHex: boiteVignetteHex,
     SEUIL_GLISSEMENT: SEUIL_GLISSEMENT,
     monter: monter
   };

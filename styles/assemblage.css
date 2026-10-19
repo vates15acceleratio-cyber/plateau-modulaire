@@ -112,3 +112,11 @@
 /* Rangée neutre du 5×5 : bande grise sous les cellules et repère dans la marge */
 .pm-assemblage-bande-neutre { fill: #dcdfd8; stroke: none; pointer-events: none; }
 .pm-assemblage-etiquette-neutre { font-size: 11px; fill: var(--pm-discret); font-style: italic; }
+
+/* Plateau hexagonal : cellules à bord droit sur le pourtour, camps teintés, rangée du milieu neutre */
+.pm-assemblage-silhouette-vert { fill: #e9f4ee; }
+.pm-assemblage-silhouette-rouge { fill: #fbeceb; }
+.pm-assemblage-silhouette-neutre { fill: #dcdfd8; }
+.pm-assemblage-etiquette-hex { font-size: 9px; }
+.pm-assemblage-svg-hex .pm-assemblage-cadre { fill: #fafaf8; stroke: var(--pm-bord); stroke-width: 1.2; }
+.pm-assemblage-svg-hex .pm-assemblage-selection .pm-assemblage-zone { stroke-width: 2.5; }

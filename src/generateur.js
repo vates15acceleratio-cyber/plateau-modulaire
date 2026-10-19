@@ -234,6 +234,8 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
 
   /** Rejet par S propre à chaque format (docs/28 § 6) : en 5×5, S >= PM.graphe.SEUIL_S (5, seuil de rejet, distinct du seuil d'alerte par format de PM.graphe.seuilS) rejette le candidat ; en 4×4, S n'est qu'un classement. */
   var REJET_S = { '4x4': false, '5x5': true, 'hex19': true };
+  /** Seuil de rejet par S en hexagonal (docs/72, arbitrage de l’orchestrateur : 3, comme le recommande docs/80 ; sans effet pratique, S valant 0 ou 1). */
+  var SEUIL_REJET_S_HEX = 3;
 
   /**
    * Cause de rejet d'une mesure d'équilibre (une seule chaîne de filtres, pour evaluer, le chemin 5×5 et les outils de mesure) :
@@ -251,7 +253,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     if (m.ecartMax > SEUIL_ECART) return 'ecart';
     if (m.trois) return 'cinq_contre_trois';
     if (!m.premiereEgale) return 'premiere_ville';
-    if (REJET_S[formatId] && m.S >= (formatId === 'hex19' ? GR.seuilS(formatId) : GR.SEUIL_S)) return 'score_s'; // hexagonal : le seuil d'alerte propre au format (4)
+    if (REJET_S[formatId] && m.S >= (formatId === 'hex19' ? SEUIL_REJET_S_HEX : GR.SEUIL_S)) return 'score_s'; // hexagonal : S >= 3
     return null;
   }
 
@@ -1115,7 +1117,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
         stock[comp.ids[q]]++;
         return;
       }
-      var o = optionsCelluleHex(ctx, c, comp.ids[q])[0]; // pourtour : une seule orientation (rotation imposée)
+      var o = ctx.rotationsPosees ? optionPoseeHex(ctx, c, comp.ids[q], ctx.rotationsPosees[c.col + ',' + c.lig]) : optionsCelluleHex(ctx, c, comp.ids[q])[0]; // pourtour : une seule orientation (rotation imposée, ou celle de la tuile posée pour « Orienter les tuiles »)
       choix[q] = o; posees.push({ modeleId: o.modeleId, col: c.col, lig: c.lig, rot: o.rots[0] });
       o.jn.forEach(function (x) { compte[x]++; });
       ecart += w[q] * (ctx.nbCases[o.modeleId] || 0);
@@ -1134,12 +1136,17 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       for (y = 0; y < nS; y++) reste[d][y] = reste[d + 1][y] + sx[y];
     }
     var feuilles = [], vus = 0, noeuds = 0, tronque = false;
-    function minPorts(x) { return estVille[x] ? MIN_PORTS_VILLE_5X5 : MIN_PORTS_JONCTION_5X5; }
+    var presentes = {}, complet = new Array(nS).fill(true);
+    if (ctx.sansPortsIncomplets) { // plateau partiel : un siège sans ses 3 tuiles n’est pas tenu d’avoir ses ports
+      cellules.forEach(function (c) { presentes[c.col + ',' + c.lig] = true; });
+      F.sieges.forEach(function (sg) { complet[sg.id] = sg.tuiles.every(function (t) { return presentes[t.col + ',' + t.lig]; }); });
+    }
+    function minPorts(x) { return !complet[x] ? 0 : (estVille[x] ? MIN_PORTS_VILLE_5X5 : MIN_PORTS_JONCTION_5X5); }
     function villesEcartees() { return !GR.villesProches(GR.construire(docP, { villesTraversables: false })).length; }
     if (!villesEcartees()) return { feuilles: [], noeuds: 0, tronque: false }; // le pourtour seul rapproche déjà deux villes
     (function visiter(p) {
       if (p === ordre.length) {
-        if (ecart !== 0) return; // cases inégales entre moitiés : pas une pose
+        if (ecart !== 0 && !ctx.sansMoities) return; // cases inégales entre moitiés : pas une pose (sauf « Orienter les tuiles » : la composition est celle de l’utilisateur)
         vus++;
         if (feuilles.length < K) feuilles.push(choix.slice());
         else { var r = entier(rng, vus); if (r < K) feuilles[r] = choix.slice(); }
@@ -1204,6 +1211,99 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     var villes = ctx.dispositions[0], r = rechercherPoseHex(ctx, comp, villes, rng, 1);
     if (!r.feuilles.length) return { cause: 'villes_ports', tronque: r.tronque, noeuds: r.noeuds };
     return { tuiles: tuilesDeFeuille(ctx, r.feuilles[0], rng), jetons: villes.map(function (s) { return { i: s, j: 0, type: 'capture' }; }), noeuds: r.noeuds, tronque: r.tronque };
+  }
+
+  /** Option d'orientation d'une tuile hexagonale posée, de rotation FIXE `rot` (pourtour posé par l'utilisateur) : même forme que optionsCelluleHex. */
+  function optionPoseeHex(ctx, c, id, rot) {
+    var e = M.tuileEnPlateau(ctx.doc, { modeleId: id, col: c.col, lig: c.lig, rot: rot });
+    return { modeleId: id, jn: e ? e.ports.filter(function (p) { return p.i !== null && p.i !== undefined; }).map(function (p) { return p.i; }) : [], rots: [rot] };
+  }
+
+  /** Refus d'« Orienter les tuiles » : { ok: false, raison }. */
+  function refusOrienter(raison) { return { ok: false, doc: null, raison: raison, changees: [], S: null, tronque: false }; }
+
+  /**
+   * « Orienter les tuiles » (hexagonal, décision de l'utilisateur, docs/72) : cherche les rotations des intérieures POSÉES qui tiennent l'écart de
+   * 4 pas entre les villes posées (3 ports par ville, 2 par siège), par la recherche exhaustive du générateur (rechercherPoseHex, 3⁷ = 2187
+   * combinaisons au plus), le pourtour restant tel qu'il est posé. Parmi les poses trouvées, retient le S minimal (plateau complet ; sinon la
+   * première) puis le moins de tuiles tournées. Pure : ne modifie pas `doc`. Renvoie
+   * { ok, doc (document tourné), changees: [{ col, lig, de, vers }], S, tronque, raison } ; raison : phrase de refus si ok est faux.
+   */
+  function orienterTuiles(doc) {
+    var F;
+    try { F = M.formatDuDocument(doc); } catch (e) { return refusOrienter(e.message); }
+    if (F.nbCotes !== 6) return refusOrienter('« Orienter les tuiles » ne sert qu’au plateau hexagonal.');
+    var tuiles = doc && doc.plateau && Array.isArray(doc.plateau.tuiles) ? doc.plateau.tuiles : [];
+    var cellules = [], ids = [], rotations = {}, centrales = 0, posees = 0;
+    F.cellules.forEach(function (c) {
+      var t = tuiles.filter(function (x) { return x && x.col === c.col && x.lig === c.lig; })[0], m = t ? M.modeleParId(doc, t.modeleId) : null;
+      if (!t || !m || !M.validerModele(m, F).complet || !Number.isInteger(t.rot) || t.rot < 0 || t.rot > 5) return;
+      posees++;
+      cellules.push({ col: c.col, lig: c.lig, gabarit: c.gabarit });
+      ids.push(t.modeleId);
+      rotations[c.col + ',' + c.lig] = t.rot;
+      if (c.gabarit === 'centrale') centrales++;
+    });
+    if (!centrales) return refusOrienter('Aucune tuile intérieure (centre et couronne) n’est posée : il n’y a rien à orienter, posez d’abord des centrales.');
+    var villes = [];
+    (doc.plateau.jetons || []).forEach(function (j) { if (j && j.type === 'capture' && j.j === 0 && Number.isInteger(j.i) && j.i >= 0 && j.i < F.sieges.length && villes.indexOf(j.i) < 0) villes.push(j.i); });
+    if (!villes.length) return refusOrienter('Aucune ville n’est posée : posez d’abord les villes (clic sur un siège, ou Outils > Placer les villes), puis orientez les tuiles pour tenir leur écart.');
+    var ctx = contexteHex(doc, F, {}, cellules, false);
+    ctx.rotationsPosees = rotations; ctx.sansMoities = true; ctx.sansPortsIncomplets = true;
+    var rng = mulberry32(hacher('orienter')), r = rechercherPoseHex(ctx, { ids: ids }, villes, rng, POSES_MAX_HEX);
+    if (!r.feuilles.length) {
+      return refusOrienter('Aucune orientation des ' + centrales + ' tuile(s) intérieure(s) posée(s) ne tient l’écart de ' + ECART_PAS_VILLES + ' pas entre les ' + villes.length + ' ville(s) posée(s), avec 3 ports par ville et 2 par siège' +
+        (r.tronque ? ' (recherche interrompue : trop de combinaisons)' : '') + ' : déplacez une ville (clic sur son siège), changez une tuile du pourtour ou une intérieure.');
+    }
+    // une pose par feuille : pour chaque centrale, la rotation équivalente la plus proche de la rotation actuelle
+    function poseDe(f) {
+      var res = [], n = 0;
+      cellules.forEach(function (c, k) {
+        var o = f[k], cur = rotations[c.col + ',' + c.lig], rot = o.rots[0];
+        if (c.gabarit === 'centrale') {
+          rot = o.rots.reduce(function (b, x) { var d = Math.min((x - cur + 6) % 6, (cur - x + 6) % 6), db = Math.min((b - cur + 6) % 6, (cur - b + 6) % 6); return d < db ? x : b; }, o.rots[0]);
+          if (o.rots.indexOf(cur) >= 0) rot = cur;
+          if (rot !== cur) n++;
+        } else rot = cur;
+        res.push({ col: c.col, lig: c.lig, modeleId: o.modeleId, rot: rot });
+      });
+      return { tuiles: res, changees: n };
+    }
+    // S n’est mesurable que sur un plateau complet à 6 villes : toutes les poses trouvées sont alors jugées (pas d’échantillon, le S minimal est garanti) ; sinon la pose la moins différente
+    var plateauComplet = posees === F.cellules.length && villes.length === GR.nbVilles(F.id), evalues = r.feuilles;
+    var meilleur = null;
+    evalues.forEach(function (f) {
+      var p = poseDe(f), S = null;
+      if (plateauComplet) {
+        try {
+          var dc = { version: doc.version, grille: F.id, modeles: doc.modeles, plateau: { tuiles: p.tuiles, jetons: villes.map(function (s) { return { i: s, j: 0, type: 'capture' }; }) } };
+          S = GR.equilibre(dc, { graphe: GR.construire(dc, { villesTraversables: false }) }).S;
+        } catch (e) { S = null; }
+      }
+      var cle = [S === null || S === undefined ? 1e9 : S, p.changees];
+      if (!meilleur || cle[0] < meilleur.cle[0] || (cle[0] === meilleur.cle[0] && cle[1] < meilleur.cle[1])) meilleur = { cle: cle, pose: p, S: S };
+    });
+    var nouveau = JSON.parse(JSON.stringify(doc)), changees = [];
+    meilleur.pose.tuiles.forEach(function (p) {
+      var t = nouveau.plateau.tuiles.filter(function (x) { return x && x.col === p.col && x.lig === p.lig; })[0];
+      if (t && t.rot !== p.rot) { changees.push({ col: p.col, lig: p.lig, de: t.rot, vers: p.rot }); t.rot = p.rot; }
+    });
+    return { ok: true, doc: nouveau, changees: changees, S: meilleur.S === undefined ? null : meilleur.S, tronque: r.tronque, raison: '', combinaisons: r.feuilles.length };
+  }
+
+  /**
+   * « Orienter les tuiles » de l'interface (hexagonal) : applique orienterTuiles en UNE étape d'historique (Ctrl+Z pour revenir), ou explique
+   * le refus dans la barre d'état. Renvoie le résultat de orienterTuiles.
+   */
+  function orienter(etat) {
+    var doc = etat.doc(), r = orienterTuiles(doc);
+    if (!r.ok) { etat.signaler(r.raison, 'alerte'); return r; }
+    if (!r.changees.length) { etat.signaler('Les tuiles intérieures sont déjà orientées de façon à tenir l’écart entre les villes posées : rien à tourner.' + (r.S !== null ? ' (S = ' + r.S + ')' : ''), 'info'); return r; }
+    var fait = etat.appliquer(function () { return r.doc; }, 'orienter les tuiles');
+    if (fait && fait.ok === false) return r;
+    etat.signaler(r.changees.length + ' tuile(s) tournée(s) pour tenir l’écart entre les villes' + (r.S !== null ? ' (S = ' + r.S + ', le plus bas parmi ' + r.combinaisons + ' orientation(s) possible(s))' : ' (' + r.combinaisons + ' orientation(s) possible(s), la moins différente est retenue)') +
+      (r.tronque ? ' ; recherche interrompue avant la fin' : '') + '. Ctrl+Z pour revenir.', 'info');
+    return r;
   }
 
   /* ------------------------------------------------------------------ */
@@ -1881,6 +1981,9 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     composer5x5: composer5x5,
     contexteDocumentHex: contexteDocumentHex,
     tuilesOrienteesHex: tuilesOrienteesHex,
+    orienterTuiles: orienterTuiles,
+    orienter: orienter,
+    SEUIL_REJET_S_HEX: SEUIL_REJET_S_HEX,
     composerHex: composerHex,
     rechercherPoseHex: rechercherPoseHex,
     candidatHex: candidatHex,

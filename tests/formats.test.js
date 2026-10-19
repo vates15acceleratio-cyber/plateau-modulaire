@@ -12,8 +12,9 @@ const PM = globalThis.PM;
 const G = PM.geometrie, M = PM.modele;
 const F4 = G.format('4x4'), F5 = G.format('5x5');
 
-test('les deux formats existent, un format inconnu est refusé', () => {
-  assert.deepEqual([...G.FORMATS], ['4x4', '5x5']);
+test('les formats existent (hex19 compris), un format inconnu est refusé', () => {
+  assert.deepEqual([...G.FORMATS], ['4x4', '5x5', 'hex19']);
+  assert.deepEqual([...G.FORMATS_TOUS], [...G.FORMATS]);
   assert.ok(Object.isFrozen(G.FORMATS));
   assert.equal(F4.id, '4x4');
   assert.equal(F5.id, '5x5');

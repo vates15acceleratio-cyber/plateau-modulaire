@@ -38,9 +38,21 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     if (f && typeof f === 'object') return f;
     return G.format(f === undefined || f === null ? G.FORMAT_DEFAUT : f);
   }
-  /** Zone visible du canevas (mm) pour un format : la tuile plus une marge pour les demi-disques et les coins. */
-  function vuePour(format) {
-    var C = leFormat(format).COTE;
+  /** Format hexagonal (6 côtés, repère local centré : l'origine est le centre de la tuile) ? */
+  function estHex(F) { return !!F && F.nbCotes === 6; }
+  /**
+   * Zone visible du canevas (mm) pour un format : la tuile plus une marge pour les demi-disques et les coins. Hexagonal : repère centré,
+   * boîte carrée de 2 × COTE (le diamètre de l'hexagone) plus la marge.
+   */
+  function vuePour(format, gabarit) {
+    var F = leFormat(format), C = F.COTE;
+    if (estHex(F)) {
+      // carré centré sur la boîte englobante de la forme du gabarit (le coin est plus haut et plus large que l'hexagone), marge de 8 mm
+      var P = formeHex(gabarit, F), xs = P.map(function (p) { return p.x; }), ys = P.map(function (p) { return p.y; });
+      var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
+      var cote = Math.max(x1 - x0, y1 - y0, 2 * C) + 16;
+      return { x: arrondi((x0 + x1) / 2 - cote / 2), y: arrondi((y0 + y1) / 2 - cote / 2), l: arrondi(cote), h: arrondi(cote) };
+    }
     return { x: -16, y: -16, l: C + 32, h: C + 32 };
   }
   /** Pas de la grille d'aimantation des cases : 1 cm (valeur du format 4×4, gardée pour l'API). */
@@ -56,6 +68,10 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
   var NOMS_COTES = ['nord', 'est', 'sud', 'ouest'];
   var NOMS_COINS = ['NO', 'NE', 'SE', 'SO'];
+  var NOMS_COTES_HEX = ['nord-est', 'est', 'sud-est', 'sud-ouest', 'ouest', 'nord-ouest'];
+  var NOMS_COINS_HEX = ['N', 'NE', 'SE', 'S', 'SO', 'NO'];
+  function nomCote(c, F) { return (estHex(F) ? NOMS_COTES_HEX : NOMS_COTES)[c]; }
+  function nomCoin(k, F) { return (estHex(F) ? NOMS_COINS_HEX : NOMS_COINS)[k]; }
   var LIBELLES_GABARITS = { centrale: 'Centrale', bord: 'Bord', coin: 'Coin' };
   var PREFIXE_CASE = 'c';
   var PREFIXE_CHEMIN = 'h';
@@ -74,6 +90,12 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     bord: [[0.5, 0.33], [0.25, 0.75], [0.75, 0.75]],
     coin: [[0.35, 0.35], [0.75, 0.75]]
   };
+  /** Cases de départ hexagonales, en mm dans le repère centré (aimantées ensuite par aimanter, qui les ramène dans la forme du gabarit). */
+  var CASES_DE_DEPART_HEX = {
+    centrale: [[0, -22], [22, 0], [0, 22], [-22, 0]],
+    bord: [[0, -14], [-20, 16], [20, 16]],
+    coin: [[10, 0], [-22, 18]]
+  };
 
   /* ------------------------------------------------------------------ */
   /* Outils                                                              */
@@ -88,17 +110,41 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; });
   }
 
-  /** Gabarit connu (description de PM.geometrie.GABARITS) ou null. */
-  function gabaritDe(nom) { return Object.prototype.hasOwnProperty.call(G.GABARITS, nom) ? G.GABARITS[nom] : null; }
-  /** Le côté est-il extérieur pour ce gabarit ? (un raccord y serait face au vide : alerte, pas de refus) */
-  function raccordExterieur(gabarit, cote) {
-    var g = gabaritDe(gabarit);
+  /** Gabarit connu (description de PM.geometrie.GABARITS, ou du format hexagonal `format`) ou null. */
+  function gabaritDe(nom, format) {
+    var T = estHex(format) ? format.GABARITS : G.GABARITS;
+    return Object.prototype.hasOwnProperty.call(T, nom) ? T[nom] : null;
+  }
+  /** Le côté est-il extérieur pour ce gabarit ? (un raccord y serait face au vide : alerte, pas de refus) `format` : 4×4 par défaut. */
+  function raccordExterieur(gabarit, cote, format) {
+    var g = gabaritDe(gabarit, format);
     return !!g && g.cotesExterieurs.indexOf(cote) >= 0;
   }
   /** Le coin est-il extérieur pour ce gabarit ? (un port n'y aboutirait à aucun campement ni aucune ville : alerte, pas de refus) */
-  function coinExterieur(gabarit, k) {
-    var g = gabaritDe(gabarit);
+  function coinExterieur(gabarit, k, format) {
+    var g = gabaritDe(gabarit, format);
     return !!g && g.coinsInterieurs.indexOf(k) < 0;
+  }
+
+  /** Polygone (repère centré) de la tuile hexagonale du gabarit déclaré ; une tuile sans gabarit connu est un hexagone (comme PM.modele). */
+  function formeHex(gabarit, F) { return F.forme(M.GABARITS.indexOf(gabarit) >= 0 ? gabarit : 'centrale'); }
+  /** Boîte englobante de la forme hexagonale du gabarit : { x0, y0, x1, y1 } (repère centré). */
+  function boiteHex(gabarit, F) {
+    var P = formeHex(gabarit, F), xs = P.map(function (p) { return p.x; }), ys = P.map(function (p) { return p.y; });
+    return { x0: Math.min.apply(null, xs), x1: Math.max.apply(null, xs), y0: Math.min.apply(null, ys), y1: Math.max.apply(null, ys) };
+  }
+  function dansPolygone(p, poly) {
+    var dedans = false;
+    for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      var a = poly[i], b = poly[j];
+      if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) dedans = !dedans;
+    }
+    return dedans;
+  }
+  function distanceBordPolygone(p, poly) {
+    var mini = Infinity;
+    for (var i = 0; i < poly.length; i++) mini = Math.min(mini, distanceSegment(p.x, p.y, poly[i], poly[(i + 1) % poly.length]));
+    return mini;
   }
 
   /** Type d'une extrémité de chemin : 'case' | 'raccord' | 'coin' | null. */
@@ -169,8 +215,9 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
    * Point de la grille de 1 cm le plus proche de (x, y) où une case de ce diamètre respecte la marge
    * de coupe et les zones de coin. Renvoie { x, y } (mm). `format` : 4×4 par défaut.
    */
-  function aimanter(x, y, diametre, format) {
+  function aimanter(x, y, diametre, format, gabarit) {
     var F = leFormat(format), pas = F.PAS_EDITEUR, r = (diametre || DIAMETRE_DEFAUT) / 2;
+    if (estHex(F)) return aimanterHex(x, y, r, F, gabarit);
     var mini = F.MARGE_COUPE_CASE + r, maxi = F.COTE - F.MARGE_COUPE_CASE - r;
     var zone = F.RAYON_ZONE_COIN + r;
     var meilleur = null, dMeilleur = Infinity;
@@ -190,6 +237,31 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     return meilleur || { x: F.COTE / 2, y: F.COTE / 2 };
   }
 
+  /**
+   * Aimantation hexagonale : point de la grille de 1 cm (repère centré) le plus proche de (x, y) où une case de rayon r reste dans la forme du
+   * gabarit à 4 mm du bord (marge de coupe) et hors des zones de jeton des coins intérieurs (les mêmes règles que PM.modele.validerModele).
+   * `gabarit` : celui du modèle (hexagone si absent ou inconnu).
+   */
+  function aimanterHex(x, y, r, F, gabarit) {
+    var pas = F.PAS_EDITEUR, poly = formeHex(gabarit, F), g = F.GABARITS[M.GABARITS.indexOf(gabarit) >= 0 ? gabarit : 'centrale'];
+    var zone = F.RAYON_ZONE_COIN + r, marge = F.MARGE_COUPE_CASE + r, meilleur = null, dMeilleur = Infinity, n = Math.ceil(F.COTE / pas) + 1;
+    for (var i = -n; i <= n; i++) {
+      for (var j = -n; j <= n; j++) {
+        var gx = i * pas + 0, gy = j * pas + 0, p = { x: gx, y: gy };
+        if (!dansPolygone(p, poly) || distanceBordPolygone(p, poly) < marge - 1e-9) continue;
+        var ok = true;
+        for (var c = 0; c < g.coinsInterieurs.length; c++) {
+          var k = F.pointCoin(g.coinsInterieurs[c]);
+          if (dist(gx, gy, k.x, k.y) < zone) { ok = false; break; }
+        }
+        if (!ok) continue;
+        var d = dist(gx, gy, x, y);
+        if (d < dMeilleur - 1e-9) { dMeilleur = d; meilleur = { x: gx, y: gy }; }
+      }
+    }
+    return meilleur || { x: 0, y: 0 };
+  }
+
   /* ------------------------------------------------------------------ */
   /* Édition d'un modèle (fonctions pures : renvoient un nouveau modèle) */
   /* Elles lèvent une Error (phrase affichable) si l'action est refusée. */
@@ -205,8 +277,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     // nouvelId ne lit que cases / chemins : on lui présente les ids des modèles comme des cases.
     var id = M.nouvelId({ cases: tab(idsExistants).map(function (i) { return { id: i }; }) }, 'modele-');
     var m = { id: id, nom: 'Nouvelle tuile ' + LIBELLES_GABARITS[gabarit].toLowerCase(), gabarit: gabarit, grille: F.id, exemplaires: 1, cases: [], chemins: [] };
-    CASES_DE_DEPART[gabarit].forEach(function (f, i) {
-      var p = aimanter(f[0] * F.COTE, f[1] * F.COTE, DIAMETRE_DEFAUT, F);
+    (estHex(F) ? CASES_DE_DEPART_HEX : CASES_DE_DEPART)[gabarit].forEach(function (f, i) {
+      var p = estHex(F) ? aimanter(f[0], f[1], DIAMETRE_DEFAUT, F, gabarit) : aimanter(f[0] * F.COTE, f[1] * F.COTE, DIAMETRE_DEFAUT, F);
       m.cases.push({
         id: PREFIXE_CASE + (i + 1), x: p.x, y: p.y, diametre: DIAMETRE_DEFAUT,
         type: gabarit !== 'centrale' && i === 0 ? 'apparition' : 'deplacement'
@@ -229,7 +301,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   function ajouterCase(modele, x, y, type, format) {
     var m = clone(modele);
     if (!Array.isArray(m.cases)) m.cases = [];
-    var p = aimanter(x, y, DIAMETRE_DEFAUT, format);
+    var p = aimanter(x, y, DIAMETRE_DEFAUT, format, m.gabarit);
     m.cases.push({ id: M.nouvelId(m, PREFIXE_CASE), x: p.x, y: p.y, diametre: DIAMETRE_DEFAUT, type: type || 'deplacement' });
     return m;
   }
@@ -238,7 +310,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   function deplacerCase(modele, id, x, y, format) {
     var m = clone(modele), c = caseParId(m, id);
     if (!c) throw new Error('Case introuvable.');
-    var p = aimanter(x, y, c.diametre, format);
+    var p = aimanter(x, y, c.diametre, format, m.gabarit);
     c.x = p.x; c.y = p.y;
     return m;
   }
@@ -312,15 +384,22 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   }
 
   /** Position aimantée (grille de 1 cm, à 1 cm au moins du bord) d'un pivot. */
-  function positionPivot(x, y, F) {
+  function positionPivot(x, y, F, gabarit) {
     var pas = F.PAS_EDITEUR;
+    if (estHex(F)) { // grille de 1 cm dans la forme du gabarit, à 5 mm du bord au moins : on rapproche du centre jusqu'à y entrer
+      var poly = formeHex(gabarit, F), px = Math.round(x / pas) * pas + 0, py = Math.round(y / pas) * pas + 0;
+      for (var n = 0; n < 12 && (!dansPolygone({ x: px, y: py }, poly) || distanceBordPolygone({ x: px, y: py }, poly) < pas / 2); n++) {
+        px = px - Math.sign(px) * pas + 0; py = py - Math.sign(py) * pas + 0;
+      }
+      return { x: px, y: py };
+    }
     function borne(v) { return Math.min(F.COTE - pas, Math.max(pas, Math.round(v / pas) * pas)); }
     return { x: borne(x), y: borne(y) };
   }
 
   /** Ajoute un pivot (point de ramification d'un T, sans case) au point de grille le plus proche de (x, y). */
   function ajouterPivot(modele, x, y, format) {
-    var m = clone(modele), q = positionPivot(x, y, leFormat(format));
+    var m = clone(modele), q = positionPivot(x, y, leFormat(format), m.gabarit);
     if (tab(m.pivots).some(function (v) { return v && Math.abs(v.x - q.x) < 1e-9 && Math.abs(v.y - q.y) < 1e-9; })) throw new Error('Un pivot existe déjà à cet endroit.');
     if (tab(m.pivots).length >= plafond('pivots', 8)) throw new Error('Une tuile porte au plus ' + plafond('pivots', 8) + ' pivots.');
     if (!Array.isArray(m.pivots)) m.pivots = [];
@@ -332,16 +411,18 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   function deplacerPivot(modele, id, x, y, format) {
     var m = clone(modele), v = pivotParId(m, id);
     if (!v) throw new Error('Pivot introuvable.');
-    var q = positionPivot(x, y, leFormat(format));
+    var q = positionPivot(x, y, leFormat(format), m.gabarit);
     v.x = q.x; v.y = q.y;
     return m;
   }
 
   /** Fixe le point de contrôle de la courbe d'un passage (au dixième de mm, dans la tuile). */
   function definirCourbe(modele, id, x, y, format) {
-    var C = leFormat(format).COTE, m = clone(modele), p = passageParId(m, id);
+    var F = leFormat(format), C = F.COTE, m = clone(modele), p = passageParId(m, id);
     if (!p) throw new Error('Passage introuvable.');
-    p.courbe = { x: Math.round(Math.min(C, Math.max(0, x)) * 10) / 10, y: Math.round(Math.min(C, Math.max(0, y)) * 10) / 10 };
+    var bx0 = 0, bx1 = C, by0 = 0, by1 = C; // carré : la tuile [0, COTE]² ; hexagonal : la boîte de la forme du gabarit (repère centré)
+    if (estHex(F)) { var bb = boiteHex(m.gabarit, F); bx0 = bb.x0; bx1 = bb.x1; by0 = bb.y0; by1 = bb.y1; }
+    p.courbe = { x: Math.round(Math.min(bx1, Math.max(bx0, x)) * 10) / 10, y: Math.round(Math.min(by1, Math.max(by0, y)) * 10) / 10 };
     return m;
   }
 
@@ -442,16 +523,16 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
    * | { type: 'chemin', id } ; `exterieur` : côté ou coin extérieur pour le gabarit. `format` : 4×4 par défaut.
    */
   function cibleEn(modele, x, y, format) {
-    var F = leFormat(format), gabarit = modele && modele.gabarit, cote, pos, k;
-    for (cote = 0; cote < 4; cote++) {
-      for (pos = 0; pos < 3; pos++) {
+    var F = leFormat(format), gabarit = modele && modele.gabarit, cote, pos, k, nbc = F.nbCotes || 4, nbp = F.POSITIONS_RACCORD.length; // 4 côtés à 3 positions en carré, 6 côtés à 1 position (le milieu) en hexagonal
+    for (cote = 0; cote < nbc; cote++) {
+      for (pos = 0; pos < nbp; pos++) {
         var p = F.pointRaccord(cote, pos);
-        if (dist(x, y, p.x, p.y) <= RAYON_RACCORD) return { type: 'raccord', cote: cote, pos: pos, exterieur: raccordExterieur(gabarit, cote) };
+        if (dist(x, y, p.x, p.y) <= RAYON_RACCORD) return { type: 'raccord', cote: cote, pos: pos, exterieur: raccordExterieur(gabarit, cote, F) };
       }
     }
-    for (k = 0; k < 4; k++) {
+    for (k = 0; k < nbc; k++) {
       var q = F.pointCoin(k);
-      if (dist(x, y, q.x, q.y) <= RAYON_COIN) return { type: 'coin', coin: k, exterieur: coinExterieur(gabarit, k) };
+      if (dist(x, y, q.x, q.y) <= RAYON_COIN) return { type: 'coin', coin: k, exterieur: coinExterieur(gabarit, k, F) };
     }
     var pvs = tab(modele && modele.pivots);
     for (var v = pvs.length - 1; v >= 0; v--) {
@@ -510,12 +591,13 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   /** Texte d'aide (survol) pour une cible. `format` : 4×4 par défaut. */
   function libelleCible(modele, c, format) {
     if (!c) return '';
+    var FL = leFormat(format);
     if (c.type === 'raccord') {
-      return 'Raccord côté ' + NOMS_COTES[c.cote] + ', à ' + cm(leFormat(format).POSITIONS_RACCORD[c.pos]) + ' cm du coin ' + NOMS_COINS[c.cote] + '.' +
+      return 'Raccord côté ' + nomCote(c.cote, FL) + (estHex(FL) ? ', au milieu du côté.' : ', à ' + cm(FL.POSITIONS_RACCORD[c.pos]) + ' cm du coin ' + NOMS_COINS[c.cote] + '.') +
         (c.exterieur ? ' Côté extérieur pour ce gabarit : un raccord y sera face au vide.' : '');
     }
     if (c.type === 'coin') {
-      return 'Coin ' + NOMS_COINS[c.coin] + (c.exterieur ? ' : coin extérieur pour ce gabarit, un port n’y mènerait à aucun campement ni aucune ville.'
+      return 'Coin ' + nomCoin(c.coin, FL) + (c.exterieur ? ' : coin extérieur pour ce gabarit, un port n’y mènerait à aucun campement ni aucune ville.'
         : ' : un port relie une case au campement (ou à la ville) de ce coin.');
     }
     if (c.type === 'case') {
@@ -533,7 +615,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     if (!c) return null;
     if (c.type === 'raccord') {
       var F = leFormat(format), p = F.pointRaccord(c.cote, c.pos);
-      return { x: p.x, y: p.y, texte: cm(F.POSITIONS_RACCORD[c.pos]) + ' cm' };
+      return { x: p.x, y: p.y, texte: estHex(F) ? 'milieu du côté' : cm(F.POSITIONS_RACCORD[c.pos]) + ' cm' };
     }
     if (c.type === 'case') {
       var k = caseParId(modele, c.id);
@@ -569,6 +651,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       if (p) res.cercles.push({ x: p.x, y: p.y, r: 9 });
     } else if (ref.type === 'modele') {
       res.tuile = true;
+      if (estHex(F)) res.polygone = formeHex(modele && modele.gabarit, F); // hexagonal : la forme de la tuile (hexagone ou pentagone), pas un carré
     }
     return res;
   }
@@ -617,8 +700,14 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   function pointsSvg(pts) { return pts.map(function (p) { return arrondi(p.x) + ',' + arrondi(p.y); }).join(' '); }
 
   /** Grille de 1 cm (lignes fines). `format` : 4×4 par défaut (de même pour les fragments suivants). */
-  function svgGrille(format) {
+  function svgGrille(format, gabarit) {
     var F = leFormat(format), C = F.COTE, s = '';
+    if (estHex(F)) { // lignes de la grille centrée sur toute la boîte de la forme du gabarit (le coin dépasse l’hexagone), découpées à cette forme
+      var bb = boiteHex(gabarit, F), pas = F.PAS_EDITEUR;
+      for (var vx = Math.ceil(bb.x0 / pas) * pas; vx <= bb.x1; vx += pas) s += '<line x1="' + vx + '" y1="' + bb.y0 + '" x2="' + vx + '" y2="' + bb.y1 + '"/>';
+      for (var vy = Math.ceil(bb.y0 / pas) * pas; vy <= bb.y1; vy += pas) s += '<line x1="' + bb.x0 + '" y1="' + vy + '" x2="' + bb.x1 + '" y2="' + vy + '"/>';
+      return '<clipPath id="pm-editeur-clip-forme"><polygon points="' + pointsSvg(formeHex(gabarit, F)) + '"/></clipPath><g clip-path="url(#pm-editeur-clip-forme)">' + s + '</g>';
+    }
     for (var v = F.PAS_EDITEUR; v < C; v += F.PAS_EDITEUR) {
       s += '<line x1="' + v + '" y1="0" x2="' + v + '" y2="' + C + '"/><line x1="0" y1="' + v + '" x2="' + C + '" y2="' + v + '"/>';
     }
@@ -626,8 +715,15 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   }
 
   /** Quarts de disque R 20 mm des quatre coins (zones réservées au jeton). */
-  function svgZonesCoin(format) {
+  function svgZonesCoin(format, gabarit) {
     var F = leFormat(format), r = F.RAYON_ZONE_COIN, C = F.COTE;
+    if (estHex(F)) { // disques de rayon R 20 mm autour des coins qui touchent un siège, découpés à la forme du gabarit
+      var g = F.GABARITS[M.GABARITS.indexOf(gabarit) >= 0 ? gabarit : 'centrale'];
+      return '<g clip-path="url(#pm-editeur-clip-forme)">' + g.coinsInterieurs.map(function (k) {
+        var p = F.pointCoin(k);
+        return '<circle data-coin="' + k + '" cx="' + arrondi(p.x) + '" cy="' + arrondi(p.y) + '" r="' + r + '"/>';
+      }).join('') + '</g>';
+    }
     // chaque quart est tracé dans le sens horaire (sweep = 1)
     var chemins = [
       'M0 0 L' + r + ' 0 A' + r + ' ' + r + ' 0 0 1 0 ' + r + ' Z',
@@ -641,6 +737,17 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   /** Demi-disques des 12 raccords, sur le bord, côté intérieur. */
   function svgRaccords(modele, marques, format) {
     var F = leFormat(format), util = extremitesUtilisees(modele).raccords, s = '', RR = 5;
+    if (estHex(F)) { // 6 demi-disques au milieu des côtés, côté intérieur (la normale du côté pointe vers l'intérieur)
+      for (var c6 = 0; c6 < 6; c6++) {
+        var q = F.pointRaccord(c6, 0), n = F.NORMALE[c6], t = { x: -n.y, y: n.x }, cle6 = c6 + ':0';
+        var cls6 = 'pm-editeur-raccord pm-editeur-actif' + (raccordExterieur(modele.gabarit, c6, F) ? ' pm-editeur-exterieur' : '');
+        if (util.indexOf(cle6) >= 0) cls6 += ' pm-editeur-utilise';
+        if (marques && marques.raccords.indexOf(cle6) >= 0) cls6 += ' pm-editeur-en-erreur';
+        s += '<path class="' + cls6 + '" data-raccord="' + cle6 + '" d="M' + arrondi(q.x - t.x * RR) + ' ' + arrondi(q.y - t.y * RR) + ' A' + RR + ' ' + RR + ' 0 0 1 ' +
+          arrondi(q.x + t.x * RR) + ' ' + arrondi(q.y + t.y * RR) + ' Z"/>';
+      }
+      return s;
+    }
     for (var cote = 0; cote < 4; cote++) {
       for (var pos = 0; pos < 3; pos++) {
         var p = F.pointRaccord(0, pos), cle = cote + ':' + pos;
@@ -658,9 +765,9 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   /** Quatre coins : gros points, en tirets s'ils sont extérieurs pour le gabarit. */
   function svgCoins(modele, marques, format) {
     var F = leFormat(format), util = extremitesUtilisees(modele).coins, s = '';
-    for (var k = 0; k < 4; k++) {
+    for (var k = 0; k < (F.nbCotes || 4); k++) {
       var p = F.pointCoin(k);
-      var cls = 'pm-editeur-coin pm-editeur-actif' + (coinExterieur(modele.gabarit, k) ? ' pm-editeur-exterieur' : '');
+      var cls = 'pm-editeur-coin pm-editeur-actif' + (coinExterieur(modele.gabarit, k, F) ? ' pm-editeur-exterieur' : '');
       if (util.indexOf(k) >= 0) cls += ' pm-editeur-utilise';
       if (marques && marques.coinsErreur.indexOf(k) >= 0) cls += ' pm-editeur-en-erreur';
       s += '<circle class="' + cls + '" data-coin="' + k + '" cx="' + arrondi(p.x) + '" cy="' + arrondi(p.y) + '" r="6"/>';
@@ -715,7 +822,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   function svgHalo(halo, classe, format) {
     var s = '', C = leFormat(format).COTE;
     classe = classe || 'pm-editeur-halo';
-    if (halo.tuile) s += '<rect class="' + classe + '" x="1" y="1" width="' + (C - 2) + '" height="' + (C - 2) + '" rx="3"/>';
+    if (halo.polygone) s += '<polygon class="' + classe + '" points="' + pointsSvg(halo.polygone) + '"/>';
+    else if (halo.tuile) s += '<rect class="' + classe + '" x="1" y="1" width="' + (C - 2) + '" height="' + (C - 2) + '" rx="3"/>';
     halo.cercles.forEach(function (c) { s += '<circle class="' + classe + '" cx="' + arrondi(c.x) + '" cy="' + arrondi(c.y) + '" r="' + arrondi(c.r) + '"/>'; });
     halo.lignes.forEach(function (l) { s += '<polyline class="' + classe + ' pm-editeur-halo-ligne" points="' + pointsSvg(l) + '"/>'; });
     return s;
@@ -727,6 +835,14 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
    */
   function svgVignette(modele, rot, format) {
     var F = leFormat(format), C = F.COTE, h = C / 2;
+    if (estHex(F)) { // 6 rotations de 60° ; le repère N suit le coin nord de la tuile (au sommet pour la rotation 0)
+      var pn = F.tournerPoint({ x: 0, y: -(C + 7) }, rot), tr = F.tournerPoint({ x: 0, y: -C }, rot);
+      var rmax = Math.max.apply(null, formeHex(modele && modele.gabarit, F).map(function (p) { return Math.hypot(p.x, p.y); })), demi = arrondi(Math.max(C + 14, rmax + 10)); // le pourtour dépasse le cercle de l'hexagone
+      return '<svg class="pm-editeur-vignette-svg" viewBox="' + (-demi) + ' ' + (-demi) + ' ' + (2 * demi) + ' ' + (2 * demi) + '" role="img" aria-label="Rotation ' + (60 * rot) + ' degrés, repère N sur le coin nord de la tuile">' +
+        R.contenuTuile(modele, { rot: rot, format: F }) +
+        '<line class="pm-editeur-repere-trait" x1="0" y1="0" x2="' + arrondi(tr.x) + '" y2="' + arrondi(tr.y) + '"/>' +
+        '<text class="pm-editeur-repere-n" x="' + arrondi(pn.x) + '" y="' + arrondi(pn.y) + '" text-anchor="middle" dominant-baseline="central">N</text></svg>';
+    }
     var pos = [{ x: h, y: -6 }, { x: C + 6, y: h }, { x: h, y: C + 6 }, { x: -6, y: h }][rot % 4];
     var trait = [
       { x1: 0, y1: 0, x2: C, y2: 0 }, { x1: C, y1: 0, x2: C, y2: C },
@@ -835,7 +951,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     zone.appendChild(colCanevas);
     /** Format du document courant (le canevas se redessine s'il change). */
     function fmt() { return M.formatDuDocument(etat.doc()); }
-    var formatAffiche = fmt(), vueAffichee = vuePour(formatAffiche);
+    var formatAffiche = fmt(), vueAffichee = vuePour(formatAffiche), gabaritAffiche;  // gabaritAffiche : gabarit dont la grille (hexagonal) est dessinée
     var svg = svgEl('svg', {
       'class': 'pm-editeur-canevas', viewBox: vueAffichee.x + ' ' + vueAffichee.y + ' ' + vueAffichee.l + ' ' + vueAffichee.h,
       tabindex: '0', role: 'application',
@@ -869,7 +985,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     colCote.appendChild(el('h3', 'pm-editeur-titre', 'Validation'));
     var listeErreurs = el('ul', 'pm-editeur-erreurs');
     colCote.appendChild(listeErreurs);
-    colCote.appendChild(el('h3', 'pm-editeur-titre', 'Aperçu des 4 rotations'));
+    var titreRotations = el('h3', 'pm-editeur-titre', 'Aperçu des 4 rotations');
+    colCote.appendChild(titreRotations);
     var vignettes = el('div', 'pm-editeur-vignettes');
     colCote.appendChild(vignettes);
     colCote.appendChild(el('p', 'pm-editeur-note',
@@ -1018,10 +1135,10 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         s += '<circle class="pm-editeur-apercu-cible" cx="' + fin.x + '" cy="' + fin.y + '" r="9"/>';
       } else if (d && d.type === 'case') {
         var cc = caseParId(m, d.id), dec = geste.decalage || { dx: 0, dy: 0 };
-        var q = aimanter(p.x + dec.dx, p.y + dec.dy, cc ? cc.diametre : DIAMETRE_DEFAUT, F);
+        var q = aimanter(p.x + dec.dx, p.y + dec.dy, cc ? cc.diametre : DIAMETRE_DEFAUT, F, m.gabarit);
         s += '<circle class="pm-editeur-apercu-case" cx="' + arrondi(q.x) + '" cy="' + arrondi(q.y) + '" r="' + arrondi((cc ? cc.diametre : DIAMETRE_DEFAUT) / 2) + '"/>';
       } else if (d && d.type === 'pivot') {
-        var qp = positionPivot(p.x, p.y, F);
+        var qp = positionPivot(p.x, p.y, F, m.gabarit);
         s += '<circle class="pm-editeur-apercu-case" cx="' + arrondi(qp.x) + '" cy="' + arrondi(qp.y) + '" r="3.2"/>';
       } else if (depart) {
         s += '<line class="pm-editeur-apercu-chemin pm-editeur-apercu-libre" x1="' + arrondi(depart.x) + '" y1="' + arrondi(depart.y) + '" x2="' + arrondi(p.x) + '" y2="' + arrondi(p.y) + '"/>';
@@ -1303,12 +1420,13 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       var util = nbUtilisations(doc, m.id);
       var ext = haloExterne(m);
       var F = M.formatDuDocument(doc);
-      if (F !== formatAffiche) { // nouveau format de grille : canevas, grille et zones de coin à refaire
+      if (F !== formatAffiche || (estHex(F) && m.gabarit !== gabaritAffiche)) { // nouveau format de grille (ou, en hexagonal, nouveau gabarit) : canevas, grille et zones de coin à refaire
         formatAffiche = F;
-        vueAffichee = vuePour(F);
+        gabaritAffiche = m.gabarit;
+        vueAffichee = vuePour(F, m.gabarit);
         svg.setAttribute('viewBox', vueAffichee.x + ' ' + vueAffichee.y + ' ' + vueAffichee.l + ' ' + vueAffichee.h);
-        gGrille.innerHTML = svgGrille(F);
-        gZones.innerHTML = svgZonesCoin(F);
+        gGrille.innerHTML = svgGrille(F, m.gabarit);
+        gZones.innerHTML = svgZonesCoin(F, m.gabarit);
       }
       var cle = JSON.stringify([m, util, selection, arme, haloLocal, ext, F.id, outil]);
       if (!force && cle === derniereCle) return;
@@ -1357,10 +1475,12 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
         (nbAlertes ? ', ' + nbAlertes + ' alerte' + (nbAlertes > 1 ? 's' : '') : '') + ' — ' + nbCases + ' case' + (nbCases > 1 ? 's' : '');
       dessinerListeErreurs(m, valid);
 
-      // aperçu des 4 rotations
-      var h = '';
-      for (var rot = 0; rot < 4; rot++) {
-        h += '<figure class="pm-editeur-vignette">' + svgVignette(m, rot, F) + '<figcaption>' + (90 * rot) + '°</figcaption></figure>';
+      // aperçu des rotations : 4 quarts de tour en carré, 6 pas de 60° en hexagonal
+      var h = '', nbRot = F.nbCotes || 4, pasRot = 360 / nbRot;
+      titreRotations.textContent = 'Aperçu des ' + nbRot + ' rotations';
+      vignettes.className = 'pm-editeur-vignettes' + (nbRot === 6 ? ' pm-editeur-vignettes-hex' : '');
+      for (var rot = 0; rot < nbRot; rot++) {
+        h += '<figure class="pm-editeur-vignette">' + svgVignette(m, rot, F) + '<figcaption>' + (pasRot * rot) + '°</figcaption></figure>';
       }
       vignettes.innerHTML = h;
 
@@ -1417,6 +1537,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     // cibles et aides (pures)
     raccordExterieur: raccordExterieur,
     coinExterieur: coinExterieur,
+    aimanterHex: aimanterHex,
+    CASES_DE_DEPART_HEX: CASES_DE_DEPART_HEX,
     cibleEn: cibleEn,
     poigneeEn: poigneeEn,
     extremiteDeCible: extremiteDeCible,

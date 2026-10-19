@@ -96,3 +96,7 @@
 .pm-editeur-poignee-guide { fill: none; stroke: #1b5fd1; stroke-width: .5; stroke-dasharray: 2 2; pointer-events: none; }
 .pm-editeur-apercu-courbe { fill: none; stroke: #1b5fd1; stroke-width: 2; stroke-dasharray: 3 2; }
 .pm-editeur-bouton-outil[aria-pressed="true"] { background: #e3f1ea; border-color: var(--pm-accent, #007A4D); font-weight: 600; }
+
+/* Format hexagonal : disques des zones de jeton (découpés à la forme du gabarit) et six vignettes de rotation sur deux rangées */
+.pm-editeur-zones-coin circle { fill: #007A4D; fill-opacity: .08; stroke: #007A4D; stroke-opacity: .35; stroke-width: .4; stroke-dasharray: 2 2; }
+.pm-editeur-vignettes-hex { grid-template-columns: repeat(3, 1fr); }

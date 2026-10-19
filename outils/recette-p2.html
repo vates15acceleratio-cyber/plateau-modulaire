@@ -181,7 +181,7 @@
       ctrl('bouton Exporter actif', $('btn-exporter') && !$('btn-exporter').disabled);
       var bs = $('controles').querySelectorAll('.pm-controles-avenir-bouton');
       var noms = [].map.call(bs, function (b) { return b.textContent + (b.disabled ? ' (inactif)' : ''); });
-      ctrl('boutons « Rapport d\'équilibre », « Plateau aléatoire » et « Placer les villes » actifs', noms.length === 3 && noms.join('|') === 'Rapport d\'équilibre|Plateau aléatoire|Placer les villes', noms.join('|'));
+      ctrl('boutons « Rapport d\'équilibre », « Plateau aléatoire » et « Placer les villes » actifs, « Orienter les tuiles » masqué en 4×4', noms.length === 4 && noms.join('|') === 'Rapport d\'équilibre|Plateau aléatoire|Placer les villes|Orienter les tuiles' && bs[3].closest('li').hidden === true, noms.join('|'));
       ctrl('boîte de dialogue commune présente et fermée', !!$('dialogue') && !dialogueOuvert());
       ctrl('modules chargés', !!(PM.graphe && PM.equilibre && PM.generateur && PM.exportation));
       ctrl('sauvegarde automatique de l\'utilisateur mise de côté', PM_P2.mise === true);

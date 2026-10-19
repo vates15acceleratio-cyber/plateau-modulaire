@@ -288,6 +288,10 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   /** Libellés d'une grille tirés de ses cotes : { id, nom: '5×5', dimensions: '50 × 50 cm', tuile: '10 cm' }. */
   function descriptionGrille(id) {
     var F = PM.geometrie.format(id), nc = F.GRILLE.colonnes, nl = F.GRILLE.lignes;
+    if (F.nbCotes === 6) { // hexagonal : 19 tuiles hexagonales, plateau en hexagone régulier
+      var cm = function (mm) { return String(Math.round(mm) / 10).replace('.', ','); };
+      return { id: id, nom: 'Hexagonal (' + F.GRILLE.cellules + ' tuiles)', dimensions: cm(F.PLATEAU.largeur) + ' × ' + cm(F.PLATEAU.hauteur) + ' cm', tuile: cm(F.COTE) + ' cm de côté', hex: true };
+    }
     return { id: id, nom: nc + '×' + nl, dimensions: (nc * F.COTE / 10) + ' × ' + (nl * F.COTE / 10) + ' cm', tuile: (F.COTE / 10) + ' cm' };
   }
 
@@ -333,7 +337,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       var r = el('input'); r.type = 'radio'; r.name = 'pm-nouveau-grille'; r.value = id; r.checked = k === 0;
       ligne.appendChild(r);
       ligne.appendChild(el('span', 'pm-nouveau-nom', d.nom));
-      ligne.appendChild(el('span', 'pm-nouveau-detail', d.dimensions + ', tuiles de ' + d.tuile + (id === '5x5' ? ', rangée centrale neutre' : '')));
+      ligne.appendChild(el('span', 'pm-nouveau-detail', d.dimensions + ', tuiles ' + (d.hex ? 'hexagonales de ' : 'de ') + d.tuile + (id === '5x5' || d.hex ? ', rangée centrale neutre' : '')));
       jeu.appendChild(ligne);
       radios.push(r);
     });

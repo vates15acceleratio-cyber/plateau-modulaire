@@ -27,14 +27,14 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
    * majorités sont propres à chaque format (docs/18, docs/48, décisions du 2026-10-19 après docs/62).
    */
   function explicationDe(formatId) {
-    var id = formatId === '5x5' ? '5x5' : '4x4';
+    var id = formatId === '5x5' || formatId === 'hex19' ? formatId : '4x4';
     var info = GR.seuilSInformation(id), alerte = GR.seuilS(id), n = GR.nbVilles(id), majAlerte = GR.seuilMajoriteAlerte(id);
     return 'Pour chaque joueur (vert, rouge), on mesure en pas la distance de chaque ville à sa case d\'apparition la plus proche, ' +
       'puis on trie les ' + n + ' distances. Plateau très déséquilibré (erreur) : un joueur plus proche de ' + GR.seuilMajorite(id) + ' villes ou plus (« ' + GR.libelleMajorite(id) + ' ») ' +
       'ou plus de ' + GR.SEUIL_BLOCAGE_ECART + ' pas d\'écart à un rang de 1 à ' + n + '. Alerte : plus de ' + GR.SEUIL_ECART + ' pas d\'écart à un rang' +
       (majAlerte ? ', ou un joueur plus proche de ' + majAlerte + ' villes (« ' + majAlerte + ' contre ' + (n - majAlerte) + ' »)' : '') + '. ' +
       'Le score S est la somme de ces écarts sur les ' + n + ' rangs (à surveiller à partir de ' + alerte + ' ; S = ' + info + (alerte - 1 > info ? ' ou ' + (alerte - 1) : '') + ' est une simple information). ' +
-      (id === '4x4' ? CONSEIL_4X4 : 'Les ' + n + ' villes se posent 2 par rangée de jonctions (4 par camp ; positions par défaut : (1,1) (4,1) (2,2) (3,2) (2,3) (3,3) (1,4) (4,4), déplaçables) ; un partage symétrique (autant de villes plus proches de chaque joueur) est préféré, un partage non symétrique est une information. ') +
+      (id === '4x4' ? CONSEIL_4X4 : id === 'hex19' ? 'Les ' + n + ' villes se posent 3 par camp, sur des sièges (intersections de 3 tuiles) : par défaut en trèfle (sièges 0, 4, 8 au nord et 15, 19, 23 au sud) ou en une autre disposition symétrique ; un partage symétrique est préféré, un partage non symétrique est une information ; « Orienter les tuiles » cherche les rotations des intérieures qui tiennent l’écart de 4 pas entre les villes. ' : 'Les ' + n + ' villes se posent 2 par rangée de jonctions (4 par camp ; positions par défaut : (1,1) (4,1) (2,2) (3,2) (2,3) (3,3) (1,4) (4,4), déplaçables) ; un partage symétrique (autant de villes plus proches de chaque joueur) est préféré, un partage non symétrique est une information. ') +
       'La première ville doit être à la même distance pour les deux joueurs. Une ville n\'est qu\'une destination : on ne la traverse pas.';
   }
   var EXPLICATION = explicationDe('4x4');
@@ -62,17 +62,17 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   function lignesOrganiques(analyse) {
     var ry = analyse.rythme, ac = analyse.acces, mo = analyse.moities, res = [];
     if (!ry || !ac || !mo) return res;
-    var est5x5 = analyse.grille === '5x5';
+    var est5x5 = analyse.grille === '5x5', hex = analyse.grille === 'hex19', neutre = est5x5 || hex;
     var tresHaut = ry.chaineMax >= 2 * GR.CHAINE_CIBLE + 1 || ry.distMax >= DIST_MAX_TRES_HAUTE; // chaîne >= 7 ou distMax >= 6 : information seulement
-    res.push('Rythme : au plus ' + ry.chaineMax + ' case(s) d’affilée sans zone d’intérêt (jonction, c’est-à-dire ville ou campement entouré de ses 4 tuiles ; passage sans case qui fait gagner un pas ; raccourci du pourtour) ; cible ' +
+    res.push('Rythme : au plus ' + ry.chaineMax + ' case(s) d’affilée sans zone d’intérêt (jonction, c’est-à-dire ville ou campement entouré de ses ' + (hex ? 3 : 4) + ' tuiles ; passage sans case qui fait gagner un pas ; raccourci du pourtour) ; cible ' +
       GR.CHAINE_CIBLE + ' ou moins' + (tresHaut ? ' (bien au-dessus de la cible).' : (ry.chaineMax > GR.CHAINE_CIBLE ? ' (au-dessus de la cible).' : '.')) + ' Distance maximale d’une case à une zone : ' + ry.distMax + ' pas.');
-    res.push('Accès au centre (' + (est5x5 ? 'rangée neutre et jonctions qui la bordent' : 'rangée de jonctions du milieu') + ') : ' + ac.portes.vert + ' porte(s) côté vert, ' +
+    res.push('Accès au centre (' + (est5x5 ? 'rangée neutre et jonctions qui la bordent' : hex ? 'rangée neutre et sièges qui la bordent' : 'rangée de jonctions du milieu') + ') : ' + ac.portes.vert + ' porte(s) côté vert, ' +
       ac.portes.rouge + ' côté rouge (écart ' + ac.ecart + ') ; chemins indépendants depuis les apparitions : vert ' + ac.chemins.vert + ', rouge ' + ac.chemins.rouge + '.');
     res.push('Cases par moitié : vert ' + mo.vert + ', rouge ' + mo.rouge + (mo.ecart ? ' (écart ' + mo.ecart + ')' : ' (égales)') + ' ; à part : ' +
-      (est5x5 ? mo.tuiles.neutre + ' sur la rangée neutre et ' : '') + mo.jonctions.milieu + ' jonction(s)-case(s) du milieu.');
+      (neutre ? mo.tuiles.neutre + ' sur la rangée neutre et ' : '') + mo.jonctions.milieu + ' ' + (hex ? 'siège(s)-case(s)' : 'jonction(s)-case(s)') + ' du milieu.');
     // 5×5 (docs/18, docs/53 § 1) : connexions par case, en information seulement
     var cx = analyse.connexions;
-    if (est5x5 && cx && cx.cases) {
+    if (neutre && cx && cx.cases) {
       res.push('Connexions par case : ' + cx.faibles + ' case(s) à 2 connexions ou moins sur ' + cx.cases + ' (' + texteParts(cx.part) + ' ; visé : moins de ' +
         texteParts(GR.PART_CONNEXIONS_MAX) + (cx.conforme ? ', tenu' : ', non tenu') + ') ; ' + texteDegre(cx.degreMoyen) + ' connexions par case en moyenne (villes à part).');
     }
@@ -85,7 +85,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
   function texteDegre(x) { return x === null || x === undefined ? '—' : (Math.round(x * 100) / 100).toString().replace('.', ','); }
 
   function texteDistance(d) { return d === null || d === undefined ? '—' : (isFinite(d) ? String(d) : '∞'); }
-  function nomVille(v) { return '(' + v.i + ', ' + v.j + ')'; }
+  function nomVille(v, grille) { return grille === 'hex19' ? 'siège ' + v.i : '(' + v.i + ', ' + v.j + ')'; }
 
   /**
    * Modèle de présentation (sans DOM) :
@@ -107,12 +107,12 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     var g1 = analyse.goulets[1], g2 = analyse.goulets[2];
     var goulets = g1.parVille.map(function (v, k) {
       var c2 = g2.parVille[k] ? g2.parVille[k].chemins : 0;
-      return { ville: nomVille(v), j1: v.chemins, j2: c2, faible: v.chemins <= 1 || c2 <= 1 };
+      return { ville: nomVille(v, analyse.grille), j1: v.chemins, j2: c2, faible: v.chemins <= 1 || c2 <= 1 };
     });
     function articulations(gj) {
       return gj.articulations.map(function (a) {
         var libelle = a.type === 'case' ? 'Une case' : (a.type === 'ville' ? 'Une ville' : 'Un campement');
-        return libelle + ' coupe ' + a.villesCoupees.length + ' ville(s) du joueur ' + GR.NOM_JOUEUR[gj.joueur] + ' : ' + a.villesCoupees.map(nomVille).join(', ') + '.';
+        return libelle + ' coupe ' + a.villesCoupees.length + ' ville(s) du joueur ' + GR.NOM_JOUEUR[gj.joueur] + ' : ' + a.villesCoupees.map(function (v) { return nomVille(v, analyse.grille); }).join(', ') + '.';
       });
     }
     return {
@@ -127,7 +127,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
       ecartRang: r.ecartRang,
       ecartMax7: r.ecartMax7,
       partage: { j1: r.partage[1], j2: r.partage[2], egalite: r.partage.egalite },
-      nbVilles: r.nbVilles || GR.nbVilles(analyse.grille), partageSymetrique: r.partageSymetrique === true, est5x5: analyse.grille === '5x5',
+      nbVilles: r.nbVilles || GR.nbVilles(analyse.grille), partageSymetrique: r.partageSymetrique === true, est5x5: analyse.grille === '5x5', avecSymetrie: analyse.grille === '5x5' || analyse.grille === 'hex19',
       tempo: tempo,
       premiere: { j1: texteDistance(r.premiereVille[1]), j2: texteDistance(r.premiereVille[2]), ecart: texteDistance(r.premiereVille.ecart) },
       goulets: goulets,
@@ -183,7 +183,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     var doc = conteneur.ownerDocument || document;
     while (conteneur.firstChild) conteneur.removeChild(conteneur.firstChild);
     var racine = el(doc, 'div', 'pm-equilibre');
-    var m = rapport(analyser(docCourant));
+    var analyse0 = analyser(docCourant), m = rapport(analyse0);
 
     racine.appendChild(el(doc, 'p', 'pm-equilibre-explication', m.explication));
 
@@ -259,7 +259,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     var sPartage = section(doc, 'Partage et tempo');
     sPartage.appendChild(el(doc, 'p', null, 'Villes strictement plus proches du joueur vert : ' + m.partage.j1 +
       ' · du joueur rouge : ' + m.partage.j2 + ' · à égalité : ' + m.partage.egalite + '.' +
-      (m.est5x5 && m.complet ? (m.partageSymetrique ? ' Partage symétrique.' : ' Partage non symétrique (information).') : '')));
+      (m.avecSymetrie && m.complet ? (m.partageSymetrique ? ' Partage symétrique.' : ' Partage non symétrique (information).') : '')));
     sPartage.appendChild(tableau(doc, 'Villes atteignables en au plus n pas', ['Pas', 'Vert', 'Rouge'],
       m.tempo.map(function (t) { return { cellules: ['≤ ' + t.pas, String(t.j1), String(t.j2)] }; })));
     sPartage.appendChild(el(doc, 'p', 'pm-equilibre-note', 'Villes à au plus 4 pas : vert ' + m.villesA4.j1 + ', rouge ' + m.villesA4.j2 + ' (différence ' + m.villesA4.ecart + ', information).'));
@@ -271,7 +271,7 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     var sGoulets = section(doc, 'Goulets');
     if (m.goulets.length) {
       sGoulets.appendChild(tableau(doc, 'Chemins disjoints (sans case commune, hors cases d\'apparition) entre les apparitions du joueur et chaque ville. Un seul chemin = goulet.',
-        ['Ville (i, j)', 'Vert', 'Rouge'],
+        [analyse0.grille === 'hex19' ? 'Ville (siège)' : 'Ville (i, j)', 'Vert', 'Rouge'],
         m.goulets.map(function (x) { return { classe: x.faible ? 'pm-equilibre-goulet' : '', cellules: [x.ville, String(x.j1), String(x.j2)] }; })));
       var arts = m.articulations[1].concat(m.articulations[2]);
       if (arts.length) {

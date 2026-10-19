@@ -16,7 +16,7 @@ test('hex19 : format connu, gelé, même objet, formats carrés inchangés', () 
   assert.strictEqual(H.id, 'hex19');
   assert.strictEqual(G.format('hex19'), H);
   assert.ok(Object.isFrozen(H));
-  assert.deepStrictEqual([...G.FORMATS], ['4x4', '5x5']);
+  assert.deepStrictEqual([...G.FORMATS], ['4x4', '5x5', 'hex19']);
   assert.deepStrictEqual([...G.FORMATS_TOUS], ['4x4', '5x5', 'hex19']);
   assert.throws(() => G.format('hex7'), /Format de grille inconnu/);
   assert.strictEqual(G.format('4x4').COTE, 120);

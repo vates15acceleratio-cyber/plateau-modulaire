@@ -211,7 +211,7 @@ test('poids de tirage hex19 : distincts du stock (poids = exemplaires du candida
 
 /* ================================ nouveauDocument ================================ */
 
-test('nouveauDocument(hex19) : grille hex19, copie modifiable des 4 modèles, plateau vide, FORMATS reste carré', () => {
+test('nouveauDocument(hex19) : grille hex19, copie modifiable des 4 modèles, plateau vide, hex19 dans FORMATS', () => {
   const d = CAT.nouveauDocument('hex19');
   assert.equal(d.grille, 'hex19');
   assert.deepEqual(d.plateau, { tuiles: [], jetons: [] });
@@ -222,7 +222,7 @@ test('nouveauDocument(hex19) : grille hex19, copie modifiable des 4 modèles, pl
   assert.equal(modele('HC2').cases[0].x, 0);
   assert.deepEqual(d, Object.assign(copie(d), {}));
   assert.deepEqual(Object.keys(M.nouveauDocument('hex19')).sort(), Object.keys(d).sort());
-  assert.deepEqual(G.FORMATS, ['4x4', '5x5']);
+  assert.deepEqual([...G.FORMATS], ['4x4', '5x5', 'hex19']);
   assert.ok(G.FORMATS_TOUS.includes('hex19'));
   assert.throws(() => CAT.nouveauDocument('hex20'), /Grille inconnue/);
 });

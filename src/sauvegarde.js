@@ -35,7 +35,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /** Délai de repli après retour du focus, pour détecter une annulation sans événement `cancel` (ms). */
   var DELAI_REPLI_ANNULATION = 1500;
   var GABARITS = M.GABARITS;
-  var FORMATS = PM.geometrie.FORMATS;
+  var FORMATS = PM.geometrie.FORMATS_TOUS; // 4×4, 5×5 et hexagonal 'hex19'
 
   /* ------------------------------------------------------------------ */
   /* Outils                                                              */
@@ -346,8 +346,9 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return { ok: true, objet: objet, erreurs: [] };
   }
 
-  /** Version à écrire : 3 si un modèle a au moins un passage ou un pivot, sinon 2. */
-  function versionEcriture(modeles) {
+  /** Version à écrire : 3 si un modèle a au moins un passage ou un pivot, ou si la grille est hexagonale (un fichier de ce format ne se lit qu'à partir de la version 3), sinon 2. */
+  function versionEcriture(modeles, grille) {
+    if (grille === PM.geometrie.ID_HEX) return VERSION_PASSAGES;
     var l = Array.isArray(modeles) ? modeles : [];
     for (var i = 0; i < l.length; i++) {
       var m = l[i];
@@ -360,7 +361,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function versJSON(doc) {
     return JSON.stringify({
       format: FORMAT,
-      version: versionEcriture(doc.modeles),
+      version: versionEcriture(doc.modeles, M.formatDuDocument(doc).id),
       grille: M.formatDuDocument(doc).id,
       date: new Date().toISOString(),
       modeles: doc.modeles,
@@ -409,7 +410,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   function bibliothequeVersJSON(doc) {
     return JSON.stringify({
       format: FORMAT,
-      version: versionEcriture(doc.modeles),
+      version: versionEcriture(doc.modeles, M.formatDuDocument(doc).id),
       grille: M.formatDuDocument(doc).id,
       contenu: 'bibliotheque',
       date: new Date().toISOString(),
