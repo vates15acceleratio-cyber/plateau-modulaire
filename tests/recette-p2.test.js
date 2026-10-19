@@ -501,8 +501,8 @@ test('export : PDF des jetons recto-verso (2 pages A4) et de l\'aperçu (A3) : t
   assert.strictEqual(r['reparé'], false);
   for (const k of [0, 1]) assert.ok(Math.abs(r.tailles[k][0] - 210) < 0.1 && Math.abs(r.tailles[k][1] - 297) < 0.1);
   assert.ok(Math.abs(r.tailles[2][0] - 297) < 0.1 && Math.abs(r.tailles[2][1] - 420) < 0.1);
-  assert.ok(r.textes[0].includes('100 mm') && r.textes[0].includes('page 1/2 : recto (16 campements)'));
-  assert.ok(r.textes[1].includes('page 2/2 : verso (16 villes)') && !r.textes[1].includes('100 mm'));
+  assert.ok(r.textes[0].includes('100 mm') && r.textes[0].includes('page 1/2 : recto (24 campements)'));
+  assert.ok(r.textes[1].includes('page 2/2 : verso (24 villes)') && !r.textes[1].includes('100 mm'));
   for (const k of [0, 1]) {
     assert.ok(r.textes[k].includes('recto-verso, retournement bord long'), 'consigne recto-verso page ' + (k + 1));
     assert.ok(!r.textes[k].includes('?'), 'caractère hors WinAnsi page ' + (k + 1) + ' : ' + JSON.stringify(r.textes[k]));
@@ -510,10 +510,10 @@ test('export : PDF des jetons recto-verso (2 pages A4) et de l\'aperçu (A3) : t
   assert.ok(r.textes[0].includes('Découper de ce côté'), 'texte accentué du recto : ' + JSON.stringify(r.textes[0]));
   assert.ok(r.textes[2].includes('non imprimable'), 'aperçu marqué « non imprimable »');
   assert.ok(r.textes[2].includes('réduit à 56'), 'texte accentué de l\'aperçu : ' + JSON.stringify(r.textes[2]));
-  // 16 jetons Ø 30 au pas de 38 mm, une grille pour tous les formats (docs/18, 2026-10-19) ; verso en miroir, Ø 36 noir
+  // 24 jetons Ø 30 au pas de 38 mm, une grille pour tous les formats (docs/18 et docs/72, 2026-10-19) ; verso en miroir, Ø 36 noir
   const j = E.planchesJetons(), v = j.verso;
-  assert.strictEqual(j.jetons.length, 16);
-  assert.strictEqual(v.jetons.length, 16);
+  assert.strictEqual(j.jetons.length, 24);
+  assert.strictEqual(v.jetons.length, 24);
   assert.ok(j.jetons.every((x) => x.type === 'campement') && v.jetons.every((x) => x.type === 'capture'));
   [j, v].forEach((page) => {
     const rf = page.rayonFondPerdu;

@@ -260,34 +260,34 @@ test('SVG de planche A3 : dimensions en mm, viewBox, balises équilibrées, une 
   assert.match(E.svgPlanche(doc, E.calepiner(doc, { format: 'A4' })[0]), /width="210mm" height="297mm" viewBox="0 0 210 297"/);
 });
 
-test('SVG des jetons recto-verso, un jeu pour tous les formats : 16 campements au recto, 16 villes en miroir au verso', () => {
+test('SVG des jetons recto-verso, un jeu pour tous les formats : 24 campements au recto, 24 villes en miroir au verso', () => {
   const recto = E.svgJetons(), verso = E.svgJetons('verso');
   assert.equal(E.svgJetons('recto'), recto);
   [recto, verso].forEach(svg => { assert.match(svg, /width="210mm" height="297mm" viewBox="0 0 210 297"/); equilibre(svg); });
   const p = E.planchesJetons(), v = p.verso;
-  assert.equal(p.jetons.length, 16);
-  assert.equal(v.jetons.length, 16);
+  assert.equal(p.jetons.length, 24);
+  assert.equal(v.jetons.length, 24);
   assert.ok(p.jetons.every(j => j.type === 'campement') && v.jetons.every(j => j.type === 'capture'));
-  assert.match(p.titre, /page 1\/2 : recto \(16 campements\)$/);
-  assert.match(v.titre, /page 2\/2 : verso \(16 villes\)$/);
+  assert.match(p.titre, /page 1\/2 : recto \(24 campements\)$/);
+  assert.match(v.titre, /page 2\/2 : verso \(24 villes\)$/);
   // miroir du retournement bord long : la ville n au dos du campement n, en (210 - cx, cy)
   v.jetons.forEach((j, k) => {
     assert.equal(j.numero, p.jetons[k].numero);
     assert.ok(Math.abs(j.cx - (210 - p.jetons[k].cx)) < 1e-9 && Math.abs(j.cy - p.jetons[k].cy) < 1e-9, 'miroir ' + k);
   });
-  // grille 4 x 4 au pas de 38, centrée dans les deux sens (mêmes positions en retournement bord court)
+  // grille 4 x 6 au pas de 38, centrée dans les deux sens (mêmes positions en retournement bord court)
   assert.ok(Math.abs(p.jetons[1].cx - p.jetons[0].cx - 38) < 1e-9 && Math.abs(p.jetons[4].cy - p.jetons[0].cy - 38) < 1e-9);
   const cles = js => js.map(j => j.cx.toFixed(6) + ',' + j.cy.toFixed(6)).sort().join(';');
   assert.equal(cles(p.jetons), cles(p.jetons.map(j => ({ cx: 210 - j.cx, cy: 297 - j.cy }))));
   // recto : contenu de PM.rendu, cercle de coupe et 4 repères par jeton, barre de 100 mm ; pas de fond perdu imprimé
   assert.ok(recto.includes(R.contenuJeton('campement', p.jetons[0].cx, p.jetons[0].cy)));
-  assert.equal((recto.match(/<circle [^>]*r="15" fill="none" stroke="#000000"/g) || []).length, 16, 'cercle de coupe par jeton');
-  assert.equal((recto.match(/<line /g) || []).length, 16 * 4 + 12, 'repères + barre (trait + 11 graduations)');
+  assert.equal((recto.match(/<circle [^>]*r="15" fill="none" stroke="#000000"/g) || []).length, 24, 'cercle de coupe par jeton');
+  assert.equal((recto.match(/<line /g) || []).length, 24 * 4 + 12, 'repères + barre (trait + 11 graduations)');
   assert.ok(!/r="1[68](\.5)?" fill="#/.test(recto));
   assert.ok(recto.includes('>100 mm</text>'));
   // verso : disque noir de fond perdu Ø 36 sous chaque ville, aucun repère ni cercle de coupe, pas de barre
   assert.equal(v.rayonFondPerdu, 18);
-  assert.equal((verso.match(new RegExp('r="18" fill="' + R.COULEURS.noir + '"', 'g')) || []).length, 16);
+  assert.equal((verso.match(new RegExp('r="18" fill="' + R.COULEURS.noir + '"', 'g')) || []).length, 24);
   assert.ok(verso.includes(R.contenuJeton('capture', v.jetons[0].cx, v.jetons[0].cy)));
   assert.equal((verso.match(/<line /g) || []).length, 0);
   assert.equal((verso.match(/fill="none"/g) || []).length, 0);
@@ -305,7 +305,7 @@ test('SVG des jetons recto-verso, un jeu pour tous les formats : 16 campements a
     page.textes.forEach(t => assert.ok(E.largeurTexte(t.texte, t.taille) <= 150, t.texte));
   });
   // tout tient dans la zone imprimable, repères du recto et fond perdu du verso compris
-  p.jetons.forEach(j => assert.ok(j.cx - 22 >= 5 && j.cx + 22 <= 205 && j.cy - 22 > 40 && j.cy + 22 <= 280));
+  p.jetons.forEach(j => assert.ok(j.cx - 22 >= 5 && j.cx + 22 <= 205 && j.cy - 22 > 30 && j.cy + 22 <= 280));
 });
 
 test('SVG de l\'aperçu : A3, marqué non imprimable, sans repères de coupe', () => {

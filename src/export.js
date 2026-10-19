@@ -12,8 +12,11 @@
  * Les fonctions de calcul n'accèdent pas au DOM (testées sous Node) ; seules rasteriser(),
  * telecharger() et ouvrir() utilisent le navigateur.
  * Règles v2 : les tuiles sont imprimées neutres (case d'apparition en noir et blanc, une même tuile sert aux
- * deux camps) ; les jetons sont 16 jetons recto-verso, campement au recto et ville au verso (deux pages A4) ; l'aperçu du plateau est refusé si le plateau complet est
+ * deux camps) ; les jetons sont 24 jetons recto-verso, campement au recto et ville au verso (deux pages A4) ; l'aperçu du plateau est refusé si le plateau complet est
  * très déséquilibré (PM.graphe, docs/20).
+ * Format hexagonal 'hex19' (docs/72, docs/75) : pièces hexagonales et pentagones à bord droit jointives en nid d’abeille,
+ * COUPES PARTAGÉES (un seul trait de coupe par côté commun, sans fond perdu ni gouttière), 10 pièces par feuille A3 paysage
+ * (3 planches pour 30 pièces) ou 3 par feuille A4 portrait ; aperçu du plateau hexagonal de 498,8 x 432 mm réduit sur A3.
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
 if (!PM.modele && typeof require === 'function') require('./modele.js'); // chargement sous Node
@@ -173,6 +176,15 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
    * 4×4 par défaut) ; lève une Error si la grille ne tient pas avec des marges >= 15 mm.
    */
   function margesFormat(nomFormat, grille) {
+    var Fg = grille && typeof grille === 'object' ? grille : G.format(grille || G.FORMAT_DEFAUT);
+    if (Fg.nbCotes === 6) { // hexagonal : marges de la disposition nominale (A3 : 10 pièces ; A4 : 3 pièces en triangle)
+      var fh = FORMATS_HEX[nomFormat];
+      if (!fh) throw new Error('Format inconnu : ' + nomFormat + '.');
+      var ux = (nomFormat === 'A3' ? 8 : 4) * Fg.APOTHEME, uy = (nomFormat === 'A3' ? 5 : 3.5) * Fg.COTE;
+      var hx = (fh.largeur - ux) / 2, hy = (fh.hauteur - uy) / 2;
+      if (hx < MARGE_HEX_X - 1e-9 || hy < 1e-9) throw new Error('La grille ne tient pas sur ' + nomFormat + ' avec des marges d’au moins ' + MARGE_HEX_X + ' mm.');
+      return { x: hx, y: hy };
+    }
     var f = FORMATS[nomFormat];
     if (!f) throw new Error('Format inconnu : ' + nomFormat + '.');
     var cp = cotePlanche(grille && typeof grille === 'object' ? grille : G.format(grille || G.FORMAT_DEFAUT));
@@ -192,6 +204,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
    *    chaque fond perdu, qui sert aux deux tuiles car leurs lignes de coupe sont alignées.
    */
   function calculerReperes(planche) {
+    if (planche.hex) return calculerReperesHex(planche);
     var occupe = {}, vus = {}, res = [], cp = planche.pas - GOUTTIERE; // côté de la tuile avec fond perdu
     planche.tuiles.forEach(function (t) { occupe[t.col + ',' + t.lig] = true; });
     function ajouter(x1, y1, x2, y2, partage) {
@@ -231,6 +244,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
   /** Textes d'une planche : [{ texte, x, y, taille (mm), ancre, gras }] (y = ligne de base). */
   function calculerTextes(planche) {
+    if (planche.hex) return calculerTextesHex(planche);
     var textes = [];
     planche.tuiles.forEach(function (t) {
       textes.push({ texte: t.etiquette, x: t.x + 10, y: t.y - 1.5, taille: TAILLE_ID, ancre: 'start', gras: false });
@@ -265,6 +279,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
    */
   function calepiner(doc, options) {
     var nomFormat = options && options.format ? options.format : 'A3';
+    if (M.formatDuDocument(doc).nbCotes === 6) return calepinerHex(doc, options);
     var F = M.formatDuDocument(doc), f = FORMATS[nomFormat], marges = margesFormat(nomFormat, F), pas = pasPlanche(F);
     var liste = listeTuiles(doc, options).tuiles;
     var parPlanche = f.colonnes * f.lignes, nbPlanches = Math.ceil(liste.length / parPlanche);
@@ -295,6 +310,385 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       planches.push(planche);
     }
     return planches;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Format hexagonal : coupes partagées (docs/72, docs/75)               */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Feuilles du format hexagonal. Les pièces (hexagones, pentagones à bord droit) sont jointives en nid d’abeille, sans fond
+   * perdu ni gouttière : chaque côté commun n’a qu’un trait de coupe, imprimé sur la planche (coupe au cutter et à la règle).
+   *  - A3 paysage (420 x 297) : disposition de docs/75, 10 pièces en trois rangées (3 en haut, 4 au milieu, 3 en bas), soit
+   *    3 planches pour 30 pièces (19 tuiles posées et 11 de réserve) ;
+   *  - A4 portrait (210 x 297) : 3 pièces jointives, disposition cherchée par essais (10 planches pour 30 pièces).
+   */
+  var FORMATS_HEX = {
+    A3: { largeur: 420, hauteur: 297, pieces: 10 },
+    A4: { largeur: 210, hauteur: 297, pieces: 3 }
+  };
+  var MARGE_HEX_X = 8;                   // mm : zone de pièces à 8 mm au moins du bord de la feuille
+  var ZONE_HEX_Y0 = 12, ZONE_HEX_Y1 = 286; // mm : sous le titre (ligne de base à 10 mm), au-dessus de la barre de contrôle
+  var TOLERANCE_RECOUVREMENT = 1e-3;     // mm : en deçà, deux pièces se touchent seulement
+  /** Rotation d’impression préférée d’un rôle (la pièce physique se tourne à la pose) : bord droit en haut pour un bord. */
+  var ROTATIONS_A4 = { centrale: [0], bord: [0, 3, 1, 2, 4, 5], coin: [4, 5, 2, 1, 0, 3] };
+
+  /** Rôle d’impression d’une pièce ('centrale', 'bord' ou 'coin') d’après le gabarit de son modèle. */
+  function roleHex(modele, F) {
+    return modele && (modele.gabarit === 'bord' || modele.gabarit === 'coin') && F.GABARITS[modele.gabarit] ? modele.gabarit : 'centrale';
+  }
+
+  /** Polygone d’une pièce de rôle `role` tournée de `rot` et centrée en (cx, cy), coordonnées arrondies au millième. */
+  function polygonePiece(F, role, rot, cx, cy) {
+    return F.forme(role).map(function (p) {
+      var t = F.tournerPoint(p, rot);
+      return { x: Math.round((cx + t.x) * 1000) / 1000, y: Math.round((cy + t.y) * 1000) / 1000 };
+    });
+  }
+
+  /** Distance (mm) d'un point à un segment. */
+  function distanceSegment(p, a, b) {
+    var dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy, t = l2 ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
+  }
+
+  /**
+   * Centre (repère de la pièce tournée de `rot`, origine au centre) de l'étiquette `texte` d'une pièce hexagonale : le point de la
+   * pièce le plus éloigné des chemins, passages, cases, sièges de jeton et côtés de coupe (grille de 3 mm).
+   */
+  var CACHE_ETIQUETTES = {};
+  function positionEtiquette(modele, role, rot, F, texte) {
+    var cleCache = JSON.stringify([modele && modele.cases, modele && modele.chemins, modele && modele.passages, modele && modele.pivots, role, rot, texte]);
+    if (Object.prototype.hasOwnProperty.call(CACHE_ETIQUETTES, cleCache)) return CACHE_ETIQUETTES[cleCache];
+    var L2 = F.LARGEUR_CHEMIN / 2, poly = polygonePiece(F, role, rot, 0, 0), lignes = [], disques = [];
+    function tourner(p) { return F.tournerPoint(p, rot); }
+    R.tracesModele(modele, F).forEach(function (t) { lignes.push(t.pts.map(tourner)); });
+    R.tracesPassages(modele, F).forEach(function (t) { lignes.push(t.pts.map(tourner)); });
+    tab(modele && modele.cases).forEach(function (c) {
+      if (!c || typeof c.x !== 'number' || typeof c.y !== 'number') return;
+      var p = tourner({ x: c.x, y: c.y });
+      disques.push({ x: p.x, y: p.y, r: (c.diametre || F.DIAMETRE_CASE) / 2 });
+    });
+    (F.GABARITS[role] ? F.GABARITS[role].coinsInterieurs : []).forEach(function (k) {
+      var p = tourner(F.pointCoin(k));
+      disques.push({ x: p.x, y: p.y, r: F.DIAMETRE_JETON / 2 });
+    });
+    var demiL = largeurTexte(texte, TAILLE_ID) / 2, demiH = 1.4;
+    var cote = function (pt, a, b) { return ((b.x - a.x) * (pt.y - a.y) - (b.y - a.y) * (pt.x - a.x)) / (Math.hypot(b.x - a.x, b.y - a.y) || 1); };
+    var signe = cote({ x: 0, y: 0 }, poly[0], poly[1]) >= 0 ? 1 : -1;
+    var meilleur = { x: 0, y: 0, d: -Infinity };
+    for (var x = -66; x <= 66; x += 3) {
+      for (var y = -66; y <= 66; y += 3) {
+        var pts = [];
+        [-1, 0, 1].forEach(function (sx) { [-1, 0, 1].forEach(function (sy) { pts.push({ x: x + sx * demiL, y: y + sy * demiH }); }); });
+        var d = Infinity;
+        pts.forEach(function (pt) {
+          poly.forEach(function (a, i) { d = Math.min(d, signe * cote(pt, a, poly[(i + 1) % poly.length]) - 1); });
+          lignes.forEach(function (ln) { for (var i = 0; i + 1 < ln.length; i++) d = Math.min(d, distanceSegment(pt, ln[i], ln[i + 1]) - L2); });
+          disques.forEach(function (c) { d = Math.min(d, Math.hypot(pt.x - c.x, pt.y - c.y) - c.r); });
+        });
+        if (d > meilleur.d + 1e-9) meilleur = { x: x, y: y, d: d };
+      }
+    }
+    var res = { x: meilleur.x, y: meilleur.y };
+    if (Object.keys(CACHE_ETIQUETTES).length > 400) CACHE_ETIQUETTES = {}; // mémoire bornée (l'éditeur change les modèles)
+    CACHE_ETIQUETTES[cleCache] = res;
+    return res;
+  }
+
+  /** Profondeur de recouvrement (mm) de deux polygones convexes ; 0 s’ils sont disjoints ou se touchent. */
+  function recouvrement(A, B) {
+    var mini = Infinity;
+    for (var g = 0; g < 2; g++) {
+      var Pg = g ? B : A;
+      for (var i = 0; i < Pg.length; i++) {
+        var p = Pg[i], q = Pg[(i + 1) % Pg.length], nx = q.y - p.y, ny = p.x - q.x, l = Math.hypot(nx, ny);
+        nx /= l; ny /= l;
+        var a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+        A.forEach(function (v) { var d = v.x * nx + v.y * ny; a0 = Math.min(a0, d); a1 = Math.max(a1, d); });
+        B.forEach(function (v) { var d = v.x * nx + v.y * ny; b0 = Math.min(b0, d); b1 = Math.max(b1, d); });
+        var o = Math.min(a1, b1) - Math.max(a0, b0);
+        if (o <= TOLERANCE_RECOUVREMENT) return 0;
+        mini = Math.min(mini, o);
+      }
+    }
+    return mini;
+  }
+
+  function boitePolygones(polys) {
+    var xs = [], ys = [];
+    polys.forEach(function (P) { P.forEach(function (p) { xs.push(p.x); ys.push(p.y); }); });
+    return { x0: Math.min.apply(null, xs), y0: Math.min.apply(null, ys), x1: Math.max.apply(null, xs), y1: Math.max.apply(null, ys) };
+  }
+
+  /**
+   * Emplacements de la planche A3 : { x, y, lig, col, type: 'coin' | 'bord' | 'milieu', rotCoin, rotBord } dans le repère de la
+   * disposition (origine au centre). Rangée du haut : bord droit vers le haut ; rangée du bas : bord droit vers le bas ;
+   * rangée du milieu : 4 hexagones. Un coin se place aux extrémités des rangées du haut et du bas (rotations 4, 5, 2, 1).
+   */
+  function emplacementsA3(F) {
+    var ri = F.APOTHEME, y = 1.5 * F.COTE, sl = [];
+    [[-2 * ri, 4], [0, null], [2 * ri, 5]].forEach(function (e, k) {
+      sl.push({ x: e[0], y: -y, lig: 0, col: k, type: e[1] === null ? 'bord' : 'coin', rotCoin: e[1], rotBord: 0 });
+    });
+    [-3 * ri, -ri, ri, 3 * ri].forEach(function (x, k) { sl.push({ x: x, y: 0, lig: 1, col: k, type: 'milieu', rotCoin: null, rotBord: 0 }); });
+    [[-2 * ri, 2], [0, null], [2 * ri, 1]].forEach(function (e, k) {
+      sl.push({ x: e[0], y: y, lig: 2, col: k, type: e[1] === null ? 'bord' : 'coin', rotCoin: e[1], rotBord: 3 });
+    });
+    return sl;
+  }
+
+  /**
+   * Répartit les pièces (rôle 'centrale' | 'bord' | 'coin') sur des planches A3 : coins aux quatre extrémités, bords aux emplacements
+   * restants des rangées du haut et du bas, hexagones au milieu et partout où il reste de la place. Renvoie une liste de planches,
+   * chacune une liste de { piece, x, y, rot, lig, col } (repère de la disposition).
+   */
+  function repartirA3(pieces, F) {
+    var file = { coin: [], bord: [], centrale: [] }, emp = emplacementsA3(F), res = [];
+    pieces.forEach(function (p) { file[p.role].push(p); });
+    var ordre = [0, 2, 7, 9, 1, 8, 3, 4, 5, 6]; // coins, puis milieux du haut et du bas, puis rangée du milieu
+    function reste() { return file.coin.length + file.bord.length + file.centrale.length; }
+    while (reste() > 0) {
+      var feuille = [];
+      ordre.forEach(function (k) {
+        var sl = emp[k], prefs = sl.type === 'coin' ? ['coin', 'bord', 'centrale'] : sl.type === 'bord' ? ['bord', 'centrale'] : ['centrale'];
+        for (var i = 0; i < prefs.length; i++) {
+          if (!file[prefs[i]].length) continue;
+          var p = file[prefs[i]].shift();
+          feuille.push({ piece: p, x: sl.x, y: sl.y, lig: sl.lig, col: sl.col, rot: p.role === 'coin' ? sl.rotCoin : p.role === 'bord' ? sl.rotBord : 0 });
+          return;
+        }
+      });
+      feuille.sort(function (a, b) { return (a.lig - b.lig) || (a.col - b.col); });
+      res.push(feuille);
+    }
+    return res;
+  }
+
+  var CACHE_A4 = {};
+  /**
+   * Disposition jointive de 1 à 3 pièces de rôles `roles` (triés) sur des cellules du nid d’abeille, dans un rectangle de
+   * W x H : cellules les plus groupées d’abord, puis rotations préférées. Renvoie [{ x, y, rot }] dans l’ordre de `roles`
+   * (origine arbitraire), ou null. Le résultat est mis en cache par composition.
+   */
+  function disposerA4(F, roles, W, H) {
+    var cle = roles.join(',') + '|' + W + 'x' + H;
+    if (Object.prototype.hasOwnProperty.call(CACHE_A4, cle)) return CACHE_A4[cle];
+    var ri = F.APOTHEME, pas = 1.5 * F.COTE, cellules = [], n = roles.length, combos = [], resultat = null;
+    for (var j = 0; j < 3; j++) for (var i = -3; i <= 3; i++) cellules.push({ x: (2 * i + j) * ri, y: j * pas });
+    (function combiner(debut, choix) {
+      if (choix.length === n) { combos.push(choix.slice()); return; }
+      for (var k = debut; k < cellules.length; k++) { choix.push(k); combiner(k + 1, choix); choix.pop(); }
+    })(0, []);
+    function etendue(c) {
+      var xs = c.map(function (k) { return cellules[k].x; }), ys = c.map(function (k) { return cellules[k].y; });
+      return (Math.max.apply(null, xs) - Math.min.apply(null, xs) + 1) * (Math.max.apply(null, ys) - Math.min.apply(null, ys) + 1);
+    }
+    combos.forEach(function (c, idx) { c.cle = etendue(c) * 1e6 + idx; });
+    combos.sort(function (a, b) { return a.cle - b.cle; });
+    var permutations = n === 1 ? [[0]] : n === 2 ? [[0, 1], [1, 0]] : [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+    for (var c = 0; c < combos.length && !resultat; c++) {
+      var vus = {};
+      for (var q = 0; q < permutations.length && !resultat; q++) {
+        var perm = permutations[q], seq = perm.map(function (k) { return roles[k]; }).join(',');
+        if (vus[seq]) continue;
+        vus[seq] = true;
+        var choix = [];
+        (function placer(k, polys) {
+          if (resultat) return;
+          if (k === n) {
+            var b = boitePolygones(polys);
+            if (b.x1 - b.x0 <= W + 1e-6 && b.y1 - b.y0 <= H + 1e-6) resultat = choix.map(function (e) { return { x: e.x, y: e.y, rot: e.rot, role: e.role }; });
+            return;
+          }
+          var cell = cellules[combos[c][k]], role = roles[perm[k]];
+          ROTATIONS_A4[role].forEach(function (rot) {
+            if (resultat) return;
+            var P = polygonePiece(F, role, rot, cell.x, cell.y);
+            if (polys.some(function (Q) { return recouvrement(P, Q) > 0; })) return;
+            choix.push({ x: cell.x, y: cell.y, rot: rot, role: role });
+            placer(k + 1, polys.concat([P]));
+            choix.pop();
+          });
+        })(0, []);
+        if (resultat) {
+          // remettre dans l’ordre de `roles` : choix[k] porte le rôle roles[perm[k]]
+          var rangees = new Array(n);
+          resultat.forEach(function (e, k) { rangees[perm[k]] = e; });
+          resultat = rangees;
+        }
+      }
+    }
+    CACHE_A4[cle] = resultat;
+    return resultat;
+  }
+
+  /**
+   * Traits de coupe d’une planche hexagonale : les côtés de toutes les pièces, fusionnés par droite. Un côté commun à deux pièces
+   * n’a qu’un seul trait (`partage` = true). Segments { x1, y1, x2, y2, partage }.
+   */
+  function calculerReperesHex(planche) {
+    var droites = Object.create(null), res = [];
+    planche.tuiles.forEach(function (t) {
+      t.forme.forEach(function (p, i) {
+        var q = t.forme[(i + 1) % t.forme.length], dx = q.x - p.x, dy = q.y - p.y, l = Math.hypot(dx, dy);
+        if (l < 1e-9) return;
+        var ux = dx / l, uy = dy / l;
+        if (ux < -1e-9 || (Math.abs(ux) <= 1e-9 && uy < 0)) { ux = -ux; uy = -uy; }
+        var c = -uy * p.x + ux * p.y, cle = Math.round(Math.atan2(uy, ux) * 1e4) + ':' + Math.round(c * 100);
+        var d = droites[cle] || (droites[cle] = { ux: ux, uy: uy, c: c, iv: [] });
+        var t0 = ux * p.x + uy * p.y, t1 = ux * q.x + uy * q.y;
+        d.iv.push([Math.min(t0, t1), Math.max(t0, t1)]);
+      });
+    });
+    Object.keys(droites).sort().forEach(function (cle) {
+      var d = droites[cle], bornes = [];
+      d.iv.forEach(function (iv) { bornes.push(iv[0], iv[1]); });
+      bornes.sort(function (a, b) { return a - b; });
+      var segs = [];
+      for (var i = 0; i + 1 < bornes.length; i++) {
+        var a = bornes[i], b = bornes[i + 1];
+        if (b - a < 1e-6) continue;
+        var m = (a + b) / 2, n = d.iv.filter(function (iv) { return iv[0] <= m && m <= iv[1]; }).length;
+        if (!n) continue;
+        var partage = n >= 2, dernier = segs[segs.length - 1];
+        if (dernier && Math.abs(dernier.b - a) < 1e-6 && dernier.partage === partage) dernier.b = b;
+        else segs.push({ a: a, b: b, partage: partage });
+      }
+      segs.forEach(function (sg) {
+        var r = function (v) { return Math.round(v * 1000) / 1000; };
+        res.push({
+          x1: r(sg.a * d.ux - d.uy * d.c), y1: r(sg.a * d.uy + d.ux * d.c),
+          x2: r(sg.b * d.ux - d.uy * d.c), y2: r(sg.b * d.uy + d.ux * d.c), partage: sg.partage
+        });
+      });
+    });
+    return res;
+  }
+
+  /** Textes d’une planche hexagonale : étiquette de chaque pièce, titre et mention de la barre de 100 mm. */
+  function calculerTextesHex(planche) {
+    var textes = [];
+    planche.tuiles.forEach(function (t) {
+      var e = t.etiquettePos || { x: t.x, y: t.y }; // centre du texte, au point le plus dégagé de la pièce
+      textes.push({ texte: t.etiquette, x: e.x, y: Math.round((e.y + 0.85) * 1000) / 1000, taille: TAILLE_ID, ancre: 'middle', gras: false });
+    });
+    textes.push({ texte: planche.titre, x: planche.margeX + 6, y: 10, taille: 3.5, ancre: 'start', gras: true });
+    var b = planche.barre;
+    textes.push({ texte: '100 mm', x: b.x + b.longueur + 2, y: b.y + 0.9, taille: 2.5, ancre: 'start', gras: false });
+    return textes;
+  }
+
+  /**
+   * Planches du format hexagonal. options : voir calepiner. Une planche : { format, nom, titre, numero, total, largeur, hauteur,
+   * hex: true, margeX, margeY, encombrement, tuiles: [{ modeleId, exemplaire, posee, role, rot, x, y, col, lig, forme, etiquette }],
+   * reperes, textes, barre } ; (x, y) = centre de la pièce, `forme` = son polygone de coupe sur la feuille, `rot` la rotation
+   * d’impression (60° par pas ; la pièce physique se tourne à la pose).
+   */
+  function calepinerHex(doc, options) {
+    var nomFormat = options && options.format ? options.format : 'A3';
+    var f = FORMATS_HEX[nomFormat];
+    if (!f) throw new Error('Format inconnu : ' + nomFormat + '.');
+    var F = M.formatDuDocument(doc), liste = listeTuiles(doc, options).tuiles;
+    var exemplairesDe = Object.create(null);
+    liste.forEach(function (t) { exemplairesDe[t.modeleId] = (exemplairesDe[t.modeleId] || 0) + 1; });
+    var pieces = liste.map(function (t) {
+      return { modeleId: t.modeleId, exemplaire: t.exemplaire, posee: t.posee, role: roleHex(M.modeleParId(doc, t.modeleId), F),
+        etiquette: t.modeleId + (exemplairesDe[t.modeleId] > 1 ? '-' + t.exemplaire : '') };
+    });
+    var feuilles = [], cx = f.largeur / 2, cy = (ZONE_HEX_Y0 + ZONE_HEX_Y1) / 2;
+    if (nomFormat === 'A3') {
+      repartirA3(pieces, F).forEach(function (feuille) {
+        feuilles.push(feuille.map(function (e) { return { piece: e.piece, x: cx + e.x, y: cy + e.y, rot: e.rot, lig: e.lig, col: e.col }; }));
+      });
+    } else {
+      var W = f.largeur - 2 * MARGE_HEX_X, H = ZONE_HEX_Y1 - ZONE_HEX_Y0;
+      for (var d = 0; d < pieces.length; d += f.pieces) {
+        var groupe = pieces.slice(d, d + f.pieces).sort(function (a, b) { return a.role < b.role ? -1 : a.role > b.role ? 1 : 0; });
+        var dispo = disposerA4(F, groupe.map(function (p) { return p.role; }), W, H);
+        if (!dispo) throw new Error('Aucune disposition jointive sur A4 pour : ' + groupe.map(function (p) { return p.modeleId; }).join(', ') + '.');
+        var polys = dispo.map(function (e) { return polygonePiece(F, e.role, e.rot, e.x, e.y); });
+        var b = boitePolygones(polys), dx = cx - (b.x0 + b.x1) / 2, dy = cy - (b.y0 + b.y1) / 2;
+        feuilles.push(dispo.map(function (e, k) { return { piece: groupe[k], x: e.x + dx, y: e.y + dy, rot: e.rot, lig: Math.round(e.y / (1.5 * F.COTE)), col: k }; }));
+      }
+    }
+    var total = feuilles.length;
+    return feuilles.map(function (feuille, p) {
+      var planche = {
+        format: nomFormat, nom: 'plateau-tuiles-' + nomFormat + '-' + (p + 1), hex: true,
+        titre: 'Plateau modulaire - tuiles ' + nomFormat + ' - planche ' + (p + 1) + '/' + total + ' - couper sur les traits (coupes partagées)',
+        numero: p + 1, total: total, largeur: f.largeur, hauteur: f.hauteur, margeX: 15, margeY: ZONE_HEX_Y0, tuiles: []
+      };
+      feuille.forEach(function (e) {
+        var ep = positionEtiquette(M.modeleParId(doc, e.piece.modeleId), e.piece.role, e.rot, F, e.piece.etiquette);
+        planche.tuiles.push({
+          modeleId: e.piece.modeleId, exemplaire: e.piece.exemplaire, posee: e.piece.posee, role: e.piece.role, rot: e.rot,
+          x: Math.round(e.x * 1000) / 1000, y: Math.round(e.y * 1000) / 1000, col: e.col, lig: e.lig,
+          forme: polygonePiece(F, e.piece.role, e.rot, e.x, e.y), etiquette: e.piece.etiquette,
+          etiquettePos: { x: Math.round((e.x + ep.x) * 1000) / 1000, y: Math.round((e.y + ep.y) * 1000) / 1000 }
+        });
+      });
+      planche.encombrement = planche.tuiles.length ? boitePolygones(planche.tuiles.map(function (t) { return t.forme; })) : null;
+      planche.reperes = calculerReperesHex(planche);
+      planche.barre = barreControle(f, planche.margeX);
+      planche.textes = calculerTextesHex(planche);
+      Object.defineProperty(planche, 'svg', { enumerable: false, get: svgPlancheDe.bind(null, doc, planche) });
+      return planche;
+    });
+  }
+
+  /** SVG d’une planche hexagonale : pièces jointives (sans fond perdu), traits de coupe partagés, textes, barre de 100 mm. */
+  function svgPlancheHex(doc, planche) {
+    var corps = '', F = M.formatDuDocument(doc);
+    planche.tuiles.forEach(function (t) {
+      var modele = M.modeleParId(doc, t.modeleId);
+      if (!modele) throw new Error('Modèle introuvable : ' + t.modeleId);
+      corps += '<g transform="translate(' + nb(t.x) + ' ' + nb(t.y) + ')">' +
+        R.contenuTuile(modele, { rot: t.rot || 0, fondPerdu: 0, contour: false, format: F }) + '</g>';
+    });
+    planche.reperes.forEach(function (r) { corps += svgLigne(r.x1, r.y1, r.x2, r.y2, EPAISSEUR_REPERE, NOIR_REPERAGE); });
+    corps += svgBarre(planche.barre);
+    planche.textes.forEach(function (t) { corps += svgTexte(t); });
+    return enveloppeSvg(planche.largeur, planche.hauteur, corps);
+  }
+
+  /** Aperçu du plateau hexagonal assemblé (498,8 x 432 mm) réduit sur A3 portrait, sans repères : non imprimable. */
+  function svgApercuHex(doc) {
+    var F = M.formatDuDocument(doc), f = FORMATS.A3, PL = F.PLATEAU, echelle = 270 / PL.largeur;
+    var cx = f.largeur / 2, cy = 50 + PL.hauteur * echelle / 2;
+    var corps = '<g transform="translate(' + nb(cx) + ' ' + nb(cy) + ') scale(' + nb(echelle) + ')">';
+    var posees = {};
+    tab(doc && doc.plateau && doc.plateau.tuiles).forEach(function (t) {
+      if (!t || !F.estCellule(t.col, t.lig)) return;
+      posees[t.col + ',' + t.lig] = true;
+      var modele = M.modeleParId(doc, t.modeleId), pos = F.positionCellule(t.col, t.lig);
+      if (!modele || !M.validerModele(modele, F).complet) {
+        var role = F.cellule(t.col, t.lig).gabarit;
+        corps += '<path d="' + F.forme(role).map(function (p, i) {
+          var q = F.tournerPoint(p, t.rot || 0);
+          return (i ? 'L' : 'M') + nb(pos.x + q.x) + ' ' + nb(pos.y + q.y);
+        }).join(' ') + ' Z" fill="none" stroke="' + R.COULEURS.noir + '" stroke-width="0.5" stroke-dasharray="3 3"/>';
+        return;
+      }
+      corps += '<g transform="translate(' + nb(pos.x) + ' ' + nb(pos.y) + ')">' +
+        R.contenuTuile(modele, { rot: t.rot || 0, fondPerdu: 0, contour: true, format: F }) + '</g>';
+    });
+    // Un siège porte une ville (jeton du document) ou, à défaut, un campement ; il n’existe que si ses 3 tuiles sont posées
+    var villes = tab(doc && doc.plateau && doc.plateau.jetons).filter(function (j) { return j && j.type === 'capture'; });
+    F.sieges.forEach(function (sg) {
+      var ville = villes.some(function (v) { return v.i === sg.id; });
+      var complet = sg.tuiles.every(function (t) { return posees[t.col + ',' + t.lig]; });
+      if (ville) corps += R.contenuJeton('capture', sg.x, sg.y, F);
+      else if (complet) corps += R.contenuJeton('campement', sg.x, sg.y, F);
+    });
+    corps += '<path d="' + F.contourPlateau().map(function (p, i) { return (i ? 'L' : 'M') + nb(p.x) + ' ' + nb(p.y); }).join(' ') +
+      ' Z" fill="none" stroke="' + R.COULEURS.noir + '" stroke-width="0.8"/></g>';
+    corps += svgTexte({ texte: 'Aperçu, non imprimable', x: f.largeur / 2, y: 28, taille: 9, ancre: 'middle', gras: true });
+    var cm = function (mm) { return String(Math.round(mm) / 10).replace('.', ','); };
+    corps += svgTexte({ texte: 'Plateau hexagonal assemblé ' + cm(PL.largeur) + ' x ' + cm(PL.hauteur) + ' cm, réduit à ' + Math.round(echelle * 100) +
+      ' % : aucun repère de coupe.', x: f.largeur / 2, y: 38, taille: 3.5, ancre: 'middle', gras: false });
+    return enveloppeSvg(f.largeur, f.hauteur, corps);
   }
 
   /** Dimensions en pixels à 300 dpi, arrondies à l'entier : A3 3508 x 4961, A4 2480 x 3508. */
@@ -335,6 +729,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
   /** SVG d'une planche de tuiles (voir calepiner). `doc` fournit les modèles. */
   function svgPlanche(doc, planche) {
+    if (planche.hex) return svgPlancheHex(doc, planche);
     var corps = '', n = 0, F = M.formatDuDocument(doc), cp = cotePlanche(F);
     planche.tuiles.forEach(function (t) {
       var modele = M.modeleParId(doc, t.modeleId);
@@ -352,7 +747,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   }
 
   /*
-   * Jetons recto-verso, un seul jeu pour tous les formats (docs/18, 2026-10-19) : 16 jetons Ø 30, campement (feu de
+   * Jetons recto-verso, un seul jeu pour tous les formats (docs/18 et docs/72, 2026-10-19) : 24 jetons Ø 30, campement (feu de
    * bois, disque blanc) au recto, ville (couronne, disque noir) au verso ; un même jeton sert de ville ou de campement
    * selon la face posée. Deux pages A4 à imprimer en recto-verso, retournement bord long : en A4 portrait, le point
    * (x, y) du recto a pour dos le point (largeur - x, y) du verso, d’où les villes placées en miroir.
@@ -360,10 +755,10 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
    * les cercles (seule page à repères) : l’anneau du campement, à 1,2 mm de la coupe, reste concentrique. Le fond du
    * recto est le papier blanc (rien à prolonger) ; le verso, noir jusqu’au bord, a un fond perdu noir de 3 mm (Ø 36),
    * plus large que le décalage : aucun croissant blanc côté ville, seule la couronne peut être excentrée de 1 à 2 mm.
-   * Grille 4 x 4 au pas de 38 mm, centrée sur la feuille dans les deux sens : les positions sont les mêmes après un
+   * Grille 4 x 6 au pas de 38 mm, centrée sur la feuille dans les deux sens : les positions sont les mêmes après un
    * retournement bord long ou bord court (une erreur de réglage ne décale donc pas les faces).
    */
-  var PAS_JETON = 38, COLONNES_JETONS = 4, RANGEES_JETONS = 4;
+  var PAS_JETON = 38, COLONNES_JETONS = 4, RANGEES_JETONS = 6;
   // Recto : zone réservée autour de la coupe (papier blanc, rien n’y est imprimé), les repères commencent 1,5 mm au-delà
   var DIAMETRE_JETON_FP = 33;
   // Verso : fond perdu noir de 3 mm autour du Ø 30 (2 mm de décalage + 0,3 mm de découpe, avec de la marge)
@@ -371,9 +766,9 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   var CONSIGNE_RECTO_VERSO = 'Imprimer ces 2 pages seules, en recto-verso, retournement bord long, taille réelle (100 %).';
 
   /**
-   * Géométrie des deux pages de jetons (A4). Le premier niveau décrit le recto : `jetons` = 16 campements
+   * Géométrie des deux pages de jetons (A4). Le premier niveau décrit le recto : `jetons` = 24 campements
    * { type, cx, cy, numero }, `rayonCoupe`, `rayonFondPerdu`, `textes`, `barre` ; `verso` décrit la page 2 :
-   * 16 villes, la ville `numero` en (largeur - cx, cy) du campement de même numéro, `rayonFondPerdu` 18 mm.
+   * 24 villes, la ville `numero` en (largeur - cx, cy) du campement de même numéro, `rayonFondPerdu` 18 mm.
    */
   function planchesJetons() {
     var f = FORMATS.A4, rCoupe = G.DIAMETRE_JETON / 2, margeX = (f.largeur - 150) / 2;
@@ -389,16 +784,16 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     }
     return {
       format: 'A4', nom: 'plateau-jetons-recto-A4', groupe: 'plateau-jetons-recto-verso-A4', face: 'recto', numero: 1, total: 2,
-      titre: 'Plateau modulaire - jetons recto-verso A4, page 1/2 : recto (16 campements)',
+      titre: 'Plateau modulaire - jetons recto-verso A4, page 1/2 : recto (24 campements)',
       largeur: f.largeur, hauteur: f.hauteur, pas: PAS_JETON, rayonCoupe: rCoupe, rayonFondPerdu: DIAMETRE_JETON_FP / 2, jetons: recto,
-      textes: textes(['Jetons recto-verso : 16 (campement / ville), pour tous les formats.', CONSIGNE_RECTO_VERSO,
+      textes: textes(['Jetons recto-verso : 24 (campement / ville), pour tous les formats.', CONSIGNE_RECTO_VERSO,
         'Découper de ce côté, sur les cercles (Ø 30 mm) : les repères de coupe sont sur cette page seulement.']),
       margeX: margeX, barre: barreControle(f, margeX),
       verso: {
         format: 'A4', nom: 'plateau-jetons-verso-A4', groupe: 'plateau-jetons-recto-verso-A4', face: 'verso', numero: 2, total: 2,
-        titre: 'Plateau modulaire - jetons recto-verso A4, page 2/2 : verso (16 villes)',
+        titre: 'Plateau modulaire - jetons recto-verso A4, page 2/2 : verso (24 villes)',
         largeur: f.largeur, hauteur: f.hauteur, pas: PAS_JETON, rayonCoupe: rCoupe, rayonFondPerdu: DIAMETRE_JETON_FP_VERSO / 2, jetons: verso,
-        textes: textes(['Jetons recto-verso : 16 (campement / ville), pour tous les formats.', CONSIGNE_RECTO_VERSO,
+        textes: textes(['Jetons recto-verso : 24 (campement / ville), pour tous les formats.', CONSIGNE_RECTO_VERSO,
           'Villes placées en miroir : chaque ville tombe au dos de son campement.',
           'Fond perdu noir de 3 mm contre le décalage recto-verso ; ne pas découper de ce côté.']),
         margeX: margeX
@@ -408,8 +803,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
   /**
    * SVG d'une page de jetons, `face` = 'recto' (par défaut) ou 'verso'.
-   * Recto : 16 campements, cercle de coupe (Ø 30 mm) en trait fin et quatre petits traits radiaux hors de la zone
-   * réservée, qui pointent vers lui ; barre de contrôle de 100 mm. Verso : 16 villes en miroir, chacune sur un disque
+   * Recto : 24 campements, cercle de coupe (Ø 30 mm) en trait fin et quatre petits traits radiaux hors de la zone
+   * réservée, qui pointent vers lui ; barre de contrôle de 100 mm. Verso : 24 villes en miroir, chacune sur un disque
    * noir de fond perdu (Ø 36), sans repère (des traits décalés de 1 à 2 mm du recto tromperaient la découpe).
    */
   function svgJetons(face) {
@@ -440,6 +835,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
   /** Aperçu du plateau assemblé (48 x 48 cm en 4×4) mis à l'échelle sur A3, sans repères : non imprimable. */
   function svgApercuPlateau(doc) {
     var F = M.formatDuDocument(doc), C = F.COTE;
+    if (F.nbCotes === 6) return svgApercuHex(doc);
     var f = FORMATS.A3, cote = C * F.GRILLE.colonnes, echelle = 270 / cote, x0 = (f.largeur - 270) / 2, y0 = 50;
     var corps = '<g transform="translate(' + nb(x0) + ' ' + nb(y0) + ') scale(' + nb(echelle) + ')">', n = 0;
     tab(doc && doc.plateau && doc.plateau.tuiles).forEach(function (t) {
@@ -612,7 +1008,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
    * Convertit un SVG en mm (width / height / viewBox 0 0 L H) en flux de contenu PDF.
    * Renvoie { largeur, hauteur, flux } ; le flux travaille en mm, origine en haut à gauche.
    * Éléments pris en charge : svg, g (transform translate / scale, clip-path), clipPath (un rect),
-   * rect (rx), circle, line, path (M L H V Z Q C), text (Helvetica, gras). Tout autre élément lève une Error.
+   * rect (rx), circle, line, path (M L H V Z Q C), text (Helvetica, gras) ; un clipPath contient un rect ou un path. Tout autre élément lève une Error.
    */
   function svgVersFlux(svg) {
     var re = /<(\/?)([A-Za-z][A-Za-z0-9]*)((?:\s+[^>]*?)?)(\/?)>|([^<]+)/g, m;
@@ -672,6 +1068,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
           break;
         }
         case 'path': {
+          if (courantClip !== null) { clips[courantClip] = cheminPath(a.d || '') + '\nW n'; break; } // découpe en polygone (pièces hexagonales)
           var rp = reglages(a);
           flux.push('q ' + rp.texte + '\n' + cheminPath(a.d || '') + '\n' + rp.op + ' Q');
           break;
@@ -997,12 +1394,13 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
       });
     gPortee.appendChild(gExemplaires);
     gContenu.appendChild(gPortee);
-    var iJetons = ligne(gContenu, 'checkbox', 'jetons', 'jetons', 'Jetons recto-verso : 16 (campement / ville), 2 pages A4', false);
+    var iJetons = ligne(gContenu, 'checkbox', 'jetons', 'jetons', 'Jetons recto-verso : 24 (campement / ville), 2 pages A4', false);
     var iApercu = ligne(gContenu, 'checkbox', 'apercu', 'apercu', 'Aperçu du plateau assemblé (A3, non imprimable)', false);
 
     var gFormat = groupe('Format de feuille pour les tuiles');
-    var iA3 = ligne(gFormat, 'radio', 'format', 'A3', 'A3 portrait : 6 tuiles par planche', true);
-    var iA4 = ligne(gFormat, 'radio', 'format', 'A4', 'A4 portrait : 2 tuiles par planche (imprimante de bureau)', false);
+    var hexDoc = F0.nbCotes === 6;
+    var iA3 = ligne(gFormat, 'radio', 'format', 'A3', hexDoc ? 'A3 paysage : 10 pièces par planche, coupes partagées' : 'A3 portrait : 6 tuiles par planche', true);
+    var iA4 = ligne(gFormat, 'radio', 'format', 'A4', hexDoc ? 'A4 portrait : 3 pièces par planche, coupes partagées (imprimante de bureau)' : 'A4 portrait : 2 tuiles par planche (imprimante de bureau)', false);
 
     var gFichier = groupe('Fichier');
     var iPdf = ligne(gFichier, 'radio', 'fichier', 'pdf', 'PDF vectoriel (échelle exacte)', true);
@@ -1105,6 +1503,7 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
 
   PM.exportation = {
     FORMATS: FORMATS,
+    FORMATS_HEX: FORMATS_HEX,
     FOND_PERDU: FOND_PERDU,
     COTE_PLANCHE: COTE_PLANCHE,
     GOUTTIERE: GOUTTIERE,
@@ -1117,6 +1516,8 @@ if (!PM.rendu && typeof require === 'function') require('./rendu.js');
     margesFormat: margesFormat,
     calepiner: calepiner,
     calculerReperes: calculerReperes,
+    calculerReperesHex: calculerReperesHex,
+    recouvrement: recouvrement,
     boiteTexte: boiteTexte,
     boiteBarre: boiteBarre,
     largeurTexte: largeurTexte,
