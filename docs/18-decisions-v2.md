@@ -180,3 +180,8 @@ Remplace, pour le 5×5, les décisions « 8 villes en damier » de la section pr
 - **Campements dans les deux formats** : le mot « campement » et le jeton de la taille d'une ville avec une icône de feu de bois s'appliquent aussi au 4×4.
 - **4×4 inchangé pour les villes** : 7 villes, positions choisies par le générateur comme aujourd'hui.
 - **Si l'écart de 3 cases ne tient pas assez souvent** entre les villes voisines du carré central du 5×5 ((2,2)–(3,2) et (2,3)–(3,3), puis les paires verticales) : **assouplir à 2 cases pour ces villes du carré central seulement** ; l'écart d'au moins 3 cases reste la règle partout ailleurs.
+
+## Réponse de l'utilisateur à la faisabilité des 8 villes fixes (2026-10-19, `64`)
+- **Motif confirmé** : (1,1) (4,1) (2,2) (3,2) (2,3) (3,3) (1,4) (4,4).
+- **Pas de tuile réservée au centre** : les joueurs peuvent déplacer les villes ou en réduire le nombre (le maximum de 8 est voulu pour l'équilibre) ; une tuile purement centrale n'aurait pas de sens.
+- **Piste de l'utilisateur** : utiliser les tuiles qui créent des **ponts** (quitte à en créer d'autres), pour respecter l'écart voulu. Les nouvelles tuiles doivent rester des centrales ordinaires, utilisables à n'importe quelle place.
