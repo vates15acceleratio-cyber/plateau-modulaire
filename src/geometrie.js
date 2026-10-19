@@ -23,7 +23,9 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     '4x4': { COTE: 120, POSITIONS_RACCORD: [30, 60, 90], DIAMETRE_CASE_MAX: 30, GRILLE: { colonnes: 4, lignes: 4 } },
     '5x5': { COTE: 100, POSITIONS_RACCORD: [30, 50, 70], DIAMETRE_CASE_MAX: 24, GRILLE: { colonnes: 5, lignes: 5 } }
   };
-  var IDS_FORMATS = ['4x4', '5x5'];
+  var IDS_FORMATS = ['4x4', '5x5'];                 // formats carrés, proposés par l'interface (FORMATS)
+  var ID_HEX = 'hex19';
+  var IDS_TOUS = IDS_FORMATS.concat([ID_HEX]);      // tous les formats connus de format(id) (FORMATS_TOUS)
   var FORMAT_DEFAUT = '4x4';
 
   /** Cotes et règles identiques sur tous les formats. */
@@ -208,6 +210,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     (m && Array.isArray(m.cases) ? m.cases : []).forEach(function (c) {
       if (c && typeof c === 'object' && typeof c.id === 'string' && typeof c.x === 'number' && typeof c.y === 'number') cs[c.id] = c;
     });
+    var NOR = F.NORMALE || NORMALE, BIS = F.BISSECTRICE || BISSECTRICE, nbc = F.nbCotes || 4, nbp = F.POSITIONS_RACCORD.length;
     var res = [];
     (m && Array.isArray(m.chemins) ? m.chemins : []).forEach(function (ch) {
       if (!ch || typeof ch !== 'object') return;
@@ -219,12 +222,12 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
         return;
       }
       var o = ext.filter(function (e) { return !estCase(e); })[0], c = cases[0];
-      if (o && o.raccord && [0, 1, 2, 3].indexOf(o.raccord.cote) >= 0 && [0, 1, 2].indexOf(o.raccord.pos) >= 0) {
-        var P = F.pointRaccord(o.raccord.cote, o.raccord.pos), n = NORMALE[o.raccord.cote];
+      if (o && o.raccord && Number.isInteger(o.raccord.cote) && o.raccord.cote >= 0 && o.raccord.cote < nbc && Number.isInteger(o.raccord.pos) && o.raccord.pos >= 0 && o.raccord.pos < nbp) {
+        var P = F.pointRaccord(o.raccord.cote, o.raccord.pos), n = NOR[o.raccord.cote];
         res.push({ id: ch.id, type: 'raccord', raccord: { cote: o.raccord.cote, pos: o.raccord.pos }, cases: cases,
           pts: [P, { x: P.x + F.AMORCE_RACCORD * n.x, y: P.y + F.AMORCE_RACCORD * n.y }, { x: c.x, y: c.y }] });
-      } else if (o && [0, 1, 2, 3].indexOf(o.coin) >= 0) {
-        var K = F.pointCoin(o.coin), b = BISSECTRICE[o.coin];
+      } else if (o && Number.isInteger(o.coin) && o.coin >= 0 && o.coin < nbc) {
+        var K = F.pointCoin(o.coin), b = BIS[o.coin];
         res.push({ id: ch.id, type: 'port', coin: o.coin, cases: cases,
           pts: [K, { x: K.x + F.AMORCE_PORT * b.x, y: K.y + F.AMORCE_PORT * b.y }, { x: c.x, y: c.y }] });
       }
@@ -258,8 +261,9 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     return 'coin:' + e.coin;
   }
 
-  function raccordBienForme(r) {
-    return !!r && typeof r === 'object' && Number.isInteger(r.cote) && r.cote >= 0 && r.cote <= 3 && Number.isInteger(r.pos) && r.pos >= 0 && r.pos <= 2;
+  function raccordBienForme(r, F) {
+    var nbc = F && F.nbCotes ? F.nbCotes : 4, nbp = F && F.POSITIONS_RACCORD ? F.POSITIONS_RACCORD.length : 3;
+    return !!r && typeof r === 'object' && Number.isInteger(r.cote) && r.cote >= 0 && r.cote < nbc && Number.isInteger(r.pos) && r.pos >= 0 && r.pos < nbp;
   }
   function pointFini(p) { return !!p && typeof p === 'object' && typeof p.x === 'number' && isFinite(p.x) && typeof p.y === 'number' && isFinite(p.y); }
 
@@ -348,8 +352,8 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
       var t = typeExtremitePassage(e);
       if (t === 'case') return cs[e['case']] ? { p: { x: cs[e['case']].x, y: cs[e['case']].y }, n: null, caseObj: cs[e['case']] } : null;
       if (t === 'pivot') return pv[e.pivot] ? { p: { x: pv[e.pivot].x, y: pv[e.pivot].y }, n: null, pivot: e.pivot } : null;
-      if (t === 'raccord' && raccordBienForme(e.raccord)) {
-        var n = NORMALE[e.raccord.cote];
+      if (t === 'raccord' && raccordBienForme(e.raccord, F)) {
+        var n = (F.NORMALE || NORMALE)[e.raccord.cote];
         return { p: F.pointRaccord(e.raccord.cote, e.raccord.pos), n: { x: n.x, y: n.y }, cote: e.raccord.cote };
       }
       return null;
@@ -408,15 +412,260 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     return res;
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Format hexagonal 'hex19' (docs/72 à docs/75)                        */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Format hexagonal : 19 tuiles hexagonales régulières pointe en haut (côté 54 mm), assemblées en un grand hexagone
+   * (rangées 3-4-5-4-3), les 12 tuiles du pourtour ayant un côté extérieur droit (docs/75).
+   *
+   * Conventions (différences avec le carré, à connaître des autres modules) :
+   *  - Côtés 0..5 (sens horaire) : 0 = NE, 1 = E, 2 = SE, 3 = SO, 4 = O, 5 = NO. Coins 0..5 (sens horaire) :
+   *    0 = N, 1 = NE, 2 = SE, 3 = S, 4 = SO, 5 = NO ; le coin k est le début du côté k (côté k = du coin k au coin k+1).
+   *  - UN SEUL raccord par côté, au milieu : POSITIONS_RACCORD = [0], le champ `pos` vaut toujours 0 (ignoré par
+   *    pointRaccord). Masque de raccords de 6 bits (bit k = côté k), masque de ports de 6 bits (bit k = coin k).
+   *  - Rotation de `rot` pas de 60° (horaire) : le côté local k devient le côté global (k + rot) % 6, le coin k le coin
+   *    (k + rot) % 6. Le côté k d'une tuile touche le côté (k + 3) % 6 de sa voisine.
+   *  - Repère local d'une tuile : ORIGINE AU CENTRE (et non au coin NO), x vers l'est, y vers le sud ; pointRaccord et
+   *    pointCoin donnent des points autour de l'origine. Rotation de point : autour de l'origine.
+   *  - Grille : coordonnées axiales décalées. Clé « col,lig », lig = r + 2 et col = q + 2 (q, r axiaux), donc 0 <= col, lig <= 4
+   *    mais seules 19 paires existent (rangées lig 0..4 de 3, 4, 5, 4, 3 tuiles : lig 0 = col 2..4, lig 1 = col 1..4,
+   *    lig 2 = col 0..4, lig 3 = col 0..3, lig 4 = col 0..2). Voisin du côté k : décalage (dc, dl) = [(1,-1), (1,0), (0,1), (-1,1),
+   *    (-1,0), (0,-1)][k]. Centre de la cellule sur le plateau (origine au centre du plateau) : x = s*sqrt(3)*(q + r/2), y = 1,5*s*r.
+   *    GRILLE = { colonnes: 5, lignes: 5, ... } n'est que la boîte englobante : utiliser `cellules` ou `estCellule`, jamais
+   *    colonnes x lignes.
+   *  - Rôles : 'centre' (0,0 axial), 'couronne' (6), 'bord' (6), 'coin' (6). Les deux premiers partagent le gabarit
+   *    'centrale' (alias 'interieure'). Les tuiles du pourtour ont une rotation imposée (`rotationImposee`) : bord canonique =
+   *    côtés extérieurs 5 et 0 (côté droit au nord), coin canonique = côtés extérieurs 0, 1 et 2.
+   *  - Camps : lig 0 et 1 = 'vert' (nord), lig 3 et 4 = 'rouge' (sud), lig 2 (5 tuiles) neutre (null).
+   *  - 24 sièges (sommets à 3 tuiles, numérotés de haut en bas puis de gauche à droite, comme docs/croquis/hexagonal/camps.png)
+   *    et 12 sommets du pourtour à 2 tuiles. Trèfle des villes : sièges 0, 4, 8 (vert) et 15, 19, 23 (rouge).
+   */
+  function creerFormatHex() {
+    var s = 54, S3 = Math.sqrt(3), ri = s * S3 / 2;
+    var RAYON_PLATEAU = 8 * s / S3;
+    function net(v) { return Math.round(v * 1e9) / 1e9; }
+    function angCoin(k) { return (-90 + 60 * k) * Math.PI / 180; }
+    function angCote(k) { return (-60 + 60 * k) * Math.PI / 180; }
+    function sixiemes(rot) { return (typeof rot === 'number' && isFinite(rot) && Math.floor(rot) === rot) ? ((rot % 6) + 6) % 6 : 0; }
+    function entierDans(v, mini, maxi) { return typeof v === 'number' && Math.floor(v) === v && v >= mini && v <= maxi; }
+
+    var COINS = [0, 1, 2, 3, 4, 5].map(function (k) { return Object.freeze({ x: net(s * Math.cos(angCoin(k))), y: net(s * Math.sin(angCoin(k))) }); });
+    var MILIEUX = [0, 1, 2, 3, 4, 5].map(function (k) { return Object.freeze({ x: net(ri * Math.cos(angCote(k))), y: net(ri * Math.sin(angCote(k))) }); });
+    var NORMALE_HEX = Object.freeze([0, 1, 2, 3, 4, 5].map(function (k) { return Object.freeze({ x: net(-Math.cos(angCote(k))), y: net(-Math.sin(angCote(k))) }); }));
+    var BISSECTRICE_HEX = Object.freeze([0, 1, 2, 3, 4, 5].map(function (k) { return Object.freeze({ x: net(-Math.cos(angCoin(k))), y: net(-Math.sin(angCoin(k))) }); }));
+
+    function bitRaccordHex(cote, pos) { return cote; }
+    function tournerRaccordsHex(m, rot) {
+      var n = sixiemes(rot);
+      for (var i = 0; i < n; i++) m = ((m << 1) | (m >> 5)) & 0x3F;
+      return m & 0x3F;
+    }
+    function tournerPortsHex(c, rot) { return tournerRaccordsHex(c, rot); }
+    function tripletHex(m, cote) { return (m >> cote) & 1; }
+    function inverser3Hex(b) { return b & 1; }
+    /** Appariement : le côté coteA de A touche le côté (coteA+3)%6 de B ; valeurs d'un seul bit (0 ou 1). */
+    function apparierHex(mA, coteA, mB) {
+      var a = tripletHex(mA, coteA), b = tripletHex(mB, (coteA + 3) % 6);
+      return { connectes: a & b, mortsA: a & ~b & 1, mortsB: b & ~a & 1 };
+    }
+    var DECALAGES = [{ dc: 1, dl: -1 }, { dc: 1, dl: 0 }, { dc: 0, dl: 1 }, { dc: -1, dl: 1 }, { dc: -1, dl: 0 }, { dc: 0, dl: -1 }];
+    function coteVoisinHex(cote) { var d = DECALAGES[cote]; return d ? { dc: d.dc, dl: d.dl } : undefined; }
+    function raccordEnFaceHex(cote, pos) { return { cote: (cote + 3) % 6, pos: 0 }; }
+    function pointRaccordHex(cote, pos) { var p = MILIEUX[cote]; return p ? { x: p.x, y: p.y } : undefined; }
+    function pointCoinHex(k) { var p = COINS[k]; return p ? { x: p.x, y: p.y } : undefined; }
+    function tournerPointHex(p, rot) {
+      var n = sixiemes(rot), a = n * Math.PI / 3, c = Math.cos(a), si = Math.sin(a);
+      return { x: net(p.x * c - p.y * si), y: net(p.x * si + p.y * c) };
+    }
+
+    var GABARITS_HEX = (function () {
+      var inter = Object.freeze({ cotesExterieurs: Object.freeze([]), coinsInterieurs: Object.freeze([0, 1, 2, 3, 4, 5]) });
+      return Object.freeze({
+        centrale: inter, interieure: inter,
+        bord: Object.freeze({ cotesExterieurs: Object.freeze([5, 0]), coinsInterieurs: Object.freeze([2, 3, 4]) }),
+        coin: Object.freeze({ cotesExterieurs: Object.freeze([0, 1, 2]), coinsInterieurs: Object.freeze([4, 5]) })
+      });
+    })();
+
+    /** Formes (polygones sens horaire, repère local centré, orientation canonique) : docs/75. */
+    var FORMES = {
+      hexagone: COINS.slice(),
+      bord: [{ x: -ri, y: -s }, { x: ri, y: -s }, { x: ri, y: s / 2 }, { x: 0, y: s }, { x: -ri, y: s / 2 }],
+      coin: [{ x: -s / S3, y: -s }, { x: ri, y: -s }, { x: ri, y: s / 2 }, { x: 0, y: s }, { x: -ri - s * S3 / 4, y: s / 4 }]
+        .map(function (p) { return tournerPointHex(p, 2); })
+    };
+    function cleGabarit(role) {
+      if (role === 'bord' || role === 'coin') return role;
+      if (role === 'centre' || role === 'couronne' || role === 'centrale' || role === 'interieure') return 'centrale';
+      return null;
+    }
+    /** Polygone d'un rôle ('centre', 'couronne', 'centrale', 'interieure' : hexagone ; 'bord' ; 'coin'), undefined si inconnu. */
+    function forme(role) {
+      var g = cleGabarit(role);
+      if (!g) return undefined;
+      var pts = g === 'centrale' ? FORMES.hexagone : FORMES[g];
+      return pts.map(function (p) { return { x: net(p.x), y: net(p.y) }; });
+    }
+
+    // --- grille de 19 cellules (coordonnées axiales décalées) ---
+    function cle(col, lig) { return col + ',' + lig; }
+    function estCellule(col, lig) {
+      if (!entierDans(col, 0, 4) || !entierDans(lig, 0, 4)) return false;
+      var q = col - 2, r = lig - 2;
+      return Math.abs(q) <= 2 && Math.abs(r) <= 2 && Math.abs(q + r) <= 2;
+    }
+    function voisin(col, lig, cote) {
+      if (!estCellule(col, lig) || !entierDans(cote, 0, 5)) return null;
+      var d = DECALAGES[cote], c = col + d.dc, l = lig + d.dl;
+      return estCellule(c, l) ? { col: c, lig: l } : null;
+    }
+    function campCellule(col, lig) {
+      if (!estCellule(col, lig)) return null;
+      return lig < 2 ? 'vert' : (lig > 2 ? 'rouge' : null);
+    }
+    function positionCellule(col, lig) {
+      if (!estCellule(col, lig)) return undefined;
+      var q = col - 2, r = lig - 2;
+      return { x: net(s * S3 * (q + r / 2)), y: net(1.5 * s * r) };
+    }
+
+    var cellulesBrutes = [];
+    for (var lg = 0; lg < 5; lg++) for (var cl = 0; cl < 5; cl++) if (estCellule(cl, lg)) cellulesBrutes.push({ col: cl, lig: lg });
+    var parCle = Object.create(null);
+    cellulesBrutes.forEach(function (c) {
+      var p = positionCellule(c.col, c.lig), q = c.col - 2, r = c.lig - 2, t = -q - r;
+      c.cle = cle(c.col, c.lig); c.q = q; c.r = r; c.x = p.x; c.y = p.y;
+      c.voisins = [0, 1, 2, 3, 4, 5].map(function (k) { var v = voisin(c.col, c.lig, k); return v ? cle(v.col, v.lig) : null; });
+      c.cotesExterieurs = [0, 1, 2, 3, 4, 5].filter(function (k) { return c.voisins[k] === null; });
+      var d = Math.max(Math.abs(q), Math.abs(r), Math.abs(t));
+      c.role = d === 0 ? 'centre' : (d === 1 ? 'couronne' : (c.cotesExterieurs.length === 3 ? 'coin' : 'bord'));
+      c.gabarit = cleGabarit(c.role);
+      c.camp = campCellule(c.col, c.lig);
+      c.rotation = null;
+      if (c.gabarit !== 'centrale') {
+        for (var rot = 0; rot < 6; rot++) {
+          if (GABARITS_HEX[c.gabarit].cotesExterieurs.every(function (k) { return c.cotesExterieurs.indexOf((k + rot) % 6) >= 0; })) c.rotation = rot;
+        }
+      }
+      parCle[c.cle] = c;
+    });
+
+    // --- sommets : 24 sièges (3 tuiles) et 12 sommets du pourtour (2 tuiles) ---
+    var sommets = Object.create(null), ordreSommets = [];
+    cellulesBrutes.forEach(function (c) {
+      for (var k = 0; k < 6; k++) {
+        var x = c.x + COINS[k].x, y = c.y + COINS[k].y, K = Math.round(x * 1000) + ',' + Math.round(y * 1000);
+        if (!sommets[K]) { sommets[K] = { x: net(x), y: net(y), tuiles: [] }; ordreSommets.push(K); }
+        sommets[K].tuiles.push({ col: c.col, lig: c.lig, coin: k });
+      }
+    });
+    function trier(a, b) { return (Math.round(a.y) - Math.round(b.y)) || (a.x - b.x); }
+    function sommetsDeTaille(n) {
+      return ordreSommets.map(function (K) { return sommets[K]; }).filter(function (v) { return v.tuiles.length === n; }).sort(trier);
+    }
+    var SIEGES = sommetsDeTaille(3).map(function (v, i) {
+      return Object.freeze({ id: i, x: v.x, y: v.y, camp: v.y < 0 ? 'vert' : 'rouge', tuiles: Object.freeze(v.tuiles.map(Object.freeze)) });
+    });
+    var SOMMETS_POURTOUR = sommetsDeTaille(2).map(function (v, i) {
+      return Object.freeze({ id: i, x: v.x, y: v.y, tuiles: Object.freeze(v.tuiles.map(Object.freeze)) });
+    });
+    cellulesBrutes.forEach(function (c) { c.coins = [null, null, null, null, null, null]; });
+    SIEGES.forEach(function (sg) { sg.tuiles.forEach(function (t) { parCle[cle(t.col, t.lig)].coins[t.coin] = sg.id; }); });
+    var CELLULES = Object.freeze(cellulesBrutes.map(function (c) {
+      c.voisins = Object.freeze(c.voisins); c.cotesExterieurs = Object.freeze(c.cotesExterieurs); c.coins = Object.freeze(c.coins);
+      return Object.freeze(c);
+    }));
+    CELLULES.forEach(function (c) { parCle[c.cle] = c; });
+
+    function cellule(col, lig) { return estCellule(col, lig) ? parCle[cle(col, lig)] : null; }
+    function roleCellule(col, lig) { var c = cellule(col, lig); return c ? c.role : null; }
+    function rotationImposee(col, lig) { var c = cellule(col, lig); return c ? c.rotation : null; }
+    function cotesExterieursCellule(col, lig) { var c = cellule(col, lig); return c ? c.cotesExterieurs.slice() : null; }
+    /** Numéro du siège (0..23) au coin `coin` (repère local, orientation canonique) de la tuile posée avec la rotation `rot` ; null au pourtour. */
+    function siegeDuCoin(col, lig, coin, rot) {
+      var c = cellule(col, lig);
+      if (!c || !entierDans(coin, 0, 5)) return null;
+      return c.coins[(coin + sixiemes(rot)) % 6];
+    }
+    /** Polygone de la cellule dans le repère du plateau (origine au centre du plateau), rotation imposée comprise. */
+    function formeCellule(col, lig) {
+      var c = cellule(col, lig);
+      if (!c) return undefined;
+      return forme(c.role).map(function (p) { var t = tournerPointHex(p, c.rotation || 0); return { x: net(c.x + t.x), y: net(c.y + t.y) }; });
+    }
+    function contourPlateau() {
+      return [0, 1, 2, 3, 4, 5].map(function (k) { return { x: net(RAYON_PLATEAU * Math.cos(k * Math.PI / 3)), y: net(RAYON_PLATEAU * Math.sin(k * Math.PI / 3)) }; });
+    }
+
+    var f = {
+      id: 'hex19',
+      nbCotes: 6,
+      COTE: s,
+      APOTHEME: net(ri),
+      POSITIONS_RACCORD: Object.freeze([0]),
+      RAYON_ZONE_COIN: COMMUNES.RAYON_ZONE_COIN,
+      DIAMETRE_CASE_MAX: 20,
+      DIAMETRE_CASE: COMMUNES.DIAMETRE_CASE,
+      DIAMETRE_CASE_JONCTION: COMMUNES.DIAMETRE_CASE_JONCTION,
+      MARGE_COUPE_CASE: COMMUNES.MARGE_COUPE_CASE,
+      LARGEUR_CHEMIN: COMMUNES.LARGEUR_CHEMIN,
+      AMORCE_RACCORD: COMMUNES.AMORCE_RACCORD,
+      AMORCE_PORT: COMMUNES.AMORCE_PORT,
+      FOND_PERDU: COMMUNES.FOND_PERDU,
+      DIAMETRE_JETON: COMMUNES.DIAMETRE_JETON,
+      GRILLE: Object.freeze({ colonnes: 5, lignes: 5, rangees: Object.freeze([3, 4, 5, 4, 3]), cellules: 19 }),
+      PLATEAU: Object.freeze({ largeur: net(2 * RAYON_PLATEAU), hauteur: 8 * s, cote: net(RAYON_PLATEAU) }),
+      PAS_EDITEUR: COMMUNES.PAS_EDITEUR,
+      ECART_MIN_VILLES: COMMUNES.ECART_MIN_VILLES,
+      MIN_PORTS_JONCTION: COMMUNES.MIN_PORTS_JONCTION,
+      // pas de NORD/EST/SUD/OUEST : les côtés hexagonaux se désignent par leur numéro 0..5
+      bitRaccord: bitRaccordHex,
+      tournerRaccords: tournerRaccordsHex,
+      tournerPorts: tournerPortsHex,
+      tournerCote: function (cote, rot) { return (cote + sixiemes(rot)) % 6; },
+      triplet: tripletHex,
+      inverser3: inverser3Hex,
+      apparier: apparierHex,
+      coteVoisin: coteVoisinHex,
+      raccordEnFace: raccordEnFaceHex,
+      pointRaccord: pointRaccordHex,
+      pointCoin: pointCoinHex,
+      tournerPoint: tournerPointHex,
+      campCellule: campCellule,
+      NORMALE: NORMALE_HEX,
+      BISSECTRICE: BISSECTRICE_HEX,
+      GABARITS: GABARITS_HEX,
+      cellules: CELLULES,
+      cle: cle,
+      cellule: cellule,
+      estCellule: estCellule,
+      voisin: voisin,
+      roleCellule: roleCellule,
+      rotationImposee: rotationImposee,
+      cotesExterieursCellule: cotesExterieursCellule,
+      positionCellule: positionCellule,
+      forme: forme,
+      formeCellule: formeCellule,
+      contourPlateau: contourPlateau,
+      sieges: Object.freeze(SIEGES),
+      sommetsPourtour: Object.freeze(SOMMETS_POURTOUR),
+      siegeDuCoin: siegeDuCoin,
+      TREFLE: Object.freeze([0, 4, 8, 15, 19, 23])
+    };
+    return Object.freeze(f);
+  }
+
   var CACHE = {};
 
   /**
-   * Objet gelé décrivant le format de grille `id` ('4x4' ou '5x5') : cotes, grille et fonctions du repère
+   * Objet gelé décrivant le format de grille `id` ('4x4', '5x5' ou 'hex19' : conventions hexagonales dans creerFormatHex) : cotes, grille et fonctions du repère
    * local. Toujours le même objet pour un même id. Lève une Error si le format est inconnu.
    */
   function format(id) {
-    if (IDS_FORMATS.indexOf(id) < 0) throw new Error('Format de grille inconnu : ' + String(id) + '.');
-    if (!CACHE[id]) CACHE[id] = creerFormat(id);
+    if (IDS_TOUS.indexOf(id) < 0) throw new Error('Format de grille inconnu : ' + String(id) + '.');
+    if (!CACHE[id]) CACHE[id] = id === ID_HEX ? creerFormatHex() : creerFormat(id);
     return CACHE[id];
   }
 
@@ -433,7 +682,9 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   PM.geometrie.cleExtremitePassage = cleExtremitePassage;
   PM.geometrie.aplatirCommandes = aplatirCommandes;
   PM.geometrie.rayonMinimal = rayonMinimal;
-  PM.geometrie.FORMATS = Object.freeze(IDS_FORMATS.slice());
+  PM.geometrie.FORMATS = Object.freeze(IDS_FORMATS.slice());           // formats carrés seulement (inchangé)
+  PM.geometrie.FORMATS_TOUS = Object.freeze(IDS_TOUS.slice());         // + 'hex19'
+  PM.geometrie.ID_HEX = ID_HEX;
   PM.geometrie.FORMAT_DEFAUT = FORMAT_DEFAUT;
   PM.geometrie.format = format;
 
