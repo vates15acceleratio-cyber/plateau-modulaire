@@ -502,6 +502,50 @@
       });
     }
 
+    function s3b_regeneration() {
+      titre('3b. Ancien plateau 5×5 à 7 villes : proposition de régénérer (Garder, Régénérer, Ctrl+Z, nouveau catalogue)');
+      var CAT5 = PM.catalogue.nouveauDocument('5x5');
+      var doc7 = clone(GEN.generer(CAT5, { graine: 'regen-recette' }).doc);
+      doc7.plateau.jetons.pop();
+      var lc2 = clone(doc7.modeles.filter(function (m) { return m.id === 'LC1'; })[0]); lc2.id = 'LC2'; lc2.exemplaires = 0; doc7.modeles.push(lc2); // marque l'ancien catalogue
+      PM.nouveau.oublierRefusRegeneration();
+      reset(clone(doc7));
+      var avant = docJ(), histAvant = etat.peutAnnuler();
+      ctrl('ancien plateau 5×5 reconnu (7 villes, bibliothèque de l\'ancien catalogue)', PM.nouveau.aAncienPlateau5x5(etat.doc()));
+      var r1 = PM.nouveau.proposerALOuverture(etat, false);
+      ctrl('à l\'ouverture : boîte « Plateau 5×5 à 8 villes » avec Régénérer et Garder', r1 === 'regenerer' && dialogueOuvert() && $('dialogue-titre').textContent === 'Plateau 5×5 à 8 villes' && !!boutonParTexte(contenu(), 'Régénérer le plateau') && !!boutonParTexte(contenu(), 'Garder ce plateau'));
+      cliquer(boutonParTexte(contenu(), 'Garder ce plateau'));
+      ctrl('Garder : boîte fermée, document identique (JSON) et historique inchangé', !dialogueOuvert() && docJ() === avant && etat.peutAnnuler() === histAvant);
+      ctrl('refus retenu pour la session : plus de boîte à la réouverture', PM.nouveau.proposerALOuverture(etat, false) === '' && !dialogueOuvert());
+      var j7 = J(etat.doc());
+      PM.nouveau.oublierRefusRegeneration();
+      // Régénérer, puis Ctrl+Z
+      PM.nouveau.proposerRegeneration(etat, { graine: 'rec' });
+      cliquer(boutonParTexte(contenu(), 'Régénérer le plateau'));
+      return jusqua(function () { return !dialogueOuvert(); }, 20000).then(function () {
+        ctrl('Régénérer : boîte fermée, 8 villes, 25 tuiles', !dialogueOuvert() && etat.doc().plateau.jetons.length === 8 && etat.doc().plateau.tuiles.length === 25, etat.doc().plateau.jetons.length);
+        ctrlZ();
+        ctrl('Ctrl+Z : document identique à l\'original (JSON)', docJ() === avant && J(etat.doc()) === j7);
+        // bibliothèque qui ne permet pas les 8 villes : proposition de charger le nouveau catalogue
+        var doc7b = clone(doc7);
+        doc7b.modeles.forEach(function (m) { if (m.id === 'LC11' || m.id === 'LC12') m.exemplaires = 0; });
+        reset(doc7b);
+        var avantB = docJ();
+        PM.nouveau.proposerRegeneration(etat, { graine: 'rec' });
+        cliquer(boutonParTexte(contenu(), 'Régénérer le plateau'));
+        return jusqua(function () { return !!boutonParTexte(contenu(), 'Charger le nouveau catalogue et générer'); }, 20000).then(function () { return avantB; });
+      }).then(function (avantB) {
+        ctrl('bibliothèque insuffisante : la boîte le dit et propose le nouveau catalogue', dialogueOuvert() && /ne permet pas de générer/.test(texteDialogue()) && !!boutonParTexte(contenu(), 'Charger le nouveau catalogue et générer') && docJ() === avantB);
+        cliquer(boutonParTexte(contenu(), 'Charger le nouveau catalogue et générer'));
+        return jusqua(function () { return !dialogueOuvert(); }, 20000).then(function () {
+          ctrl('nouveau catalogue chargé : 8 villes, LC11 et LC12 dans la bibliothèque', etat.doc().plateau.jetons.length === 8 && etat.doc().modeles.some(function (m) { return m.id === 'LC11'; }) && etat.doc().modeles.some(function (m) { return m.id === 'LC12'; }));
+          ctrlZ();
+          ctrl('Ctrl+Z : document d\'avant', docJ() === avantB);
+          PM.nouveau.oublierRefusRegeneration();
+        });
+      });
+    }
+
     function s4_controles() {
       titre('4. Contrôles : plateau très déséquilibré (erreur), déséquilibre modéré (alerte), export de l\'aperçu refusé');
       reset(plateauAlea.doc);
@@ -548,7 +592,7 @@
     var chaine = Promise.resolve();
     function etape(f) { chaine = chaine.then(function () { try { return f(); } catch (e) { nEchec++; rapportEl.textContent += 'ÉCHEC  exception dans ' + f.name + ' : ' + (e && e.stack || e) + '\n'; } }).catch(function (e) { nEchec++; rapportEl.textContent += 'ÉCHEC  rejet dans ' + f.name + ' : ' + (e && e.stack || e) + '\n'; }); }
     if (!etat) { rapportEl.textContent = 'ÉCHEC  application non démarrée (PM.app.etat absent)\n'; nEchec++; }
-    else [s0_chargement, s1_export, s1b_bibliothequeModifiee, s1c_telechargements, s2_rapport, s3_generateur, s4_controles, s9_remiseEnPlace].forEach(etape);
+    else [s0_chargement, s1_export, s1b_bibliothequeModifiee, s1c_telechargements, s2_rapport, s3_generateur, s3b_regeneration, s4_controles, s9_remiseEnPlace].forEach(etape);
     chaine.then(function () {
       var nErr = (document.getElementById('erreurs').textContent.match(/ERREUR JS/g) || []).length;
       ctrl('aucune erreur JavaScript pendant tout le parcours', nErr === 0, nErr + ' erreur(s)');

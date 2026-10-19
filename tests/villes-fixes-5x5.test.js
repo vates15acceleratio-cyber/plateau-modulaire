@@ -46,9 +46,18 @@ test('5×5 : plus de 8 villes est une erreur (alerte bloquante) ; 8 villes, aucu
 test('anciens plateaux 5×5 à 7 villes : reconnus (proposition de régénérer) ; un plateau à 8 villes, un 4×4 ou un plateau incomplet, non', () => {
   const d = plateau5();
   assert.strictEqual(S.ancienPlateau5x5(d), false);
-  const sept = copie(d); sept.plateau.jetons.pop();
+  // bibliothèque actuelle (LC11, LC12, sans LC2) : une ville retirée à la main ne déclenche rien
+  const retiree = copie(d); retiree.plateau.jetons.pop();
+  assert.strictEqual(S.ancienPlateau5x5(retiree), false);
+  assert.strictEqual(PM.nouveau.aAncienPlateau5x5(retiree), false);
+  // ancien catalogue reconnu par LC2, ou par l'absence de LC11 et de LC12
+  const sept = copie(retiree);
+  const lc2 = copie(sept.modeles.find((m) => m.id === 'LC1')); lc2.id = 'LC2'; lc2.exemplaires = 0;
+  sept.modeles.push(lc2);
   assert.strictEqual(S.ancienPlateau5x5(sept), true);
   assert.strictEqual(PM.nouveau.aAncienPlateau5x5(sept), true);
+  const sansPonts = copie(retiree); sansPonts.modeles = sansPonts.modeles.filter((m) => m.id !== 'LC11' && m.id !== 'LC12');
+  assert.strictEqual(S.ancienPlateau5x5(sansPonts), true);
   const troue = copie(sept); troue.plateau.tuiles.pop();
   assert.strictEqual(S.ancienPlateau5x5(troue), false);
   const d4 = GEN.generer(CAT.nouveauDocument('4x4'), { graine: 'fixes4', candidats: 4 }).doc;

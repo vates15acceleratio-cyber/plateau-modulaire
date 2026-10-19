@@ -21,3 +21,8 @@ Objet : diff `1c2d89c~5..00c69bd` (`src` et `styles`). **Aucun point bloquant.**
 
 ## Arbitrage de l'orchestrateur sur le point 3
 On ne propose la régénération que pour un document **produit par une version antérieure**, reconnu à sa bibliothèque (ancien catalogue 5×5 : sans LC11 ni LC12, ou avec LC2) **et** portant 7 villes. Un refus est retenu pour la session. Une ville retirée volontairement ne déclenche donc plus rien.
+
+## Corrections faites (2026-10-19)
+- 1 : scénario `s3b_regeneration` dans `recette-p2.html` (9 contrôles : Garder = document identique, refus de session, Régénérer puis Ctrl+Z, chemin « Charger le nouveau catalogue »). recette-p2 : 125 OK.
+- 2 : la boîte utilise des `<p>` et `<button>` sans classe, comme `proposerRemplacement` ; classes `pm-regenerer-*` supprimées.
+- 3 : `ancienPlateau5x5` exige l’ncien catalogue ; refus mémorisé pour la session (sessionStorage, repli en mémoire), dès l’ffichage de la boîte (Échap compte comme un refus).

@@ -167,6 +167,26 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
   }
 
   /**
+   * Refus de la régénération retenu pour la session (sessionStorage, repli sur une variable du module si le stockage est refusé) :
+   * la boîte ne revient pas au rechargement de la page, ni à l'ouverture suivante, dans la même session.
+   */
+  var CLE_REFUS_REGENERATION = 'plateau-modulaire:regeneration-refusee';
+  var refusRegeneration = false;
+  function regenerationRefusee() {
+    if (refusRegeneration) return true;
+    try { return window.sessionStorage.getItem(CLE_REFUS_REGENERATION) === '1'; } catch (e) { return false; }
+  }
+  function memoriserRefusRegeneration() {
+    refusRegeneration = true;
+    try { window.sessionStorage.setItem(CLE_REFUS_REGENERATION, '1'); } catch (e) { /* variable du module seule */ }
+  }
+  /** Oublie le refus (tests, recettes). */
+  function oublierRefusRegeneration() {
+    refusRegeneration = false;
+    try { window.sessionStorage.removeItem(CLE_REFUS_REGENERATION); } catch (e) { /* rien */ }
+  }
+
+  /**
    * Propose de RÉGÉNÉRER un ancien plateau 5×5 à 7 villes (docs/18, décision 5 du 2026-10-19), dans le style des propositions de
    * catalogue. « Garder ce plateau » ne change rien (le rapport signale la lacune « Il manque 1 ville »). « Régénérer le plateau » tire
    * un plateau 5×5 à 8 villes avec le générateur dans la bibliothèque du document, en une étape d'historique (Ctrl+Z rend le plateau
@@ -178,21 +198,20 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     options = options || {};
     if (!PM.generateur || typeof PM.generateur.generer !== 'function' || !PM.dialogue || !$('dialogue')) return null;
     var c = PM.dialogue.ouvrir('Plateau 5×5 à 8 villes');
-    function bouton(texte, classe, action) {
+    // Mêmes éléments nus que proposerRemplacement : le style des boîtes existantes s'applique, sans classe propre
+    function bouton(texte, action) {
       var b = document.createElement('button');
       b.type = 'button';
-      b.className = classe;
       b.textContent = texte;
       b.addEventListener('click', action);
       return b;
     }
     function ligne(boutons) {
       var actions = document.createElement('p');
-      actions.className = 'pm-regenerer-actions';
       boutons.forEach(function (b, k) { if (k) actions.appendChild(document.createTextNode(' ')); actions.appendChild(b); });
       return actions;
     }
-    function paragraphe(texte, classe) { var p = document.createElement('p'); p.className = classe; p.textContent = texte; return p; }
+    function paragraphe(texte) { var p = document.createElement('p'); p.textContent = texte; return p; }
     function garder() { PM.dialogue.fermer(); etat.signaler('Plateau gardé tel quel : il lui manque 1 ville (8 en 5×5). Outils > Placer les villes ou Plateau aléatoire.', 'info'); }
     function graine() { return options.graine !== undefined ? String(options.graine) : PM.generateur.nouvelleGraine(); }
     /** Calcul synchrone (environ 1 s) au tour suivant, pour que la boîte affiche d'abord « Génération… ». */
@@ -203,8 +222,8 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     }
     var texte = paragraphe('Ce plateau 5×5 a 7 villes : le 5×5 en compte désormais 8 (4 par camp, à des positions par défaut que vous pouvez déplacer). ' +
       'Régénérer le plateau tire un nouveau plateau 5×5 à 8 villes avec le générateur, dans la bibliothèque du document ; Ctrl+Z permet de revenir au plateau tel qu’il était. ' +
-      'Si vous gardez ce plateau, le document reste inchangé (le rapport d’équilibre signale qu’il manque 1 ville ; Outils > Placer les villes pose les 8 villes si les tuiles le permettent).', 'pm-regenerer-texte');
-    var oui = bouton('Régénérer le plateau', 'pm-regenerer-oui', function () {
+      'Si vous gardez ce plateau, le document reste inchangé (le rapport d’équilibre signale qu’il manque 1 ville ; Outils > Placer les villes pose les 8 villes si les tuiles le permettent).');
+    var oui = bouton('Régénérer le plateau', function () {
       plusTard([oui, non], function () {
         var r = PM.generateur.generer(etat.doc(), { graine: graine() });
         if (r.ok) {
@@ -216,18 +235,18 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
         echecBibliotheque(r);
       });
     });
-    var non = bouton('Garder ce plateau', 'pm-regenerer-non', garder);
+    var non = bouton('Garder ce plateau', garder);
     c.appendChild(texte);
     c.appendChild(ligne([oui, non]));
 
     /** La bibliothèque du document ne donne pas de plateau à 8 villes : conseil, et proposition du nouveau catalogue 5×5. */
     function echecBibliotheque(r) {
       while (c.firstChild) c.removeChild(c.firstChild);
-      c.appendChild(paragraphe('La bibliothèque de ce document ne permet pas de générer un plateau 5×5 à 8 villes : ' + r.raison, 'pm-regenerer-texte pm-regenerer-echec'));
+      c.appendChild(paragraphe('La bibliothèque de ce document ne permet pas de générer un plateau 5×5 à 8 villes : ' + r.raison));
       var boutons = [];
       if (PM.catalogue && typeof PM.catalogue.nouveauDocument === 'function') {
-        c.appendChild(paragraphe('Le nouveau catalogue 5×5 le permet : le charger remplace la bibliothèque et génère un plateau à 8 villes (Ctrl+Z pour revenir au document tel qu’il était).', 'pm-regenerer-texte'));
-        var cat = bouton('Charger le nouveau catalogue et générer', 'pm-regenerer-catalogue', function () {
+        c.appendChild(paragraphe('Le nouveau catalogue 5×5 le permet : le charger remplace la bibliothèque et génère un plateau à 8 villes (Ctrl+Z pour revenir au document tel qu’il était).'));
+        var cat = bouton('Charger le nouveau catalogue et générer', function () {
           plusTard([cat, garde], function () {
             var neuf = PM.catalogue.nouveauDocument('5x5'), r2 = PM.generateur.generer(neuf, { graine: graine() });
             etat.remplacer(r2.ok ? r2.doc : neuf, 'nouveau catalogue et plateau à 8 villes');
@@ -238,7 +257,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
         });
         boutons.push(cat);
       }
-      var garde = bouton('Garder ce plateau', 'pm-regenerer-non', garder);
+      var garde = bouton('Garder ce plateau', garder);
       boutons.push(garde);
       c.appendChild(ligne(boutons));
       boutons[0].focus();
@@ -257,7 +276,8 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
     var doc = etat.doc();
     if (v1) { proposerCatalogueV2(etat); return 'catalogue'; }
     if (aCataloguePrecedent(doc)) { proposerNouveauCatalogue(etat); return 'catalogue'; }
-    if (aAncienPlateau5x5(doc)) { proposerRegeneration(etat); return 'regenerer'; }
+    // une seule fois par session : le refus (« Garder », Échap, ✕) est retenu dès l'affichage de la boîte
+    if (aAncienPlateau5x5(doc) && !regenerationRefusee()) { memoriserRefusRegeneration(); proposerRegeneration(etat); return 'regenerer'; }
     return '';
   }
 
@@ -446,7 +466,7 @@ var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalT
 
   PM.nouveau = {
     descriptionGrille: descriptionGrille, libelleIndicateur: libelleIndicateur, documentPourGrille: documentPourGrille, ouvrirDialogue: ouvrirDialogueNouveau,
-    proposerRegeneration: proposerRegeneration, proposerALOuverture: proposerALOuverture, aAncienPlateau5x5: aAncienPlateau5x5
+    proposerRegeneration: proposerRegeneration, proposerALOuverture: proposerALOuverture, aAncienPlateau5x5: aAncienPlateau5x5, oublierRefusRegeneration: oublierRefusRegeneration
   };
 
   if (typeof document === 'undefined') return; // chargement sous Node (tests) : pas de coquille à démarrer

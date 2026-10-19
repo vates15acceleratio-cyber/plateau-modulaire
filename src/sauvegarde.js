@@ -169,6 +169,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     if (estEntier(brut.poids) && brut.poids >= 1 && brut.poids <= LIMITES.exemplaires) m.poids = brut.poids;
     // murs voulus : facultatif (liste de côtés 0 à 3, sans doublon ; lecture en un passage avec masque de 4 bits : temps linéaire, docs/61 D1) ; absent = aucun mur (PM.modele.mursDuModele)
     if (Array.isArray(brut.murs)) m.murs = mursLus(brut.murs);
+    // hors tirage : facultatif, vrai seulement s'il est exactement `true` (pose à la main : le générateur ne tire jamais ce modèle)
+    if (brut.horsTirage === true) m.horsTirage = true;
     if (!M.validerModele(m, grille).complet) {
       alertes.push(erreur('modele_incomplet', 'Le modèle « ' + libelle + ' » est incomplet : conservé comme brouillon, non posable.'));
     }
@@ -262,7 +264,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     if (valeur && typeof valeur === 'object') {
       return '{' + Object.keys(valeur).sort().filter(function (k) {
         var v = valeur[k];
-        return k !== 'exemplaires' && k !== 'poids' && k !== 'murs' && k !== 'nom' && v !== undefined && !(Array.isArray(v) && !v.length);
+        return k !== 'exemplaires' && k !== 'poids' && k !== 'horsTirage' && k !== 'murs' && k !== 'nom' && v !== undefined && !(Array.isArray(v) && !v.length);
       }).map(function (k) { return JSON.stringify(k) + ':' + signatureModele(valeur[k]); }).join(',') + '}';
     }
     return JSON.stringify(valeur);
@@ -297,12 +299,16 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   /**
    * Ancien plateau 5×5 à 7 villes (docs/18, décision 5 du 2026-10-19 : le 5×5 compte désormais 8 villes) : document 5×5 dont les 25 tuiles
    * sont posées et qui porte exactement 7 villes. Lecture seule ; le format de sauvegarde ne change pas (aucune migration des jetons).
+   * Seul un document produit par une version antérieure compte : sa bibliothèque 5×5 est celle de l'ancien catalogue (ni LC11 ni LC12,
+   * ou présence de LC2). Une ville retirée à la main d'un plateau au catalogue actuel ne déclenche donc rien.
    * L'interface propose alors de régénérer le plateau (app.js).
    */
   function ancienPlateau5x5(doc) {
     try {
       var F = M.formatDuDocument(doc), p = doc && doc.plateau;
-      if (F.id !== '5x5' || !p || !Array.isArray(p.tuiles) || !Array.isArray(p.jetons)) return false;
+      if (F.id !== '5x5' || !p || !Array.isArray(p.tuiles) || !Array.isArray(p.jetons) || !Array.isArray(doc.modeles)) return false;
+      var ids = doc.modeles.map(function (m) { return m && m.id; });
+      if (!((ids.indexOf('LC11') < 0 && ids.indexOf('LC12') < 0) || ids.indexOf('LC2') >= 0)) return false;
       var huit = PM.graphe && typeof PM.graphe.nbVilles === 'function' ? PM.graphe.nbVilles('5x5') : 8;
       var villes = p.jetons.filter(function (j) { return j && j.type === 'capture'; }).length;
       return villes === huit - 1 && p.tuiles.filter(Boolean).length === F.GRILLE.colonnes * F.GRILLE.lignes;
