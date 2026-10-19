@@ -1,10 +1,11 @@
 'use strict';
 /*
  * Tests du générateur 5×5 (src/generateur.js) pour le catalogue à 2 cases par tuile (docs/53 § 3, docs/55 ; décisions de docs/18
- * « 5×5 très connecté ») : composition par quotas (4 coins, 12 bords, 9 des 12 centrales du stock « B3 » : 2 LC1, 1 LC2, 3 LC3, 1 LC4, 2 LC5, 1 LC6, 2 LC7), placement des villes
- * AVANT l'orientation des centrales (aucune porteuse ne dessert deux villes, 2-3-2, écart de 3 cases contrôlé par villesProches),
- * orientation pour ce placement, rejets (plus de 5 % de cases à 2 connexions, jonction à moins de 2 ports, ville à moins de 3 ports,
- * écart, S >= 5, « 5 contre 2 »), préférences (chaîne, raccords morts, points d'articulation, S), mesures gardées (rythme, accès,
+ * « 5×5 très connecté ») : composition par quotas (4 coins, 12 bords, 9 des 14 centrales du stock « P » de docs/66 : 1 LC1, 4 LC3, 1 LC4,
+ * 1 LC5, 1 LC6, 1 LC7, 2 LC11, 3 LC12), 8 villes aux positions par défaut (docs/18, 2026-10-19), place et orientation des centrales
+ * choisies pour elles (rechercherPose5x5 : aucune porteuse ne dessert deux villes, ports, moitiés égales ; écart de 3 cases contrôlé par
+ * villesProches), rejets (plus de 5 % de cases à 2 connexions, jonction à moins de 2 ports, ville à moins de 3 ports,
+ * écart, S >= 5, « 6 contre 2 », « 5 contre 3 »), préférences (partage symétrique, chaîne, raccords morts, points d'articulation, S), mesures gardées (rythme, accès,
  * moitiés), aide « placer les villes », abandon sur bibliothèque impossible, vrais miroirs, bornes des options, PM.graphe.flancs,
  * empreintes du 4×4. Bibliothèque : le vrai catalogue 5×5 (PM.catalogue).
  */
@@ -54,25 +55,30 @@ function porteuseDeDeuxVilles(doc) {
   return [...g.cases.keys()].some((id) => [...g.voisins.get(id)].filter((v) => g.villes.has(v)).length >= 2);
 }
 
-test('200 graines : plateau valide, 25 tuiles, 7 villes, compteurs à ok, aucune erreur ; aucune alerte ; les 2 murs de « Deux ponts » (s’il est posé) en information', () => {
+test('200 graines : plateau valide, 25 tuiles, 8 villes, compteurs à ok, aucune erreur ; aucune alerte ; les 2 murs de « Deux ponts » (s’il est posé) en information ; partage non symétrique rare (information)', () => {
+  let asym = 0;
   plateaux().forEach((r, k) => {
     const doc = r.doc, v = M.validerPlateau(doc);
     assert.strictEqual(doc.grille, '5x5');
     assert.strictEqual(doc.plateau.tuiles.length, 25, 'g5-' + k);
-    assert.strictEqual(doc.plateau.jetons.length, 7, 'g5-' + k);
+    assert.strictEqual(doc.plateau.jetons.length, 8, 'g5-' + k);
     assert.deepStrictEqual(v.erreurs, [], 'g5-' + k);
     assert.deepStrictEqual(v.alertes, [], 'g5-' + k);
     assert.deepStrictEqual(v.informations.map((a) => a.code), Array(mursAttendus(doc)).fill('raccord_mur'), 'g5-' + k); // les murs voulus de « Deux ponts » (docs/18)
     const c = PM.controles.calculer(doc);
     assert.deepStrictEqual(c.erreurs.map((e) => e.code), [], 'g5-' + k);
     assert.deepStrictEqual(c.alertes, [], 'g5-' + k);
-    assert.deepStrictEqual(c.informations.map((e) => e.code), Array(mursAttendus(doc)).fill('raccord_mur'), 'g5-' + k);
+    // partage non symétrique : préférence du générateur, jamais un rejet (docs/18) ; avec 6 candidats seulement, il arrive
+    const sym = r.score.partageSymetrique;
+    if (!sym) asym++;
+    assert.deepStrictEqual(c.informations.map((e) => e.code), Array(mursAttendus(doc)).fill('raccord_mur').concat(sym ? [] : ['partage_asymetrique']), 'g5-' + k);
     assert.deepStrictEqual(c.compteurs.filter((x) => x.etat !== 'ok').map((x) => x.cle), [], 'g5-' + k);
     assert.strictEqual(r.rejets.plateau_invalide, 0);
   });
+  assert.ok(asym <= NB_GRAINES * 0.3, asym + ' partages non symétriques sur ' + NB_GRAINES); // 6 candidats par graine : 46 / 200 mesurés ; avec les 60 candidats par défaut, presque jamais (test du temps ci-dessous)
 });
 
-test('200 graines : composition par quotas (4 LK2, 12 LB2, 9 centrales dans le stock, composition variée), 57 ou 58 cases, 46 ou 48 ports, moitiés égales', () => {
+test('200 graines : composition par quotas (4 LK2, 12 LB2, 9 centrales dans le stock, composition variée), 57 ou 58 cases, 46 ports plus 2 par LC4 ou LC12, moitiés égales', () => {
   const stock = Object.fromEntries(doc5().modeles.map((m) => [m.id, m.exemplaires]));
   const compositions = new Set();
   plateaux().forEach((r, k) => {
@@ -84,11 +90,11 @@ test('200 graines : composition par quotas (4 LK2, 12 LB2, 9 centrales dans le s
     assert.strictEqual(centrales, 9, 'g5-' + k);
     compositions.add(Object.keys(n).sort().map((id) => id + n[id]).join(' '));
     doc.plateau.tuiles.forEach((t) => assert.ok(t.modeleId === (M.gabaritCellule(t.col, t.lig, '5x5') === 'coin' ? 'LK2' : M.gabaritCellule(t.col, t.lig, '5x5') === 'bord' ? 'LB2' : t.modeleId)));
-    const cases = 59 - (n.LC5 || 0); // 2 cases par tuile, 1 pour LC5, 9 jonctions-cases
+    const cases = 58 - (n.LC5 || 0); // 2 cases par tuile, 1 pour LC5, 8 campements
     assert.strictEqual(r.score.cases.total, cases, 'g5-' + k);
     assert.ok(cases >= 57 && cases <= 58, 'g5-' + k);
     assert.strictEqual(PM.controles.calculer(doc).compteurs.find((x) => x.cle === 'cases').valeur, cases);
-    assert.strictEqual(GEN.portsParJonction(doc).reduce((a, b) => a + b, 0), n.LC4 ? 48 : 46, 'g5-' + k);
+    assert.strictEqual(GEN.portsParJonction(doc).reduce((a, b) => a + b, 0), 46 + 2 * ((n.LC4 || 0) + (n.LC12 || 0)), 'g5-' + k);
     const mo = GR.casesParMoitie(doc, GR.construire(doc));
     assert.strictEqual(mo.ecart, 0, 'g5-' + k + ' : ' + JSON.stringify(mo));
     assert.strictEqual(r.score.cases.ecart, 0);
@@ -101,7 +107,7 @@ test('200 graines : moins de 5 % de cases à 2 connexions (rejet), au moins 3 co
   plateaux().forEach((r, k) => {
     const cx = GR.connexions(r.doc);
     assert.ok(cx.conforme && cx.part < GR.PART_CONNEXIONS_MAX && cx.faibles <= 2, 'g5-' + k + ' : ' + cx.faibles + ' case(s) faibles');
-    assert.strictEqual(cx.cases, 59 - (composition(r.doc).LC5 || 0));
+    assert.strictEqual(cx.cases, 58 - (composition(r.doc).LC5 || 0));
     assert.ok(cx.degreMoyen >= 3.5, 'g5-' + k + ' : degré moyen ' + cx.degreMoyen);
     assert.deepStrictEqual(r.score.connexions, { cases: cx.cases, faibles: cx.faibles, part: cx.part, degreMoyen: cx.degreMoyen, parDegre: cx.parDegre });
     // les jonctions-cases à 2 ports sont des cases faibles ; une case de tuile peut l'être aussi (le plus souvent le relais de LC6 ou LC7 dont un raccord fait face à un mur de « Deux ponts », mesuré sur 100 plateaux : 21 cases de tuile faibles contre 99 jonctions-cases)
@@ -112,12 +118,11 @@ test('200 graines : moins de 5 % de cases à 2 connexions (rejet), au moins 3 co
   assert.ok(faiblesTuile / NB_GRAINES < 0.4, 'moyenne de cases de tuile faibles : ' + faiblesTuile / NB_GRAINES);
 });
 
-test('200 graines : villes en 2-3-2 sur des jonctions à 3 ports, jonctions à 2 ports au moins, aucune porteuse ne dessert deux villes, villes à 4 pas au moins', () => {
+test('200 graines : 8 villes aux positions par défaut sur des jonctions à 3 ports, jonctions à 2 ports au moins, aucune porteuse ne dessert deux villes, villes à 4 pas au moins partout', () => {
   plateaux().forEach((r, k) => {
     const doc = r.doc, jetons = doc.plateau.jetons;
-    const ligne = (j) => jetons.filter((x) => x.j === j).length;
-    assert.deepStrictEqual([ligne(1), ligne(2) + ligne(3), ligne(4)], [2, 3, 2], 'g5-' + k + ' : ' + jetons.map(cle).join(' '));
-    assert.strictEqual(new Set(jetons.map(cle)).size, 7);
+    assert.deepStrictEqual(jetons.map((x) => [x.i, x.j]), [[1, 1], [4, 1], [2, 2], [3, 2], [2, 3], [3, 3], [1, 4], [4, 4]], 'g5-' + k);
+    assert.deepStrictEqual(jetons.map((x) => [x.i, x.j]), GR.MOTIF_VILLES_5X5.map((v) => [v.i, v.j]));
     jetons.forEach((x) => assert.ok(M.portsJonction(doc, x.i, x.j).ports >= 3, 'g5-' + k + ' : ville (' + cle(x) + ')'));
     GEN.portsParJonction(doc).forEach((p, y) => assert.ok(p >= 2, 'g5-' + k + ' : jonction ' + y + ' à ' + p + ' port(s)'));
     assert.deepStrictEqual(M.jonctionsMalReliees(doc), []);
@@ -168,38 +173,39 @@ test('200 graines : préférences et mesures gardées (chaîne, distance maximal
   assert.ok(plateaux().filter((r) => r.score.articulations === 0).length >= NB_GRAINES * 0.9);
 });
 
-test('variété : plateaux distincts, et plusieurs dizaines de placements de villes différents sur 200 plateaux', () => {
+test('variété : plateaux presque tous distincts (les villes sont fixes, la variété vient des tuiles) ; un seul placement de villes, celui par défaut', () => {
   const profils = new Set(plateaux().map((r) => JSON.stringify(r.doc.plateau)));
-  assert.ok(profils.size >= 195, 'plateaux distincts : ' + profils.size + ' / ' + NB_GRAINES);
+  assert.ok(profils.size >= 180, 'plateaux distincts : ' + profils.size + ' / ' + NB_GRAINES);
   const placements = new Set(plateaux().map((r) => r.doc.plateau.jetons.map(cle).join(' ')));
-  assert.ok(placements.size >= 30, 'placements différents : ' + placements.size);
+  assert.strictEqual(placements.size, 1, 'placements différents : ' + placements.size);
 });
 
-test('orientation pour les villes : aucune rotation d\'une seule centrale ne fait moins de jonctions-cases à 2 ports sans enfreindre une condition ferme', () => {
-  const ctx = GEN.contexteDocument5x5(doc5());
-  let alternatives = 0, pires = 0;
-  for (let k = 0; k < 40; k++) {
-    const t = GEN.tuilesOrientees5x5(ctx, GEN.mulberry32(1000 + k));
-    if (t.cause) continue;
-    const doc = Object.assign(doc5(), { plateau: { tuiles: t.tuiles, jetons: t.jetons } });
-    const ref = faibles(doc);
-    assert.strictEqual(ref, t.faibles, 'tirage ' + k);
-    assert.strictEqual(porteuseDeDeuxVilles(doc), false);
-    doc.plateau.tuiles.forEach((x, n) => {
-      if (M.gabaritCellule(x.col, x.lig, '5x5') !== 'centrale') return;
-      for (let rot = 0; rot < 4; rot++) {
-        if (rot === x.rot) continue;
-        const d = copie(doc);
-        d.plateau.tuiles[n].rot = rot;
-        const p = GEN.portsParJonction(d), villes = new Set(d.plateau.jetons.map((j) => (j.j - 1) * 4 + j.i - 1));
-        const permis = p.every((v, y) => v >= 2 && (!villes.has(y) || v >= 3)) && !porteuseDeDeuxVilles(d);
-        alternatives++;
-        if (permis) assert.ok(faibles(d) >= ref, 'tirage ' + k + ' : centrale (' + x.col + ',' + x.lig + ') tournée de ' + rot);
-        else pires++;
-      }
-    });
+test('pose pour les villes par défaut (rechercherPose5x5) : conditions fermes tenues, centrales posées = centrales tirées (place choisie), moitiés égales', () => {
+  const ctx = GEN.contexteDocument5x5(doc5()), rng = GEN.mulberry32(77);
+  let poses = 0, placeChangee = 0;
+  for (let k = 0; k < 30; k++) {
+    const comp = GEN.composer5x5(ctx, rng);
+    if (comp.cause) continue;
+    const r = GEN.rechercherPose5x5(ctx, comp, ctx.motif.villes, rng, 5);
+    assert.ok(r.feuilles.length <= 5);
+    const tirees = comp.ids.filter((id, n) => ctx.cellules[n].gabarit === 'centrale').sort().join();
+    for (const f of r.feuilles) {
+      poses++;
+      const tuiles = f.map((o, n) => ({ modeleId: o.modeleId, col: ctx.cellules[n].col, lig: ctx.cellules[n].lig, rot: o.rots[0] }));
+      const doc = Object.assign(doc5(), { plateau: { tuiles, jetons: copie(ctx.motif.jetons) } });
+      // affectation : les mêmes centrales (multiensemble), à des places éventuellement différentes ; bords et coins à leur place
+      assert.strictEqual(f.filter((o, n) => ctx.cellules[n].gabarit === 'centrale').map((o) => o.modeleId).sort().join(), tirees);
+      f.forEach((o, n) => { if (ctx.cellules[n].gabarit !== 'centrale') assert.ok(o.modeleId === comp.ids[n] || PM.generateur.sontMiroirs(M.modeleParId(doc, o.modeleId), M.modeleParId(doc, comp.ids[n]), PM.geometrie.format('5x5'))); });
+      if (f.some((o, n) => ctx.cellules[n].gabarit === 'centrale' && o.modeleId !== comp.ids[n])) placeChangee++;
+      // toute rotation équivalente donne les mêmes ports
+      const p = GEN.portsParJonction(doc);
+      p.forEach((v, y) => assert.ok(v >= (ctx.motif.villes[y] ? 3 : 2), 'jonction ' + y + ' : ' + v + ' port(s)'));
+      assert.strictEqual(porteuseDeDeuxVilles(doc), false);
+      assert.strictEqual(GR.casesParMoitie(doc, GR.construire(doc)).ecart, 0);
+    }
   }
-  assert.ok(pires > alternatives / 3, pires + ' rotations interdites sur ' + alternatives);
+  assert.ok(poses >= 100, poses + ' poses');
+  assert.ok(placeChangee > poses / 2, 'le générateur déplace les centrales tirées : ' + placeChangee + ' / ' + poses);
 });
 
 test('orientation : des centrales tournées au hasard enfreignent presque toujours une condition ferme (le choix de rotation est utile)', () => {
@@ -214,28 +220,13 @@ test('orientation : des centrales tournées au hasard enfreignent presque toujou
   assert.ok(mauvais > 45, mauvais + ' / 60 plateaux à rotations aléatoires enfreignent une condition ferme');
 });
 
-test('placements compatibles : calcul par masques identique à optionsPermises (chaque cellule garde une option, ports possibles)', () => {
-  const ctx = GEN.contexteDocument5x5(doc5()), rng = GEN.mulberry32(9);
-  for (let k = 0; k < 5; k++) {
-    const comp = GEN.composer5x5(ctx, rng), compat = GEN.placementsCompatibles(ctx, comp.options);
-    const attendus = ctx.placements.filter((pl) => {
-      const villes = new Array(16).fill(0); pl.indices.forEach((x) => { villes[x] = 1; });
-      const ok = comp.options.every((l) => l.some((o) => o.groupes.every((g) => g.filter((x) => villes[x]).length < 2)));
-      if (!ok) return false;
-      const pot = new Array(16).fill(0);
-      comp.options.forEach((l) => { const u = new Set(); l.filter((o) => o.groupes.every((g) => g.filter((x) => villes[x]).length < 2)).forEach((o) => o.jn.forEach((y) => u.add(y))); u.forEach((y) => pot[y]++); });
-      return pot.every((v, y) => v >= 2 && (!villes[y] || v >= 3));
-    });
-    assert.deepStrictEqual(compat.map((c) => c.pl.indices.join()), attendus.map((pl) => pl.indices.join()), 'composition ' + k);
-    assert.ok(compat.length > 10, compat.length + ' placements compatibles');
-  }
-});
+
 
 test('outils de mesure : tirages orientés (villes d\'abord) sans ville posée, rejets du générateur par cause', () => {
   const MES = require('../outils/mesures-equilibre.js');
   const r = MES.tirerPlateaux5x5(20, 3);
   assert.strictEqual(r.entrees.length + r.sansOrientation, 20);
-  assert.ok(r.entrees.every((e) => e.doc.plateau.tuiles.length === 25 && e.doc.plateau.jetons.length === 0 && e.villes.length === 7));
+  assert.ok(r.entrees.every((e) => e.doc.plateau.tuiles.length === 25 && e.doc.plateau.jetons.length === 0 && e.villes.length === 8));
   assert.strictEqual(r.generateur.essais, 20);
   assert.ok(r.generateur.acceptes >= 11, JSON.stringify(r.generateur));
 });
@@ -253,25 +244,25 @@ test('reproductibilité : même graine, même plateau et mêmes compteurs', () =
 test('tirage par quotas : les poids fixent la composition ; d\'autres poids donnent d\'autres compositions, au plus près des proportions', () => {
   const ctx = GEN.contexteDocument5x5(doc5()), rng = GEN.mulberry32(3);
   const compte = (ids) => { const n = {}; ids.forEach((id, k) => { if (ctx.cellules[k].gabarit === 'centrale') n[id] = (n[id] || 0) + 1; }); return n; };
-  // poids = exemplaires du stock « B3 » (12 centrales pour 9 places) : chaque modèle au plus près de 9 × poids / 12 (arrondi par défaut ou par excès)
-  const poids = { LC1: 2, LC2: 1, LC3: 3, LC4: 1, LC5: 2, LC6: 1, LC7: 2 }, vues = new Set();
+  // poids = exemplaires du stock « P » (14 centrales pour 9 places) : chaque modèle au plus près de 9 × poids / 14 (arrondi par défaut ou par excès)
+  const poids = { LC1: 1, LC3: 4, LC4: 1, LC5: 1, LC6: 1, LC7: 1, LC11: 2, LC12: 3 }, vues = new Set();
   for (let k = 0; k < 40; k++) {
     const n = compte(GEN.composer5x5(ctx, rng).ids);
     assert.strictEqual(Object.values(n).reduce((a, b) => a + b, 0), 9);
     for (const id of Object.keys(poids)) {
-      const v = 9 * poids[id] / 12, nb = n[id] || 0;
+      const v = 9 * poids[id] / 14, nb = n[id] || 0;
       assert.ok(nb >= Math.floor(v) && nb <= Math.ceil(v) && nb <= poids[id], id + ' : ' + nb + ' pour ' + v + ' ' + JSON.stringify(n));
     }
     vues.add(JSON.stringify(n));
   }
   assert.ok(vues.size >= 10, 'compositions de centrales différentes : ' + vues.size);
-  // poids 1 pour les 7 modèles : 9 centrales = 1 de chaque + 2 tirées au hasard
+  // poids 1 pour les 8 modèles : 9 centrales = 1 de chaque + 1 tirée au hasard
   const d = doc5(); d.modeles.forEach((m) => { if (m.gabarit === 'centrale') m.poids = 1; });
   const ctx2 = GEN.contexteDocument5x5(d), vus = new Set();
   for (let k = 0; k < 20; k++) {
     const n = compte.call(null, GEN.composer5x5(ctx2, rng).ids.map((x) => x));
     const v = Object.values(n).sort();
-    assert.deepStrictEqual(v, [1, 1, 1, 1, 1, 2, 2], JSON.stringify(n));
+    assert.deepStrictEqual(v, [1, 1, 1, 1, 1, 1, 1, 2], JSON.stringify(n));
     vus.add(JSON.stringify(n));
   }
   assert.ok(vus.size >= 3, 'le reste est tiré au hasard');
@@ -306,23 +297,31 @@ test('bibliothèque trop pauvre ou ancienne : rejet explicite, abandon après 25
   assert.ok(Date.now() - t0 < 8000, 'abandons rapides : ' + (Date.now() - t0) + ' ms');
 });
 
-test('bibliothèque modifiée : sans « Deux ponts » (46 ports), les plateaux restent conformes mais ont 2 jonctions à 2 ports au moins', () => {
+test('bibliothèque modifiée : sans « Deux ponts » (LC4), les plateaux restent conformes, sans mur ; sans « Deux ponts ouverts » (LC12), les villes par défaut ne tiennent plus (abandon expliqué)', () => {
   const d = doc5(); d.modeles = d.modeles.filter((m) => m.id !== 'LC4');
   for (let k = 0; k < 4; k++) {
     const r = GEN.generer(d, { graine: 'sans-lc4-' + k, candidats: 10 });
     assert.ok(r.ok, r.raison);
-    assert.strictEqual(GEN.portsParJonction(r.doc).reduce((a, b) => a + b, 0), 46);
-    assert.strictEqual(r.score.connexions.faibles, 2);
+    assert.strictEqual(GEN.portsParJonction(r.doc).reduce((a, b) => a + b, 0), 46 + 2 * (composition(r.doc).LC12 || 0));
+    assert.ok(r.score.connexions.part < GR.PART_CONNEXIONS_MAX);
     assert.strictEqual(r.score.raccordsMorts, 0);
+    assert.strictEqual(M.raccordsMorts(r.doc).filter((x) => x.mur).length, 0);
   }
+  // les centrales du jeu « B3 » seules (sans LC11 ni LC12) ne donnent aucune pose pour les villes par défaut (docs/64, docs/66 § 1)
+  const b3 = doc5(); b3.modeles = b3.modeles.filter((m) => m.id !== 'LC11' && m.id !== 'LC12');
+  const x = GEN.generer(b3, { graine: 'sans-ponts' });
+  assert.strictEqual(x.ok, false);
+  assert.match(x.raison, /Abandon après 25 échecs consécutifs/);
+  assert.match(x.raison, /positions par défaut/);
 });
 
-test('taux de rejet par cause et temps (200 candidats) sur le catalogue 5×5', () => {
+test('taux de rejet par cause et temps (candidats par défaut) sur le catalogue 5×5', () => {
   const t0 = Date.now();
   const r = GEN.generer(doc5(), { graine: 'chrono-5x5' });
   const ms = Date.now() - t0;
   assert.ok(r.ok, r.raison);
-  assert.strictEqual(r.candidats, 200);
+  assert.ok(r.candidats >= GEN.CANDIDATS_DEFAUT_5X5, String(r.candidats));
+  assert.strictEqual(r.score.partageSymetrique, true, 'partage symétrique préféré');
   assert.ok(ms < 6000, ms + ' ms');
   const rej = {}; let essais = 0, acceptes = 0;
   for (let k = 0; k < 200; k++) {
@@ -331,8 +330,8 @@ test('taux de rejet par cause et temps (200 candidats) sur le catalogue 5×5', (
     if (x.ok) acceptes++;
     Object.keys(x.rejets).forEach((c) => { rej[c] = (rej[c] || 0) + x.rejets[c]; });
   }
-  console.log(`# 5×5 : 200 candidats en ${ms} ms (${r.essais} essais) ; ${acceptes}/${essais} candidats acceptés ; rejets : ${JSON.stringify(rej)}`);
-  assert.ok(acceptes >= essais * 0.58, 'taux d\'acceptation : ' + acceptes + ' / ' + essais); // ≈ 63 % avec le stock « B3 » (rejets « villes_ports » surtout) ; 100 % des plateaux sont réussis
+  console.log(`# 5×5 : ${r.candidats} candidats en ${ms} ms (${r.essais} essais) ; ${acceptes}/${essais} essais acceptés ; rejets : ${JSON.stringify(rej)}`);
+  assert.ok(acceptes >= essais * 0.35, 'taux d\'acceptation : ' + acceptes + ' / ' + essais); // un essai = une composition, jusqu'à 20 poses jugées (mesuré : 83 / 200, surtout « villes_proches ») ; 100 % des plateaux sont réussis
   assert.strictEqual(rej.plateau_invalide, 0);
   assert.strictEqual(rej.connexite, 0);
   assert.strictEqual(rej.connexions, 0, 'le catalogue livré ne laisse jamais plus de 5 % de cases faibles après orientation');
@@ -379,19 +378,21 @@ test('vrais miroirs (bibliothèque du catalogue 3.04) : B7 <-> B7m seulement ; u
 
 /* ---------- aide « placer les villes » ---------- */
 
-test('aide « placer les villes » : meilleur placement admissible (2-3-2, 3 ports, 4 pas, équilibre) d\'un plateau généré, au plus petit S', () => {
+test('aide « placer les villes » : les positions par défaut d\'abord, sinon le meilleur placement admissible (2-2-2-2, 3 ports, 4 pas, équilibre)', () => {
   plateaux().slice(0, 30).forEach((r, k) => {
     const sans = copie(r.doc); sans.plateau.jetons = [];
     const p = GEN.meilleurPlacementVilles(sans);
     assert.ok(p.ok, 'g5-' + k + ' : ' + p.raison);
-    assert.strictEqual(p.jetons.length, 7);
+    assert.strictEqual(p.jetons.length, 8);
+    assert.strictEqual(p.motif, true, 'g5-' + k + ' : positions par défaut');
+    assert.deepStrictEqual(p.jetons, r.doc.plateau.jetons);
     assert.strictEqual(p.admissibles, r.score.placementsAdmissibles);
     const d = copie(sans); d.plateau.jetons = p.jetons;
     const g = GR.construire(d, { villesTraversables: false }), e = GR.equilibre(d, { graphe: g });
     assert.deepStrictEqual(GR.villesProches(g), []);
     assert.ok(p.jetons.every((j) => M.portsJonction(d, j.i, j.j).ports >= 3));
     assert.strictEqual(e.S, p.S);
-    assert.ok(p.S <= r.score.S, 'g5-' + k + ' : le meilleur S vaut au plus celui du générateur');
+    assert.strictEqual(p.S, r.score.S, 'g5-' + k);
     assert.ok(e.premiereEgale && !e.cinqContreDeux && e.ecartMax7 <= 2);
     // les villes déjà posées sont ignorées : même résultat
     assert.deepStrictEqual(GEN.meilleurPlacementVilles(r.doc).jetons, p.jetons);
@@ -407,7 +408,7 @@ test('aide « placer les villes » : refus expliqués (plateau incomplet, aucun 
   d.plateau.tuiles.forEach((t) => { if (M.gabaritCellule(t.col, t.lig, '5x5') === 'centrale') t.rot = 0; });
   const r = GEN.meilleurPlacementVilles(d);
   assert.strictEqual(r.ok, false);
-  assert.match(r.raison, /Aucun placement des 7 villes \(en 2-3-2, sur des jonctions à 3 ports au moins, à 3 cases d’écart au moins\)/);
+  assert.match(r.raison, /Aucun placement des 8 villes \(en 2-2-2-2, sur des jonctions à 3 ports au moins, à 3 cases d’écart au moins\)/);
   assert.strictEqual(GEN.placementsAdmissibles5x5(d), 0);
   // 4×4 : placements complémentaires des 12 paires équilibrées, sans condition de ports
   const g4 = GEN.generer(CAT.nouveauDocument('4x4'), { graine: 'aide-4x4', candidats: 5 });
@@ -424,7 +425,7 @@ test('aide « placer les villes » à l\'état : pose en une étape d\'historiqu
   const r = GEN.placerVilles(etat);
   assert.ok(r.ok, r.raison);
   assert.deepStrictEqual(etat.doc().plateau.jetons, r.jetons);
-  assert.match(etat.ui().message.texte, /7 villes placées au meilleur placement \(S = \d+, parmi \d+ placement\(s\) équilibré\(s\) sur \d+ admissible\(s\)\)\. Ctrl\+Z pour revenir\./);
+  assert.match(etat.ui().message.texte, /^8 villes placées aux positions par défaut \(S = \d+, parmi \d+ placement\(s\) équilibré\(s\) sur \d+ admissible\(s\)\)\. Ctrl\+Z pour revenir\./);
   etat.annuler();
   assert.deepStrictEqual(etat.doc().plateau.jetons, [{ i: 1, j: 1, type: 'capture' }]);
   const etat2 = PM.etat.creer(doc5()), avant = JSON.stringify(etat2.doc());
@@ -487,13 +488,17 @@ test('PM.graphe.flancs : « centre » = colonnes 1 à colonnes - 2 (5×5 : 1, 2 
   }
 });
 
-test('constantes partagées : ports minimum, répartition 2-3-2, causeRejet et placements gelés', () => {
+test('constantes partagées : ports minimum, positions par défaut, répartition 2-2-2-2, causeRejet et placements gelés', () => {
   assert.strictEqual(GR.PORTS_VILLE_MIN, 3);
   assert.strictEqual(GR.PORTS_JONCTION_MIN, 2);
-  assert.deepStrictEqual(JSON.parse(JSON.stringify(GR.REPARTITION_VILLES_5X5)), [{ rangees: [1], nb: 2 }, { rangees: [2, 3], nb: 3 }, { rangees: [4], nb: 2 }]);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(GR.MOTIF_VILLES_5X5)), [{ i: 1, j: 1 }, { i: 4, j: 1 }, { i: 2, j: 2 }, { i: 3, j: 2 }, { i: 2, j: 3 }, { i: 3, j: 3 }, { i: 1, j: 4 }, { i: 4, j: 4 }]);
+  assert.ok(Object.isFrozen(GR.MOTIF_VILLES_5X5) && Object.isFrozen(GR.MOTIF_VILLES_5X5[0]));
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(GR.REPARTITION_VILLES_5X5)), [{ rangees: [1], nb: 2 }, { rangees: [2], nb: 2 }, { rangees: [3], nb: 2 }, { rangees: [4], nb: 2 }]);
   assert.strictEqual(GEN.REPARTITION_VILLES_5X5, GR.REPARTITION_VILLES_5X5);
   assert.ok(Object.isFrozen(GEN.placementsVilles5x5()) && Object.isFrozen(GEN.placementsVilles5x5()[0]));
-  assert.strictEqual(GEN.placementsVilles5x5().length, 2016);
+  assert.strictEqual(GEN.placementsVilles5x5().length, 1296);
+  assert.deepStrictEqual([GR.nbVilles('4x4'), GR.nbVilles('5x5'), GR.seuilMajorite('4x4'), GR.seuilMajorite('5x5'), GR.seuilMajoriteAlerte('4x4'), GR.seuilMajoriteAlerte('5x5')], [7, 8, 5, 6, null, 5]);
+  assert.strictEqual(GEN.causeRejet({ accessible: true, cinq: false, trois: true, ecartMax: 1, premiereEgale: true, S: 3 }, '5x5'), 'cinq_contre_trois');
   const ok = { accessible: true, cinq: false, ecartMax: 1, premiereEgale: true, S: 3 };
   const avec = (o) => Object.assign({}, ok, o);
   assert.strictEqual(GEN.causeRejet(ok, '5x5'), null);
@@ -529,7 +534,7 @@ const EMPREINTES_4X4 = [
   'a4da801b19', '47ecc07d80', 'cbc169bf66', '6798312960', '2ed6de112a', 'd574c6c673', '8ee3208ef5', 'eafac54e7c', '2b03155fa7', '0d333266b7',
   '928c4975b9', '2ba53d56ce', '304b762f96', '3a5e15c89d', '35418b6859', '648c604e4d', '942ad45295', '080d881eee', 'e32517cdfd', '417f823d3a',
   'd2a6e5b9ce', 'efcf47b9e5', 'beb2734d92', '00eb11f779', '20d23f4d46', '5d1db830e2', '0813f4b905', '98c08d3a59', 'cbb8d5229d', 'eaeeb65ec2',
-  'a73459917d'
+  '099315ebc6' // le seul changé le 2026-10-19 : il contient le rapport, où les jonctions sans ville s'appellent désormais « campements » (plateau, essais, rejets inchangés)
 ];
 const sha = (x) => crypto.createHash('sha1').update(JSON.stringify(x)).digest('hex').slice(0, 10);
 

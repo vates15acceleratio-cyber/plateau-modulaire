@@ -259,7 +259,9 @@
       cp = compteurs();
       var pasOk = Object.keys(cp).filter(function (k) { return !cp[k].ok; }).map(function (k) { return k + '=' + cp[k].v; });
       ctrl('tous les compteurs à « ok »', pasOk.length === 0, pasOk.join(', '));
-      ctrl('compteur « Cases (tuiles et jonctions) » : 54 (≈ 58)', cp['Cases (tuiles et jonctions)'] && cp['Cases (tuiles et jonctions)'].v === '54 (≈ 58)', cp['Cases (tuiles et jonctions)'] && cp['Cases (tuiles et jonctions)'].v);
+      ctrl('compteur « Cases (tuiles et campements) » : 54 (≈ 58)', cp['Cases (tuiles et campements)'] && cp['Cases (tuiles et campements)'].v === '54 (≈ 58)', cp['Cases (tuiles et campements)'] && cp['Cases (tuiles et campements)'].v);
+      // campements (docs/18, 2026-10-19) : jeton feu de bois à chaque intersection sans ville dont les 4 tuiles sont posées
+      ctrl('écran Plateau : 2 campements (9 jonctions, 7 villes), aucun petit point', document.querySelectorAll('.pm-assemblage-campement').length === 2 && document.querySelectorAll('.pm-assemblage-point').length === 0, document.querySelectorAll('.pm-assemblage-campement').length);
       ctrl('pastille « Plateau complet »', pastille() === 'Plateau complet' && $('pastille-alertes').classList.contains('pm-ok'), pastille());
       ctrl('panneau : « Aucune erreur ni alerte. »', !!document.querySelector('.pm-controles-vide'));
       ctrl('compteur d\'écran « Villes posées 7/7 »', /Villes posées 7\/7/.test(document.querySelector('[data-role="jetons"]').textContent));
@@ -430,7 +432,7 @@
       var sj1 = docJ();
       ctrl('clic jonction : ville posée', etat.doc().plateau.jetons.length === 1 && etat.doc().plateau.jetons[0].type === 'capture', msg());
       cliquerJonction(1, 1);
-      ctrl('2e clic : la jonction redevient une case chemin', etat.doc().plateau.jetons.length === 0 && /case chemin/.test(msg()), msg());
+      ctrl('2e clic : la jonction redevient un campement', etat.doc().plateau.jetons.length === 0 && /redevient un campement/.test(msg()), msg());
       ctrlZ(); ctrlZ();
       ctrl('2 × Ctrl+Z : état initial exact', docJ() === sj0);
       ctrlY();
@@ -655,7 +657,8 @@
       var bp5 = Array.prototype.filter.call($('controles').querySelectorAll('button'), function (x) { return x.textContent === 'Placer les villes'; })[0];
       ctrl('5×5 : bouton « Placer les villes » présent et actif', !!bp5 && !bp5.disabled);
       ctrl('5×5 : 25 cellules et 16 jonctions', document.querySelectorAll('[data-cellule]').length === 25 && document.querySelectorAll('[data-jonction]').length === 16);
-      ctrl('5×5 : compteurs tuiles 0 / 25, apparitions 0 / 7, cases (≈ 57)', cp['Tuiles posées'].v === '0 / 25' && cp['Apparitions vert'].v === '0 / 7' && /≈ 57/.test(cp['Cases (tuiles et jonctions)'].v), J(cp));
+      ctrl('5×5 : compteurs tuiles 0 / 25, apparitions 0 / 7, cases (≈ 57), villes 0 / 8', cp['Tuiles posées'].v === '0 / 25' && cp['Apparitions vert'].v === '0 / 7' && /≈ 57/.test(cp['Cases (tuiles et campements)'].v) && /0 \/ 8/.test(cp['Villes'].v), J(cp));
+      ctrl('5×5 vide : petits points aux 16 jonctions, aucun campement', document.querySelectorAll('.pm-assemblage-point').length === 16 && document.querySelectorAll('.pm-assemblage-campement').length === 0);
       ctrl('5×5 : rangée centrale neutre', /Bord, neutre/.test(document.querySelector('[data-cellule="0,2"]').textContent));
     }
 
@@ -917,7 +920,7 @@
       radio.checked = true;
       document.querySelector('#dialogue-contenu .pm-nouveau-creer').click();
       ctrl('vrai catalogue : Créer 5×5 ferme la boîte et crée un document 5×5 sans tuile', !$('dialogue').open && etat.doc().grille === '5x5' && nbTuiles() === 0);
-      ctrl('vrai catalogue : 9 vignettes en bibliothèque (LK2, LB2, LC1 à LC7)', document.querySelectorAll('.pm-biblio-vignette').length === 9 && ['LK2', 'LB2', 'LC1', 'LC2', 'LC3', 'LC4', 'LC5', 'LC6', 'LC7'].every(function (id) { return !!document.querySelector('[data-vignette="' + id + '"]'); }));
+      ctrl('vrai catalogue : 10 vignettes en bibliothèque (LK2, LB2, LC1, LC3 à LC7, LC11, LC12)', document.querySelectorAll('.pm-biblio-vignette').length === 10 && ['LK2', 'LB2', 'LC1', 'LC3', 'LC4', 'LC5', 'LC6', 'LC7', 'LC11', 'LC12'].every(function (id) { return !!document.querySelector('[data-vignette="' + id + '"]'); }));
       // une pose valide : coin LK2 en (0,0), bord LB2 en (1,0), centrale LC1 en (1,1)
       var g1 = glisser('LK2', 0, 0, 0), g2 = glisser('LB2', 1, 0, 0), g3 = glisser('LC1', 1, 1, 0);
       ctrl('vrai catalogue : pose d’un coin, d’un bord et d’une centrale', g1.demarre && g2.demarre && g3.demarre && nbTuiles() === 3, nbTuiles() + ' ' + msg());
@@ -927,7 +930,7 @@
       var r = null, exception = null;
       try { r = PM.generateur.generer(etat.doc(), { graine: 'recette-5x5' }); } catch (e) { exception = e; }
       ctrl('vrai catalogue : « Plateau aléatoire » (graine fixée) ne lève aucune exception', exception === null && !!r, exception && exception.message);
-      ctrl('vrai catalogue : le plateau aléatoire 5×5 a 25 tuiles et 7 villes', !!r && r.ok === true && r.doc.plateau.tuiles.length === 25 && r.doc.plateau.jetons.length === 7, r && (r.raison || J(r.rapport)));
+      ctrl('vrai catalogue : le plateau aléatoire 5×5 a 25 tuiles et 8 villes', !!r && r.ok === true && r.doc.plateau.tuiles.length === 25 && r.doc.plateau.jetons.length === 8, r && (r.raison || J(r.rapport)));
       reset(docExemples('4x4'));
     }
 
@@ -937,7 +940,9 @@
      *  rapport d’équilibre, conseil « Placer les villes » en pose manuelle, information « ville sur jonction à moins de 3 ports ». */
     function s8c_generateur5x5_parcours() {
       titre('S9c Générateur 5×5 : parcours dans l’interface (docs/34, docs/36)');
-      var CONSEIL = 'Outils > Placer les villes pose les 7 villes au meilleur placement admissible';
+      var CONSEIL = 'Outils > Placer les villes pose les 8 villes aux positions par défaut si elles conviennent, sinon au meilleur placement admissible';
+      var MAJ = ['cinq_contre_deux', 'cinq_contre_trois'];
+      function majorite(e) { return codes(e).some(function (c) { return MAJ.indexOf(c) >= 0; }); }
       var GR = PM.graphe, GEN = PM.generateur;
       function bouton(zone, texte) {
         var bs = zone.querySelectorAll('button'), r = null;
@@ -960,6 +965,7 @@
         vs.forEach(function (v) { if (!etat.doc().plateau.jetons.some(function (x) { return x.i === v.i && x.j === v.j; })) cliquerJonction(v.i, v.j); });
       }
       function texteControles() { return $('controles').textContent; }
+      function toutesLibres() { var r = []; for (var j = 1; j <= 4; j++) for (var i = 1; i <= 4; i++) if (!etat.doc().plateau.jetons.some(function (x) { return x.i === i && x.j === j; })) r.push({ i: i, j: j }); return r; }
       function ouvrirRapport() {
         var b = bouton($('controles'), 'Rapport d'); if (b) b.click();
         return $('dialogue-contenu').textContent;
@@ -977,7 +983,7 @@
         var dlg = $('dialogue-contenu');
         ctrl('boîte « Plateau aléatoire » ouverte, champ graine et bouton Générer présents', $('dialogue').open && !!dlg.querySelector('.pm-generateur-graine') && !!bouton(dlg, 'Générer'));
         ctrl('5×5 : option « jonctions variées » absente de la boîte', !dlg.querySelector('.pm-generateur-variees') && !/[Jj]onctions variées/.test(dlg.textContent), dlg.textContent.slice(0, 200));
-        ctrl('5×5 : explication du 2-3-2, des villes placées d’abord, des 57 cases à moins de 5 % de cases à 2 connexions et des moitiés dans la boîte', /2-3-2/.test(dlg.textContent) && /villes placées d’abord/.test(dlg.textContent) && /57 cases, dont moins de 5 % à 2 connexions/.test(dlg.textContent) && /moitié verte/.test(dlg.textContent));
+        ctrl('5×5 : explication des 8 villes aux positions par défaut, des campements, des 57 cases à moins de 5 % de cases à 2 connexions et des moitiés dans la boîte', /8 villes/.test(dlg.textContent) && /positions par défaut/.test(dlg.textContent) && /campements/.test(dlg.textContent) && /57 cases, dont moins de 5 % à 2 connexions/.test(dlg.textContent) && /moitié verte/.test(dlg.textContent));
         var appl = bouton(dlg, 'Appliquer');
         ctrl('Appliquer désactivé avant la première génération', !!appl && appl.disabled);
         dlg.querySelector('.pm-generateur-graine').value = 'recette-5x5-ui-a';
@@ -987,7 +993,7 @@
         var dlg = $('dialogue-contenu'), r1 = resume();
         ctrl('Générer : aperçu et résumé affichés, Appliquer actif', !!r1 && !!dlg.querySelector('.pm-generateur-apercu svg') && !bouton(dlg, 'Appliquer').disabled, r1 && r1.slice(0, 80));
         ctrl('Générer : la graine saisie est rendue dans le résumé', !!r1 && r1.indexOf('recette-5x5-ui-a') >= 0);
-        ctrl('Générer : le résumé annonce 2-3-2, le placement avant l’orientation et les connexions par case', !!r1 && /2-3-2/.test(r1) && /avant l’orientation des centrales/.test(r1) && /Connexions par case : \d+ case\(s\) à 2 connexions ou moins sur 5[78]/.test(r1));
+        ctrl('Générer : le résumé annonce les positions par défaut, les campements, la place des centrales et les connexions par case', !!r1 && /8 villes aux positions par défaut/.test(r1) && /campements/.test(r1) && /Centrales placées et orientées/.test(r1) && /Connexions par case : \d+ case\(s\) à 2 connexions ou moins sur 5[78]/.test(r1));
         ctrl('Générer ne touche pas au plateau avant Appliquer', nbTuiles() === 0);
         dlg.querySelector('.pm-generateur-graine').value = 'recette-5x5-ui-a';
         bouton(dlg, 'Générer').click();
@@ -997,29 +1003,30 @@
         ctrl('même graine, même résumé (reproductibilité)', r1 === r2, String(r2).slice(0, 120));
         bouton(dlg, 'Appliquer').click();
         var d = etat.doc();
-        ctrl('Appliquer : boîte fermée, 25 tuiles, 7 villes, grille 5×5', !$('dialogue').open && d.grille === '5x5' && nbTuiles() === 25 && d.plateau.jetons.length === 7, nbTuiles() + ' ' + msg());
+        ctrl('Appliquer : boîte fermée, 25 tuiles, 8 villes, grille 5×5', !$('dialogue').open && d.grille === '5x5' && nbTuiles() === 25 && d.plateau.jetons.length === 8, nbTuiles() + ' ' + msg());
+        ctrl('écran Plateau : 8 campements (jetons feu de bois) et 8 villes', document.querySelectorAll('.pm-assemblage-campement').length === 8 && document.querySelectorAll('.pm-assemblage-jeton').length === 8, document.querySelectorAll('.pm-assemblage-campement').length);
         ctrl('Appliquer : message avec la graine et Ctrl+Z', /Plateau aléatoire appliqué \(graine recette-5x5-ui-a\)/.test(msg()) && /Ctrl\+Z/.test(msg()), msg());
-        var nbCases = d.plateau.tuiles.reduce(function (s, t) { return s + M.modeleParId(d, t.modeleId).cases.length; }, 0) + 9;
+        var nbCases = d.plateau.tuiles.reduce(function (s, t) { return s + M.modeleParId(d, t.modeleId).cases.length; }, 0) + 8;
         var moit = PM.graphe.casesParMoitie(d, PM.graphe.construire(d)), cx = PM.graphe.connexions(d);
         var nLc5 = d.plateau.tuiles.filter(function (t) { return t.modeleId === 'LC5'; }).length;
-        ctrl('plateau appliqué : 57 ou 58 cases (59 moins les LC5), autant de cases dans chaque moitié, moins de 5 % de cases à 2 connexions', nbCases === 59 - nLc5 && nLc5 >= 1 && moit.ecart === 0 && cx.conforme && cx.cases === nbCases, nbCases + ' cases, ' + J(moit) + ' ' + cx.faibles);
+        ctrl('plateau appliqué : 57 ou 58 cases (58 moins les LC5), autant de cases dans chaque moitié, moins de 5 % de cases à 2 connexions', nbCases === 58 - nLc5 && nLc5 <= 1 && moit.ecart === 0 && cx.conforme && cx.cases === nbCases, nbCases + ' cases, ' + J(moit) + ' ' + cx.faibles);
         var mini = 9, ports3 = true, vs = d.plateau.jetons;
         for (var j = 1; j <= 4; j++) for (var i = 1; i <= 4; i++) mini = Math.min(mini, M.portsJonction(d, i, j).ports);
         vs.forEach(function (v) { if (M.portsJonction(d, v.i, v.j).ports < 3) ports3 = false; });
         ctrl('plateau appliqué : toutes les jonctions à 2 ports au moins, villes à 3 ports au moins', mini >= 2 && ports3, 'minimum ' + mini);
-        ctrl('plateau appliqué : villes en 2-3-2', nbSur(vs, 1) === 2 && nbSur(vs, 2) + nbSur(vs, 3) === 3 && nbSur(vs, 4) === 2, vs.map(cle).join(' '));
+        ctrl('plateau appliqué : villes aux positions par défaut', cleTri(vs) === cleTri(GR.MOTIF_VILLES_5X5), vs.map(cle).join(' '));
         var c = compteurs();
         ctrl('plateau appliqué : compteur « Tuiles posées » 25 / 25', c['Tuiles posées'].v === '25 / 25', J(c));
         ctrl('plateau appliqué : information « Cases à 2 connexions ou moins » au panneau (cible < 5 %)', !!c['Cases à 2 connexions ou moins'] && c['Cases à 2 connexions ou moins'].v === cx.faibles + ' (' + (Math.round(cx.part * 1000) / 10).toString().replace('.', ',') + ' %) (visé : < 5 %)', J(c['Cases à 2 connexions ou moins']));
         var e = GR.equilibre(d);
-        ctrl('plateau appliqué : moteur sans alerte ni blocage ni information', e.complet && e.alertes.length === 0 && e.blocages.length === 0 && e.informations.length === 0, J(codes(e)));
+        ctrl('plateau appliqué : moteur sans alerte ni blocage ni information', e.complet && e.alertes.length === 0 && e.blocages.length === 0 && e.informations.length === 0, J(codes(e)) + J(e.informations));
         var t = texteControles();
         ctrl('panneau : aucune erreur ni alerte d’équilibre sur le plateau généré', !/déséquilibré|Score S|plus proche de|écart|Première ville/.test(t), t.replace(/\s+/g, ' ').slice(0, 300));
         ctrl('panneau : aucune erreur (barre d’état)', niveau() !== 'erreur', niveau() + ' ' + pastille());
         var rap = ouvrirRapport();
         ctrl('rapport d’équilibre : « Aucune alerte d’équilibre. », pas de section Informations', /Aucune alerte d.équilibre\./.test(rap) && !document.querySelector('#dialogue-contenu .pm-equilibre-informations'), rap.replace(/\s+/g, ' ').slice(0, 200));
         ctrl('rapport d’équilibre : rythme, accès au centre, cases par moitié et connexions par case en information (docs/46, docs/53)', document.querySelectorAll('#dialogue-contenu .pm-equilibre-organique li').length === 4 && /Rythme : au plus/.test(rap) && /Accès au centre/.test(rap) && /Cases par moitié : vert \d+, rouge \d+ \(égales\)/.test(rap) && /Connexions par case : \d+ case\(s\) à 2 connexions ou moins sur 5[78]/.test(rap), rap.replace(/\s+/g, ' ').slice(0, 200));
-        ctrl('rapport d’équilibre 5×5 : sans conseil des jonctions-cases du 4×4', !/jonctions-cases/.test(rap));
+        ctrl('rapport d’équilibre 5×5 : sans conseil des campements du 4×4', !/deux campements/.test(rap));
         PM.dialogue.fermer();
         var avant = docJ();
         ctrlZ();
@@ -1035,7 +1042,7 @@
         var attendu = GEN.meilleurPlacementVilles(etat.doc());
         bp.click();
         var dv = etat.doc();
-        ctrl('« Placer les villes » : 7 villes posées au meilleur placement, message avec S et Ctrl+Z', dv.plateau.jetons.length === 7 && J(dv.plateau.jetons) === J(attendu.jetons) && /7 villes placées au meilleur placement \(S = \d+/.test(msg()) && /Ctrl\+Z/.test(msg()), msg());
+        ctrl('« Placer les villes » : 8 villes posées aux positions par défaut, message avec S et Ctrl+Z', dv.plateau.jetons.length === 8 && J(dv.plateau.jetons) === J(attendu.jetons) && /8 villes placées aux positions par défaut \(S = \d+/.test(msg()) && /Ctrl\+Z/.test(msg()), msg());
         ctrl('« Placer les villes » : villes à 3 cases d’écart au moins, aucune alerte de villes proches', GR.villesProches(GR.construire(dv, { villesTraversables: false })).length === 0 && !/Villes trop proches/.test(texteControles()));
         ctrlZ();
         ctrl('Ctrl+Z après « Placer les villes » : plateau sans ville', etat.doc().plateau.jetons.length === 0);
@@ -1046,28 +1053,37 @@
         ctrl('« Placer les villes » sur un plateau incomplet : refus expliqué, document inchangé', docJ() === avantClic && /Posez d’abord toutes les tuiles du plateau \(24 sur 25\)/.test(msg()), msg());
         ctrlZ();
         ctrl('Ctrl+Z : la tuile retirée revient (25 tuiles, sans ville)', nbTuiles() === 25 && etat.doc().plateau.jetons.length === 0 && villesGen.length > 2);
-        // pose manuelle : placements 2-3-2 cherchés dans la page avec le moteur (et non codés en dur)
+        // pose manuelle : poses de 8 villes cherchées dans la page avec le moteur (et non codées en dur) : les 1296 placements 2-2-2-2,
+        // puis des poses quelconques (« 6 contre 2 » est rare en 2-2-2-2)
         var trouve = { cinq: null, deuxUn: null, rien: null };
-        var pl = GEN.placementsVilles5x5();
+        var pl = GEN.placementsVilles5x5().slice();
+        var toutes = []; for (var jj = 1; jj <= 4; jj++) for (var ii = 1; ii <= 4; ii++) toutes.push({ i: ii, j: jj });
+        var graine = 7; function hasard() { graine = (graine * 1664525 + 1013904223) >>> 0; return graine / 4294967296; }
+        for (var q = 0; q < 6000; q++) { var l = toutes.slice(), s8 = []; for (var n8 = 0; n8 < 8; n8++) s8.push(l.splice(Math.floor(hasard() * l.length), 1)[0]); pl.push(s8); }
         GEN.placementsAdmissibles(etat.doc()).placements.forEach(function (p) { ADM[cleTri(p)] = 1; });
         for (var k = 0; k < pl.length && !(trouve.cinq && trouve.deuxUn && trouve.rien); k++) {
           var vv = pl[k], ee = GR.equilibre(avecVilles(vv)), un = conseilAttendu(vv);
           if (un && codes(ee).indexOf('cinq_contre_deux') >= 0 && !trouve.cinq) trouve.cinq = vv;
-          if (un && codes(ee).indexOf('score_s') >= 0 && codes(ee).indexOf('cinq_contre_deux') < 0 && !trouve.deuxUn) trouve.deuxUn = vv;
+          if (un && codes(ee).indexOf('score_s') >= 0 && !majorite(ee) && !trouve.deuxUn) trouve.deuxUn = vv;
           if (!un && !codes(ee).length && !trouve.rien) trouve.rien = vv;
         }
-        ctrl('recherche de placements : 5 contre 2 hors placement admissible, S ≥ 5 seul hors placement admissible, placement admissible sans alerte', !!(trouve.cinq && trouve.deuxUn && trouve.rien));
+        ctrl('recherche de placements : « 6 contre 2 » hors placement admissible, S ≥ 5 seul hors placement admissible, placement admissible sans alerte', !!(trouve.cinq && trouve.deuxUn && trouve.rien));
         return trouve;
       }).then(function (trouve) {
-        // (a) « 5 contre 2 » hors placement admissible
+        // (a) « 6 contre 2 » hors placement admissible
         poserVilles(trouve.cinq);
         var e = GR.equilibre(etat.doc());
-        ctrl('pose manuelle (a) : villes posées par clics, moteur : « 5 contre 2 » bloquant', etat.doc().plateau.jetons.length === 7 && codes(e).indexOf('cinq_contre_deux') >= 0 && e.blocages.length >= 1, J(codes(e)) + ' ' + etat.doc().plateau.jetons.length);
+        ctrl('pose manuelle (a) : villes posées par clics, moteur : « 6 contre 2 » bloquant', etat.doc().plateau.jetons.length === 8 && codes(e).indexOf('cinq_contre_deux') >= 0 && e.blocages.length >= 1, J(codes(e)) + ' ' + etat.doc().plateau.jetons.length);
         var t = texteControles();
-        ctrl('pose manuelle (a) : le panneau affiche l’erreur de déséquilibre avec le conseil', /Plateau très déséquilibré/.test(t) && t.indexOf(CONSEIL) >= 0, t.replace(/\s+/g, ' ').slice(0, 300));
+        ctrl('pose manuelle (a) : le panneau affiche l’erreur de déséquilibre avec le conseil', /Plateau très déséquilibré/.test(t) && /6 contre 2/.test(t) && t.indexOf(CONSEIL) >= 0, t.replace(/\s+/g, ' ').slice(0, 300));
         var rap = ouvrirRapport();
-        ctrl('pose manuelle (a) : le rapport d’équilibre affiche le conseil une seule fois (au message « 5 contre 2 », même si S ≥ 5 s’y ajoute)', rap.indexOf(CONSEIL) >= 0 && rap.split(CONSEIL).length - 1 === 1 && /Plateau très déséquilibré/.test(rap), (rap.split(CONSEIL).length - 1) + ' conseil(s)');
+        ctrl('pose manuelle (a) : le rapport d’équilibre affiche le conseil une seule fois (au message « 6 contre 2 », même si S ≥ 5 s’y ajoute)', rap.indexOf(CONSEIL) >= 0 && rap.split(CONSEIL).length - 1 === 1 && /Plateau très déséquilibré/.test(rap), (rap.split(CONSEIL).length - 1) + ' conseil(s)');
         PM.dialogue.fermer();
+        // alerte bloquante (docs/18, 2026-10-19) : une 9e ville est une erreur au panneau
+        var libre = toutesLibres()[0];
+        cliquerJonction(libre.i, libre.j);
+        ctrl('9e ville en 5×5 : erreur « Trop de villes » (alerte bloquante), pastille rouge', etat.doc().plateau.jetons.length === 9 && PM.controles.calculer(etat.doc()).erreurs.some(function (x) { return x.code === 'trop_de_villes'; }) && /erreur/.test(pastille()), pastille());
+        cliquerJonction(libre.i, libre.j);
         // (b) S >= 5 seul hors placement admissible : le conseil est joint à l’alerte
         poserVilles(trouve.deuxUn);
         e = GR.equilibre(etat.doc());
@@ -1092,11 +1108,12 @@
           if (p < 3 && !peu) peu = { i: i, j: j, p: p }; else if (p >= 3) beaucoup.push({ i: i, j: j });
         }
         ctrl('plateau : au moins une jonction à moins de 3 ports pour tester l’information', !!peu && beaucoup.length >= 7);
-        poserVilles(beaucoup.slice(0, 6).concat([peu]));
-        ctrl('information (d) : les 7 villes ont pu être posées par clics', etat.doc().plateau.jetons.length === 7, etat.doc().plateau.jetons.length + ' villes ; ' + msg());
-        if (etat.doc().plateau.jetons.length === 7) {
+        poserVilles(beaucoup.slice(0, 7).concat([peu]));
+        ctrl('information (d) : les 8 villes ont pu être posées par clics', etat.doc().plateau.jetons.length === 8, etat.doc().plateau.jetons.length + ' villes ; ' + msg());
+        if (etat.doc().plateau.jetons.length === 8) {
           e = GR.equilibre(etat.doc());
-          ctrl('information (d) : une information « ville_peu_de_ports » du moteur, aucune alerte de ce code', e.informations.length === 1 && e.informations[0].code === 'ville_peu_de_ports' && codes(e).indexOf('ville_peu_de_ports') < 0, J(e.informations));
+          var infoPorts = e.informations.filter(function (x) { return x.code === 'ville_peu_de_ports'; });
+          ctrl('information (d) : une information « ville_peu_de_ports » du moteur, aucune alerte de ce code', infoPorts.length === 1 && codes(e).indexOf('ville_peu_de_ports') < 0, J(e.informations));
           t = texteControles();
           ctrl('information (d) : absente du panneau d’alertes', !/port\(s\)/.test(t), t.replace(/\s+/g, ' ').slice(0, 200));
           rap = ouvrirRapport();

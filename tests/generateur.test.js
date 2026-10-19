@@ -55,7 +55,7 @@ test('sans graine : une graine est générée et renvoyée, et la rejouer redonn
   assert.deepStrictEqual(a.doc, b.doc);
 });
 
-test('plateau généré 4×4 et 5×5 : grille pleine, 7 villes, valide, compteurs PM.controles à ok, aucune erreur', () => {
+test('plateau généré 4×4 et 5×5 : grille pleine, 7 villes (4×4) ou 8 (5×5), valide, compteurs PM.controles à ok, aucune erreur', () => {
   for (const grille of ['4x4', '5x5']) {
     for (const graine of ['a', 'b']) {
       const r = GEN.generer(docGen(grille), { graine, candidats: 40 });
@@ -63,7 +63,7 @@ test('plateau généré 4×4 et 5×5 : grille pleine, 7 villes, valide, compteur
       const n = PM.geometrie.format(grille).GRILLE.colonnes;
       assert.strictEqual(r.doc.grille, grille);
       assert.strictEqual(r.doc.plateau.tuiles.length, n * n);
-      assert.strictEqual(r.doc.plateau.jetons.length, 7);
+      assert.strictEqual(r.doc.plateau.jetons.length, grille === '4x4' ? 7 : 8);
       assert.ok(r.doc.plateau.jetons.every((j) => j.type === 'capture'));
       assert.ok(!('forme' in r.doc.plateau));
       assert.strictEqual(M.validerPlateau(r.doc).erreurs.length, 0);
@@ -198,15 +198,18 @@ test('tolérance : S du plateau rendu ≤ Smin + tolérance (1 par défaut, 0 = 
 // fichiers en parallèle, dont les 8 fils de calcul du stock (stock-et-catalogue-precedent.test.js), et le testeur y a mesuré de 8,6 à 14 s
 // pour la même limite. `process.cpuUsage()` donne le temps processeur (utilisateur + système) du seul processus courant, et chaque fichier de
 // test a son propre processus : la mesure ne dépend plus des autres fichiers (ni de leurs fils). L'horloge est gardée en information.
-test('temps : 200 candidats en moins de 12 s de temps processeur sous Node (4×4 et 5×5)', () => {
+// 5×5 (docs/18 du 2026-10-19) : 60 candidats par défaut (CANDIDATS_DEFAUT_5X5 ; une composition peut en donner plusieurs), objectif
+// de moins de 2 s par plateau ; la limite du test reste large (temps processeur, machines lentes et fichiers en parallèle).
+test('temps : candidats par défaut (200 en 4×4, au moins 60 en 5×5) en moins de 12 s de temps processeur sous Node', () => {
   for (const grille of ['4x4', '5x5']) {
     const t0 = Date.now(), c0 = process.cpuUsage();
     const r = GEN.generer(docGen(grille), { graine: 'chrono' });
     const horloge = Date.now() - t0, c = process.cpuUsage(c0);
     const cpu = Math.round((c.user + c.system) / 1000);
     assert.ok(r.ok, r.raison);
-    assert.strictEqual(r.candidats, 200);
-    console.log(`# 200 candidats (${grille}) : ${cpu} ms de processeur (${horloge} ms d'horloge), ${r.essais} essais`);
+    if (grille === '4x4') assert.strictEqual(r.candidats, 200);
+    else assert.ok(r.candidats >= GEN.CANDIDATS_DEFAUT_5X5 && GEN.CANDIDATS_DEFAUT_5X5 === 60, String(r.candidats));
+    console.log(`# ${r.candidats} candidats (${grille}) : ${cpu} ms de processeur (${horloge} ms d'horloge), ${r.essais} essais`);
     assert.ok(cpu < 12000, cpu + ' ms de processeur (' + horloge + ' ms d’horloge)');
   }
 });
@@ -334,7 +337,7 @@ function jonctionsCases(doc) {
 }
 const cle = (p) => p.map((c) => '(' + c.i + ',' + c.j + ')').join('+');
 
-test('jonctions-cases : 3 paires de la rangée centrale par défaut, 12 en mode varié (autant côté vert que côté rouge), 5×5 : les 2016 placements 2-3-2', () => {
+test('campements : 3 paires de la rangée centrale par défaut, 12 en mode varié (autant côté vert que côté rouge), 5×5 : les 1296 placements libres 2-2-2-2', () => {
   const F4 = PM.geometrie.format('4x4'), F5 = PM.geometrie.format('5x5');
   assert.deepStrictEqual(GEN.pairesJonctionsCases(F4, false).map(cle), ['(1,2)+(2,2)', '(1,2)+(3,2)', '(2,2)+(3,2)']);
   const variees = GEN.pairesJonctionsCases(F4, true);
@@ -344,11 +347,13 @@ test('jonctions-cases : 3 paires de la rangée centrale par défaut, 12 en mode 
   assert.ok(!variees.some((p) => p[0].j === p[1].j && p[0].j !== 2), 'aucune paire d\'une même rangée extérieure');
   assert.ok(variees.some((p) => p[0].j === 2 && p[1].j === 2), 'la rangée centrale reste permise');
   assert.strictEqual(variees.filter((p) => p[0].j === 1 && p[1].j === 3).length, 9);
-  // 5×5 : placements de 7 villes en 2-3-2 (2 en j = 1, 3 en j = 2 ou 3, 2 en j = 4), donc 9 jonctions-cases chacun
+  // 5×5 : placements libres de 8 villes en 2-2-2-2 (2 par rangée de jonctions), donc 8 campements chacun ; le motif par défaut en fait partie
   const p5 = GEN.pairesJonctionsCases(F5, false);
-  assert.strictEqual(p5.length, 6 * 56 * 6);
-  assert.ok(p5.every((c) => c.length === 9));
-  assert.strictEqual(new Set(p5.map(cle)).size, 2016);
+  assert.strictEqual(p5.length, 6 * 6 * 6 * 6);
+  assert.ok(p5.every((c) => c.length === 8));
+  assert.strictEqual(new Set(p5.map(cle)).size, 1296);
+  const motif = PM.graphe.MOTIF_VILLES_5X5.map((v) => '(' + v.i + ',' + v.j + ')').join(' ');
+  assert.ok(GEN.placementsVilles5x5().some((pl) => pl.map((c) => '(' + c.i + ',' + c.j + ')').join(' ') === motif), 'motif par défaut parmi les placements libres');
   assert.deepStrictEqual(GEN.pairesJonctionsCases(F5, true), p5, 'l\'option « variées » ne change rien en 5×5');
 });
 

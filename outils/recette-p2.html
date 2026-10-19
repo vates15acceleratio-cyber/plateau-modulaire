@@ -216,9 +216,9 @@
         ctrl('aucun contenu : rien à exporter, bouton inactif, aperçu masqué', /Rien à exporter/.test(resume.textContent) && bouton.disabled && img.hidden);
         ctrl('format A3 / A4 désactivés sans tuiles', radio('A3', 'format').disabled && radio('A4', 'format').disabled);
         changer(caseA('jetons'), true);
-        ctrl('jetons seuls : 1 feuille', /1 feuille\(s\)/.test(resume.textContent), resume.textContent);
+        ctrl('jetons seuls : 2 feuilles (recto et verso)', /2 feuille\(s\)/.test(resume.textContent), resume.textContent);
         changer(caseA('apercu'), true);
-        ctrl('jetons + aperçu : 2 feuilles', /2 feuille\(s\)/.test(resume.textContent), resume.textContent);
+        ctrl('jetons + aperçu : 3 feuilles', /3 feuille\(s\)/.test(resume.textContent), resume.textContent);
         changer(caseA('apercu'), false); changer(caseA('jetons'), false); changer(caseA('tuiles'), true);
         ctrl('retour aux tuiles : 4 feuilles', /4 feuille\(s\)/.test(resume.textContent));
         ctrl('l\'export ne modifie pas le document', docJ() === docInitial);
@@ -309,11 +309,11 @@
         telechargements.length = 0;
         changer(caseA('tuiles'), false); changer(caseA('jetons'), true); changer(radio('png', 'fichier'), true);
         cliquer(bouton);
-        return jusqua(function () { return telechargements.length > 0; }, 30000);
+        return jusqua(function () { return telechargements.length >= 2; }, 30000);
       }).then(function () {
-        ctrl('PNG : un fichier plateau-jetons-A4.png', telechargements.length === 1 && telechargements[0].nom === 'plateau-jetons-A4.png', J(telechargements.map(function (t) { return t.nom; })));
-        if (!telechargements.length) return null;
-        return telechargements[0].promesse;
+        ctrl('PNG : deux fichiers plateau-jetons-recto-A4.png et plateau-jetons-verso-A4.png', telechargements.length >= 2 && telechargements[0].nom === 'plateau-jetons-recto-A4.png' && telechargements[1].nom === 'plateau-jetons-verso-A4.png', J(telechargements.map(function (t) { return t.nom; })));
+        if (telechargements.length < 2) return null;
+        return telechargements[1].promesse; // le verso porte les villes (pixels noirs)
       }).then(function (blob) {
         if (!blob) return null;
         return octets(blob).then(function (b) {
@@ -402,7 +402,7 @@
       var casesACocher = contenu().querySelectorAll('input[type=checkbox]');
       ctrl('une seule option : « jonctions variées », cochée par défaut (plus de carrefours ni de villes traversables)', !contenu().querySelector('input[type=radio]') && casesACocher.length === 1 && casesACocher[0].checked && /Jonctions variées/.test(contenu().querySelector('label[for="' + casesACocher[0].id + '"]').textContent));
       ctrl('explication : jonctions-cases dans la rangée centrale', /rangée centrale/.test(texteDialogue()));
-      ctrl('explication : 7 villes à 3 cases d\'écart, cases chemin', /7 villes à 3 cases d'écart/.test(texteDialogue()) && /cases chemin/.test(texteDialogue()));
+      ctrl('explication : 7 villes à 3 cases d\'écart, campements', /7 villes à 3 cases d'écart/.test(texteDialogue()) && /campements/.test(texteDialogue()));
       champ.value = 'recette';
       cliquer(bGenerer);
       ctrl('pendant le calcul : Générer désactivé, texte « Génération… »', bGenerer.disabled && bGenerer.textContent === 'Génération…', bGenerer.textContent);
@@ -410,7 +410,7 @@
       return attendre(50).then(function () {
         ctrl('fin du calcul : Générer réactivé', !bGenerer.disabled && bGenerer.textContent === 'Générer', bGenerer.textContent);
         ctrl('aperçu SVG présent après Générer, cases d\'apparition aux couleurs des camps', !!contenu().querySelector('.pm-generateur-apercu svg') && !!contenu().querySelector('.pm-generateur-apercu [data-apparition="vert"]'));
-        ctrl('résumé en plusieurs lignes (graine, villes, S)', contenu().querySelectorAll('.pm-generateur-resume li').length >= 5 && /Graine « recette »/.test(texteDialogue()) && /cases chemin/.test(texteDialogue()));
+        ctrl('résumé en plusieurs lignes (graine, villes, S)', contenu().querySelectorAll('.pm-generateur-resume li').length >= 5 && /Graine « recette »/.test(texteDialogue()) && /campements/.test(texteDialogue()));
         ctrl('Appliquer actif après Générer', !bAppliquer.disabled);
         ctrl('Générer ne modifie pas le plateau', docJ() === avantJ);
         attendu = GEN.generer(docAvant, { graine: 'recette' });
@@ -450,22 +450,22 @@
         reset(PM.catalogue.nouveauDocument('5x5'));
         cliquer(boutonParTexte($('controles'), 'Plateau aléatoire'));
         ctrl('5×5 : pas d\'option « jonctions variées » (cases à cocher absentes)', contenu().querySelectorAll('input[type=checkbox]').length === 0);
-        ctrl('5×5 : explication des villes en 2-3-2, des 57 cases et des moitiés', /2-3-2/.test(texteDialogue()) && /57 cases/.test(texteDialogue()) && /moitié verte/.test(texteDialogue()) && !/rangée centrale/.test(texteDialogue()));
+        ctrl('5×5 : explication des 8 villes aux positions par défaut, des 57 cases et des moitiés', /8 villes/.test(texteDialogue()) && /positions par défaut/.test(texteDialogue()) && /57 cases/.test(texteDialogue()) && /moitié verte/.test(texteDialogue()) && !/rangée centrale/.test(texteDialogue()));
         contenu().querySelector('.pm-generateur-graine').value = 'recette-5x5';
         cliquer(boutonParTexte(contenu(), 'Générer'));
         return attendre(2500);
       }).then(function () {
         ctrl('5×5 : aperçu affiché, Appliquer actif', !!contenu().querySelector('.pm-generateur-apercu svg') && !boutonParTexte(contenu(), 'Appliquer au plateau').disabled,
           (contenu().querySelector('.pm-generateur-erreur') || {}).textContent);
-        ctrl('5×5 : résumé (villes en 2-3-2, jonctions à 3 ports)', /en 2-3-2/.test(texteDialogue()) && /jonction\(s\) sur 16/.test(texteDialogue()));
+        ctrl('5×5 : résumé (villes aux positions par défaut, jonctions à 3 ports)', /8 villes aux positions par défaut/.test(texteDialogue()) && /jonction\(s\) sur 16/.test(texteDialogue()));
         cliquer(boutonParTexte(contenu(), 'Appliquer au plateau'));
         var d5 = etat.doc(), ligne = function (j) { return d5.plateau.jetons.filter(function (x) { return x.j === j; }).length; };
         var nB1 = d5.plateau.tuiles.filter(function (t) { return t.modeleId === 'B1'; }).length;
-        ctrl('5×5 appliqué : 25 tuiles, 7 villes en 2-3-2', d5.grille === '5x5' && d5.plateau.tuiles.length === 25 && ligne(1) === 2 && ligne(2) + ligne(3) === 3 && ligne(4) === 2);
-        var nCases = d5.plateau.tuiles.reduce(function (s, t) { return s + M.modeleParId(d5, t.modeleId).cases.length; }, 0) + 9;
+        ctrl('5×5 appliqué : 25 tuiles, 8 villes (2 par rangée de jonctions)', d5.grille === '5x5' && d5.plateau.tuiles.length === 25 && d5.plateau.jetons.length === 8 && ligne(1) === 2 && ligne(2) === 2 && ligne(3) === 2 && ligne(4) === 2);
+        var nCases = d5.plateau.tuiles.reduce(function (s, t) { return s + M.modeleParId(d5, t.modeleId).cases.length; }, 0) + 8;
         ctrl('5×5 appliqué : catalogue à 2 cases par tuile (aucun B1), 57 ou 58 cases, toutes les villes à 3 ports au moins, aucune jonction à moins de 2 ports',
           nB1 === 0 && (nCases === 57 || nCases === 58) && d5.plateau.jetons.every(function (x) { return M.portsJonction(d5, x.i, x.j).ports >= 3; }) && M.jonctionsMalReliees(d5).length === 0, nB1 + ' B1, ' + nCases + ' cases');
-        ctrl('5×5 appliqué : plateau affiché (25 tuiles, 7 villes), contrôles sans alerte d\'équilibre', $('assemblage').querySelectorAll('.pm-assemblage-occupee').length === 25 && $('assemblage').querySelectorAll('.pm-assemblage-jeton').length === 7 &&
+        ctrl('5×5 appliqué : plateau affiché (25 tuiles, 8 villes, 8 campements), contrôles sans alerte d\'équilibre', $('assemblage').querySelectorAll('.pm-assemblage-occupee').length === 25 && $('assemblage').querySelectorAll('.pm-assemblage-jeton').length === 8 && $('assemblage').querySelectorAll('.pm-assemblage-campement').length === 8 &&
           !/très déséquilibré|Score S à surveiller|Première ville inégale|Écart de distance|Villes trop proches|Jonctions mal reliées/.test($('controles').textContent));
         PM.dialogue.fermer();
         // centrales en anneau (cases à port reliées : R2 violée) : aucun plateau, raison explicite

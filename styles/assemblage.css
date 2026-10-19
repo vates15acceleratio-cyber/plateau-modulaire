@@ -82,6 +82,9 @@
 .pm-assemblage-point { fill: #fff; stroke: #6b7068; stroke-width: 1.2; stroke-dasharray: 3 2; }
 .pm-assemblage-disponible:hover .pm-assemblage-point { stroke: var(--pm-accent); stroke-width: 2; }
 .pm-assemblage-refusee .pm-assemblage-point { fill: #eceee9; stroke: #b9bdb4; }
+/* Campement (jeton feu de bois, 4 tuiles posées) : anneau au survol si une ville peut s'y poser, estompé si la pose est refusée */
+.pm-assemblage-avec-campement.pm-assemblage-disponible:hover .pm-assemblage-zone-jonction { stroke: var(--pm-accent); stroke-width: 2.5; }
+.pm-assemblage-refusee .pm-assemblage-campement { opacity: .55; }
 
 /* Alertes : raccords morts et ports de coin morts */
 .pm-assemblage-alerte-trait { stroke: var(--pm-alerte); stroke-width: 2.4; stroke-dasharray: 3 2.5; fill: none; }

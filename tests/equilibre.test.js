@@ -290,16 +290,18 @@ test('equilibre : villes non traversables, aucune distance triée ne diminue', (
   }
 });
 
-test('equilibre : plateau d\'exemples, 4×4 et 5×5 : sans ville partiel, avec 7 villes complet et sans blocage', () => {
+test('equilibre : plateau d\'exemples, 4×4 et 5×5 : sans ville partiel, avec 7 villes (4×4) ou 8 (5×5) complet et sans blocage', () => {
   for (const grille of ['4x4', '5x5']) {
+    const n = grille === '4x4' ? 7 : 8;
     let e = GR.equilibre(A.plateauComplet(grille));
     assert.strictEqual(e.complet, false);
     assert.deepStrictEqual(e.D, { 1: [], 2: [] });
-    assert.ok(e.lacunes.some((t) => t.includes('Il manque 7 ville')));
+    assert.ok(e.lacunes.some((t) => t.includes('Il manque ' + n + ' ville')));
     e = GR.equilibre(A.plateauComplet(grille, true));
     assert.strictEqual(e.complet, true, grille + ' ' + e.lacunes.join(' / '));
     assert.deepStrictEqual(e.blocages, []);
-    assert.strictEqual(e.villes.length, 7);
+    assert.strictEqual(e.villes.length, n);
+    assert.strictEqual(e.nbVilles, n);
     assert.deepStrictEqual(e.apparitions, grille === '4x4' ? { 1: 6, 2: 6 } : { 1: 7, 2: 7 });
   }
 });
@@ -488,12 +490,15 @@ test('equilibre : score S, écart aux rangs 1 à 7, D6 étendu, première ville,
   assert.strictEqual(GR.equilibre(M.nouveauDocument()).S, null);
 });
 
-test('equilibre 5×5 : alerte S dès 5, information S = 4, comme le 4×4 (docs/18 décision 1 de 2026-10-18, docs/60)', () => {
+test('equilibre 5×5 : alerte S dès 5, information S = 4, comme le 4×4 (docs/18 décision 1 de 2026-10-18, docs/60) ; S sur les 8 rangs', () => {
   const DOC5 = M.nouveauDocument('5x5');
   const d1 = [2, 3, 3, 4, 5, 6, 6];
   const attendus = [[[2, 3, 3, 4, 5, 6, 6], 0, false, false], [[2, 4, 4, 5, 6, 6, 6], 4, false, true], [[2, 4, 4, 5, 6, 6, 7], 5, true, false], [[2, 4, 4, 5, 6, 7, 7], 6, true, false], [[2, 4, 4, 5, 7, 7, 7], 7, true, false]];
   for (const [d2, S, alerte, info] of attendus) {
-    const e = GR.equilibre(DOC5, { graphe: grapheDistances(d1, d2) });
+    // 5×5 : 8 villes (docs/18, 2026-10-19) ; une 8e ville à 7 pas des deux joueurs ne change pas S
+    const e = GR.equilibre(DOC5, { graphe: grapheDistances(d1.concat([7]), d2.concat([7])) });
+    assert.strictEqual(e.nbVilles, 8);
+    assert.strictEqual(e.parRang.filter((x) => x.compte).length, 8);
     assert.strictEqual(e.S, S);
     assert.strictEqual(e.aSurveiller, alerte, '5×5 S = ' + S);
     assert.strictEqual(e.sInformation, info, '5×5 S = ' + S);
@@ -503,8 +508,45 @@ test('equilibre 5×5 : alerte S dès 5, information S = 4, comme le 4×4 (docs/1
     assert.strictEqual(e4.aSurveiller, S >= 5, '4×4 S = ' + S);
     assert.strictEqual(e4.sInformation, S === 4, '4×4 S = ' + S);
   }
-  const al = GR.equilibre(DOC5, { graphe: grapheDistances(d1, [2, 4, 4, 5, 7, 7, 7]) }).alertes.find((x) => x.code === 'score_s');
+  const al = GR.equilibre(DOC5, { graphe: grapheDistances(d1.concat([7]), [2, 4, 4, 5, 7, 7, 7, 7]) }).alertes.find((x) => x.code === 'score_s');
   assert.ok(al.message.includes('à partir de 5'), al.message);
+  assert.ok(al.message.includes('sur les 8 rangs'), al.message);
+  // 7 villes seulement sur un document 5×5 : lacune, pas de S
+  const e7 = GR.equilibre(DOC5, { graphe: grapheDistances(d1, d1) });
+  assert.strictEqual(e7.S, null);
+  assert.ok(e7.lacunes.some((t) => t.includes('Il manque 1 ville')), e7.lacunes.join(' / '));
+});
+
+test('equilibre 5×5 à 8 villes (docs/62 § 2, docs/18) : « 6 contre 2 » bloquant, « 5 contre 3 » en alerte, partage non symétrique en information', () => {
+  const DOC5 = M.nouveauDocument('5x5');
+  // d1 < d2 pour les k premières villes, d1 > d2 pour les suivantes : partage k / 8 − k
+  const partage = (k, egalites) => {
+    const a = [], b = [];
+    for (let x = 0; x < 8; x++) { if (x < egalites) { a.push(4); b.push(4); } else if (x < egalites + k) { a.push(3); b.push(5); } else { a.push(5); b.push(3); } }
+    return GR.equilibre(DOC5, { graphe: grapheDistances(a, b) });
+  };
+  let e = partage(6, 0);
+  assert.deepStrictEqual(e.blocages.map((b) => b.code), ['cinq_contre_deux']);
+  assert.ok(e.blocages[0].message.includes('« 6 contre 2 »'), e.blocages[0].message);
+  assert.strictEqual(e.cinqContreTrois, false);
+  e = partage(5, 0);
+  assert.deepStrictEqual(e.blocages, []);
+  assert.strictEqual(e.cinqContreTrois, true);
+  assert.ok(e.alertes.some((a) => a.code === 'cinq_contre_trois' && a.message.includes('« 5 contre 3 »')));
+  assert.ok(e.informations.some((a) => a.code === 'partage_asymetrique'));
+  e = partage(4, 0);
+  assert.deepStrictEqual([e.blocages, e.cinqContreTrois, e.partageSymetrique], [[], false, true]);
+  assert.ok(!e.informations.some((a) => a.code === 'partage_asymetrique'));
+  e = partage(3, 2); // 2 à égalité, 3 / 3 : symétrique
+  assert.strictEqual(e.partageSymetrique, true);
+  e = partage(4, 1); // 1 à égalité, 4 / 3 : non symétrique, information seulement
+  assert.strictEqual(e.partageSymetrique, false);
+  assert.ok(e.informations.some((a) => a.code === 'partage_asymetrique'));
+  assert.ok(!e.alertes.some((a) => a.code === 'partage_asymetrique'));
+  // le 4×4 garde 7 villes, « 5 contre 2 » bloquant et aucune alerte « 5 contre 3 »
+  const e4 = GR.equilibre(DOC_VIDE, { graphe: grapheDistances([3, 3, 3, 3, 5, 5, 5], [5, 5, 5, 5, 3, 3, 3]) });
+  assert.deepStrictEqual([e4.nbVilles, e4.cinqContreDeux, e4.cinqContreTrois], [7, false, false]);
+  assert.ok(!e4.informations.some((a) => a.code === 'partage_asymetrique'));
 });
 
 test('cinq contre deux : sans case d’apparition pour un camp (plateau incomplet), pas de blocage', () => {

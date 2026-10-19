@@ -28,11 +28,11 @@ function distPS(p, a, b) {
 
 /* ---------- DIAMETRE_CASE : une seule valeur partout ---------- */
 
-test('DIAMETRE_CASE : même valeur (20) dans les deux formats, catalogue, éditeur, exemples et jonction', () => {
+test('DIAMETRE_CASE : même valeur (20) dans les deux formats, catalogue, éditeur et exemples ; siège de campement Ø 30 (taille d’une ville)', () => {
   for (const g of GRILLES) {
     const F = G.format(g);
     assert.equal(F.DIAMETRE_CASE, 20, g);
-    assert.equal(F.DIAMETRE_CASE, F.DIAMETRE_CASE_JONCTION, g + ' = jonction');
+    assert.equal(F.DIAMETRE_CASE_JONCTION, F.DIAMETRE_JETON, g + ' : siège de campement = jeton ville (docs/18, 2026-10-19)');
     assert.ok(F.DIAMETRE_CASE <= F.DIAMETRE_CASE_MAX, g + ' <= Ø max');
     for (const m of M.copieExemples(g)) for (const c of m.cases) assert.equal(c.diametre, F.DIAMETRE_CASE, g + ' exemple ' + m.id + '/' + c.id);
   }
@@ -121,7 +121,7 @@ test('K4 : les deux routes de l’apparition à la case à port ont la même lon
 
 /* ---------- halo de coin ---------- */
 
-test('haloDe : le halo d’un coin enveloppe la case de jonction (rayon = Ø/2 + 3), 4 coins, 2 formats', () => {
+test('haloDe : le halo d’un coin enveloppe le siège du campement (rayon = Ø/2 + 3 = 18, dans la zone de coin de 20), 4 coins, 2 formats', () => {
   for (const g of GRILLES) {
     const F = G.format(g), m = M.copieExemples(g).find((x) => x.gabarit === 'coin');
     for (let k = 0; k < 4; k++) {
@@ -129,6 +129,7 @@ test('haloDe : le halo d’un coin enveloppe la case de jonction (rayon = Ø/2 +
       assert.equal(h.cercles.length, 1, g + ' coin ' + k);
       const p = F.pointCoin(k);
       assert.deepEqual(h.cercles[0], { x: p.x, y: p.y, r: F.DIAMETRE_CASE_JONCTION / 2 + 3 }, g + ' coin ' + k);
+      assert.ok(h.cercles[0].r === 18 && h.cercles[0].r <= F.RAYON_ZONE_COIN, g + ' halo dans la zone de coin');
     }
   }
 });

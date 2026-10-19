@@ -106,7 +106,7 @@ test('poids : une clé __proto__ ou constructor dans un modèle du fichier ne po
 
 test('poids : réouverture après sauvegarde, exemplaires changés par l\'utilisateur : le poids reste celui du catalogue, le stock change', () => {
   for (const g of ['4x4', '5x5']) {
-    const doc = nouveau(g), id = g === '4x4' ? 'B8' : 'LC2';
+    const doc = nouveau(g), id = g === '4x4' ? 'B8' : 'LC1';
     const avant = modele(doc, id).poids;
     const d = M.changerExemplaires(doc, id, 11);
     const r = S.depuisJSON(S.versJSON(d));
@@ -158,12 +158,12 @@ test('modèle à 0 exemplaire : jamais tiré, même avec un poids énorme, sur 2
     assert.ok(!u.B8 && !u.K4, 'graine ' + k + ' : ' + JSON.stringify(u));
   }
   const d5 = nouveau('5x5');
-  ['LC2', 'LC4'].forEach((id) => { modele(d5, id).exemplaires = 0; modele(d5, id).poids = 1e9; });
+  ['LC1', 'LC4'].forEach((id) => { modele(d5, id).exemplaires = 0; modele(d5, id).poids = 1e9; });
   for (let k = 0; k < 8; k++) {
     const r = GEN.generer(d5, { graine: 'zero-' + k, candidats: 2 });
     assert.ok(r.ok, r.raison);
     const u = comptes(r.doc);
-    assert.ok(!u.LC2 && !u.LC4, 'graine ' + k + ' : ' + JSON.stringify(u));
+    assert.ok(!u.LC1 && !u.LC4, 'graine ' + k + ' : ' + JSON.stringify(u));
   }
 });
 
@@ -503,8 +503,8 @@ test('rythme : sans villes (jetons retirés), les zones sont les jonctions, les 
     assert.equal(gr.villes.size, 0);
     assert.equal(new Set([...r.casesPassage, ...r.casesRaccourci, ...r.casesJonction]).size, r.zones);
     const { r: r2 } = mesures(doc);
-    assert.equal(r2.zones, r.zones, 'plateau complet : chaque ville remplace une jonction-case déjà zone');
-    assert.equal(r2.casesJonction.length, r.casesJonction.length - 7);
+    assert.equal(r2.zones, r.zones, 'plateau complet : chaque ville remplace un campement déjà zone');
+    assert.equal(r2.casesJonction.length, r.casesJonction.length - doc.plateau.jetons.length); // 7 villes en 4×4, 8 en 5×5
   }
 });
 
@@ -545,13 +545,13 @@ test('égalité des moitiés : écart de cases nul sur 40 graines en 4×4 et 25 
 /** Cases du plateau : cases des tuiles plus jonctions qui ne portent pas de ville (la jonction-case compte une case). */
 const casesTotales = (doc) => { const g = GR.construire(doc); return g.cases.size + g.jonctions.filter((j) => j.type === 'case').length; };
 
-test('5×5 : 57 ou 58 cases sur 25 graines (2 cases par tuile, 1 pour LC5, 9 jonctions-cases, docs/58) ; 4×4 : de 56 à 62 cases sur 15 graines', () => {
+test('5×5 : 57 ou 58 cases sur 25 graines (2 cases par tuile, 1 pour LC5, 8 campements, docs/66) ; 4×4 : de 56 à 62 cases sur 15 graines', () => {
   for (let k = 0; k < 25; k++) {
     const r = GEN.generer(nouveau('5x5'), { graine: 'cases-' + k, candidats: 2 });
     assert.ok(r.ok, r.raison);
     const lc5 = r.doc.plateau.tuiles.filter((t) => t.modeleId === 'LC5').length;
-    assert.equal(casesTotales(r.doc), 59 - lc5, 'graine ' + k);
-    assert.ok(lc5 >= 1 && lc5 <= 2, 'graine ' + k + ' : LC5 ' + lc5);
+    assert.equal(casesTotales(r.doc), 58 - lc5, 'graine ' + k);
+    assert.ok(lc5 >= 0 && lc5 <= 1, 'graine ' + k + ' : LC5 ' + lc5);
   }
   for (let k = 0; k < 15; k++) {
     const r = GEN.generer(nouveau('4x4'), { graine: 'cases-' + k, candidats: 2 });
@@ -646,8 +646,8 @@ test('document 3.04 ou 4.00.0 conservé tel quel par l\'utilisateur (« Garder m
 
 /* ======================= F. export du jeu complet avec le nouveau stock ======================= */
 
-test('export du jeu complet : 24 tuiles en 4×4 (4 planches A3, 12 A4) et 28 en 5×5 (5 planches A3, 14 A4), exemplaires par modèle respectés', () => {
-  for (const [g, total, a3, a4] of [['4x4', 24, 4, 12], ['5x5', 28, 5, 14]]) {
+test('export du jeu complet : 24 tuiles en 4×4 (4 planches A3, 12 A4) et 30 en 5×5 (5 planches A3, 15 A4), exemplaires par modèle respectés', () => {
+  for (const [g, total, a3, a4] of [['4x4', 24, 4, 12], ['5x5', 30, 5, 15]]) {
     const doc = nouveau(g);
     assert.equal(doc.modeles.reduce((s, m) => s + m.exemplaires, 0), total);
     const liste = E.listeTuiles(doc, { portee: 'stock' });
@@ -668,10 +668,10 @@ test('export du jeu complet : 24 tuiles en 4×4 (4 planches A3, 12 A4) et 28 en 
   }
 });
 
-test('export du jeu complet : dernière planche A3 du 5×5 ne porte que quatre tuiles (28 = 4 × 6 + 4) ; le SVG de chaque planche est produit ; le document n\'est pas modifié', () => {
+test('export du jeu complet : les 5 planches A3 du 5×5 sont pleines (30 = 5 × 6) ; le SVG de chaque planche est produit ; le document n\'est pas modifié', () => {
   const doc = nouveau('5x5'), avant = JSON.stringify(doc);
   const planches = E.calepiner(doc, { format: 'A3', portee: 'stock' });
-  assert.equal(planches[planches.length - 1].tuiles.length, 4);
+  assert.equal(planches[planches.length - 1].tuiles.length, 6);
   assert.equal(planches[0].tuiles.length, 6);
   planches.forEach((p) => { const svg = p.svg; assert.match(svg, /^<svg|^<\?xml/); assert.ok(svg.length > 1000); });
   assert.equal(JSON.stringify(doc), avant);
@@ -706,7 +706,7 @@ test('export du jeu complet : stock modifié (0 exemplaire, modèle supprimé, t
 });
 
 test('export du jeu complet : après acceptation du nouveau catalogue, le jeu exporté est celui du nouveau stock (et non de l\'ancien)', () => {
-  for (const [g, total] of [['4x4', 24], ['5x5', 28]]) {
+  for (const [g, total] of [['4x4', 24], ['5x5', 30]]) {
     const etat = PM.etat.creer(precedent(g));
     const avant = E.listeTuiles(etat.doc(), { portee: 'stock' }).tuiles.length;
     accepter(etat);

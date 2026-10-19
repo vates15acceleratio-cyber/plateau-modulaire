@@ -163,13 +163,13 @@ test('etiquetteCellule : gabarit attendu et camp de la cellule', function () {
   assert.equal(A.etiquetteCellule(4, 4), null);
 });
 
-test('messageJeton et compterJetons : cycle case chemin → ville → case chemin', function () {
+test('messageJeton et compterJetons : cycle campement → ville → campement', function () {
   var d = remplir(docExemples());
   d = M.cyclerJeton(d, 1, 1);
   assert.equal(A.compterJetons(d), 1);
   assert.deepEqual(A.messageJeton(d, 1, 1), { texte: 'Ville sur la jonction (1,1).', niveau: 'info' });
   d = M.cyclerJeton(d, 1, 1);
-  assert.equal(A.messageJeton(d, 1, 1).texte, 'Ville retirée : la jonction (1,1) redevient une case chemin.');
+  assert.equal(A.messageJeton(d, 1, 1).texte, 'Ville retirée : la jonction (1,1) redevient un campement.');
   assert.equal(A.compterJetons(d), 0);
 });
 
@@ -230,7 +230,15 @@ test('svgPlateau : 16 cellules, 9 jonctions, camps vert et rouge, villes, classe
   // à l'écran : cases d'apparition aux couleurs (et formes) de leur camp
   assert.equal((s3.match(/data-apparition="vert"/g) || []).length, 6);
   assert.equal((s3.match(/data-apparition="rouge"/g) || []).length, 6);
-  assert.match(s3, /Case de jonction \(1,1\) : clic pour y poser une ville/);
+  // campements (docs/18, 2026-10-19) : jeton feu de bois aux intersections sans ville dont les 4 tuiles sont posées, petit point sinon
+  assert.match(s3, /Campement \(1,1\) : clic pour y poser une ville/);
+  assert.equal((s3.match(/class="pm-assemblage-campement"/g) || []).length, 8, '9 jonctions, 1 ville : 8 campements');
+  assert.ok(s3.includes(PM.rendu.contenuJeton('campement', 120, 120, '4x4')), 'jeton campement de PM.rendu en (1,1)');
+  assert.equal((s3.match(/class="pm-assemblage-point"/g) || []).length, 0);
+  assert.equal((s.match(/class="pm-assemblage-campement"/g) || []).length, 0, 'sans tuile : aucun campement');
+  assert.equal((s.match(/class="pm-assemblage-point"/g) || []).length, 9, 'sans tuile : 9 petits points');
+  assert.match(s, /Jonction \(1,1\) : /);
+  assert.ok(!/style=/.test(s3), 'aucun style en ligne (CSP)');
   var d5 = M.nouveauDocument('5x5');
   d5.modeles = M.copieExemples('5x5');
   var s5 = A.svgPlateau(d5, {});

@@ -5,11 +5,12 @@
  * testables sous Node. Partie interface (monter) : panneau de droite, construit avec
  * createElement et textContent (jamais innerHTML : les messages contiennent des noms saisis).
  *
- * Vocabulaire : une « ville » est un jeton de type 'capture' ; une jonction sans ville est une case chemin.
- * Joueurs : vert (nord) et rouge (sud). Dans un compteur, `cible` est la valeur visée (7, 6...). Dans une
+ * Vocabulaire : une « ville » est un jeton de type 'capture' ; une jonction sans ville est un « campement » (docs/18, 2026-10-19), qui compte comme une case.
+ * Joueurs : vert (nord) et rouge (sud). Dans un compteur, `cible` est la valeur visée (7 ou 8 villes, 6...). Dans une
  * erreur ou une alerte, `cible` est l'objet de surbrillance défini dans l'en-tête de etat.js (ou null).
- * Un plateau complet très déséquilibré (PM.graphe : « 5 contre 2 » ou écart de plus de 3 pas à un rang)
- * est une ERREUR (code 'desequilibre') ; la pose reste toujours permise.
+ * Un plateau complet très déséquilibré (PM.graphe : « 5 contre 2 » en 4×4, « 6 contre 2 » en 5×5, ou écart de plus de 3 pas à un rang)
+ * est une ERREUR (code 'desequilibre') ; la pose reste toujours permise. En 5×5, plus de 8 villes est aussi une ERREUR (alerte bloquante,
+ * code 'trop_de_villes', docs/18 du 2026-10-19) ; en 4×4, plus de 7 villes reste une alerte.
  */
 var PM = (typeof globalThis !== 'undefined' ? globalThis : window).PM = (globalThis.PM || {});
 
@@ -20,9 +21,16 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   var M = PM.modele;
 
-  /** Composition visée : 7 villes ; cases (cases des tuiles + cases de jonction) ≈ 58 en 4×4 (docs/46), ≈ 57 en 5×5 (2 cases par tuile, 1 pour LC5, docs/58). */
+  /**
+   * Composition visée : 7 villes en 4×4, 8 en 5×5 (docs/18, décisions du 2026-10-19 ; PM.graphe.nbVilles quand il est chargé) ; cases (cases
+   * des tuiles + campements) ≈ 58 en 4×4 (docs/46), ≈ 57 en 5×5 (2 cases par tuile, 1 pour LC5 ; 8 campements ; catalogue « P », docs/66).
+   * NB_VILLES garde la valeur du 4×4 (ancienne constante unique).
+   */
   var NB_VILLES = 7;
-  var CIBLE_CASES = { '4x4': 58, '5x5': 57 }; // cases par plateau du catalogue livré : 4×4 mesuré à 58,4 ; 5×5 : 48 ou 49 cases de tuiles + 9 jonctions-cases = 57 ou 58 (docs/58, B3)
+  var NB_VILLES_PAR_FORMAT = { '4x4': 7, '5x5': 8 };
+  var CIBLE_CASES = { '4x4': 58, '5x5': 57 }; // cases par plateau du catalogue livré : 4×4 mesuré à 58,4 ; 5×5 : 50 cases de tuiles (49 avec LC5) + 8 campements = 58 ou 57 (docs/66, 57,2 mesuré)
+  /** Nombre de villes du format F (PM.graphe.nbVilles si chargé, sinon la table locale, identique). */
+  function nbVillesDe(F) { return PM.graphe && typeof PM.graphe.nbVilles === 'function' ? PM.graphe.nbVilles(F.id) : (NB_VILLES_PAR_FORMAT[F.id] || NB_VILLES); }
 
   /** Dimensions du plateau (en cm) pour le format F. */
   function dimensions(F) { return (F.GRILLE.colonnes * F.COTE / 10) + ' × ' + (F.GRILLE.lignes * F.COTE / 10) + ' cm'; }
@@ -41,13 +49,19 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     villes_proches: 'Villes trop proches',
     plateau_non_connexe: 'Plateau non connexe',
     cinq_contre_deux: '5 villes contre 2',
+    cinq_contre_trois: '5 villes contre 3',
+    partage_asymetrique: 'Partage non symétrique (information)',
     ecart_rang_etendu: 'Écart de distance entre joueurs',
     score_s: 'Score S à surveiller',
     premiere_ville_inegale: 'Première ville inégale',
     ville_inaccessible: 'Ville inaccessible'
   };
-  /** Alertes d'équilibre reprises de PM.graphe (villes non traversables). « 5 contre 2 » n'y est que s'il n'est pas bloquant. */
-  var CODES_EQUILIBRE = ['cinq_contre_deux', 'ecart_rang_etendu', 'score_s', 'premiere_ville_inegale', 'ville_inaccessible'];
+  /** Libellés propres à un format (la majorité bloquante du 5×5 est « 6 contre 2 », docs/18). */
+  var LIBELLES_PAR_FORMAT = { '5x5': { cinq_contre_deux: '6 villes contre 2' } };
+  /** Alertes d'équilibre reprises de PM.graphe (villes non traversables). La majorité bloquante n'y est que si elle n'est pas bloquante. */
+  var CODES_EQUILIBRE = ['cinq_contre_deux', 'cinq_contre_trois', 'ecart_rang_etendu', 'score_s', 'premiere_ville_inegale', 'ville_inaccessible'];
+  /** Informations d'équilibre reprises de PM.graphe (jamais des alertes) : partage non symétrique du 5×5 (docs/18, décision 2 du 2026-10-19). */
+  var CODES_INFORMATION_EQUILIBRE = ['partage_asymetrique'];
 
   function estNb(x) { return typeof x === 'number' && isFinite(x); }
 
@@ -102,22 +116,23 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
   }
 
   /**
-   * Alertes sur les villes et le graphe : plus de 7 villes ; deux villes à moins de 3 cases (PM.graphe chargé) ;
-   * plateau non connexe (seulement une fois toutes les tuiles posées : avant, des cases de jonction sont isolées).
+   * Alertes sur les villes et le graphe : plus de villes que le format n'en prévoit (7 en 4×4 : alerte ; 8 en 5×5 : ERREUR, alerte bloquante
+   * de docs/18 du 2026-10-19, rangée parmi les erreurs par calculer) ; deux villes à moins de 3 cases (PM.graphe chargé ; en 5×5, le message
+   * renvoie à « Placer les villes ») ; plateau non connexe (seulement une fois toutes les tuiles posées : avant, des campements sont isolés).
    */
   function alertesGraphe(doc, g) {
-    var res = [], villes = doc.plateau.jetons.filter(function (j) { return j && j.type === 'capture'; });
-    if (villes.length > NB_VILLES) {
-      res.push({ code: 'trop_de_villes', niveau: 'alerte', cible: cibleJonction(villes[villes.length - 1]),
-        message: 'Il y a ' + villes.length + ' villes, la composition en prévoit ' + NB_VILLES + '.' });
+    var res = [], villes = doc.plateau.jetons.filter(function (j) { return j && j.type === 'capture'; }), F = M.formatDuDocument(doc), nb = nbVillesDe(F);
+    if (villes.length > nb) {
+      res.push({ code: 'trop_de_villes', niveau: F.id === '5x5' ? 'erreur' : 'alerte', cible: cibleJonction(villes[villes.length - 1]),
+        message: 'Il y a ' + villes.length + ' villes, la composition en prévoit ' + nb + '.' + (F.id === '5x5' ? ' En 5×5, 8 villes au plus : retirez-en ' + (villes.length - nb) + ' (clic sur la ville).' : '') });
     }
     if (!g) return res;
     PM.graphe.villesProches(g).forEach(function (p) {
       res.push({ code: 'villes_proches', niveau: 'alerte', cible: cibleJonction(p.b),
         message: 'Villes (' + p.a.i + ', ' + p.a.j + ') et (' + p.b.i + ', ' + p.b.j + ') à ' + (p.pas - 1) + ' case(s) d\'écart : la règle en demande au moins ' + PM.geometrie.ECART_MIN_VILLES + '.' +
-          (M.formatDuDocument(doc).id === '5x5' ? ' Outils > Placer les villes pose les 7 villes au meilleur placement admissible.' : '') });
+          (F.id === '5x5' ? PM.graphe.CONSEIL_5X5 : '') }); // renvoi à « Placer les villes » (docs/60 § 5)
     });
-    if (plateauRempli(doc, M.formatDuDocument(doc)) && !PM.graphe.connexe(g)) {
+    if (plateauRempli(doc, F) && !PM.graphe.connexe(g)) {
       res.push({ code: 'plateau_non_connexe', niveau: 'alerte', cible: null,
         message: 'Le plateau n\'est pas d\'un seul tenant : certaines cases ne sont reliées à aucune autre partie.' });
     }
@@ -132,7 +147,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   /**
    * Équilibre mesuré (villes non traversables), seulement si PM.graphe est chargé et que le plateau
-   * est complet : 7 villes, une case d'apparition par camp au moins, toutes les tuiles posées. Renvoie null sinon.
+   * est complet : les villes du format (7 en 4×4, 8 en 5×5), une case d'apparition par camp au moins, toutes les tuiles posées. Renvoie null sinon.
    */
   function mesureEquilibre(doc, g) {
     if (!g || typeof PM.graphe.equilibre !== 'function') return null;
@@ -146,6 +161,14 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     if (!e) return [];
     return e.alertes.filter(function (a) { return CODES_EQUILIBRE.indexOf(a.code) >= 0; }).map(function (a) {
       return { code: a.code, message: a.message, niveau: 'alerte', cible: null };
+    });
+  }
+
+  /** Informations d'équilibre affichées (codes de CODES_INFORMATION_EQUILIBRE), niveau 'information' : jamais comptées parmi les alertes. */
+  function informationsEquilibre(e) {
+    if (!e || !Array.isArray(e.informations)) return [];
+    return e.informations.filter(function (a) { return CODES_INFORMATION_EQUILIBRE.indexOf(a.code) >= 0; }).map(function (a) {
+      return { code: a.code, message: a.message, niveau: 'information', cible: null };
     });
   }
 
@@ -202,8 +225,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     }
     var cibleCases = CIBLE_CASES[F.id];
     return [
-      compteur('villes', 'Villes', villes, NB_VILLES),
-      { cle: 'cases', libelle: 'Cases (tuiles et jonctions)', valeur: cases, cible: '≈ ' + cibleCases, etat: 'ok' },
+      compteur('villes', 'Villes', villes, nbVillesDe(F)),
+      { cle: 'cases', libelle: 'Cases (tuiles et campements)', valeur: cases, cible: '≈ ' + cibleCases, etat: 'ok' },
       compteur('tuiles', 'Tuiles posées', plateau.tuiles.length, F.GRILLE.colonnes * F.GRILLE.lignes),
       compteur('apparitions_vert', 'Apparitions vert', apparitions.vert, apparitionsAttendues(F, 'vert')),
       compteur('apparitions_rouge', 'Apparitions rouge', apparitions.rouge, apparitionsAttendues(F, 'rouge')),
@@ -242,13 +265,14 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return 3;
   }
 
-  /** Groupes { code, niveau, libelle, nombre, rang, elements: [{message, cible}] } triés par rang (stable). */
-  function regrouper(entrees) {
-    var groupes = [], parCode = Object.create(null);
+  /** Groupes { code, niveau, libelle, nombre, rang, elements: [{message, cible}] } triés par rang (stable) ; libellés du format `formatId` s'il en a. */
+  function regrouper(entrees, formatId) {
+    var groupes = [], parCode = Object.create(null), propres = LIBELLES_PAR_FORMAT[formatId] || {};
     entrees.forEach(function (e) {
       var g = parCode[e.code];
       if (!g) {
-        var libelle = Object.prototype.hasOwnProperty.call(LIBELLES, e.code) ? LIBELLES[e.code] : e.message;
+        var libelle = Object.prototype.hasOwnProperty.call(propres, e.code) ? propres[e.code]
+          : (Object.prototype.hasOwnProperty.call(LIBELLES, e.code) ? LIBELLES[e.code] : e.message);
         g = parCode[e.code] = { code: e.code, niveau: e.niveau, libelle: libelle, nombre: 0, rang: rangDe(e), elements: [] };
         groupes.push(g);
       }
@@ -267,8 +291,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   /**
    * Calcule compteurs, erreurs, alertes et groupes d'un document. Ne modifie pas `doc`.
-   * Renvoie { compteurs, erreurs, alertes, informations, regroupees } ; informations : les raccords face à un mur voulu
-   * (niveau 'information', hors du compte des alertes) ; regroupees les contient en dernier.
+   * Renvoie { compteurs, erreurs, alertes, informations, regroupees } ; informations : les raccords face à un mur voulu et, en 5×5, le
+   * partage non symétrique (niveau 'information', hors du compte des alertes) ; regroupees les contient en dernier.
    * erreurs / alertes / informations : [{ code, message, niveau: 'erreur'|'alerte'|'information', cible }].
    */
   function calculer(doc) {
@@ -279,17 +303,18 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     }
     if (!Array.isArray(doc.modeles)) throw new Error('Document invalide : bibliothèque de modèles absente.');
     var v = M.validerPlateau(doc), g = grapheDuPlateau(doc), eq = mesureEquilibre(doc, g);
-    var erreurs = v.erreurs.map(function (x) { return versEntree(x, 'erreur', doc); }).concat(erreursEquilibre(eq));
+    var graphe = alertesGraphe(doc, g), estErreur = function (x) { return x.niveau === 'erreur'; };
+    var erreurs = v.erreurs.map(function (x) { return versEntree(x, 'erreur', doc); }).concat(graphe.filter(estErreur), erreursEquilibre(eq));
     var alertes = v.alertes.map(function (x) { return versEntree(x, 'alerte', doc); })
-      .concat(alertesGraphe(doc, g)).concat(alertesEquilibre(eq));
+      .concat(graphe.filter(function (x) { return !estErreur(x); })).concat(alertesEquilibre(eq));
     // informations (docs/18, murs voulus) : jamais comptées parmi les alertes
-    var informations = (v.informations || []).map(function (x) { return versEntree(x, 'information', doc); });
+    var informations = (v.informations || []).map(function (x) { return versEntree(x, 'information', doc); }).concat(informationsEquilibre(eq));
     return {
       compteurs: compteursDuPlateau(doc).concat(compteursConnexions(doc, g)),
       erreurs: erreurs,
       alertes: alertes,
       informations: informations,
-      regroupees: regrouper(erreurs.concat(alertes, informations))
+      regroupees: regrouper(erreurs.concat(alertes, informations), M.formatDuDocument(doc).id)
     };
   }
 
@@ -307,6 +332,12 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     if (classe) e.className = classe;
     if (texte !== undefined) e.textContent = texte;
     return e;
+  }
+
+  /** Aide du bouton « Placer les villes » pour le format F : « Pose les N villes… » (N = 7 en 4×4, 8 en 5×5, positions par défaut d'abord). */
+  function titrePlacerVilles(F) {
+    return 'Pose les ' + nbVillesDe(F) + ' villes au meilleur placement permis sur le plateau complet (3 cases d’écart' +
+      (F.id === '5x5' ? ', 3 ports par ville ; d’abord aux positions par défaut, sinon 2 villes par rangée de jonctions, partage symétrique préféré' : '') + ', équilibre) ; Ctrl+Z pour revenir.';
   }
 
   /** Ligne d'un compteur : libellé, valeur / cible, jauge (colorée seulement en cas d'écart). */
@@ -365,6 +396,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     var blocAVenir = el('section', 'pm-controles-bloc');
     blocAVenir.appendChild(el('h2', 'pm-controles-titre', 'Outils'));
     var listeAVenir = el('ul', 'pm-controles-avenir');
+    var boutonPlacer = null;
     [['Rapport d\'équilibre', 'equilibre', 'ouvrir'], ['Plateau aléatoire', 'generateur', 'ouvrir'], ['Placer les villes', 'generateur', 'placerVilles']].forEach(function (outil) {
       var li = el('li', 'pm-controles-avenir-item');
       var bouton = el('button', 'pm-controles-avenir-bouton', outil[0]);
@@ -372,7 +404,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
       var module = PM[outil[1]], action = outil[2];
       if (action === 'placerVilles') {
         bouton.classList.add('pm-controles-placer-villes');
-        bouton.title = 'Pose les 7 villes au meilleur placement permis sur le plateau complet (3 cases d’écart, 3 ports par ville en 5×5, équilibre) ; Ctrl+Z pour revenir.';
+        boutonPlacer = bouton; // aide (title) propre au format, posée par rafraichir (appelé à la fin du montage)
       }
       li.appendChild(bouton);
       if (module && typeof module[action] === 'function') {
@@ -439,6 +471,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     }
 
     function rafraichir() {
+      if (boutonPlacer) { try { boutonPlacer.title = titrePlacerVilles(M.formatDuDocument(etat.doc())); } catch (x) { /* document mal formé : titre inchangé */ } }
       var r = calculer(etat.doc());
       var empreinte = JSON.stringify([r.compteurs, r.regroupees]);
       if (empreinte === dernier) return;
@@ -455,6 +488,9 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   PM.controles = {
     NB_VILLES: NB_VILLES,
+    NB_VILLES_PAR_FORMAT: NB_VILLES_PAR_FORMAT,
+    nbVilles: function (formatId) { return nbVillesDe({ id: formatId }); },
+    titrePlacerVilles: titrePlacerVilles,
     CIBLE_CASES: CIBLE_CASES,
     calculer: calculer,
     monter: monter,

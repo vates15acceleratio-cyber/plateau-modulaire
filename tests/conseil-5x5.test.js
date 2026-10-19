@@ -14,7 +14,7 @@ require('../src/equilibre.js');
 const PM = globalThis.PM;
 const GR = PM.graphe, GEN = PM.generateur, CAT = PM.catalogue;
 
-const CONSEIL = 'Outils > Placer les villes pose les 7 villes au meilleur placement admissible.';
+const CONSEIL = GR.CONSEIL_5X5.trim(); // « Placer les villes » : 8 villes, positions par défaut d’abord (docs/18, 2026-10-19)
 const jetons = (vs) => vs.map((v) => ({ i: v.i, j: v.j, type: 'capture' }));
 
 /** Générateur pseudo-aléatoire déterministe. */
@@ -27,21 +27,21 @@ function tirer(r, liste, n) {
 const JONCTIONS = []; for (let j = 1; j <= 4; j++) for (let i = 1; i <= 4; i++) JONCTIONS.push({ i, j });
 const rangee = (j) => JONCTIONS.filter((v) => v.j === j);
 
-/** Villes tirées : squelette 2-3-2 (3 du milieu sur une rangée, ou 2 + 1) ou 7 jonctions quelconques. */
+/** 8 villes tirées : squelette 2-2-2-2 (2 par rangée), hors squelette (3 + 1 au milieu) ou 8 jonctions quelconques. */
 function placement(r, genre) {
-  if (genre === 'libre') return tirer(r, JONCTIONS, 7);
+  if (genre === 'libre') return tirer(r, JONCTIONS, 8);
   const milieu = genre === 'une-rangee'
-    ? tirer(r, rangee(2 + Math.floor(r() * 2)), 3)
-    : tirer(r, rangee(2), 2).concat(tirer(r, rangee(3), 1));
+    ? tirer(r, rangee(2), 2).concat(tirer(r, rangee(3), 2))
+    : tirer(r, rangee(2), 3).concat(tirer(r, rangee(3), 1));
   return tirer(r, rangee(1), 2).concat(milieu, tirer(r, rangee(4), 2));
 }
 
 const cleTri = (vs) => vs.map((v) => v.i + ',' + v.j).sort().join(' ');
 // graine choisie pour que les trois genres de placement portent des alertes (le plateau de la graine « conseil » est si équilibré
 // que le squelette 2 + 1 n'y donne jamais d'alerte, ce qui rendrait le test vide)
-const doc5 = GEN.generer(CAT.nouveauDocument('5x5'), { graine: 'conseil-2', candidats: 6 }).doc;
+const doc5 = GEN.generer(CAT.nouveauDocument('5x5'), { graine: 'conseil-9', candidats: 6 }).doc;
 const ADMISSIBLES = new Set(GEN.placementsAdmissibles(doc5).placements.map(cleTri));
-/** Attendu, calculé à part : les 7 villes ne forment pas un placement admissible (2-3-2, 3 ports, 3 cases d’écart). */
+/** Attendu, calculé à part : les 8 villes ne forment pas un placement admissible (2-2-2-2, 3 ports, 3 cases d’écart). */
 const conseilAttendu = (vs) => !ADMISSIBLES.has(cleTri(vs));
 
 test('seuils de S : rejet du générateur 5 (constante unique), alerte et information propres à chaque format, lus par l’interface', () => {
@@ -55,21 +55,22 @@ test('seuils de S : rejet du générateur 5 (constante unique), alerte et inform
   assert.ok(!/provisoire/.test(src), 'le rejet S >= 5 n’est plus provisoire');
 });
 
-test('conseil 5×5 : présent si et seulement si les 7 villes ne forment pas un placement admissible', () => {
+test('conseil 5×5 : présent si et seulement si les 8 villes ne forment pas un placement admissible', () => {
   const r = rng(36), vus = { avec: 0, deuxPlusUn: 0, horsSquelette: 0 };
   for (let k = 0; k < 1500; k++) {
     const genre = ['une-rangee', 'deux-un', 'libre'][k % 3], vs = placement(r, genre);
     const e = GR.equilibre(doc5, { jetons: jetons(vs) });
-    const msgs = e.blocages.concat(e.alertes).filter((a) => a.code === 'cinq_contre_deux' || a.code === 'score_s');
+    const majorite = (a) => a.code === 'cinq_contre_deux' || a.code === 'cinq_contre_trois';
+    const msgs = e.blocages.concat(e.alertes).filter((a) => majorite(a) || a.code === 'score_s');
     const attendu = conseilAttendu(vs);
-    // « 5 contre 2 » et S >= 5 ensemble : le conseil n’est écrit qu’une fois (au message « 5 contre 2 »)
-    const aCinq = msgs.some((a) => a.code === 'cinq_contre_deux');
+    // majorité (« 6 contre 2 » ou « 5 contre 3 ») et S >= 5 ensemble : le conseil n’est écrit qu’une fois (au message de la majorité)
+    const aCinq = msgs.some(majorite);
     msgs.forEach((a) => {
-      assert.strictEqual(a.message.includes(CONSEIL), attendu && (a.code === 'cinq_contre_deux' || !aCinq), genre + ' ' + a.code + ' : ' + a.message);
+      assert.strictEqual(a.message.includes(CONSEIL), attendu && (majorite(a) || !aCinq), genre + ' ' + a.code + ' : ' + a.message);
       if (attendu) vus.avec++; else if (genre === 'deux-un') vus.deuxPlusUn++; else if (genre === 'libre') vus.horsSquelette++;
     });
     assert.ok(msgs.filter((a) => a.message.includes(CONSEIL)).length <= 1, 'conseil en double : ' + genre);
-    if (!msgs.length) assert.ok(!JSON.stringify(e).includes('Placer les villes'), 'sans alerte, pas de conseil');
+    if (!msgs.length) assert.ok(!JSON.stringify(e).includes(CONSEIL), 'sans alerte, pas de conseil');
   }
   assert.ok(vus.avec > 0, JSON.stringify(vus));
 });
@@ -97,18 +98,18 @@ test('conseil 5×5 : le même message ne contient jamais le conseil du 4×4, et 
 test('information « ville sur une jonction à moins de 3 ports » : 5×5 seulement, jamais une alerte', () => {
   const g = GR.construire(doc5), peu = g.jonctions.filter((j) => j.ports < 3), beaucoup = g.jonctions.filter((j) => j.ports >= 3);
   assert.ok(peu.length > 0 && beaucoup.length >= 7);
-  const bases = beaucoup.slice(0, 7);
+  assert.ok(beaucoup.length >= 8);
+  const bases = beaucoup.slice(0, 8), ports = (e) => e.informations.filter((a) => a.code === 'ville_peu_de_ports');
   const sans = GR.equilibre(doc5, { jetons: jetons(bases) });
-  assert.deepStrictEqual(sans.informations, []);
-  const avec = GR.equilibre(doc5, { jetons: jetons(bases.slice(0, 6).concat([peu[0]])) });
-  assert.strictEqual(avec.informations.length, 1);
-  assert.strictEqual(avec.informations[0].code, 'ville_peu_de_ports');
-  assert.ok(avec.informations[0].message.includes('(' + peu[0].i + ', ' + peu[0].j + ')'));
+  assert.deepStrictEqual(ports(sans), []);
+  const avec = GR.equilibre(doc5, { jetons: jetons(bases.slice(0, 7).concat([peu[0]])) });
+  assert.strictEqual(ports(avec).length, 1);
+  assert.ok(ports(avec)[0].message.includes('(' + peu[0].i + ', ' + peu[0].j + ')'));
   assert.ok(avec.alertes.every((a) => a.code !== 'ville_peu_de_ports') && avec.blocages.every((a) => a.code !== 'ville_peu_de_ports'));
   // rapport d’équilibre : section d’information
   const docV = JSON.parse(JSON.stringify(doc5));
-  docV.plateau.jetons = jetons(bases.slice(0, 6).concat([peu[0]]));
+  docV.plateau.jetons = jetons(bases.slice(0, 7).concat([peu[0]]));
   const m = PM.equilibre.rapport(PM.equilibre.analyser(docV));
-  assert.strictEqual(m.informations.length, 1);
+  assert.strictEqual(m.informations.filter((t) => t.includes('port(s)')).length, 1);
   assert.ok(m.alertes.every((t) => !t.includes('port(s)')));
 });

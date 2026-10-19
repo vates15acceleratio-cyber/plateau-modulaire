@@ -25,7 +25,7 @@ test('les deux formats existent, un format inconnu est refusé', () => {
 
 test('valeurs du tableau D4', () => {
   const communes = {
-    RAYON_ZONE_COIN: 20, DIAMETRE_JETON: 30, DIAMETRE_CASE: 20, DIAMETRE_CASE_JONCTION: 20, LARGEUR_CHEMIN: 8,
+    RAYON_ZONE_COIN: 20, DIAMETRE_JETON: 30, DIAMETRE_CASE: 20, DIAMETRE_CASE_JONCTION: 30, LARGEUR_CHEMIN: 8,
     AMORCE_RACCORD: 10, AMORCE_PORT: 28, MARGE_COUPE_CASE: 4, FOND_PERDU: 3, PAS_EDITEUR: 10
   };
   for (const F of [F4, F5]) for (const [k, v] of Object.entries(communes)) assert.equal(F[k], v, F.id + ' ' + k);

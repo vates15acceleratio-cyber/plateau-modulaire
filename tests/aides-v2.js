@@ -12,10 +12,10 @@ if (!PM.modele && typeof require === 'function') require('../src/modele.js');
   var M = PM.modele;
   var ID = { centrale: 'ex-centrale', bord: 'ex-bord', coin: 'ex-coin' };
 
-  /** 7 villes équilibrées (S = 0 en 4×4) pour le plateau des exemples. */
+  /** Villes équilibrées pour le plateau des exemples : 7 en 4×4 (S = 0) ; 8 en 5×5, aux positions par défaut (docs/18, 2026-10-19 ; S = 0). */
   var VILLES = {
     '4x4': [[1, 1], [2, 1], [3, 1], [2, 2], [1, 3], [2, 3], [3, 3]],
-    '5x5': [[1, 1], [3, 1], [2, 2], [2, 3], [4, 2], [1, 4], [3, 4]]
+    '5x5': [[1, 1], [4, 1], [2, 2], [3, 2], [2, 3], [3, 3], [1, 4], [4, 4]]
   };
 
   /** Document vide du format avec les exemples (exemplaires de quoi remplir la grille). */

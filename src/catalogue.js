@@ -7,14 +7,16 @@
  *      centrales Q1 « Trident à virage » (4 cases, 3 coins, 1 virage sans case ; ×4) et Q2 « Étoile à crochet » (5 cases, 4 coins,
  *      1 crochet ; ×3) ; bords B1 « Bord en V » (×8) et B8 « Bord à virage » (1 passage ; ×1) ; coins K2 (×4) et K4 (×1) ;
  *  - 5×5 (tuiles de 100 mm, tests/catalogue-5x5.test.js) : catalogue « très connecté » de docs/55 (décisions de docs/18, « 5×5 très
- *      connecté ») complété par les centrales de docs/58 (jeu « B3 ») : 2 cases par tuile au plus, ≈ 57 cases par plateau : 9 modèles,
- *      28 exemplaires dont 12 centrales pour 9 places (poids = exemplaires) : centrales LC1 « Pont et relais » (×2), LC2 « Pont et
- *      relais décalé » (×1, même topologie), LC3 « Pont et fourche » (T sans case ; ×3), LC4 « Deux ponts » (deux porteuses latérales
- *      opposées, murs E et O déclarés par `murs: [1, 3]` : 2 raccords morts par pose, en information ; ×1), LC5 « Pont et carrefour »
- *      (une case, T sans case ; ×2), LC6 « Pont et fourche libres » (×1), LC7 « Pont et relais libres » (×2) ; bord LB2 « Bord à
- *      pont » (×12) ; coin LK2 « Coin à porteuse » (×4). 46 ou 48 ports par plateau (48 = 16 jonctions × 3 quand LC4 est posé).
+ *      connecté ») complété par les centrales de docs/58 et les « ponts » de docs/66 (catalogue « P », décisions de docs/18 du
+ *      2026-10-19 : 8 villes à positions fixes) : 2 cases par tuile au plus, ≈ 57 cases par plateau : 10 modèles, 30 exemplaires dont
+ *      14 centrales pour 9 places (poids = exemplaires) : centrales LC1 « Pont et relais » (×1), LC3 « Pont et fourche » (T sans case ;
+ *      ×4), LC4 « Deux ponts » (deux porteuses latérales opposées, murs E et O déclarés par `murs: [1, 3]` : 2 raccords morts par pose,
+ *      en information ; ×1), LC5 « Pont et carrefour » (une case, T sans case ; ×1), LC6 « Pont et fourche libres » (×1), LC7 « Pont et
+ *      relais libres » (×1), LC11 « Coins opposés » (deux porteuses à 1 port en diagonale ; ×2), LC12 « Deux ponts ouverts » (deux
+ *      porteuses latérales opposées, 4 raccords ; ×3) ; bord LB2 « Bord à pont » (×12) ; coin LK2 « Coin à porteuse » (×4). LC2 « Pont
+ *      et relais décalé » du jeu « B3 » est retiré.
  * Les nombres de modèle écrits ci-dessous (« ×4 », « ×5 »…) sont les POIDS de tirage (champ `poids`) ; le stock à imprimer (`exemplaires`)
- * vient de STOCK (B8 ×3 et K4 ×2 en 4×4 ; en 5×5 il vaut les poids, le générateur tirant 9 des 12 centrales par quotas), pour que 90 % au
+ * vient de STOCK (B8 ×3 et K4 ×2 en 4×4 ; en 5×5 il vaut les poids, le générateur tirant 9 des 14 centrales par quotas), pour que 90 % au
  * moins des plateaux générés se montent (docs/47 ; 100 % en 5×5).
  * Les catalogues précédents restent lisibles, gelés : PM.catalogue.precedent (version 3.04 : 4×4 C1 à C6, B1, B3 à B6, K2, K4 ; 5×5 C7,
  * C8, B1, B7, B7m, K2) et PM.catalogue.precedents (toutes les versions par grille ; en 5×5 aussi le catalogue organique de la 4.00.0 :
@@ -27,7 +29,9 @@
  *  - R1 une case porte au plus un port de coin ; R2 deux cases porteuses ne sont jamais reliées directement ;
  *  - R3 aucun raccord latéral sur une case porteuse ; R4 la case d'apparition ne porte jamais de port ;
  *  - 5×5 seulement (règles propres au format, PM.modele) : R1 et R3 levées pour la PORTEUSE LATÉRALE (2 ports sur les coins k et
- *    k + 1, seul raccord au milieu du côté k) et pour la porteuse d'un coin (1 port, paire basse le long de ce coin) ; R2 et R4
+ *    k + 1, raccord au milieu du côté k ; sur une centrale, plus le milieu d'un côté voisin) et pour la porteuse d'un coin (1 port,
+ *    paire basse le long de ce coin) ; R3 assouplie sur les centrales (une porteuse à 1 port sur le coin k porte les milieux des deux
+ *    côtés qui encadrent ce coin, docs/66 § 2) ; R2 et R4
  *    gardées ; murs permis sur « Deux ponts » ; l'écart de 3 cases entre villes n'est plus garanti par les tuiles mais par le placement
  *    des villes (générateur, aide « placer les villes », alerte villes_proches) ; ce qui suit vaut pour le 4×4 ;
  *  - passages (docs/18) : une case porteuse ne touche jamais un passage ; pas de passage vers un coin, ni depuis une case
@@ -137,8 +141,8 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   /*
    * Catalogue 5×5 livré (version 5 du catalogue, docs/53 et docs/55, décisions de docs/18 « 5×5 très connecté ») : voie « porteuse
-   * latérale + relais », 2 cases par tuile au plus, ≈ 57 cases par plateau (48 ou 49 cases de tuiles + 9 jonctions-cases) ; LC5 à LC7 de docs/58. Coordonnées validées par
-   * l'advisor géométrie (docs/55, marges de 3,79 à 10,04 mm). Ids de docs/55 (préfixe L, « latérale ») : aucun n'existe dans les
+   * latérale + relais », 2 cases par tuile au plus, ≈ 57 cases par plateau (50 cases de tuiles, 49 quand LC5 est posé, + 8 campements ; 8 villes) ; LC5 à LC7 de docs/58,
+   * LC11 et LC12 de docs/66 (marges de tracé 11,8 et 4,97 mm). Coordonnées validées par l'advisor géométrie (docs/55, marges de 3,79 à 10,04 mm). Ids de docs/55 (préfixe L, « latérale ») : aucun n'existe dans les
    * catalogues précédents. Une PORTEUSE LATÉRALE (règle propre au 5×5, PM.modele) dessert les deux coins d'un même côté et porte le
    * raccord du milieu de ce côté ; la porteuse du coin (1 port) porte la paire basse (E2 / S0).
    */
@@ -153,15 +157,11 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     return [
       /* Centrales (porteuse latérale nord + relais, ou deux porteuses) */
       // Pont et relais : le relais tient E, S et O au milieu, un lien vers la porteuse
-      m5('LC1', 'Pont et relais', 'centrale', 2,
+      m5('LC1', 'Pont et relais', 'centrale', 1,
         [kase('p', 50, 25), kase('r', 50, 58)],
         pont('p').concat([lien('h1', 'p', 'r'), raccord('re', 'r', 1, 1), raccord('rs', 'r', 2, 1), raccord('ro', 'r', 3, 1)])),
-      // Pont et relais décalé : même topologie, relais décalé vers le sud-est (variété du dessin)
-      m5('LC2', 'Pont et relais décalé', 'centrale', 1,
-        [kase('p', 44, 27), kase('r', 62, 62)],
-        pont('p').concat([lien('h1', 'p', 'r'), raccord('re', 'r', 1, 1), raccord('rs', 'r', 2, 1), raccord('ro', 'r', 3, 1)])),
       // Pont et fourche : le relais tient E ; un T sans case (pivot hors du relais) le relie à S et à O (motif organique)
-      m5('LC3', 'Pont et fourche', 'centrale', 3,
+      m5('LC3', 'Pont et fourche', 'centrale', 4,
         [kase('p', 50, 25), kase('r', 62, 60)],
         pont('p').concat([lien('h1', 'p', 'r'), raccord('re', 'r', 1, 1)]),
         [pivot('v', 31, 76)], [passage('t1', R(2, 1), V('v')), passage('t2', R(3, 1), V('v')), passage('t3', C('r'), V('v'))]),
@@ -170,7 +170,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         [kase('p', 50, 25), kase('q', 50, 75)],
         pont('p').concat([port('p3', 'q', 2), port('p4', 'q', 3), raccord('rs', 'q', 2, 1)]), [], [], [1, 3]),
       // Pont et carrefour (docs/58) : UNE case (la porteuse nord) ; E, S et O se rejoignent par un T sans case (les trois voisines se touchent)
-      m5('LC5', 'Pont et carrefour', 'centrale', 2,
+      m5('LC5', 'Pont et carrefour', 'centrale', 1,
         [kase('p', 50, 25)], pont('p'),
         [pivot('v', 50, 66)], [passage('t1', R(1, 1), V('v')), passage('t2', R(2, 1), V('v')), passage('t3', R(3, 1), V('v'))]),
       // Pont et fourche libres : comme « Pont et fourche », mais la porteuse et le relais ne sont pas reliés
@@ -178,8 +178,18 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
         [kase('p', 50, 25), kase('r', 66, 62)], pont('p').concat([raccord('re', 'r', 1, 1)]),
         [pivot('v', 31, 76)], [passage('t1', R(2, 1), V('v')), passage('t2', R(3, 1), V('v')), passage('t3', C('r'), V('v'))]),
       // Pont et relais libres : comme « Pont et relais », sans le lien entre la porteuse et le relais
-      m5('LC7', 'Pont et relais libres', 'centrale', 2,
+      m5('LC7', 'Pont et relais libres', 'centrale', 1,
         [kase('p', 50, 25), kase('r', 50, 64)], pont('p').concat([raccord('re', 'r', 1, 1), raccord('rs', 'r', 2, 1), raccord('ro', 'r', 3, 1)])),
+      // Coins opposés (docs/66) : deux porteuses à 1 port (NO et SE), non reliées ; chacune porte les milieux des deux côtés qui encadrent
+      // son coin (R3 assouplie des centrales 5×5) : a tient N et O, b tient E et S
+      m5('LC11', 'Coins opposés', 'centrale', 2,
+        [kase('a', 30, 30), kase('b', 70, 70)],
+        [port('p1', 'a', 0), raccord('rn', 'a', 0, 1), raccord('ro', 'a', 3, 1), port('p2', 'b', 2), raccord('re', 'b', 1, 1), raccord('rs', 'b', 2, 1)]),
+      // Deux ponts ouverts (docs/66) : porteuse latérale ouest p (NO, SO) avec O et N ; porteuse latérale est q (NE, SE) avec E et S ; non reliées
+      m5('LC12', 'Deux ponts ouverts', 'centrale', 3,
+        [kase('p', 33, 44), kase('q', 67, 56)],
+        [port('p1', 'p', 0), port('p2', 'p', 3), raccord('ro', 'p', 3, 1), raccord('rn', 'p', 0, 1),
+          port('p3', 'q', 1), port('p4', 'q', 2), raccord('re', 'q', 1, 1), raccord('rs', 'q', 2, 1)]),
       /* Bord (extérieur N) : apparition à raccourci E0 / O2 et paire basse E2 / O0 ; porteuse latérale sud (SE, SO, S au milieu) */
       m5('LB2', 'Bord à pont', 'bord', 12,
         [appar('a', 50, 48), kase('c', 50, 81)], [
@@ -413,7 +423,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * plateaux : mesures d'équilibre inchangées) ; les exemplaires sont ceux de ce tableau, relevés pour qu'au moins 90 % des plateaux
    * générés se montent avec la boîte imprimée (docs/47). Le stock ne limite jamais la pose.
    */
-  var STOCK = { '4x4': { Q1: 4, Q2: 3, B1: 8, B8: 3, K2: 4, K4: 2 }, '5x5': { LC1: 2, LC2: 1, LC3: 3, LC4: 1, LC5: 2, LC6: 1, LC7: 2, LB2: 12, LK2: 4 } };
+  var STOCK = { '4x4': { Q1: 4, Q2: 3, B1: 8, B8: 3, K2: 4, K4: 2 }, '5x5': { LC1: 1, LC3: 4, LC4: 1, LC5: 1, LC6: 1, LC7: 1, LC11: 2, LC12: 3, LB2: 12, LK2: 4 } };
   /** Stock du catalogue 5×5 de la version 4.00.0 (docs/47), gardé avec lui dans PM.catalogue.precedents['5x5']. */
   var STOCK_5X5_400 = { U1: 5, P3: 4, P5: 3, P1: 3, P2: 3, B1: 6, B7: 8, K2: 5 };
   function avecStock(liste, stock) {
@@ -440,7 +450,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
 
   /**
    * Document neuf de la grille demandée ('4x4' par défaut) contenant une copie modifiable de ses modèles
-   * (6 en 4×4, 6 en 5×5). Lève une Error pour une grille inconnue.
+   * (6 en 4×4, 10 en 5×5). Lève une Error pour une grille inconnue.
    */
   function nouveauDocument(grille) {
     var g = grille === undefined || grille === null ? '4x4' : grille;

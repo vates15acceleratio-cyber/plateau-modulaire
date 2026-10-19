@@ -49,15 +49,18 @@ function plateau5() {
 
 /* ============================ A. règles de porteuse du 5×5 ============================ */
 
-test('A1 porteuse latérale : tout raccord autre que le milieu de son côté (autre position, autre côté, double) reste une alerte', () => {
+test('A1 porteuse latérale : tout raccord autre que le milieu de son côté ou d’un côté voisin (autre position, côté opposé, double) reste une alerte', () => {
   const ok = lc('LC1');
   assert.deepEqual(codes(ok, '5x5'), [], 'témoin : LC1 conforme');
   // même côté (nord), position 0 en plus du milieu
   const a = lc('LC1'); a.chemins.push({ id: 'rx', a: { 'case': 'p' }, b: { raccord: { cote: 0, pos: 0 } } });
   assert.ok(codes(a, '5x5').includes('raccord_porteuse'), 'N:0 + N:1');
-  // le milieu, mais d'un autre côté que celui des deux ports (ports N et E : côté 0)
-  const b = lc('LC1'); chemin(b, 'rn').b.raccord = { cote: 1, pos: 1 };
-  assert.ok(codes(b, '5x5').includes('raccord_porteuse'), 'E:1 au lieu de N:1');
+  // le milieu du côté opposé à celui des deux ports (ports NO et NE : côté 0)
+  const b = lc('LC1'); chemin(b, 'rn').b.raccord = { cote: 2, pos: 1 };
+  assert.ok(codes(b, '5x5').includes('raccord_porteuse'), 'S:1 au lieu de N:1');
+  // R3 assouplie sur les centrales (docs/18, 2026-10-19) : le milieu d'un côté voisin est permis
+  const bv = lc('LC1'); chemin(bv, 'rn').b.raccord = { cote: 1, pos: 1 };
+  assert.ok(!codes(bv, '5x5').includes('raccord_porteuse'), 'E:1 (côté voisin) permis sur une centrale');
   // la fin du côté (pos 2) à la place du milieu
   const c = lc('LC1'); chemin(c, 'rn').b.raccord.pos = 2;
   assert.ok(codes(c, '5x5').includes('raccord_porteuse'), 'N:2');
@@ -82,7 +85,9 @@ test('A2 porteuse : 2 ports en diagonale, 3 ports, 4 ports donnent ports_case ET
   // coins 3 et 0 : ce sont les deux coins du côté 3 (ouest) ; le seul raccord permis est (3, milieu)
   const w = lc('LC1');
   chemin(w, 'p1').b.coin = 3; chemin(w, 'p2').b.coin = 0;
-  assert.ok(codes(w, '5x5').includes('raccord_porteuse'), 'rn (N:1) n\'est pas permis sur un côté ouest');
+  assert.ok(!codes(w, '5x5').includes('raccord_porteuse'), 'rn (N:1) : côté voisin du côté ouest, permis sur une centrale');
+  chemin(w, 'rn').b.raccord = { cote: 1, pos: 1 };
+  assert.ok(codes(w, '5x5').includes('raccord_porteuse'), 'E:1 : côté opposé au côté ouest');
   chemin(w, 'rn').b.raccord = { cote: 3, pos: 1 };
   const cw = codes(w, '5x5');
   assert.ok(!cw.includes('ports_case') && !cw.includes('raccord_porteuse'), 'ouest : ' + cw.join());
@@ -114,8 +119,11 @@ test('A4 porteuse de coin : paire basse seulement sur un gabarit coin ; une seul
   const autre = lc('LK2'); chemin(autre, 'p1').b.coin = 0; // la paire du coin 2 ne longe pas le coin 0
   assert.ok(codes(autre, '5x5').includes('raccord_porteuse'), 'paire du mauvais coin');
   // même motif sur une centrale (1 port + raccord) et sur un bord : alerte (déjà couvert pour LK2 ; ici une centrale avec un seul port)
+  // centrale à 1 port (NO) : N:1 et O:1 encadrent le coin (R3 assouplie, docs/66 § 2) ; S:1 non
   const cen = lc('LC1'); cen.chemins = cen.chemins.filter((ch) => ch.id !== 'p2');
-  assert.ok(codes(cen, '5x5').includes('raccord_porteuse'), 'centrale 1 port + raccord N:1');
+  assert.ok(!codes(cen, '5x5').includes('raccord_porteuse'), 'centrale 1 port + raccord N:1 : permis');
+  chemin(cen, 'rn').b.raccord = { cote: 2, pos: 1 };
+  assert.ok(codes(cen, '5x5').includes('raccord_porteuse'), 'centrale 1 port + raccord S:1');
   const cen0 = lc('LC1'); cen0.chemins = cen0.chemins.filter((ch) => ch.id !== 'p2' && ch.id !== 'rn');
   assert.ok(!codes(cen0, '5x5').includes('raccord_porteuse'), '1 port sans raccord : permis');
 });
@@ -205,7 +213,7 @@ test('C1 connexions : plateau vide, une seule tuile, plateau non connexe, docume
   assert.doesNotThrow(() => GR.connexions(sale));
 });
 
-test('C2 connexions : sans ville 16 jonctions-cases ; avec 7 villes 9 ; les degrés des cases de tuile ne changent pas', () => {
+test('C2 connexions : sans ville 16 campements ; avec 8 villes 8 ; les degrés des cases de tuile ne changent pas', () => {
   const d = plateau5();
   const sans = GR.connexions(d);
   const nbTuilesCases = d.plateau.tuiles.reduce((s, t) => s + M.modeleParId(d, t.modeleId).cases.length, 0);
@@ -214,7 +222,7 @@ test('C2 connexions : sans ville 16 jonctions-cases ; avec 7 villes 9 ; les degr
   assert.ok(p.ok, p.raison);
   const av = copie(d); av.plateau.jetons = p.jetons;
   const avec = GR.connexions(av);
-  assert.equal(avec.cases, nbTuilesCases + 9);
+  assert.equal(avec.cases, nbTuilesCases + 8);
   // g construit avec ou sans la clé : même résultat que l'appel explicite
   assert.deepEqual(GR.connexions(av, GR.construire(av, { villesTraversables: false })), avec);
   // les cases de tuile à 2 connexions ou moins sont les mêmes avec ou sans ville
@@ -280,7 +288,7 @@ test('D2 placerVilles : aucun placement possible sur un plateau complet = refus 
   const avant = JSON.stringify(etat.doc());
   const r = GEN.placerVilles(etat);
   assert.equal(r.ok, false);
-  assert.match(r.raison, /Aucun placement des 7 villes/);
+  assert.match(r.raison, /Aucun placement des 8 villes/);
   assert.equal(JSON.stringify(etat.doc()), avant, 'la ville déjà posée n\'est pas touchée');
   assert.equal(etat.ui().message.niveau, 'alerte');
   assert.equal(etat.peutRetablir(), false);
@@ -288,7 +296,7 @@ test('D2 placerVilles : aucun placement possible sur un plateau complet = refus 
   assert.deepEqual(etat.doc().plateau.jetons, []);
 });
 
-test('D3 placerVilles puis Ctrl+Z / Ctrl+Y (4×4 et 5×5) : les 7 villes vont et viennent à l\'identique ; un second appel après Ctrl+Z redonne le même placement', () => {
+test('D3 placerVilles puis Ctrl+Z / Ctrl+Y (4×4 et 5×5) : les 7 (4×4) ou 8 (5×5) villes vont et viennent à l\'identique ; un second appel après Ctrl+Z redonne le même placement', () => {
   for (const grille of ['4x4', '5x5']) {
     const d = grille === '5x5' ? plateau5() : sansVilles(GEN.generer(doc4(), { graine: 'pv4b', candidats: 3 }).doc);
     d.plateau.jetons = [{ i: 1, j: 1, type: 'capture' }]; // une ville mal placée : remplacée, puis rendue au Ctrl+Z
@@ -296,8 +304,8 @@ test('D3 placerVilles puis Ctrl+Z / Ctrl+Y (4×4 et 5×5) : les 7 villes vont et
     const r = GEN.placerVilles(etat);
     assert.ok(r.ok, grille + ' : ' + r.raison);
     const poses = copie(etat.doc().plateau.jetons);
-    assert.equal(poses.length, 7);
-    assert.equal(new Set(poses.map((j) => j.i + ',' + j.j)).size, 7, 'sept villes distinctes');
+    assert.equal(poses.length, grille === '4x4' ? 7 : 8);
+    assert.equal(new Set(poses.map((j) => j.i + ',' + j.j)).size, poses.length, 'villes distinctes');
     assert.ok(etat.peutAnnuler());
     etat.annuler();
     assert.deepEqual(etat.doc().plateau.jetons, [{ i: 1, j: 1, type: 'capture' }], grille);
@@ -521,7 +529,7 @@ test('G1 bibliothèque modifiée : LC4 supprimé, LC5 retiré, LC5 à 0 exemplai
       const r = GEN.generer(d, { graine: nom + k, candidats: 6 });
       assert.ok(r.ok, nom + ' : ' + r.raison);
       assert.equal(r.doc.plateau.tuiles.length, 25);
-      assert.equal(r.doc.plateau.jetons.length, 7);
+      assert.equal(r.doc.plateau.jetons.length, 8);
       assert.equal(utilisation(r.doc)[ecarte] || 0, 0, nom + ' : ' + ecarte + ' ne doit pas être posé');
       assert.deepEqual(horsStock(r.doc), [], nom);
       assert.equal(M.validerPlateau(r.doc).erreurs.length, 0, nom);
@@ -550,7 +558,7 @@ test('G2 tuile de l\'utilisateur ajoutée à la bibliothèque 5×5 : copie de LC
   assert.ok(r.ok || (typeof r.raison === 'string' && r.raison.length > 20), r.raison);
   if (r.ok) assert.equal(M.validerPlateau(r.doc).erreurs.length, 0);
   // l'original n'est pas modifié
-  assert.equal(mauvaise.modeles.length, 10);
+  assert.equal(mauvaise.modeles.length, 11); // 10 modèles du catalogue « P » + U2
 });
 
 test('G3 bibliothèque modifiée : plus de bord (LB2 à 0), plus de coin (LK2 supprimé), plus de centrale : refus explicite en une phrase, document intact', () => {
@@ -655,7 +663,7 @@ test('H3 acceptation (logique de proposerRemplacement, sans boîte de dialogue ;
     assert.equal(n.plateau.tuiles.length, 0);
     assert.equal(n.plateau.jetons.length, 0);
     assert.deepEqual(n.modeles.map((m) => m.id).sort(), C5.map((m) => m.id).sort());
-    assert.equal(n.modeles.reduce((s, m) => s + m.exemplaires, 0), 28);
+    assert.equal(n.modeles.reduce((s, m) => s + m.exemplaires, 0), 30);
     assert.equal(propose(n), false, 'plus de re-proposition');
     assert.equal(etat.peutAnnuler(), true);
     etat.annuler();
@@ -663,7 +671,7 @@ test('H3 acceptation (logique de proposerRemplacement, sans boîte de dialogue ;
     assert.equal(propose(etat.doc()), true);
     etat.retablir();
     assert.equal(etat.doc().plateau.tuiles.length, 0);
-    assert.equal(etat.doc().modeles.length, 9);
+    assert.equal(etat.doc().modeles.length, 10);
   }
 });
 
@@ -693,14 +701,14 @@ test('H5 bibliothèque : les identifiants des catalogues livrés et des deux cat
 
 /* ============================ I. export du jeu complet ============================ */
 
-test('I1 export du jeu complet 5×5 (28 tuiles) : tuiles et planches selon les exemplaires, y compris après modification (LC5 à 0, tuile utilisateur ajoutée, LC4 à 3)', () => {
+test('I1 export du jeu complet 5×5 (30 tuiles) : tuiles et planches selon les exemplaires, y compris après modification (LC5 à 0, tuile utilisateur ajoutée, LC4 à 3)', () => {
   const d = doc5();
-  assert.equal(E.listeTuiles(d, { portee: 'stock' }).tuiles.length, 28);
+  assert.equal(E.listeTuiles(d, { portee: 'stock' }).tuiles.length, 30);
   d.modeles.find((m) => m.id === 'LC5').exemplaires = 0;
   d.modeles.find((m) => m.id === 'LC4').exemplaires = 3;
   const u = lc('LC1'); u.id = 'U1'; u.exemplaires = 2; delete u.poids; d.modeles.push(u);
   const l = E.listeTuiles(d, { portee: 'stock' });
-  assert.equal(l.tuiles.length, 28 - 2 + 2 + 2);
+  assert.equal(l.tuiles.length, 30 - 1 + 2 + 2);
   assert.equal(l.tuiles.filter((t) => t.modeleId === 'LC5').length, 0);
   assert.equal(l.tuiles.filter((t) => t.modeleId === 'LC4').length, 3);
   assert.equal(l.tuiles.filter((t) => t.modeleId === 'U1').length, 2);

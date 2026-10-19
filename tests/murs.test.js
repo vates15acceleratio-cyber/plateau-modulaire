@@ -191,7 +191,7 @@ test('sauvegarde : `murs` est relu (côtés 0 à 3 sans doublon) ; sans champ, a
   assert.deepEqual(M.validerPlateau(r3.doc).informations, []);
 });
 
-test('« Placer les villes » à l\'état, en 4×4 comme en 5×5 : pose les 7 villes en une étape d\'historique (Ctrl+Z)', () => {
+test('« Placer les villes » à l\'état, en 4×4 comme en 5×5 : pose les 7 villes (4×4) ou les 8 villes aux positions par défaut (5×5) en une étape d\'historique (Ctrl+Z)', () => {
   const GEN = PM.generateur;
   for (const grille of ['4x4', '5x5']) {
     const r = GEN.generer(CAT.nouveauDocument(grille), { graine: 'murs-' + grille, candidats: 6 });
@@ -200,9 +200,10 @@ test('« Placer les villes » à l\'état, en 4×4 comme en 5×5 : pose les 7 vi
     const etat = PM.etat.creer(d);
     const p = GEN.placerVilles(etat);
     assert.ok(p.ok, grille + ' : ' + p.raison);
-    assert.equal(etat.doc().plateau.jetons.length, 7, grille);
+    assert.equal(etat.doc().plateau.jetons.length, grille === '4x4' ? 7 : 8, grille);
     assert.deepEqual(etat.doc().plateau.jetons, p.jetons);
-    assert.match(etat.ui().message.texte, /7 villes placées au meilleur placement/);
+    assert.match(etat.ui().message.texte, grille === '4x4' ? /7 villes placées au meilleur placement/ : /8 villes placées aux positions par défaut/);
+    if (grille === '5x5') assert.deepEqual(p.jetons.map((j) => [j.i, j.j]), PM.graphe.MOTIF_VILLES_5X5.map((v) => [v.i, v.j]));
     etat.annuler();
     assert.equal(etat.doc().plateau.jetons.length, 0, grille);
   }

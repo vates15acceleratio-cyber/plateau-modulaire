@@ -376,7 +376,9 @@ test('format : un document à passages ou pivots est écrit en version 3 et se r
 
 /** Empreintes [plateau : équilibre] du générateur sur un ancien document, graines s0 à s2 (recalculées en docs/46). */
 const EMPREINTES_ANCIENS = {
-  '4x4': ['4e7c5295164b:22674eb713f6', 'aedb663958ba:43b2a937ac55', 'b31ff25cddc0:a50e00bd63b1'],
+  // seconde moitié : empreinte de PM.graphe.equilibre, dont la forme a changé avec les 8 villes du 5×5 (champs nbVilles, cinqContreTrois,
+  // partageSymetrique ; conseil « campements ») ; les plateaux (première moitié) sont inchangés
+  '4x4': ['4e7c5295164b:12ecb3f80cc4', 'aedb663958ba:59684720bef8', 'b31ff25cddc0:a0498532cf5e'],
   '5x5': ['55db3a27e119:d46f86ada847', '21f5f7d21dc7:6496cfc04542', '03268fea0577:274abe1fc9b8']
 };
 
