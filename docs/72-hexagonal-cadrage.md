@@ -41,4 +41,4 @@
 ## Décisions pendant la production (2026-10-19)
 - **Bouton « Orienter les tuiles »** pour la pose à la main en hexagonal : accepté (recherche des rotations des intérieures qui écartent les villes, environ 1 s, annulable par Ctrl+Z).
 - Arbitrage de l'orchestrateur : rejet du générateur hexagonal à **S ≥ 3** (`80` § 4), au lieu de 4 (`81`) ; sans effet pratique (S vaut 0 ou 1).
-- En attente de confirmation de l'utilisateur (appliqués provisoirement) : critères à 6 villes de `80` (« 4 contre 2 » bloquant, S alerte 4 / information 3), 10 dispositions variées, répartition des 30 pièces de `79`.
+- **Confirmés par l'utilisateur (2026-10-20)** : critères à 6 villes de `80` (« 4 contre 2 » bloquant, S alerte 4 / information 3, rejet du générateur à S ≥ 3) ; 10 dispositions variées (trèfle par défaut) ; 30 pièces de `79` (HC2 8, HC3 7, HB1 8, HK1 7, 3 planches A3) ; courbe de la traverse de HC2 aplatie (point de contrôle (0 ; 4)).
