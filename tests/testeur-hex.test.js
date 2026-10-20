@@ -2,7 +2,7 @@
 // Recette du testeur pour le format hexagonal 'hex19' (2026-10-19) : cas limites non couverts par les tests des 6 lots.
 // 1. fichiers JSON hostiles ; 2. tuiles de l'utilisateur (validation hexagonale) ; 3. bibliothèque modifiée (générateur) ;
 // 4. « Orienter les tuiles » ; 5. « Placer les villes » ; 6. mélange de formats ; 7. export ; 8. non-régression 4×4 / 5×5 ;
-// 9. fuzz déterministe passant par le chargeur. Les tests marqués { skip: 'défaut : …' } décrivent un défaut du code (non corrigé ici).
+// 9. fuzz déterministe passant par le chargeur. Les deux défauts D1 et D2 (docs/83) sont corrigés.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
@@ -549,7 +549,7 @@ test('Orienter : rotations déjà équivalentes (symétrie) — aucune tuile « 
   assert.equal(e.peutAnnuler(), false);
 });
 
-test('Orienter : une tuile centrale à rotation invalide (77, -2, 1,5) ne doit pas être déclarée « absente »', { skip: 'défaut : src/generateur.js:1244 écarte sans le dire les tuiles à rotation non entière ou hors 0..5 ; si toutes les centrales sont dans ce cas, le refus dit « Aucune tuile intérieure n’est posée » (faux) au lieu de les orienter ou de signaler la rotation invalide' }, () => {
+test('Orienter : une tuile centrale à rotation invalide (77, -2, 1,5) ne doit pas être déclarée « absente »', () => {
   const doc = plateau();
   doc.plateau.tuiles.forEach((t) => { if (estCentrale(t)) t.rot = 77; });
   const r = GEN.orienterTuiles(doc);
@@ -831,7 +831,7 @@ test('fuzz : 60 fichiers hexagonaux altérés au hasard (graine fixe), relus par
   assert.ok(lus > 35, lus + ' fichiers lus');
 });
 
-test('plateau dont un modèle posé est incomplet (cases supprimées) : le rapport d’équilibre, Placer les villes et la préparation des sorties ne doivent pas lever', { skip: 'défaut : src/graphe.js:196 (lier) lève « Cannot read properties of undefined (reading \'add\') » quand un chemin d’un modèle posé cite une case absente ; PM.graphe.construire n’est protégé que dans controles.js:154. Existe aussi en 4×4 et sur origin/main (non propre à l’hexagonal). Atteignable par un fichier JSON dont un modèle posé a perdu ses cases.' }, () => {
+test('plateau dont un modèle posé est incomplet (cases supprimées) : le rapport d’équilibre, Placer les villes et la préparation des sorties ne doivent pas lever', () => {
   const o = JSON.parse(S.versJSON(plateau()));
   o.modeles[0].cases = [];
   const r = S.depuisJSON(JSON.stringify(o));

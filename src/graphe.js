@@ -49,7 +49,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    * Majorités (docs/18, décision 3 du 2026-10-19) : un joueur strictement plus proche d'au moins N − 2 villes est un blocage
    * (« 5 contre 2 » en 4×4, « 6 contre 2 » en 5×5) ; en 5×5, 5 villes (« 5 contre 3 ») sont une alerte. Le 4×4 n'a pas d'alerte de majorité.
    */
-  var SEUIL_MAJORITE_PAR_FORMAT = Object.freeze({ '4x4': 5, '5x5': 6, 'hex19': 4 }); // hexagonal : N − 2 = « 4 contre 2 » (docs/73), pas d'alerte intermédiaire
+  var SEUIL_MAJORITE_PAR_FORMAT = Object.freeze({ '4x4': 5, '5x5': 6, 'hex19': 4 }); // hexagonal : N − 2 = « 4 contre 2 » (docs/73, validé docs/80), pas d'alerte intermédiaire
   var SEUIL_MAJORITE_ALERTE_PAR_FORMAT = Object.freeze({ '5x5': 5 });
   var LIBELLE_MAJORITE_PAR_FORMAT = Object.freeze({ '4x4': '5 contre 2', '5x5': '6 contre 2', 'hex19': '4 contre 2' });
   var LIBELLE_MAJORITE_ALERTE_PAR_FORMAT = Object.freeze({ '5x5': '5 contre 3' });
@@ -65,7 +65,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
    *  (comme le rejet du générateur ; avec le catalogue très connecté, le 95e centile de la pose libre 5×5 est à 5). Les tables restent séparées : les formats peuvent diverger. */
   var SEUIL_S_PAR_FORMAT = Object.freeze({ '4x4': 5, '5x5': 5 });
   var SEUIL_S_INFORMATION_PAR_FORMAT = Object.freeze({ '4x4': 4, '5x5': 4 });
-  /** Hexagonal (6 rangs, docs/73, à recalibrer sur 1000 plateaux) : alerte dès S = 4, information dès 3. Tables à part : celles du carré restent figées. */
+  /** Hexagonal (6 rangs, calibré docs/80 sur 600 plateaux : S accepté ≤ 3, validé docs/80) : alerte dès S = 4, information dès 3. Tables à part : celles du carré restent figées. */
   var SEUIL_S_HEX = Object.freeze({ alerte: 4, information: 3 });
   var PORTS_VILLE_MIN = 3;         // 5×5 : ports minimum d'une jonction qui porte une ville ; en dessous, information seulement (docs/36) ; lu par le générateur et les outils
   var PORTS_JONCTION_MIN = G.MIN_PORTS_JONCTION; // ports minimum de toute jonction intérieure (condition ferme du générateur 5×5)
@@ -237,7 +237,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     function jonction(i, j) {
       var id = idJonction(i, j), portees = portsParJonction.get(id) || [], ville = villes.has(id);
       noeud(id);
-      portees.forEach(function (c) { lier(id, c); });
+      portees.forEach(function (c) { if (voisins.has(c)) lier(id, c); });
       g.jonctions.push({ id: id, i: i, j: j, type: ville ? 'ville' : 'case', ports: portees.length, cases: portees.slice() });
       if (ville) g.villes.add(id);
     }
@@ -457,7 +457,7 @@ if (!PM.modele && typeof require === 'function') require('./modele.js'); // char
     if (infosVilles) {
       villes.forEach(function (v) {
         if (v.ports < PORTS_VILLE_MIN) {
-          informations.push({ code: 'ville_peu_de_ports', message: 'La ville (' + v.i + ', ' + v.j + ') est sur une jonction à ' + v.ports + ' port(s), moins de ' + PORTS_VILLE_MIN + ' (information, sans alerte).' });
+          informations.push({ code: 'ville_peu_de_ports', message: 'La ville ' + (formatId === 'hex19' ? 'siège ' + v.i : '(' + v.i + ', ' + v.j + ')') + ' est sur une jonction à ' + v.ports + ' port(s), moins de ' + PORTS_VILLE_MIN + ' (information, sans alerte).' });
         }
       });
     }

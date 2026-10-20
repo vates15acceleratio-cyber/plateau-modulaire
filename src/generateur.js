@@ -1234,16 +1234,18 @@ if (!PM.graphe && typeof require === 'function') require('./graphe.js'); // char
     try { F = M.formatDuDocument(doc); } catch (e) { return refusOrienter(e.message); }
     if (F.nbCotes !== 6) return refusOrienter('« Orienter les tuiles » ne sert qu’au plateau hexagonal.');
     var tuiles = doc && doc.plateau && Array.isArray(doc.plateau.tuiles) ? doc.plateau.tuiles : [];
-    var cellules = [], ids = [], rotations = {}, centrales = 0, posees = 0;
+    var cellules = [], ids = [], rotations = {}, centrales = 0, posees = 0, rotationInvalide = null;
     F.cellules.forEach(function (c) {
       var t = tuiles.filter(function (x) { return x && x.col === c.col && x.lig === c.lig; })[0], m = t ? M.modeleParId(doc, t.modeleId) : null;
-      if (!t || !m || !M.validerModele(m, F).complet || !Number.isInteger(t.rot) || t.rot < 0 || t.rot > 5) return;
+      if (!t || !m || !M.validerModele(m, F).complet) return;
+      if (!Number.isInteger(t.rot) || t.rot < 0 || t.rot > 5) { rotationInvalide = rotationInvalide || { col: c.col, lig: c.lig, rot: t.rot }; return; }
       posees++;
       cellules.push({ col: c.col, lig: c.lig, gabarit: c.gabarit });
       ids.push(t.modeleId);
       rotations[c.col + ',' + c.lig] = t.rot;
       if (c.gabarit === 'centrale') centrales++;
     });
+    if (rotationInvalide) return refusOrienter('Rotation invalide (' + String(rotationInvalide.rot) + ') sur la tuile (' + rotationInvalide.col + ', ' + rotationInvalide.lig + ') : une rotation est un entier de 0 à 5.');
     if (!centrales) return refusOrienter('Aucune tuile intérieure (centre et couronne) n’est posée : il n’y a rien à orienter, posez d’abord des centrales.');
     var villes = [];
     (doc.plateau.jetons || []).forEach(function (j) { if (j && j.type === 'capture' && j.j === 0 && Number.isInteger(j.i) && j.i >= 0 && j.i < F.sieges.length && villes.indexOf(j.i) < 0) villes.push(j.i); });
