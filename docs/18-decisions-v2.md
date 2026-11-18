@@ -208,3 +208,13 @@ Les règles de jeu sont rédigées dans `regles/` (source HTML et PDF de 2 pages
 - **Montage du plateau** : **d'abord le pourtour** (4 coins puis les tuiles de bord), **ensuite les tuiles centrales** ; tuiles tirées ou choisies librement, orientées pour raccorder les chemins ; « le plateau est équilibré par lui-même ». Puis les jetons aux croisements : 8 villes en 5×5 (les 4 croisements centraux et les 2 extrêmes de la première et de la dernière rangée), campements ailleurs.
 - **Premier joueur** : celui qui a visité un château ou une forteresse le plus récemment (à égalité, le plus âgé).
 - **Non décidé** (idées seulement) : comme les campements donnent une carte, un critère d'accès équitable aux campements pourrait compléter le rapport d'équilibre ; rien n'est demandé à l'outil pour l'instant.
+
+## Plateau hexagonal : feu vert et cadrage (2026-11-18)
+Feu vert de l'utilisateur pour le format hexagonal, qui était en attente jusqu'ici. Le gameplay validé (règles V2.3) est conservé ; de nouvelles mécaniques s'y ajoutent (or, rations, marché, phases achat / déplacement / résolution), à traiter après les tuiles.
+- **Périmètre : les tuiles seulement.** Le plateau est « quelconque » (forme libre, noyau dur de quelques tuiles invariables) : l'outil ne le crée pas.
+- **Une tuile = une case de déplacement.** Terrains envisagés : plaine, forêt, marais, montagne. Environ 90 tuiles au départ (un grand hexagone de côté 6 en compte 91).
+- **Taille : 4 à 4,5 cm plat à plat** (45 mm retenus pour les essais).
+- **Rations = déplacement** (et non le déploiement) : le terrain peut ainsi changer le coût de déplacement.
+- **Même dépôt, espaces de travail séparés** : tout le travail hexagonal est dans `hex/` ; `src/`, `tests/` et `outils/` ne changent pas.
+- **Ordre de travail** : d'abord les tuiles, pour comparer les outils (protograf, pymupdf, nandeck, Figma) ; ensuite les autres mécaniques.
+- **Pas encore décidé** : répartition des ~90 tuiles par terrain, coût en rations de chaque terrain, marquage des tuiles du noyau, villes et campements en tuiles ou en jetons, palette (la règle vert / rouge / noir / blanc de `archives/6` couvre-t-elle encore les terrains ?).
