@@ -2,9 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "plateau",
+      "name": "plateau-carre-archive",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["outils/serveur.js", "8765"],
+      "runtimeArgs": [
+        "archives/plateau-carre/outils/serveur.js",
+        "8765"
+      ],
       "port": 8765
     }
   ]

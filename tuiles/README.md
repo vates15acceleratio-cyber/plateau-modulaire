@@ -2,11 +2,13 @@
 
 Conception des **tuiles** d'un plateau hexagonal modulaire : plaine, forêt, marais, montagne. Les tuiles servent
 directement de cases de déplacement ; le plateau lui-même (forme quelconque, noyau fixe) n'est pas dessiné ici.
-Cet espace est indépendant de l'outil de plateau carré (`src/`, `index.html`) : rien ici ne touche à `src/`, `tests/` ni `outils/`.
+L'ancien outil de plateau carré est archivé dans `archives/plateau-carre/` (étiquette git `5.00.0`) ; rien ici n'en dépend.
 
 ## Décisions de départ
 Tuile de 45 mm plat à plat, pointe en haut (52 mm de pointe à pointe). Fond perdu 3 mm, zone de sécurité 4 mm,
-texte ≥ 6 pt, traits ≥ 0,25 mm, barre de contrôle de 100 mm (règles d'impression de `docs/archives/6`).
+texte ≥ 6 pt, traits positifs ≥ 0,25 mm, barre de contrôle de 100 mm et nom de la planche. Ces minimums viennent de l'avis prépresse de l'ancien projet
+(`archives/plateau-carre/docs/archives/6-avis-prepresse.md`), repris ici parce qu'ils s'appliquent toujours.
+Capacité mesurée avec la gouttière de 16 mm : **10 tuiles par A4, 28 par A3** (4 planches A3 pour 91 tuiles).
 Chaque terrain se reconnaît à son motif, pas seulement à sa couleur (à vérifier en niveaux de gris).
 
 ## Contenu
@@ -16,14 +18,14 @@ Chaque terrain se reconnaît à son motif, pas seulement à sa couleur (à véri
 - `sortie/` : PDF et PNG produits (jetables, régénérables).
 
 ## Lancer
-Environnement isolé (non versionné) : `python -m venv hex/.venv` puis `hex/.venv/Scripts/python.exe -m pip install protograf`.
+Un seul environnement isolé à la racine du dépôt (non versionné), partagé par les futurs espaces cartes et jetons : `python -m venv .venv` puis `.venv/Scripts/python.exe -m pip install protograf`.
 Depuis la racine du dépôt :
 
 ```
-hex/.venv/Scripts/python.exe -I hex/essais/echantillon_pymupdf.py            # feuille d'impression
-hex/.venv/Scripts/python.exe -I hex/essais/echantillon_pymupdf.py controle   # + coupe (rouge) et sécurité (bleu)
-hex/.venv/Scripts/python.exe -I hex/essais/echantillon_protograf.py [controle]
-hex/.venv/Scripts/python.exe -I hex/essais/apercu.py hex/sortie/echantillon_pymupdf.pdf
+.venv/Scripts/python.exe -I tuiles/essais/echantillon_pymupdf.py            # feuille d'impression
+.venv/Scripts/python.exe -I tuiles/essais/echantillon_pymupdf.py controle   # + coupe (rouge) et sécurité (bleu)
+.venv/Scripts/python.exe -I tuiles/essais/echantillon_protograf.py [controle]
+.venv/Scripts/python.exe -I tuiles/essais/apercu.py tuiles/sortie/echantillon_pymupdf.pdf
 ```
 
 ## Pièges connus

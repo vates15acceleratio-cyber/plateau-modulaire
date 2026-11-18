@@ -1,8 +1,7 @@
 name: Tests
 
 on:
-  push:
-  pull_request:
+  workflow_dispatch:   # archive : lancement manuel seulement
 
 jobs:
   node-test:
@@ -19,3 +18,4 @@ jobs:
       - run: pip install pymupdf==1.28.2
       # Les recettes navigateur (outils/recette-*.html) restent manuelles.
       - run: node --test
+        working-directory: archives/plateau-carre

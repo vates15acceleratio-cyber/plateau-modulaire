@@ -52,7 +52,7 @@ def main(guides):
     ops, pos = g.feuille('Échantillon de tuiles hexagonales : pymupdf', guides)
     g.verifier(pos)
     dessiner(page, ops)
-    nom = 'hex/sortie/echantillon_pymupdf' + ('_controle' if guides else '') + '.pdf'
+    nom = 'tuiles/sortie/echantillon_pymupdf' + ('_controle' if guides else '') + '.pdf'
     doc.save(nom)
     print(nom)
 

@@ -17,7 +17,7 @@ PT = 72 / 25.4            # protograf lit les épaisseurs de trait en points, pa
 
 
 def main(guides):
-    nom = 'hex/sortie/echantillon_protograf' + ('_controle' if guides else '') + '.pdf'
+    nom = 'tuiles/sortie/echantillon_protograf' + ('_controle' if guides else '') + '.pdf'
     Create(filename=nom, paper='A4', margin=0, units='mm')
     ops, pos = g.feuille('Échantillon de tuiles hexagonales : protograf', guides)
     g.verifier(pos)

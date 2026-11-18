@@ -1,42 +1,32 @@
-# Plateau modulaire — consignes pour Claude
+# Bannerlord : plateau hexagonal et matériel de jeu, consignes pour Claude
 
-Outil web hors ligne (page unique `index.html` + `src/*.js`, sans dépendance ni modules ES, ouvert en `file://`) pour concevoir un plateau de jeu modulaire pour 2 joueurs, imprimé en tuiles de carton. Le périmètre est le plateau seulement (pas de règles de jeu ni de moteur).
+Projet : concevoir le matériel d'un jeu de plateau pour 2 joueurs : **tuiles hexagonales modulaires, cartes, jetons**, imprimés et collés sur carton. Le plateau est assemblé à la main (forme quelconque, noyau fixe) : l'outil ne le crée pas. L'ancien outil de plateau carré est archivé.
 
 ## Langue
 Toujours répondre à l'utilisateur **en français**. Code, identifiants et commentaires en français sans accents dans les identifiants.
 
 ## Où sont les décisions (lire avant tout travail)
-1. **`docs/18-decisions-v2.md`** : décisions de l'utilisateur pour la version 2 ; **prime sur tout le reste** (dont les retours après essai du 4×4, en fin de fichier).
-2. Avis des advisors v2 : `docs/19-avis-design-v2.md` (R1 à R4, apparitions, raccourci de coin), `docs/20-avis-geometrie-v2.md` (cotes 4×4 / 5×5, règles des tuiles, arbitrages), `docs/22-avis-seuils-v2.md` (seuils d'équilibre, cadrage 5×5).
-3. Mesures : `docs/21-mesures-catalogue-v2.md` (catalogue 4×4 v2) ; audits : `docs/23-audit-securite-v2.md`.
-4. Conventions de code et contrats entre modules : `docs/4-architecture.md`, `docs/10-contrats-interface.md`.
-5. Encore en vigueur malgré l'archivage : `archives/2` (conventions côtés / coins, D3 / D4 / D10), `archives/6` (prépresse, palette), `archives/16` (critère d'équilibre), `archives/11` (B1 sécurité, I1, I2).
-6. Historique de la version 1 (pour le contexte seulement) : `docs/0-brief.md`, `docs/archives/3-synthese.md`, `docs/archives/` (avis, mesures et revues de la version 1).
+1. **`docs/00-direction.md`** : direction actuelle, décisions de l'utilisateur, ce qui est obsolète, ce qui reste à décider. **Prime sur tout le reste.**
+2. `docs/01-outils-tuiles.md` : essai des outils (pymupdf, protograf…), limites mesurées, impression.
+3. `regles/Bannerlord_Regles_V2.3.pdf` (source `.html`) : règles de jeu validées. Sa section 4A (mise en place du plateau carré) est **dépassée**.
+4. `archives/plateau-carre/` : l'ancien outil de plateau carré 4×4 / 5×5 (version 5.00.0, étiquette git `5.00.0`) avec ses docs, tests et CHANGELOG. **Figé, ne pas modifier** ; ses tests se lancent depuis ce dossier (`node --test`, 750 OK).
 
-## Interdits et règles fermes
-- **Format hexagonal : ne rien faire, pas même préparer**, tant que l'utilisateur n'a pas donné son feu vert.
+## Règles fermes
 - Commits avec l'**adresse anonyme GitHub** de l'utilisateur (déjà réglée dans la configuration locale du dépôt) ; ne jamais publier son adresse personnelle. Dépôt public sans licence (tous droits réservés) : https://github.com/vates15acceleratio-cyber/plateau-modulaire
-- Ne pas affaiblir la politique CSP de `index.html` (pas de script, style ou attribut `style=` en ligne ; utiliser des classes CSS).
-
-## Méthode de travail voulue par l'utilisateur
-- Équipe d'agents du brief (`docs/0-brief.md` §8) : advisors en lecture seule, sous-agents de production avec un périmètre de fichiers précis, puis **testeur** et **relecteur** après chaque module, puis **versionneur** (numéro `X.xx.x`, étiquette git sans « v », entrée dans `CHANGELOG.md`).
-- L'orchestrateur consigne chaque rapport d'agent dans `docs/`, tranche les points ouverts et soumet à l'utilisateur les décisions qui lui reviennent (règles de jeu, publication, licence…).
-- Avant de déclarer un travail fini : `node --test` (0 échec) et les deux recettes navigateur à 0 échec.
+- Ne jamais pousser ni fusionner sans demande. Les fonctionnalités se font sur une branche, fusionnée par PR.
+- Ne rien installer au niveau du système (par exemple GTK/Cairo) sans l'accord de l'utilisateur.
 
 ## Commandes
-- Tests : `node --test` à la racine (Node 24 refuse `node --test tests/`).
-- Recettes navigateur (Edge sans fenêtre ; sur cette machine il faut passer par PowerShell `Start-Process`, la sortie par Bash est vide) :
-  `Start-Process -FilePath "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" -ArgumentList @("--headless=new","--disable-gpu","--user-data-dir=<dossier temporaire>","--virtual-time-budget=<budget>","--dump-dom","file:///<dossier du projet>/outils/<page>.html") -RedirectStandardOutput <fichier> -RedirectStandardError <fichier2> -Wait -NoNewWindow`
-  avec `recette-interface.html` (budget 8000) et `recette-p2.html` (budget 300000) ; chercher la ligne `TOTAL : N OK, 0 ÉCHEC`.
-- Serveur local de test (pour le panneau navigateur) : `node outils/serveur.js 8765`.
-- Rendu d'un PDF exporté : PyMuPDF (`import pymupdf`).
+- Un seul environnement Python à la racine, non versionné : `python -m venv .venv`, puis `.venv/Scripts/python.exe -m pip install protograf` (pymupdf et Pillow suivent). Lancer avec `.venv/Scripts/python.exe -I <script>`.
+- Tuiles : voir `tuiles/README.md` (échantillon, contrôle, aperçu en gris).
+- Avant de déclarer fini un travail sur les tuiles : régénérer, mesurer les hexagones (45 mm plat à plat, fond perdu 51 mm) et regarder le rendu, en couleur et en gris.
 
 ## Pièges connus
-- Dans une chaîne JS entre apostrophes droites, une apostrophe française casse la syntaxe : utiliser `’` ; lancer `node --check` après chaque modification.
-- Ne jamais modifier le fichier d'un sous-agent en cours avec une expression régulière large.
+- protograf demande Cairo sous Windows : voir `docs/01-outils-tuiles.md` (contournement dans les scripts).
+- Dans un script Python qui écrit du texte français, utiliser `’` plutôt que l'apostrophe droite dans les chaînes entre apostrophes.
+- Rendu d'un PDF : pymupdf (`import pymupdf`). PDF d'une page HTML : Edge sans fenêtre via PowerShell `Start-Process` (voir comment les règles ont été exportées : `--headless=new --no-pdf-header-footer --print-to-pdf=...`).
 
-## État (2026-10-19)
-- Le travail se fait aussi sur un autre poste : **toujours commencer par `git fetch` puis `git pull`**. Les fonctionnalités se font sur une branche, fusionnée par PR. Le `main` local peut être en retard : comparer avec `origin/main`.
-- **Version 5.00.0 sur `main`** (étiquette `5.00.0`, PR #8 fusionnée). Contenu : 5×5 très connecté (`docs/53` à `docs/63`), catalogue 5×5 « P » de 31 tuiles (LC11 Coins opposés, LC12 Deux ponts ouverts, Étoile LE1 hors tirage `horsTirage: true`, LC2 retiré), R3 assouplie sur les centrales 5×5, **8 villes à positions fixes** (1,1) (4,1) (2,2) (3,2) (2,3) (3,3) (1,4) (4,4) avec écart de 3 cases partout (générateur `rechercherPose5x5` : place puis orientation des centrales), critères à 8 villes, erreur au-delà de 8 villes, **campements** (jeton feu de bois Ø 30, siège Ø 30, deux formats), **16 jetons recto-verso** (campement / ville, deux pages A4 en miroir), régénération proposée pour les anciens 5×5. Rapports `docs/64` à `docs/71`. `node --test` 750 OK, recettes 365 / 125 OK.
-- **Prochaine étape** : à définir avec l’utilisateur (voir les points ouverts).
-- **Points ouverts** : validation par l’advisor prépresse (jeton campement, marge 4,97 mm de LC12, recto-verso) ; audit de sécurité des derniers ajouts ; la 9e ville est signalée en erreur mais pas refusée ; vignette de LE1 sans mention « hors tirage » ; reste `docs/25-travail-restant.md` (affichage mobile, régions thématiques, hexagonal en attente).
+## État (2026-11-18)
+- Branche `hexagonal-tuiles` (non poussée, non fusionnée) : archivage de l'outil carré, dossier `tuiles/` avec l'échantillon de 8 tuiles, nouveau `docs/`. **Commencer par `git fetch` puis `git pull`** : le travail se fait aussi sur un autre poste.
+- Prochaine étape : concevoir les vraies tuiles (répartition par terrain, coût en rations, noyau), puis les autres mécaniques (or, rations, marché, phases), puis les cartes et jetons.
+- À confirmer avec l'utilisateur : méthode de travail (équipe d'agents et versionneur) et numérotation des versions du nouveau projet ; avec l'archivage, le `CHANGELOG.md` est dans `archives/plateau-carre/`.
