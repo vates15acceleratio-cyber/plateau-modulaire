@@ -94,7 +94,9 @@ test('stock : total, posées, restant', () => {
   assert.deepStrictEqual(s.P, { total: 39, poses: 3, restant: 36 });
   assert.deepStrictEqual(s.N1, { total: 1, poses: 1, restant: 0 });
   assert.deepStrictEqual(s.M5, { total: 1, poses: 0, restant: 1 });
-  assert.deepStrictEqual(Object.keys(s), C.ORDRE_MODELES);
+  // Catalogue imprimé, puis les modèles hors catalogue (M1, total 0) ; les pièces personnelles viendraient ensuite.
+  assert.deepStrictEqual(Object.keys(s), C.ORDRE_MODELES.concat(C.ORDRE_HORS_CATALOGUE));
+  assert.deepStrictEqual(s.M1, { total: 0, poses: 0, restant: 0 });
 });
 
 test('cases, cout, villes : terrain, pièce, origine', () => {

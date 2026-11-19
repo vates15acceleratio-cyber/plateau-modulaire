@@ -96,6 +96,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       // avec les 8 cartes Événement dans la pioche, donc avec les 8 tuiles en réserve.
       var source = ctx.plateau(), essais = source.recouvrements.length;
       var plateau = { version: source.version, graine: source.graine, pieces: source.pieces, recouvrements: [], camps: source.camps };
+      if (source.modeles) plateau.modeles = source.modeles;          // pièces personnelles du document : la partie les emporte
       var premier = JOUEURS.indexOf(choixPremier.value) !== -1 ? choixPremier.value : AT.cartes.REGLAGES.premierJoueur;
       var r = PA.creer({ graine: g, plateau: plateau, reglages: { premierJoueur: premier } }, { alea: AT.alea.creer(g), hex: H, plateau: P });
       if (!r.ok) { ctx.message('Partie impossible : ' + r.raison, 'erreur'); return false; }

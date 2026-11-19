@@ -1,7 +1,12 @@
 /*
- * vue-plateau.js : onglet « Plateau » (lot C). Générer, retoucher à la main, contrôler en direct,
+ * vue-plateau.js : onglet « Plateau » (lots C et E). Générer, retoucher à la main, contrôler en direct,
  * enregistrer / ouvrir, exporter, imprimer.
  * Dépend de AT.hex, AT.catalogue, AT.plateau, AT.controles, AT.generateur, AT.rendu ; AT.app à l'exécution.
+ *
+ * La colonne de gauche a cinq MODES (bascule en tête) : « Générer », « Créer à la main » (palette, vue-creation.js),
+ * « Pinceau » (vue-creation.js), « Mes monoblocs » (vue-monoblocs.js), « Bibliothèque » (vue-bibliotheque.js).
+ * Cette vue garde le plateau courant et son historique : toute modification, d'où qu'elle vienne, passe par
+ * changer() (une étape d'annulation, contrôles recalculés, sauvegarde automatique planifiée).
  *
  * Après chaque retouche (poser, retirer, tourner, déplacer), les villes de déploiement sont recalculées
  * par AT.plateau.avecCamps. Un fichier ouvert est affiché tel quel : les contrôles disent ce qui ne va pas.
@@ -13,10 +18,24 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   if (typeof module !== 'undefined' && module.exports && typeof require === 'function') {
     if (!AT.plateau) require('./plateau.js');
+    if (!AT.vueCreation) require('./vue-creation.js');
   }
   var H = AT.hex, C = AT.catalogue, P = AT.plateau;
   var possede = Object.prototype.hasOwnProperty;
   var TAILLE_HISTORIQUE = 200;
+
+  /** Modes de la colonne de gauche de l'onglet Plateau. */
+  var MODES = [
+    { id: 'generer', nom: 'Générer' },
+    { id: 'creer', nom: 'Créer à la main' },
+    { id: 'pinceau', nom: 'Pinceau' },
+    { id: 'monoblocs', nom: 'Mes monoblocs' },
+    { id: 'bibliotheque', nom: 'Bibliothèque' }
+  ];
+
+  /** Couleurs de l'aperçu fantôme, en attributs SVG : vert si la pose est possible, rouge sinon. */
+  var FANTOME_OK = { fill: '#00965A', 'fill-opacity': 0.38, stroke: '#00703F', 'stroke-width': 3, 'stroke-dasharray': '6 4' };
+  var FANTOME_REFUS = { fill: '#D8321C', 'fill-opacity': 0.42, stroke: '#B3200E', 'stroke-width': 3, 'stroke-dasharray': '6 4' };
 
   // ------------------------------------------------------------------ logique pure (testée sous Node)
 
@@ -24,12 +43,14 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * Déplace une pièce posée : son ancre va en (q, r), avec la rotation donnée (la sienne par défaut).
    * C'est un retrait suivi d'une pose : l'identifiant de la pièce change. Si la pose est refusée,
    * le plateau reçu est rendu inchangé. Renvoie {ok, plateau, id, raison}.
+   * La repose ne compte pas contre le stock (un déplacement ne change pas le nombre de pièces) : une tuile
+   * posée hors stock, comme la montagne d'une case du pinceau, se déplace donc aussi.
    */
   function deplacerPiece(plateau, idPiece, q, r, rotation) {
     var piece = (plateau.pieces || []).filter(function (p) { return p.id === idPiece; })[0];
     if (!piece) return { ok: false, plateau: plateau, raison: 'Pièce introuvable sur le plateau.' };
     var retrait = P.retirer(plateau, idPiece);
-    var pose = P.poser(retrait.plateau, piece.modele, q, r, rotation === undefined ? piece.rotation : rotation);
+    var pose = P.poser(retrait.plateau, piece.modele, q, r, rotation === undefined ? piece.rotation : rotation, { horsStock: true });
     if (!pose.ok) return { ok: false, plateau: plateau, raison: pose.raison };
     return { ok: true, plateau: P.avecCamps(pose.plateau), id: pose.id, raison: null };
   }
@@ -76,8 +97,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     var reglages = { seuilContact: C.REGLAGES.seuilContact, mesureContact: C.REGLAGES.mesureContact };
     var selection = null;        // identifiant de la pièce sélectionnée
     var caseSelection = null;    // case cliquée lors de la sélection (pour retirer une tuile d'événement)
-    var aPoser = null;           // {type: 'piece', modele, rotation} | {type: 'evenement', id} | {type: 'deplacement', rotation}
+    var aPoser = null;           // {type: 'piece', modele, rotation} | {type: 'evenement', id} | {type: 'deplacement', rotation, decalage}
     var survol = null, epingle = null, affichage = 'rien', bilan = null;
+    var mode = 'generer';        // mode de la colonne de gauche (voir MODES)
+    var guide = null, pinceau = null, monoblocs = null, biblio = null;      // panneaux des modes (créés à l'assemblage)
 
     function plateau() { return historique[rang]; }
 
@@ -99,13 +122,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     ].map(function (x) { return el('option', { value: x[0], texte: x[1] }); }));
     var avisGeneration = el('p', { classe: 'at-avis', id: 'pl-avis', hidden: true });
     var zoneOutil = el('div', { classe: 'at-outil', id: 'pl-outil' });
-    var zoneStock = el('div', { classe: 'at-stock', id: 'pl-stock' });
     var zoneControles = el('div', { id: 'pl-controles' });
     var infoPlateau = el('span', { classe: 'at-info-plateau', id: 'pl-info' });
     var btnAnnuler = bouton('Annuler', annuler, { id: 'pl-annuler', title: 'Annuler (Ctrl+Z)' });
     var btnRetablir = bouton('Rétablir', retablir, { id: 'pl-retablir', title: 'Rétablir (Ctrl+Y)' });
 
-    var vue = R.creerVue({ etiquette: 'Plateau.', surClic: surClic, surSurvol: function (k) { survol = k; dessinerFantome(); } });
+    var vue = R.creerVue({ etiquette: 'Plateau.', surClic: surClic, surAppui: surAppui, surSurvol: function (k) { survol = k; dessinerFantome(); } });
     vue.barre.appendChild(el('label', { classe: 'at-etiquette-ligne', for: 'pl-affichage', texte: 'Sur les cases : ' }));
     vue.barre.appendChild(choixAffichage);
     vue.barre.appendChild(infoPlateau);
@@ -126,16 +148,17 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       if (historique.length > TAILLE_HISTORIQUE) historique.shift();
       rang = historique.length - 1;
       rafraichir(o.garderVue !== false);
+      biblio.planifier();
     }
 
     function annuler() {
       if (rang === 0) { ctx.message('Rien à annuler.', 'info'); return; }
-      rang -= 1; quitterModes(); rafraichir(true); ctx.message('Retouche annulée.', 'info');
+      rang -= 1; quitterModes(); rafraichir(true); biblio.planifier(); ctx.message('Retouche annulée.', 'info');
     }
 
     function retablir() {
       if (rang >= historique.length - 1) { ctx.message('Rien à rétablir.', 'info'); return; }
-      rang += 1; quitterModes(); rafraichir(true); ctx.message('Retouche rétablie.', 'info');
+      rang += 1; quitterModes(); rafraichir(true); biblio.planifier(); ctx.message('Retouche rétablie.', 'info');
     }
 
     function quitterModes() { selection = null; caseSelection = null; aPoser = null; epingle = null; }
@@ -145,7 +168,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var g = graine === undefined ? AT.app.graineSaisie(champGraine.value) : graine;
       if (g === null) g = 1;
       champGraine.value = String(g);
-      var r = AT.generateur.generer(g, { seuilContact: reglages.seuilContact, mesureContact: reglages.mesureContact });
+      // Les pièces personnelles du document sont reportées dans le plateau généré (non posées) : r.note le dit.
+      var r = AT.generateur.generer(g, { seuilContact: reglages.seuilContact, mesureContact: reglages.mesureContact, modeles: P.modeles(plateau()) });
       if (!r.ok) {
         avisGeneration.hidden = false;
         // Catalogue ou rayon hors de ce que le générateur sait poser : changer de graine n'y ferait rien.
@@ -155,8 +179,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       }
       avisGeneration.hidden = true;
       quitterModes();
+      biblio.detacher();                // un plateau généré n'est plus celui de l'entrée ouverte de la bibliothèque
       changer(r.plateau, { garderVue: false });
-      ctx.message('Plateau généré (graine ' + g + ', score d’équilibre ' + r.score + ').', 'info');
+      ctx.message('Plateau généré (graine ' + g + ', score d’équilibre ' + r.score + ').' + (r.note ? ' ' + r.note : ''), 'info');
       return true;
     }
 
@@ -214,8 +239,93 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
     function viderPlateau() {
       quitterModes();
-      changer(P.vide(plateau().graine));
+      var vide = P.vide(plateau().graine);
+      if (P.modeles(plateau()).length) vide.modeles = P.modeles(plateau());      // les pièces personnelles restent dans le document
+      changer(vide);
       ctx.message('Plateau vidé : toutes les pièces sont au stock (Annuler pour revenir en arrière).', 'info');
+    }
+
+    /** Nouveau plateau vierge : le seul noyau, au centre. Les pièces personnelles du document sont gardées. */
+    function nouveauVierge() {
+      quitterModes();
+      var vierge = P.vierge('fait main');
+      if (P.modeles(plateau()).length) vierge.modeles = P.modeles(plateau());
+      biblio.detacher();
+      changer(vierge, { garderVue: false });
+      ctx.message('Nouveau plateau vierge : le noyau est posé au centre (Annuler pour revenir au plateau précédent).', 'info');
+    }
+
+    /** Retire les pièces de modèle inconnu (elles n'occupent aucune case : aucun clic ne les atteint). */
+    function retirerInconnues() {
+      var n = AT.vueCreation.piecesInconnues(plateau()).length;
+      if (!n) return;
+      quitterModes();
+      changer(AT.vueCreation.sansPiecesInconnues(plateau()));
+      ctx.message(n + (n > 1 ? ' pièces de modèle inconnu retirées.' : ' pièce de modèle inconnu retirée.'), 'info');
+    }
+
+    // ---------------------------------------------------------------- glisser-déposer (mode « Créer à la main »)
+    /** Une pièce de la palette est glissée au-dessus de l'écran en (x, y) : l'aperçu fantôme la suit. */
+    function glisserModele(id, x, y) {
+      if (!(aPoser && aPoser.type === 'piece' && aPoser.modele === id)) {
+        selection = null; caseSelection = null;
+        aPoser = { type: 'piece', modele: id, rotation: 0 };
+        rafraichirZoneOutil();
+      }
+      survol = vue.caseSousEcran(x, y);
+      dessinerFantome();
+    }
+
+    /** La pièce glissée est relâchée en (x, y) : posée si le point est sur le plateau et la pose possible. */
+    function deposerModele(id, x, y) {
+      var cle = vue.caseSousEcran(x, y), rotation = aPoser && aPoser.type === 'piece' && aPoser.modele === id ? aPoser.rotation : 0;
+      aPoser = null; survol = null;
+      if (!cle) { rafraichirOutils(); ctx.message('Pièce relâchée hors du plateau : rien n’est posé.', 'info'); return; }
+      var p = H.decle(cle), r = P.poser(plateau(), id, p.q, p.r, rotation);
+      if (!r.ok) { rafraichirOutils(); ctx.message('Pose refusée : ' + r.raison, 'erreur'); return; }
+      changer(r.plateau);
+      ctx.message('Pièce posée en (' + cle + ').', 'info');
+    }
+
+    function annulerGlisse() { aPoser = null; survol = null; rafraichirOutils(); }
+
+    /**
+     * Appui sur une case (voir AT.rendu.creerVue, option surAppui). Pinceau : le trait commence. Création guidée,
+     * sans pièce en attente de pose : la pièce sous le pointeur se déplace en la glissant. Sinon null (la vue se déplace).
+     */
+    function surAppui(cle) {
+      if (mode === 'pinceau') return pinceau.geste(cle);
+      if (mode !== 'creer' || aPoser) return null;
+      var toutes = P.cases(plateau());
+      if (!possede.call(toutes, cle)) return null;
+      var piece = pieceDe(toutes[cle].piece), depart = H.decle(cle);
+      if (!piece) return null;
+      var decalage = { q: piece.q - depart.q, r: piece.r - depart.r };
+      var fin = function () { aPoser = null; survol = null; };
+      return {
+        bouger: function (k) {
+          if (!(aPoser && aPoser.type === 'deplacement')) {
+            selection = piece.id; caseSelection = null;
+            aPoser = { type: 'deplacement', rotation: piece.rotation, decalage: decalage };
+            rafraichirZoneOutil();
+            dessinerMarques();
+          }
+          survol = k;
+          dessinerFantome();
+        },
+        finir: function (k, aBouge) {
+          if (!aBouge || !(aPoser && aPoser.type === 'deplacement')) { fin(); surClic(cle); return; }   // simple clic : sélection
+          var rotation = aPoser.rotation, p = H.decle(k);
+          fin();
+          var r = deplacerPiece(plateau(), piece.id, p.q + decalage.q, p.r + decalage.r, rotation);
+          if (!r.ok) { rafraichirOutils(); ctx.message('Déplacement refusé : ' + r.raison, 'erreur'); return; }
+          selection = r.id; caseSelection = null;
+          var mention = mentionEvenements(plateau(), r.plateau);
+          changer(r.plateau);
+          ctx.message('Pièce déplacée.' + mention, mention ? 'alerte' : 'info');
+        },
+        annuler: function () { fin(); rafraichirOutils(); }
+      };
     }
 
     function retirerEvenement(cle) {
@@ -227,10 +337,13 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
     function surClic(cle) {
       var p = H.decle(cle), r;
+      if (mode === 'pinceau') { pinceau.clic(cle); return; }
+      if (mode === 'monoblocs' || mode === 'bibliotheque') return;       // dans ces modes, le plateau ne se retouche pas
       if (aPoser && aPoser.type === 'piece') {
         r = P.poser(plateau(), aPoser.modele, p.q, p.r, aPoser.rotation);
         if (!r.ok) { ctx.message('Pose refusée : ' + r.raison, 'erreur'); return; }
-        if (P.stock(r.plateau)[aPoser.modele].restant <= 0) aPoser = null;      // dernière pièce de ce modèle
+        var reste = P.stock(r.plateau)[aPoser.modele];
+        if (!reste || reste.restant <= 0) aPoser = null;                         // dernière pièce de ce modèle
         changer(r.plateau);
         ctx.message('Pièce posée en (' + cle + ').', 'info');
         return;
@@ -244,7 +357,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         return;
       }
       if (aPoser && aPoser.type === 'deplacement') {
-        r = deplacerPiece(plateau(), selection, p.q, p.r, aPoser.rotation);
+        var dec = aPoser.decalage || { q: 0, r: 0 };
+        r = deplacerPiece(plateau(), selection, p.q + dec.q, p.r + dec.r, aPoser.rotation);
         if (!r.ok) { ctx.message('Déplacement refusé : ' + r.raison, 'erreur'); return; }
         selection = r.id; caseSelection = null; aPoser = null;
         var mention = mentionEvenements(plateau(), r.plateau);
@@ -277,24 +391,23 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
     // ---------------------------------------------------------------- dessin
     function dessinerFantome() {
+      // Aperçu de la pose : essai « à blanc » (stock, limites, chevauchement), vert si elle est possible, rouge sinon.
       var cles = [], refus = false;
       if (survol && aPoser && aPoser.type !== 'evenement') {
         var p = H.decle(survol), piece = aPoser.type === 'deplacement' ? pieceDe(selection) : null;
-        var modele = piece ? piece.modele : aPoser.modele;
+        var modele = piece ? piece.modele : aPoser.modele, dec = aPoser.decalage || { q: 0, r: 0 };
         if (modele) {
-          var occupees = P.cases({ pieces: plateau().pieces.filter(function (x) { return !piece || x.id !== piece.id; }) }, { sansRecouvrements: true });
-          P.casesModele(modele, p.q, p.r, aPoser.rotation).forEach(function (c) {
-            cles.push(c.cle);
-            if (possede.call(occupees, c.cle)) refus = true;
-          });
+          var essai = AT.vueCreation.essaiPose(plateau(), modele, p.q + dec.q, p.r + dec.r, aPoser.rotation, piece ? piece.id : null);
+          cles = essai.cles;
+          refus = !essai.ok;
         }
       }
-      vue.marquer('fantome', cles, refus ? 'at-fantome at-fantome-refus' : 'at-fantome');
+      vue.marquer('fantome', cles, refus ? 'at-fantome at-fantome-refus' : 'at-fantome', refus ? FANTOME_REFUS : FANTOME_OK);
     }
 
     function dessinerMarques() {
       var piece = selection ? pieceDe(selection) : null;
-      vue.marquer('selection', piece ? P.casesPiece(piece).map(function (c) { return c.cle; }) : [], 'at-selection');
+      vue.marquer('selection', piece ? P.casesPiece(piece, plateau()).map(function (c) { return c.cle; }) : [], 'at-selection');
       vue.marquer('admissibles', aPoser && aPoser.type === 'evenement' ? casesAdmissibles(plateau(), aPoser.id) : [], 'at-admissible');
       vue.marquer('surbrillance', epingle ? epingle.cases : [], 'at-surbrillance');
       dessinerFantome();
@@ -318,22 +431,29 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       return element;
     }
 
-    function rafraichirOutils() {
-      var pl = plateau(), stock = P.stock(pl), contenu = [], piece = selection ? pieceDe(selection) : null;
+    /** Nom d'un modèle, même inconnu du catalogue et du document (pièce orpheline d'un document monté à la main). */
+    function nomModele(pl, id) {
+      var m = P.modele(pl, id);
+      return m ? m.nom : 'pièce de modèle inconnu (' + String(id).slice(0, 16) + ')';
+    }
+
+    function rafraichirZoneOutil() {
+      var pl = plateau(), contenu = [], piece = selection ? pieceDe(selection) : null;
       if (selection && !piece) { selection = null; caseSelection = null; }
+      if (aPoser && aPoser.type === 'piece' && !P.modele(pl, aPoser.modele)) aPoser = null;     // modèle disparu (annulation, suppression)
 
       if (aPoser && aPoser.type === 'piece') {
-        contenu.push(el('p', { texte: 'À poser : ' + C.MODELES[aPoser.modele].nom + ' (rotation ' + aPoser.rotation + ' / 6). Cliquez une case du plateau.' }));
+        contenu.push(el('p', { texte: 'À poser : ' + nomModele(pl, aPoser.modele) + ' (rotation ' + aPoser.rotation + ' / 6). Cliquez une case du plateau.' }));
         contenu.push(el('div', { classe: 'at-ligne' }, [bouton('Tourner (R)', tourner, { id: 'pl-tourner' }), bouton('Arrêter la pose (Échap)', function () { aPoser = null; rafraichirOutils(); })]));
       } else if (aPoser && aPoser.type === 'evenement') {
         contenu.push(el('p', { texte: 'Tuile d’événement à poser : ' + C.EVENEMENTS[aPoser.id].nom + '. Cliquez une case surlignée.' }));
         contenu.push(el('div', { classe: 'at-ligne' }, [bouton('Arrêter la pose (Échap)', function () { aPoser = null; rafraichirOutils(); })]));
       } else if (aPoser && aPoser.type === 'deplacement' && piece) {
-        contenu.push(el('p', { texte: 'Déplacement de « ' + C.MODELES[piece.modele].nom + ' » (rotation ' + aPoser.rotation + ' / 6) : cliquez la nouvelle case.' }));
+        contenu.push(el('p', { texte: 'Déplacement de « ' + nomModele(pl, piece.modele) + ' » (rotation ' + aPoser.rotation + ' / 6) : cliquez la nouvelle case.' }));
         contenu.push(el('div', { classe: 'at-ligne' }, [bouton('Tourner (R)', tourner, { id: 'pl-tourner' }), bouton('Renoncer (Échap)', function () { aPoser = null; rafraichirOutils(); })]));
       } else if (piece) {
-        var m = C.MODELES[piece.modele], nb = m.cases.length;
-        contenu.push(el('p', { texte: 'Pièce sélectionnée : ' + m.nom + ' (' + nb + (nb > 1 ? ' cases' : ' case') + '), en (' + H.cle(piece.q, piece.r) + ').' }));
+        var m = P.modele(pl, piece.modele), nb = m ? m.cases.length : 0;
+        contenu.push(el('p', { texte: 'Pièce sélectionnée : ' + nomModele(pl, piece.modele) + ' (' + nb + (nb > 1 ? ' cases' : ' case') + '), en (' + H.cle(piece.q, piece.r) + ').' }));
         var ligne = [bouton('Tourner (R)', tourner, { id: 'pl-tourner' }), bouton('Déplacer', commencerDeplacement, { id: 'pl-deplacer' }), bouton('Retirer (Suppr)', retirerSelection, { id: 'pl-retirer' })];
         var toutes = P.cases(pl);
         if (caseSelection && possede.call(toutes, caseSelection) && toutes[caseSelection].evenement) {
@@ -341,33 +461,19 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         }
         contenu.push(el('div', { classe: 'at-ligne' }, ligne));
       } else {
-        contenu.push(el('p', { classe: 'at-aide', texte: 'Cliquez une pièce du plateau pour la sélectionner, ou une pièce du stock pour la poser.' }));
+        contenu.push(el('p', { classe: 'at-aide', texte: mode === 'creer'
+          ? 'Cliquez une pièce de la palette pour la poser, ou une pièce du plateau pour la sélectionner.'
+          : 'Cliquez une pièce du plateau pour la sélectionner (tourner, déplacer, retirer). Pour poser des pièces : mode « Créer à la main ».' }));
       }
       R.remplacer(zoneOutil, contenu);
+    }
 
-      // Stock restant.
-      var pieces = C.ORDRE_MODELES.filter(function (id) { return stock[id].restant > 0; }).map(function (id) {
-        var choisi = !!(aPoser && aPoser.type === 'piece' && aPoser.modele === id);
-        return el('button', {
-          type: 'button', classe: 'at-piece-stock', 'data-modele': id, 'aria-pressed': choisi ? 'true' : 'false',
-          title: 'Poser : ' + C.MODELES[id].nom, sur: { click: function () { choisirModele(id); } }
-        }, [R.dessinModele(id, { echelle: 0.24, titre: C.MODELES[id].nom }), el('span', { texte: C.MODELES[id].nom + ' × ' + stock[id].restant })]);
-      });
-      var poses = {};
-      pl.recouvrements.forEach(function (x) { poses[x.evenement] = true; });
-      var evenements = C.ORDRE_EVENEMENTS.filter(function (id) { return !poses[id]; }).map(function (id) {
-        var choisi = !!(aPoser && aPoser.type === 'evenement' && aPoser.id === id);
-        return el('button', {
-          type: 'button', classe: 'at-piece-stock', 'data-evenement': id, 'aria-pressed': choisi ? 'true' : 'false',
-          title: 'Essayer la tuile d’événement : ' + C.EVENEMENTS[id].nom, sur: { click: function () { choisirEvenement(id); } }
-        }, [R.pastilleTerrain(C.EVENEMENTS[id].terrain, true), el('span', { texte: id + ' ' + C.EVENEMENTS[id].nom })]);
-      });
-      R.remplacer(zoneStock, [
-        el('h3', { texte: 'Stock restant' }),
-        pieces.length ? el('div', { classe: 'at-grille-stock' }, pieces) : el('p', { classe: 'at-aide', texte: 'Toutes les pièces sont posées.' }),
-        el('h3', { texte: 'Tuiles d’événement (essai de pose)' }),
-        evenements.length ? el('div', { classe: 'at-grille-stock' }, evenements) : el('p', { classe: 'at-aide', texte: 'Les 8 tuiles sont posées.' })
-      ]);
+    /** Zone d'outil, panneaux des modes (palette, « reste à faire », monoblocs, bibliothèque) et marques sur le plateau. */
+    function rafraichirOutils() {
+      rafraichirZoneOutil();
+      guide.rafraichir();
+      if (mode === 'monoblocs') monoblocs.rafraichir();
+      biblio.rafraichir();
       btnAnnuler.disabled = rang === 0;
       btnRetablir.disabled = rang >= historique.length - 1;
       dessinerMarques();
@@ -419,7 +525,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
           el('thead', null, el('tr', null, ['Ville', 'Case', 'Depuis Vert', 'Depuis Rouge', 'Écart'].map(function (t) { return el('th', { scope: 'col', texte: t }); }))),
           corpsTable
         ]));
-        blocs.push(el('p', { id: 'pl-score', texte: 'Score d’équilibre : ' + e.score + ' (0 = équilibré ; écart = différence avec la ville symétrique vue de l’autre camp).' }));
+        blocs.push(el('p', { id: 'pl-score', texte: e.comparable
+          ? 'Score d’équilibre : ' + e.score + ' (0 = équilibré ; écart = différence avec la ville symétrique vue de l’autre camp).'
+          : 'Score d’équilibre : non comparable. ' + e.raison + ' Les coûts par ville ci-dessus restent valables.' }));
       }
 
       // Répartition des terrains.
@@ -443,10 +551,57 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
     function rafraichir(garderVue) {
       var pl = plateau();
-      vue.afficher({ plateau: pl, etiquettes: etiquettes(pl, affichage) }, garderVue);
+      vue.afficher(scene(pl, true), garderVue);
       infoPlateau.textContent = 'Graine du plateau : ' + pl.graine + ' ; ' + pl.pieces.length + ' pièce(s), ' + Object.keys(P.cases(pl)).length + ' case(s)';
       rafraichirControles();
       rafraichirOutils();
+    }
+
+    /** Scène à dessiner : la grille vide (rayon 7) s'ajoute dans les modes de création. */
+    function scene(pl, avecEtiquettes) {
+      var s = { plateau: pl };
+      if (avecEtiquettes) s.etiquettes = etiquettes(pl, affichage);
+      if (mode === 'creer' || mode === 'pinceau') s.grille = R.casesGrille(pl, AT.vueCreation.RAYON_GRILLE);
+      return s;
+    }
+
+    /** Aperçu d'un plateau provisoire (trait de pinceau en cours), hors historique et sans contrôles ; null : retour au plateau courant. */
+    function apercu(provisoire) { vue.afficher(provisoire ? scene(provisoire, false) : scene(plateau(), true), true); }
+
+    // ---------------------------------------------------------------- modes
+    function choisirMode(nouveau) {
+      if (!MODES.some(function (m) { return m.id === nouveau; })) return false;
+      var grilleAvant = mode === 'creer' || mode === 'pinceau';
+      quitterModes();
+      mode = nouveau;
+      var grilleApres = mode === 'creer' || mode === 'pinceau';
+      MODES.forEach(function (m) {
+        boutonsModes[m.id].setAttribute('aria-pressed', m.id === mode ? 'true' : 'false');
+        panneauxModes[m.id].hidden = m.id !== mode;
+      });
+      zoneOutil.hidden = !(mode === 'generer' || mode === 'creer');
+      guide.reste.hidden = !grilleApres;
+      element.setAttribute('data-mode', mode);
+      biblio.montrer(mode === 'bibliotheque');
+      rafraichir(grilleAvant === grilleApres);          // la grille change le cadre : on recadre
+      return true;
+    }
+
+    /** Ouvre un plateau de la bibliothèque (annulable comme une retouche). */
+    function ouvrirDocument(nouveau) {
+      quitterModes();
+      changer(nouveau, { brut: true, garderVue: false });
+    }
+
+    /** Reprend le travail en cours sauvegardé, s'il y en a un. Renvoie {repris, modifie, raison}. */
+    function reprendreTravail() {
+      var r = biblio.reprendre();
+      if (!r.ok || !r.plateau) return { repris: false, modifie: null, raison: r.ok ? null : r.raison, corrompu: !!r.corrompu };
+      quitterModes();
+      historique = [r.plateau];
+      rang = 0;
+      rafraichir(false);
+      return { repris: true, modifie: r.modifie, raison: null };
     }
 
     // ---------------------------------------------------------------- fichiers
@@ -467,6 +622,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var r = P.lire(texte);
       if (!r.ok) { ctx.message('Fichier refusé : ' + r.erreurs[0], 'erreur'); return false; }
       quitterModes();
+      biblio.detacher();
       changer(r.plateau, { brut: true, garderVue: false });
       ctx.message('Plateau ouvert (' + r.plateau.pieces.length + ' pièces). Les contrôles sont à jour.', 'info');
       return true;
@@ -507,7 +663,30 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
           el('span', { classe: 'at-legende-item' }, [el('span', { classe: 'at-trait-epais at-trait-noyau' }), 'noyau'])
         ]));
 
-    var gauche = el('div', { classe: 'at-colonne at-colonne-gauche' }, [
+    // Panneaux des modes de création (lot E).
+    var accesCommun = {
+      plateau: plateau, bilan: function () { return bilan; }, reglages: function () { return reglages; },
+      changer: function (nouveau) { changer(nouveau); }, apercu: apercu,
+      message: ctx.message, confirmer: ctx.confirmer, telecharger: ctx.telecharger, ouvrirFichier: ctx.ouvrirFichier,
+      etat: function () { return { aPoser: aPoser, selection: selection }; },
+      choisirModele: choisirModele, choisirEvenement: choisirEvenement,
+      glisserModele: glisserModele, deposerModele: deposerModele, annulerGlisse: annulerGlisse,
+      nouveauVierge: nouveauVierge, vider: viderPlateau, retirerInconnues: retirerInconnues,
+      ouvrirDocument: ouvrirDocument, indiquer: ctx.indiquerPlateau,
+      bibliotheque: function () { return biblio.liste(); }
+    };
+    biblio = AT.vueBibliotheque.creer(accesCommun, { stockage: ctx.stockage });
+    guide = AT.vueCreation.creerGuide(accesCommun);
+    pinceau = AT.vueCreation.creerPinceau(accesCommun);
+    monoblocs = AT.vueMonoblocs.creer(accesCommun);
+
+    var boutonsModes = {}, panneauxModes = {};
+    var bascule = el('div', { classe: 'at-modes', id: 'pl-modes', role: 'group', 'aria-label': 'Mode de travail sur le plateau' }, MODES.map(function (m) {
+      boutonsModes[m.id] = el('button', { type: 'button', id: 'pl-mode-' + m.id, texte: m.nom, 'aria-pressed': m.id === mode ? 'true' : 'false', sur: { click: function () { choisirMode(m.id); } } });
+      return boutonsModes[m.id];
+    }));
+
+    panneauxModes.generer = el('div', { classe: 'at-mode-panneau', id: 'ge-panneau' }, [
       el('fieldset', null, [
         el('legend', { texte: 'Générer' }),
         el('div', { classe: 'at-ligne' }, [el('label', { for: 'pl-graine', texte: 'Graine' }), champGraine]),
@@ -518,12 +697,6 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         el('div', { classe: 'at-ligne' }, [el('label', { for: 'pl-seuil', texte: 'Seuil de contact' }), choixSeuil]),
         el('div', { classe: 'at-ligne' }, [el('label', { for: 'pl-mesure', texte: 'Mesure' }), choixMesure]),
         avisGeneration
-      ]),
-      el('fieldset', null, [
-        el('legend', { texte: 'Retouche à la main' }),
-        el('div', { classe: 'at-ligne' }, [btnAnnuler, btnRetablir, bouton('Vider le plateau', viderPlateau, { id: 'pl-vider' })]),
-        zoneOutil,
-        zoneStock
       ]),
       el('fieldset', null, [
         el('legend', { texte: 'Fichier et image' }),
@@ -538,9 +711,22 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         ])
       ])
     ]);
+    panneauxModes.creer = guide.element;
+    panneauxModes.pinceau = pinceau.element;
+    panneauxModes.monoblocs = monoblocs.element;
+    panneauxModes.bibliotheque = biblio.element;
+    MODES.forEach(function (m) { panneauxModes[m.id].hidden = m.id !== mode; });
+    guide.reste.hidden = true;
+
+    var gauche = el('div', { classe: 'at-colonne at-colonne-gauche' }, [
+      bascule,
+      el('div', { classe: 'at-ligne at-ligne-historique' }, [btnAnnuler, btnRetablir]),
+      zoneOutil,
+      MODES.map(function (m) { return panneauxModes[m.id]; })
+    ]);
     var centre = el('div', { classe: 'at-centre' }, [vue.element, legende]);
-    var droite = el('div', { classe: 'at-colonne at-colonne-droite' }, [el('h2', { texte: 'Contrôles du plateau' }), zoneControles]);
-    var element = el('div', { classe: 'at-ecran at-ecran-plateau' }, [gauche, centre, droite]);
+    var droite = el('div', { classe: 'at-colonne at-colonne-droite' }, [guide.reste, el('h2', { texte: 'Contrôles du plateau' }), zoneControles]);
+    var element = el('div', { classe: 'at-ecran at-ecran-plateau', 'data-mode': mode }, [gauche, centre, droite]);
 
     rafraichir(false);
 
@@ -550,11 +736,14 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       generer: generer, annuler: annuler, retablir: retablir, touche: touche,
       enregistrer: enregistrer, texteEnregistrement: texteEnregistrement, ouvrirTexte: ouvrirTexte,
       imageExport: imageExport, exporterSvg: exporterSvg, exporterPng: exporterPng,
-      etat: function () { return { selection: selection, aPoser: aPoser, rang: rang, longueur: historique.length }; }
+      etat: function () { return { selection: selection, aPoser: aPoser, rang: rang, longueur: historique.length, mode: mode }; },
+      choisirMode: choisirMode, mode: function () { return mode; },
+      bibliotheque: biblio, monoblocs: monoblocs, pinceau: pinceau,
+      reprendreTravail: reprendreTravail, activerSauvegarde: biblio.activer, sauverTravail: biblio.sauverTravail
     };
   }
 
-  AT.vuePlateau = { creer: creer, deplacerPiece: deplacerPiece, etiquettes: etiquettes, casesAdmissibles: casesAdmissibles };
+  AT.vuePlateau = { MODES: MODES, creer: creer, deplacerPiece: deplacerPiece, etiquettes: etiquettes, casesAdmissibles: casesAdmissibles };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = AT.vuePlateau;
 })();

@@ -39,6 +39,15 @@ Une table libre : l'outil compte, mélange, lance les dés et prévient, mais **
 9. Gloire (+ / −, victoire signalée à 15), marqueurs de dégâts (+ / −), « Éliminer », « +1 action », « Fin du tour » (le joueur suivant pioche 1 carte).
 10. « Annuler » / « Rétablir », « Enregistrer » / « Ouvrir » (fichier JSON), notes dans le journal, « Troupes provisoires… » pour changer nom, moral, Puissance et dés.
 
+## Création à la main : ce que le modèle sait déjà faire (lot D)
+
+Les écrans de création (palette, pinceau, « Mes monoblocs », bibliothèque) ne sont pas encore là ; la logique, elle, est en place et testée :
+
+- **Pièces personnelles** : un plateau peut porter ses propres monoblocs (champ facultatif `modeles` du fichier : 2 à 6 cases, plaine / forêt / marais / montagne, jamais de ville, 1 à 9 exemplaires, 24 pièces au plus). Elles voyagent avec le fichier du plateau et avec celui de la partie.
+- **Pose hors stock et montagne d’une case** (`M1`, hors catalogue imprimé) : le contrôle 1 annonce en alerte les « tuiles à prévoir en plus du catalogue » et rappelle la décision « montagnes en blocs de 4 ou 5 cases ».
+- **Équilibre** : sur un plateau qui n’est pas symétrique par demi-tour (forme ou villes), le score est « non comparable » ; le tableau des coûts par ville reste affiché.
+- **Générer** sur un plateau qui a des pièces personnelles : elles sont gardées dans le plateau généré, non posées, et le message le dit.
+
 ## Changer le catalogue
 
 L'en-tête de `src/catalogue.js` dit ce qui se change librement (noms, coûts, seuils, événements, nombre de plaines, forêts et marais à total constant) et ce qui demande d'adapter aussi `src/generateur.js` (nombre de cases ou rayon, nombre de villes, monoblocs ajoutés ou retirés). Dans le second cas, « Générer » échoue tout de suite avec un message qui nomme la cause ; la retouche à la main et les contrôles continuent de marcher.
@@ -72,6 +81,7 @@ Depuis le dossier `atelier/` :
 | `src/vue-plateau.js`, `src/vue-inventaire.js`, `src/vue-partie.js` | les trois onglets |
 | `src/alea.js` … `src/generateur.js` | cœur du plateau (lot A) |
 | `src/cartes.js`, `src/paquets.js`, `src/partie.js` | table de jeu (lot B) |
+| `src/bibliotheque.js` | bibliothèque de plateaux et travail en cours : logique et stockage du navigateur injecté (lot D, pas encore d’écran) |
 | `outils/serveur.js`, `outils/recette.html`, `outils/recette.js` | serveur local, recette automatique |
 | `outils/verifier-regles.js`, `outils/mesures-faisabilite.js` | vérification indépendante des règles, mesures de faisabilité |
 | `tests/` | tests Node |

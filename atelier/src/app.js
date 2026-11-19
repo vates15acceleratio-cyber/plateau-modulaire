@@ -4,8 +4,14 @@
  * Chargé en dernier : dépend de AT.rendu et des vues (AT.vuePlateau, AT.vueInventaire, AT.vuePartie).
  *
  * La page comprend des paramètres d'adresse, utiles pour les captures d'écran et la recette :
- *   index.html#onglet=plateau|inventaire|partie&graine=12&partie=5
- *   (graine : génère ce plateau au démarrage ; partie : ouvre une partie fictive avec cette graine).
+ *   index.html#onglet=plateau|inventaire|partie&graine=12&partie=5&mode=creer
+ *   (graine : génère ce plateau au démarrage ; partie : ouvre une partie fictive avec cette graine ;
+ *    mode : generer | creer | pinceau | monoblocs | bibliotheque, mode de l'onglet Plateau).
+ *
+ * Au démarrage, sans paramètre « graine », le travail en cours sauvegardé dans le navigateur est repris
+ * (vue-bibliotheque.js) ; sinon, ou avec « graine », un plateau est généré.
+ * AT.app.stockage (facultatif, à poser avant le démarrage) remplace le stockage du navigateur : la recette
+ * automatique y met un stockage en mémoire pour ne jamais toucher à la bibliothèque du poste.
  */
 var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof globalThis !== 'undefined' ? globalThis : window).AT || {});
 
@@ -36,9 +42,11 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     return (typeof graine === 'number' && graine < 999999999) ? graine + 1 : 1;
   }
 
-  /** Paramètres de l'adresse (« #onglet=partie&graine=12 ») : {onglet, graine, partie}, null si absent ou invalide. */
+  var MODES_PLATEAU = ['generer', 'creer', 'pinceau', 'monoblocs', 'bibliotheque'];
+
+  /** Paramètres de l'adresse (« #onglet=partie&graine=12 ») : {onglet, graine, partie, mode}, null si absent ou invalide. */
   function lireParametres(hash) {
-    var res = { onglet: null, graine: null, partie: null };
+    var res = { onglet: null, graine: null, partie: null, mode: null };
     String(hash || '').replace(/^#/, '').split('&').forEach(function (morceau) {
       var i = morceau.indexOf('=');
       if (i < 1) return;
@@ -47,6 +55,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       if (nom === 'onglet' && ONGLETS.some(function (o) { return o.id === valeur; })) res.onglet = valeur;
       if (nom === 'graine') res.graine = graineSaisie(valeur);
       if (nom === 'partie') res.partie = graineSaisie(valeur);
+      if (nom === 'mode' && MODES_PLATEAU.indexOf(valeur) !== -1) res.mode = valeur;
     });
     return res;
   }
@@ -65,6 +74,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   var el = AT.rendu.el;
   var vues = {}, boutons = {}, panneaux = {}, actif = null, barreEtat = null;
+  var nomPlateau = null, etatSauvegarde = null, dialogueConfirmation = null;
 
   /** Message dans la barre d'état (lue par les lecteurs d'écran). niveau : 'info' | 'alerte' | 'erreur'. */
   function message(texte, niveau) {
@@ -106,6 +116,38 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     champ.click();
   }
 
+  /**
+   * Nom du plateau courant et état de la sauvegarde automatique, dans la barre du haut (jamais dans la barre
+   * d'état, réservée aux messages des actions). info : {nom (null = pas dans la bibliothèque), modifie, sauvegarde, niveau}.
+   */
+  function indiquerPlateau(info) {
+    if (!nomPlateau) return;
+    nomPlateau.textContent = info.nom ? 'Plateau : « ' + info.nom + ' »' + (info.modifie ? ' (modifié)' : '') : 'Plateau : sans nom';
+    nomPlateau.title = info.nom ? 'Plateau de la bibliothèque ouvert' + (info.modifie ? ', modifié depuis son enregistrement' : '') : 'Ce plateau n’est pas enregistré dans la bibliothèque (mode « Bibliothèque »)';
+    etatSauvegarde.textContent = info.sauvegarde || '';
+    etatSauvegarde.className = 'at-sauvegarde' + (info.niveau === 'erreur' ? ' at-sauvegarde-erreur' : '');
+  }
+
+  /**
+   * Fenêtre de confirmation de la page (jamais confirm(), qui bloque). rappel() n'est appelé que sur « oui ».
+   * Au clavier : Tab entre les deux boutons, Entrée valide le bouton actif, Échap renonce.
+   */
+  function confirmer(texte, libelle, rappel) {
+    var d = dialogueConfirmation;
+    if (!d) return;
+    var fermer = function () { if (typeof d.close === 'function' && d.open) d.close(); else d.removeAttribute('open'); };
+    var non = el('button', { type: 'button', id: 'at-confirmer-non', texte: 'Renoncer', sur: { click: fermer } });
+    var oui = el('button', { type: 'button', id: 'at-confirmer-oui', classe: 'at-principal-bouton', texte: libelle || 'Confirmer', sur: { click: function () { fermer(); rappel(); } } });
+    var question = el('p', { id: 'at-confirmation-texte' });
+    question.textContent = texte;
+    AT.rendu.vider(d);
+    d.appendChild(question);
+    d.appendChild(el('div', { classe: 'at-ligne at-confirmation-boutons' }, [non, oui]));
+    if (d.open) fermer();
+    if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+    non.focus();
+  }
+
   function montrer(id) {
     if (!panneaux[id]) return;
     actif = id;
@@ -140,6 +182,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   function demarrer(racine) {
     var contexte = {
       message: message, telecharger: telecharger, ouvrirFichier: ouvrirFichier,
+      confirmer: confirmer, indiquerPlateau: indiquerPlateau, stockage: AT.app.stockage,
       plateau: function () { return vues.plateau.plateau(); },
       reglagesControles: function () { return vues.plateau.reglages(); },
       montrer: montrer
@@ -165,13 +208,19 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       principal.appendChild(panneaux[o.id]);
     });
     barreEtat = el('footer', { classe: 'at-etat', id: 'barre-etat', role: 'status', 'aria-live': 'polite' });
+    nomPlateau = el('span', { classe: 'at-nom-plateau', id: 'at-nom-plateau', texte: 'Plateau : sans nom' });
+    etatSauvegarde = el('span', { classe: 'at-sauvegarde', id: 'at-sauvegarde' });
+    dialogueConfirmation = el('dialog', { classe: 'at-dialogue at-confirmation', id: 'at-confirmation', 'aria-labelledby': 'at-confirmation-texte' });
     racine.appendChild(el('header', { classe: 'at-barre' }, [
       el('strong', { classe: 'at-titre', texte: 'Atelier du plateau' }),
       liste,
+      nomPlateau,
+      etatSauvegarde,
       el('span', { classe: 'at-provisoire', texte: 'Catalogue, événements et Troupes : propositions provisoires, à valider' })
     ]));
     racine.appendChild(principal);
     racine.appendChild(barreEtat);
+    racine.appendChild(dialogueConfirmation);
 
     vues.plateau = AT.vuePlateau.creer(contexte);
     vues.inventaire = AT.vueInventaire.creer(contexte);
@@ -181,15 +230,28 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
     document.addEventListener('keydown', surTouche);
 
+    // Reprise du travail en cours (sauf si l'adresse demande une graine), sinon plateau généré.
     var params = lireParametres(window.location.hash);
-    vues.plateau.generer(params.graine === null ? 1 : params.graine);
+    var reprise = params.graine === null ? vues.plateau.reprendreTravail() : { repris: false };
+    if (!reprise.repris) vues.plateau.generer(params.graine === null ? 1 : params.graine);
+    if (params.mode !== null) vues.plateau.choisirMode(params.mode);
     if (params.partie !== null) vues.partie.nouvelle(params.partie);
     montrer(params.onglet || 'plateau');
+    if (reprise.repris) {
+      var quand = AT.vueBibliotheque.dateLisible(reprise.modifie);
+      message('Travail en cours repris' + (quand ? ' (sauvegardé le ' + quand + ')' : '') + '. « Générer » ou « Nouveau plateau vierge » pour repartir d’autre chose.', 'info');
+    } else if (reprise.corrompu) {
+      message(reprise.raison + ' Il est ignoré : un plateau a été généré à la place.', 'alerte');
+    }
+    // La sauvegarde automatique ne commence qu'ici : le plateau généré au démarrage n'écrase rien.
+    vues.plateau.activerSauvegarde();
+    window.addEventListener('pagehide', function () { vues.plateau.sauverTravail(); });
   }
 
   AT.app.demarrer = demarrer;
   AT.app.montrer = montrer;
   AT.app.message = message;
+  AT.app.confirmer = confirmer;
   AT.app.telechargement = telechargement;
   AT.app.ongletActif = function () { return actif; };
 

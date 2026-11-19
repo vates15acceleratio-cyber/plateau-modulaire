@@ -1,0 +1,73 @@
+/* creation.css : création à la main (lot E) : bascule des modes, palette, « reste à faire », pinceau,
+   éditeur de monoblocs, bibliothèque, fenêtre de confirmation, nom du plateau dans la barre. */
+
+/* Nom du plateau courant et sauvegarde automatique, dans la barre du haut */
+.at-nom-plateau { font-weight: 600; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.at-sauvegarde { font-size: 12px; color: #c9c7d6; white-space: nowrap; }
+.at-sauvegarde-erreur { color: #ffb4a8; font-weight: 600; }
+
+/* Bascule des modes de l'onglet Plateau */
+.at-modes { display: flex; flex-wrap: wrap; gap: 3px; margin: 0 0 4px; }
+.at-modes button { flex: 1 1 auto; padding: 4px 6px; font-weight: 600; }
+.at-ligne-historique { margin: 0 0 4px; }
+.at-mode-panneau { margin-top: 4px; }
+
+/* Palette de la création guidée */
+.at-piece-nom { text-align: center; overflow-wrap: anywhere; }
+.at-piece-perso { border-style: dashed; }
+.at-piece-epuisee { opacity: .45; }
+.at-piece-stock { touch-action: none; user-select: none; }
+
+/* « Ce qu'il reste à faire » (colonne de droite) */
+.at-reste { background: var(--papier); border: 1px solid var(--trait); border-radius: 4px; padding: 2px 8px 6px; margin-bottom: 8px; }
+.at-reste-liste { list-style: none; margin: 2px 0; padding: 0; }
+.at-reste-liste li { padding: 1px 0; }
+.at-reste-fait { color: var(--conforme); }
+.at-reste-a-faire { color: var(--encre); font-weight: 600; }
+.at-reste-marque { display: inline-block; width: 14px; text-align: center; }
+.at-reste-detail { font-weight: normal; color: var(--discret); margin-left: 18px; font-size: 12px; }
+.at-reste-termine { font-weight: 700; }
+
+/* Pinceau et terrains de l'éditeur */
+.at-pinceau-outils { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin: 6px 0; }
+.at-pinceau-outil { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 2px; font-size: 12px; }
+.at-gomme-dessin { display: inline-block; width: 23px; height: 25px; line-height: 23px; border: 2px dashed #8b887c; border-radius: 4px; font-weight: 700; color: var(--erreur); background: #fff; }
+.at-pinceau-message { min-height: 36px; margin: 6px 0; padding: 4px 6px; background: #f4f1e6; border-radius: 4px; font-weight: 600; }
+.at-pinceau-message:empty { display: none; }
+
+/* Éditeur de monoblocs */
+.at-mono-grille { display: block; width: 100%; max-width: 250px; height: auto; margin: 4px auto; background: var(--papier); border: 1px solid var(--trait); border-radius: 4px; touch-action: manipulation; user-select: none; }
+.at-mono-case { cursor: pointer; }
+.at-mono-case:hover { stroke: #1e64dc; stroke-width: 3; }
+.at-mono-apercu { display: flex; align-items: center; gap: 8px; min-height: 40px; margin: 4px 0; }
+.at-mono-avis { list-style: none; margin: 4px 0; padding: 0; font-weight: 600; }
+.at-mono-carte { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-top: 1px solid var(--trait); }
+.at-mono-carte:first-child { border-top: 0; }
+.at-mono-texte { min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
+#mo-nom { flex: 1 1 120px; }
+#mo-source { flex: 1 1 120px; max-width: 100%; }
+
+/* Bibliothèque */
+.at-bib-fiche { display: flex; gap: 8px; padding: 6px 0; border-top: 1px solid var(--trait); }
+.at-bib-fiche:first-child { border-top: 0; }
+.at-bib-ouverte { background: #eef4ff; box-shadow: -4px 0 0 var(--accent); }
+.at-vignette { flex: none; background: var(--papier); border: 1px solid var(--trait); border-radius: 4px; }
+.at-bib-texte { min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
+.at-bib-marque { color: var(--accent); font-weight: 600; }
+.at-bib-champ { flex: 1 1 90px; }
+.at-bib-fiche .at-ligne button { padding: 2px 6px; }
+#bi-nom { flex: 1 1 140px; }
+
+/* Fenêtre de confirmation */
+.at-confirmation { max-width: min(460px, 92vw); }
+.at-confirmation p { font-size: 14px; margin: 4px 0 12px; }
+.at-confirmation-boutons { justify-content: flex-end; }
+
+@media (max-width: 1000px) {
+  .at-nom-plateau { max-width: 100%; }
+  .at-mono-grille { max-width: 320px; }
+}
+
+@media print {
+  .at-confirmation { display: none !important; }
+}

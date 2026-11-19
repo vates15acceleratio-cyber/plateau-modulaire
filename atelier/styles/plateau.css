@@ -11,8 +11,7 @@
 .at-surbrillance { fill: rgba(255, 200, 0, .5); stroke: #a35f00; stroke-width: 4; }
 .at-selection { fill: rgba(30, 100, 220, .16); stroke: #1e64dc; stroke-width: 4; }
 .at-admissible { fill: rgba(0, 150, 90, .26); stroke: #00703f; stroke-width: 3; stroke-dasharray: 2 4; stroke-linecap: round; }
-.at-fantome { fill: rgba(30, 100, 220, .38); stroke: #1e64dc; stroke-width: 3; stroke-dasharray: 6 4; }
-.at-fantome-refus { fill: rgba(216, 50, 28, .42); stroke: #b3200e; }
+/* .at-fantome / .at-fantome-refus : couleurs en attributs SVG (vert = pose possible, rouge = refus), voir vue-plateau.js */
 .at-curseur { fill: none; stroke: #000; stroke-width: 3.5; stroke-dasharray: 4 3; }
 
 /* Légende */
@@ -27,7 +26,7 @@
 
 /* Outils de retouche et stock */
 .at-outil { margin: 6px 0; padding: 4px 6px; background: #f4f1e6; border-radius: 4px; min-height: 44px; }
-.at-grille-stock { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.at-grille-stock { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
 .at-piece-stock { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; padding: 3px 2px; font-size: 12px; min-height: 46px; }
 .at-dessin-piece { flex: none; }
 

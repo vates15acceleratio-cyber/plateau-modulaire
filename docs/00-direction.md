@@ -44,6 +44,8 @@ Elles priment sur la proposition d'inventaire du 2026-11-18 ci-dessous. Détail 
 5. **Tuiles d'événement** uniques (torrent de boue, crevasse, tunnel dans la montagne…), gardées en **réserve** et posées **par-dessus** une tuile du plateau quand un joueur pioche l'événement ; elles ne servent pas à construire le plateau.
 6. Chaque tuile touche **au moins 3 autres tuiles** (à voir : 2 peuvent-elles suffire ?). Mesures : `docs/03-mesures-faisabilite.md`.
 7. **Parties fictives** dans l'outil : jets de dés, mélange des cartes. La conception du plateau reste la priorité.
+8. **Création à la main** (même jour, après la première livraison) : mode création guidé sur plateau vierge, pinceau libre hors catalogue, monoblocs dessinés par l'utilisateur, bibliothèque de plateaux. Voir `docs/02-atelier-cahier-des-charges.md` §8.
+9. **Finalité** (même jour) : un jeu pour **tester des parties en 1 contre 1 en local, deux joueurs sur le même écran**. L'outil doit être une **app transportable**, sous **Windows et Mac**. On reste sur le format web (pas de Godot) ; lanceur et empaquetage à faire après la création à la main.
 
 ## Proposition d'inventaire (à valider ; dessinée dans `tuiles/sortie/types_de_tuiles.pdf`)
 Décisions de l'utilisateur du 2026-11-18 : **2 montagnes** (au lieu de 3) ; tuiles simples à **70 % de plaines, 15 % de forêts, 15 % de marais** ; **7 villes**, au moins **3 tuiles entre deux villes** voisines.

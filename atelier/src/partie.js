@@ -65,8 +65,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     modeles: 200,       // définitions de Troupes
     actions: 99,        // compteur d'actions
     tour: 100000,
-    grainePlateau: 64   // longueur d'une graine de plateau en texte : la même que AT.catalogue.REGLAGES.bornes.longueurGraine
+    grainePlateau: 64,  // longueur d'une graine de plateau en texte : la même que AT.catalogue.REGLAGES.bornes.longueurGraine
+    // Pièces personnelles portées par le plateau : les mêmes bornes que AT.catalogue.REGLAGES.perso.
+    persoModeles: 24, persoCases: 6, persoQuantite: 9, persoNom: 40
   };
+  var MOTIF_PERSO = /^X[1-9]\d{0,3}$/;
+  var TERRAINS_PERSO = ['plaine', 'foret', 'marais', 'montagne'];   // jamais de ville dans un monobloc (règle A2)
 
   /** Bornes acceptées pour chaque réglage (création et relecture d'un fichier). */
   var BORNES_REGLAGES = {
@@ -280,8 +284,41 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * Valide la STRUCTURE d'un plateau selon le contrat A / B et en renvoie une copie propre, avec ses cases.
    * Le contenu (catalogue, chevauchements...) relève des contrôles du lot A.
    */
+  /**
+   * Pièces personnelles du plateau (champ facultatif `modeles`) : structure stricte et copie propre.
+   * Le lot A (env.plateau.valider) ajoute ses propres règles (un seul tenant, case (0,0), identifiants de base).
+   */
+  function validerModelesPlateau(liste) {
+    exiger(Array.isArray(liste) && liste.length <= LIMITES.persoModeles, 'Plateau : liste de pièces personnelles invalide (' + LIMITES.persoModeles + ' au plus).');
+    var ids = Object.create(null);
+    return liste.map(function (m, i) {
+      var ou = 'Plateau, pièce personnelle ' + (i + 1);
+      clesExactes(m, ['id', 'nom', 'cases', 'quantite'], ou);
+      exiger(typeof m.id === 'string' && MOTIF_PERSO.test(m.id), ou + ' : identifiant invalide (« X » suivi de chiffres).');
+      exiger(ids[m.id] !== true, ou + ' : identifiant en double.');
+      ids[m.id] = true;
+      exiger(typeof m.nom === 'string' && m.nom.trim().length >= 1 && m.nom.length <= LIMITES.persoNom && !/[\u0000-\u001f\u007f]/.test(m.nom),
+        ou + ' : nom invalide (1 à ' + LIMITES.persoNom + ' caractères).');
+      exiger(estEntier(m.quantite, 1, LIMITES.persoQuantite), ou + ' : quantité invalide (1 à ' + LIMITES.persoQuantite + ').');
+      exiger(Array.isArray(m.cases) && m.cases.length >= 2 && m.cases.length <= LIMITES.persoCases, ou + ' : 2 à ' + LIMITES.persoCases + ' cases attendues.');
+      var vues = Object.create(null);
+      var cases = m.cases.map(function (c) {
+        clesExactes(c, ['q', 'r', 'terrain'], ou);
+        exiger(estEntier(c.q, -LIMITES.persoCases, LIMITES.persoCases) && estEntier(c.r, -LIMITES.persoCases, LIMITES.persoCases), ou + ' : case invalide.');
+        exiger(TERRAINS_PERSO.indexOf(c.terrain) >= 0, ou + ' : terrain invalide (jamais de ville dans un monobloc).');
+        exiger(vues[c.q + ',' + c.r] !== true, ou + ' : case en double.');
+        vues[c.q + ',' + c.r] = true;
+        return { q: c.q, r: c.r, terrain: c.terrain };
+      });
+      return { id: m.id, nom: m.nom, cases: cases, quantite: m.quantite };
+    });
+  }
+
   function validerPlateau(pl, env) {
-    clesExactes(pl, ['version', 'graine', 'pieces', 'recouvrements', 'camps'], 'Plateau');
+    var champs = ['version', 'graine', 'pieces', 'recouvrements', 'camps'];
+    exiger(estObjet(pl), 'Plateau : objet attendu.');
+    var avecModeles = possede(pl, 'modeles');                       // champ facultatif
+    clesExactes(pl, avecModeles ? champs.concat(['modeles']) : champs, 'Plateau');
     exiger(estEntier(pl.version, 0, 1000), 'Plateau : version invalide.');
     // La graine du plateau est moins contrainte que celle de la partie (chaîne vide ou null admis),
     // pour ne pas refuser un plateau que le lot A accepte.
@@ -292,6 +329,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         'Plateau : graine invalide (entier ou texte de ' + LIMITES.grainePlateau + ' caractères au plus).');
     }
     var propre = { version: pl.version, graine: pl.graine, pieces: [], recouvrements: [], camps: {} };
+    if (avecModeles) {
+      var persos = validerModelesPlateau(pl.modeles);
+      if (persos.length) propre.modeles = persos;                    // forme canonique : champ absent s'il n'y en a pas
+    }
     exiger(Array.isArray(pl.pieces) && pl.pieces.length <= LIMITES.pieces, 'Plateau : liste de pièces invalide.');
     exiger(pl.pieces.length >= 1, 'Plateau vide : il faut au moins une pièce pour jouer.');
     function ident(v, ou) {

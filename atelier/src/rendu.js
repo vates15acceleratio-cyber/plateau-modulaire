@@ -251,7 +251,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     Object.keys(parPiece).forEach(function (id) {
       var groupe = parPiece[id];
       if (groupe.length < 2) return;
-      var m = C.modele(toutes[groupe[0]].modele), noyau = !!(m && m.noyau);
+      var m = P.modele(plateau, toutes[groupe[0]].modele), noyau = !!(m && m.noyau);
       gContours.appendChild(svg('path', {
         d: cheminContour(groupe), fill: 'none', stroke: noyau ? '#5B2A86' : '#1F1F1F',
         'stroke-width': noyau ? 6 : 4, 'stroke-linecap': 'round'
@@ -322,30 +322,54 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     racine.appendChild(gDessus);
   }
 
-  /** Cadre d'affichage d'un plateau : ses cases et l'hexagone de départ (rayon 5), avec une marge. */
-  function cadrePlateau(plateau, marge) {
-    var cles = Object.keys(P.cases(plateau)).concat(H.disque(C.REGLAGES.generateur.rayon));
+  /** Cadre d'affichage d'un plateau : ses cases, l'hexagone de départ (rayon 5) et la grille vide affichée, avec une marge. */
+  function cadrePlateau(plateau, marge, grille) {
+    var cles = Object.keys(P.cases(plateau)).concat(H.disque(C.REGLAGES.generateur.rayon), grille || []);
     return cadre(cles, PLAT, marge === undefined ? 24 : marge);
+  }
+
+  /**
+   * Cases VIDES de la grille de création : celles du disque de rayon `rayon` autour de (0,0) que le plateau
+   * n'occupe pas (liste de clés). Fonction pure.
+   */
+  function casesGrille(plateau, rayon) {
+    var occupees = P.cases(plateau, { sansRecouvrements: true });
+    return H.disque(rayon).filter(function (k) { return !possede.call(occupees, k); });
+  }
+
+  /** Dessine la grille vide (cases fantômes discrètes) dans le groupe `racine`, tout en attributs SVG. */
+  function dessinerGrille(racine, cles) {
+    vider(racine);
+    (cles || []).forEach(function (k) {
+      if (H.estCle(k)) racine.appendChild(polygoneCase(k, { fill: '#FBFAF6', stroke: '#B9B4A3', 'stroke-width': 1, 'stroke-dasharray': '3 5' }, 0.05));
+    });
   }
 
   /**
    * Vue interactive d'un plateau. options :
    *   etiquette        : texte lu par les lecteurs d'écran ;
    *   surClic(cle)     : clic ou touche Entrée sur une case (existante ou non) ;
-   *   surSurvol(cle)   : case sous la souris ou sous le curseur du clavier (null quand la souris sort).
-   * Renvoie {element, barre, svg, afficher(scene), marquer(nom, cles, classe), cadrer(), zoomer(facteur),
-   *          pointEcran(cle), curseur()}.
+   *   surSurvol(cle)   : case sous la souris ou sous le curseur du clavier (null quand la souris sort) ;
+   *   surAppui(cle, ev): FACULTATIF. Appelé quand le bouton gauche s'enfonce sur une case (sans la touche Maj).
+   *                      S'il renvoie un geste {bouger(cle), finir(cle, aBouge), annuler()}, le glissement lui est
+   *                      confié (pinceau, déplacement d'une pièce) au lieu de déplacer la vue, et le clic qui suit
+   *                      n'appelle pas surClic. S'il renvoie null, rien ne change : glisser déplace la vue.
+   *                      Maj + glisser déplace toujours la vue.
+   * La scène peut porter `grille` : clés de cases vides à dessiner en cases fantômes (jamais exportées).
+   * Renvoie {element, barre, svg, afficher(scene), marquer(nom, cles, classe, attrs), cadrer(), zoomer(facteur),
+   *          pointEcran(cle), caseSousEcran(x, y), curseur()}.
    */
   function creerVue(options) {
     var prefixe = nouveauPrefixe();
-    var gScene = svg('g'), gInterface = svg('g', { classe: 'at-interface' });
+    var gScene = svg('g'), gGrille = svg('g'), gInterface = svg('g', { classe: 'at-interface' });
     var racine = svg('svg', {
       classe: 'at-plateau-svg', tabindex: 0, role: 'application', focusable: 'true',
       'aria-label': (options.etiquette || 'Plateau') + ' Flèches : déplacer le curseur ; Entrée : agir sur la case ; + et − : zoom ; 0 : tout voir.'
-    }, [definitions(prefixe), gScene, gInterface]);
+    }, [definitions(prefixe), gScene, gGrille, gInterface]);
     var vb = { x: -400, y: -400, l: 800, h: 800 }, cadreScene = vb, scene = null;
     var couches = {}, curseur = '0,0', curseurVisible = false, survol = null;
     var appui = null, glisse = false;
+    var geste = null, gesteCle = null, gesteBouge = false, avalerClic = false;
 
     function appliquerVue() { racine.setAttribute('viewBox', [vb.x, vb.y, vb.l, vb.h].map(arrondi).join(' ')); }
 
@@ -382,12 +406,25 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       return m ? p.matrixTransform(m) : null;
     }
 
-    /** Remplace les cases d'une couche d'interface (surbrillance, sélection, fantôme…). */
-    function marquer(nom, cles, classe) {
+    /** Case sous un point de l'écran, ou null si le point est hors du dessin (glisser-déposer depuis la palette). */
+    function caseSousEcran(clientX, clientY) {
+      var b = racine.getBoundingClientRect();
+      if (clientX < b.left || clientX > b.right || clientY < b.top || clientY > b.bottom) return null;
+      return cleSousPoint(clientX, clientY);
+    }
+
+    /**
+     * Remplace les cases d'une couche d'interface (surbrillance, sélection, fantôme…).
+     * `attrs` (facultatif) : attributs SVG posés sur chaque case (couleurs de l'aperçu fantôme).
+     */
+    function marquer(nom, cles, classe, attrs) {
       if (!couches[nom]) { couches[nom] = svg('g'); gInterface.appendChild(couches[nom]); }
       vider(couches[nom]);
       (cles || []).forEach(function (k) {
-        if (H.estCle(k)) couches[nom].appendChild(polygoneCase(k, { classe: classe }, 0.06));
+        if (!H.estCle(k)) return;
+        var poly = polygoneCase(k, { classe: classe }, 0.06);
+        appliquer(poly, attrs);
+        couches[nom].appendChild(poly);
       });
     }
 
@@ -397,7 +434,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var premiere = scene === null;
       scene = nouvelleScene;
       dessinerScene(gScene, scene, prefixe);
-      cadreScene = cadrePlateau(scene.plateau);
+      dessinerGrille(gGrille, scene.grille);
+      cadreScene = cadrePlateau(scene.plateau, undefined, scene.grille);
       if (premiere || !garderVue) cadrer();
     }
 
@@ -415,10 +453,25 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
     racine.addEventListener('pointerdown', function (ev) {
       if (ev.button !== 0) return;
+      avalerClic = false;
+      if (options.surAppui && !ev.shiftKey) {
+        var cle = cleSousPoint(ev.clientX, ev.clientY);
+        geste = cle ? (options.surAppui(cle, ev) || null) : null;
+        if (geste) {
+          gesteCle = cle; gesteBouge = false;
+          try { racine.setPointerCapture(ev.pointerId); } catch (e) { /* sans capture, le geste s'arrête au bord */ }
+          return;
+        }
+      }
       appui = { x: ev.clientX, y: ev.clientY, vx: vb.x, vy: vb.y };
       glisse = false;
     });
     racine.addEventListener('pointermove', function (ev) {
+      if (geste) {
+        var k = cleSousPoint(ev.clientX, ev.clientY);
+        if (k && k !== gesteCle) { gesteCle = k; gesteBouge = true; if (geste.bouger) geste.bouger(k); }
+        return;
+      }
       if (appui) {
         var dx = ev.clientX - appui.x, dy = ev.clientY - appui.y;
         if (!glisse && Math.abs(dx) + Math.abs(dy) < 6) return;
@@ -431,11 +484,26 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       }
       signalerSurvol(cleSousPoint(ev.clientX, ev.clientY));
     });
-    var relacher = function () { appui = null; };
-    racine.addEventListener('pointerup', relacher);
-    racine.addEventListener('pointercancel', relacher);
-    racine.addEventListener('pointerleave', function () { if (!appui) signalerSurvol(null); });
+    racine.addEventListener('pointerup', function () {
+      appui = null;
+      if (!geste) return;
+      var g = geste;
+      geste = null;
+      // Le navigateur envoie un clic juste après : il appartient au geste, pas à surClic.
+      avalerClic = true;
+      setTimeout(function () { avalerClic = false; }, 0);
+      if (g.finir) g.finir(gesteCle, gesteBouge);
+    });
+    racine.addEventListener('pointercancel', function () {
+      appui = null;
+      if (!geste) return;
+      var g = geste;
+      geste = null;
+      if (g.annuler) g.annuler();
+    });
+    racine.addEventListener('pointerleave', function () { if (!appui && !geste) signalerSurvol(null); });
     racine.addEventListener('click', function (ev) {
+      if (avalerClic) { avalerClic = false; return; }  // fin d'un geste (trait de pinceau, pièce déplacée)
       if (glisse) { glisse = false; return; }          // fin d'un déplacement de la vue : pas un clic sur une case
       var cle = cleSousPoint(ev.clientX, ev.clientY);
       if (cle && options.surClic) options.surClic(cle);
@@ -474,8 +542,27 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     return {
       element: el('div', { classe: 'at-vue' }, [barre, racine]), barre: barre, svg: racine,
       afficher: afficher, marquer: marquer, cadrer: cadrer, zoomer: zoomer, pointEcran: pointEcran,
+      caseSousEcran: caseSousEcran,
       curseur: function () { return curseur; }
     };
+  }
+
+  /**
+   * Vignette d'un plateau (bibliothèque) : petit dessin SVG sans interaction, cadré sur ses cases.
+   * options : largeur, hauteur (en pixels), titre (texte lu par les lecteurs d'écran).
+   */
+  function vignette(plateau, options) {
+    var o = options || {}, prefixe = nouveauPrefixe();
+    var c = cadre(Object.keys(P.cases(plateau)), PLAT, 8);
+    var racine = svg('svg', {
+      classe: 'at-vignette', width: o.largeur || 96, height: o.hauteur || 84,
+      viewBox: [c.x, c.y, c.l, c.h].map(arrondi).join(' '), role: 'img', 'aria-label': o.titre || 'Vignette du plateau'
+    });
+    var g = svg('g');
+    racine.appendChild(definitions(prefixe));
+    racine.appendChild(g);
+    dessinerScene(g, { plateau: plateau }, prefixe);
+    return racine;
   }
 
   /**
@@ -517,11 +604,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   }
 
   /**
-   * Petit dessin d'un modèle de pièce (inventaire, stock). options : rotation, echelle (0,4 par défaut), titre.
+   * Petit dessin d'un modèle de pièce (inventaire, stock). options : rotation, echelle (0,4 par défaut), titre,
+   * plateau (document où chercher une pièce personnelle ; inutile pour le catalogue de base, M1 compris).
    */
   function dessinModele(idModele, options) {
     var o = options || {}, prefixe = nouveauPrefixe(), echelle = o.echelle || 0.4;
-    var cases = P.casesModele(idModele, 0, 0, o.rotation || 0);
+    var cases = P.casesModele(idModele, 0, 0, o.rotation || 0, o.plateau);
     var cles = cases.map(function (c) { return c.cle; }), c = cadre(cles, PLAT, 5);
     var racine = svg('svg', {
       classe: 'at-dessin-piece', width: Math.round(c.l * echelle), height: Math.round(c.h * echelle),
@@ -532,7 +620,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       racine.appendChild(polygoneCase(x.cle, { fill: remplissage(prefixe, x.terrain), stroke: '#6E6A58', 'stroke-width': 1.5 }));
     });
     if (cles.length > 1) {
-      var m = C.modele(idModele);
+      var m = P.modele(o.plateau, idModele);
       racine.appendChild(svg('path', { d: cheminContour(cles), fill: 'none', stroke: m && m.noyau ? '#5B2A86' : '#1F1F1F', 'stroke-width': 5, 'stroke-linecap': 'round' }));
     }
     return racine;
@@ -559,10 +647,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     COULEURS_CAMPS: COULEURS_CAMPS, NOMS_CAMPS: NOMS_CAMPS,
     // géométrie pure
     aretesContour: aretesContour, pointVersCase: pointVersCase, cadre: cadre, caseVoisineFleche: caseVoisineFleche,
-    numerosVilles: numerosVilles, nomTerrain: nomTerrain,
+    numerosVilles: numerosVilles, nomTerrain: nomTerrain, casesGrille: casesGrille,
     // DOM et SVG
-    el: el, svg: svg, vider: vider, remplacer: remplacer,
-    creerVue: creerVue, svgAutonome: svgAutonome, versPng: versPng, dessinModele: dessinModele, pastilleTerrain: pastilleTerrain
+    el: el, svg: svg, vider: vider, remplacer: remplacer, polygoneCase: polygoneCase, definitions: definitions, remplissage: remplissage,
+    nouveauPrefixe: nouveauPrefixe, cheminContour: cheminContour,
+    creerVue: creerVue, svgAutonome: svgAutonome, versPng: versPng, dessinModele: dessinModele, pastilleTerrain: pastilleTerrain,
+    vignette: vignette
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = AT.rendu;

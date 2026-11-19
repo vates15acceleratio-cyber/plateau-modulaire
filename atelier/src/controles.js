@@ -50,26 +50,60 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   // ------------------------------------------------------------------ 1. inventaire
 
+  /**
+   * Inventaire. Erreurs : pièce de modèle inconnu ; monobloc (ou noyau) posé plus de fois que prévu.
+   * Alertes : pièces restantes (catalogue imprimé, puis pièces personnelles) ; tuiles d'UNE case posées hors stock
+   * par le pinceau (« à prévoir en plus du catalogue », détail par modèle) ; toute montagne d'une case.
+   */
   function inventaire(plateau) {
-    var res = [], inconnues = 0;
-    (plateau.pieces || []).forEach(function (p) { if (!C.modele(p.modele)) inconnues += 1; });
+    var res = [], inconnues = 0, pieces = plateau.pieces || [];
+    pieces.forEach(function (p) { if (!P.modele(plateau, p.modele)) inconnues += 1; });
     if (inconnues) res.push(constat('inventaire', 'erreur', pluriel(inconnues, 'pièce') + ' hors catalogue sur le plateau.', []));
-    var stock = P.stock(plateau), restantes = [], nbRestantes = 0;
-    C.ORDRE_MODELES.forEach(function (id) {
-      var s = stock[id], m = C.MODELES[id];
+    var stock = P.stock(plateau), restantes = [], nbRestantes = 0, restantesPerso = [], nbRestantesPerso = 0;
+    var enPlus = [], nbEnPlus = 0, casesEnPlus = [], parModele = {};
+    var casesDe = function (liste) {
+      var cases = [];
+      liste.forEach(function (p) { P.casesPiece(p, plateau).forEach(function (c) { cases.push(c.cle); }); });
+      return cases;
+    };
+    Object.keys(stock).forEach(function (id) {
+      var s = stock[id], m = P.modele(plateau, id);
       if (s.restant < 0) {
-        var cases = [];
-        plateau.pieces.forEach(function (p) { if (p.modele === id) P.casesPiece(p).forEach(function (c) { cases.push(c.cle); }); });
-        res.push(constat('inventaire', 'erreur', 'Stock dépassé : ' + s.poses + ' × « ' + m.nom + ' » posées pour ' + s.total + ' au catalogue.', cases));
+        var posees = pieces.filter(function (p) { return p.modele === id; });
+        if (m.cases.length === 1) {
+          // Tuile d'une case posée hors stock (pinceau) : ce n'est pas une faute, c'est du carton à prévoir.
+          enPlus.push((0 - s.restant) + ' × ' + m.nom);
+          nbEnPlus -= s.restant;
+          parModele[id] = 0 - s.restant;
+          casesEnPlus = casesEnPlus.concat(casesDe(posees.slice(s.total)));
+        } else {
+          res.push(constat('inventaire', 'erreur', 'Stock dépassé : ' + s.poses + ' × « ' + m.nom + ' » posées pour ' + s.total
+            + (m.perso ? ' prévue(s) (pièce personnelle).' : ' au catalogue.'), casesDe(posees)));
+        }
       } else if (s.restant > 0) {
-        restantes.push(s.restant + ' × ' + m.nom);
-        nbRestantes += s.restant;
+        if (m.perso) { restantesPerso.push(s.restant + ' × ' + m.nom); nbRestantesPerso += s.restant; }
+        else { restantes.push(s.restant + ' × ' + m.nom); nbRestantes += s.restant; }
       }
     });
     if (nbRestantes) {
       res.push(constat('inventaire', 'alerte', 'Pièces restantes (' + nbRestantes + ') : ' + restantes.join(', ') + '.', [], { restantes: nbRestantes }));
     } else if (!res.length) {
       res.push(constat('inventaire', 'info', 'Toutes les pièces du catalogue sont posées (' + C.totaux().pieces + ' pièces).', [], { restantes: 0 }));
+    }
+    if (nbRestantesPerso) {
+      res.push(constat('inventaire', 'alerte', 'Pièces personnelles restantes (' + nbRestantesPerso + ') : ' + restantesPerso.join(', ') + '.', [], { restantesPerso: nbRestantesPerso }));
+    }
+    if (nbEnPlus) {
+      res.push(constat('inventaire', 'alerte', 'Tuiles à prévoir en plus du catalogue (' + nbEnPlus + ') : ' + enPlus.join(', ') + '.', casesEnPlus,
+        { enPlus: nbEnPlus, parModele: parModele }));
+    }
+    var montagnes = pieces.filter(function (p) {
+      var m = P.modele(plateau, p.modele);
+      return !!m && m.cases.length === 1 && m.cases[0].terrain === 'montagne';
+    });
+    if (montagnes.length) {
+      res.push(constat('inventaire', 'alerte', pluriel(montagnes.length, 'montagne') + ' d’une case sur le plateau : la décision en vigueur est « montagnes en blocs de 4 ou 5 cases ».',
+        casesDe(montagnes), { montagnesUneCase: montagnes.length }));
     }
     return res;
   }
@@ -115,9 +149,15 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     var res = [];
     var fautifs = C.monoblocsAvecVille();
     if (fautifs.length) res.push(constat('monoblocs', 'erreur', 'Catalogue : ville dans un monobloc hors noyau (' + fautifs.join(', ') + ').', []));
+    // Une pièce personnelle validée n'a jamais de ville ; un document monté en mémoire est quand même vérifié.
+    var fautifsPerso = P.modeles(plateau).filter(function (m) {
+      return !C.modele(m.id) && m.cases.length > 1 && m.cases.some(function (c) { return c.terrain === 'ville'; });
+    }).map(function (m) { return m.id; });
+    if (fautifsPerso.length) res.push(constat('monoblocs', 'erreur', 'Pièce personnelle avec une ville (' + fautifsPerso.join(', ') + ') : jamais de ville dans un monobloc (règle A2).', []));
+    fautifs = fautifs.concat(fautifsPerso);
     var cases = [];
     (plateau.pieces || []).forEach(function (p) {
-      if (fautifs.indexOf(p.modele) !== -1) P.casesPiece(p).forEach(function (c) { cases.push(c.cle); });
+      if (fautifs.indexOf(p.modele) !== -1) P.casesPiece(p, plateau).forEach(function (c) { cases.push(c.cle); });
     });
     if (cases.length) res.push(constat('monoblocs', 'erreur', 'Une ville se trouve dans un monobloc qui n’est pas le noyau.', cases));
     var noyaux = (plateau.pieces || []).filter(function (p) { var m = C.modele(p.modele); return m && m.noyau; });
@@ -126,7 +166,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     } else {
       noyaux.forEach(function (p) {
         if (p.q !== 0 || p.r !== 0) {
-          res.push(constat('monoblocs', 'erreur', 'Le noyau doit être centré en (0,0) ; il est en (' + H.cle(p.q, p.r) + ').', P.casesPiece(p).map(function (c) { return c.cle; })));
+          res.push(constat('monoblocs', 'erreur', 'Le noyau doit être centré en (0,0) ; il est en (' + H.cle(p.q, p.r) + ').', P.casesPiece(p, plateau).map(function (c) { return c.cle; })));
         }
       });
     }
@@ -244,31 +284,51 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * Équilibre entre les deux camps. Pour chaque ville : coût minimal en rations depuis les villes de
    * déploiement de Vert, et depuis celles de Rouge. Score = somme, sur les villes, de l'écart entre le
    * coût de Vert vers la ville et le coût de Rouge vers la ville symétrique (demi-tour autour de (0,0)).
-   * 0 = parfaitement équilibré. Une ville sans symétrique est comparée à elle-même (et signalée).
-   * Renvoie {calculable, score, villes: [{cle, vert, rouge, symetrique, ecart}], sansSymetrique: [clés], horsAtteinte: [clés]}.
+   * 0 = parfaitement équilibré.
+   *
+   * Le score n'a de sens que sur un plateau SYMÉTRIQUE par demi-tour, pour la forme (cases occupées) et pour
+   * les villes. Sinon : comparable = false, score = null, `raison` dit pourquoi ; le tableau `villes` (coûts
+   * depuis chaque camp) reste rempli, et l'écart d'une ville sans ville symétrique vaut null.
+   *
+   * Renvoie {calculable, comparable, score, raison, villes: [{cle, vert, rouge, symetrique, ecart}],
+   *          sansSymetrique: [villes sans ville symétrique], casesSansSymetrique: [cases sans case symétrique],
+   *          horsAtteinte: [clés]}.
+   *   calculable : les villes de déploiement des deux camps sont désignées (sinon rien n'est calculé) ;
+   *   symetrique : la ville symétrique, ou la ville elle-même si elle n'en a pas.
    */
   function equilibre(plateau, options) {
     var toutes = P.cases(plateau, BASE), camps = P.campsAuto(plateau), couts = options && options.couts;
-    var res = { calculable: false, score: null, villes: [], sansSymetrique: [], horsAtteinte: [] };
-    if (!camps.vert.length || !camps.rouge.length) return res;
+    var res = { calculable: false, comparable: false, score: null, raison: null, villes: [], sansSymetrique: [], casesSansSymetrique: [], horsAtteinte: [] };
+    if (!camps.vert.length || !camps.rouge.length) {
+      res.raison = 'Les villes de déploiement ne sont pas désignées.';
+      return res;
+    }
     var dv = P.rationsSurCases(toutes, camps.vert, { couts: couts });
     var dr = P.rationsSurCases(toutes, camps.rouge, { couts: couts });
+    res.casesSansSymetrique = H.trier(Object.keys(toutes).filter(function (k) { return !possede.call(toutes, H.symetrique(k)); }));
     var cles = H.trier(Object.keys(toutes).filter(function (k) { return toutes[k].terrain === 'ville'; }));
     var score = 0;
     cles.forEach(function (k) {
-      var s = H.symetrique(k);
-      if (!(possede.call(toutes, s) && toutes[s].terrain === 'ville')) { res.sansSymetrique.push(k); s = k; }
+      var s = H.symetrique(k), seule = !(possede.call(toutes, s) && toutes[s].terrain === 'ville');
+      if (seule) { res.sansSymetrique.push(k); s = k; }
       var ligne = { cle: k, vert: possede.call(dv, k) ? dv[k] : null, rouge: possede.call(dr, k) ? dr[k] : null, symetrique: s, ecart: null };
       if (possede.call(dv, k) && possede.call(dr, s)) {
-        ligne.ecart = Math.abs(dv[k] - dr[s]);
-        score += ligne.ecart;
+        if (!seule) { ligne.ecart = Math.abs(dv[k] - dr[s]); score += ligne.ecart; }
       } else {
         res.horsAtteinte.push(k);
       }
       res.villes.push(ligne);
     });
     res.calculable = true;
-    res.score = score;
+    res.comparable = !res.casesSansSymetrique.length && !res.sansSymetrique.length;
+    if (res.comparable) {
+      res.score = score;
+    } else {
+      var causes = [];
+      if (res.casesSansSymetrique.length) causes.push('forme : ' + pluriel(res.casesSansSymetrique.length, 'case') + ' sans case symétrique');
+      if (res.sansSymetrique.length) causes.push(pluriel(res.sansSymetrique.length, 'ville') + ' sans ville symétrique : ' + liste(res.sansSymetrique));
+      res.raison = 'Plateau non symétrique par demi-tour (' + causes.join(' ; ') + ').';
+    }
     return res;
   }
 
@@ -287,9 +347,11 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     if (!e.calculable) {
       res.push(constat('equilibre', 'alerte', 'Équilibre non calculable : les villes de déploiement ne sont pas désignées (il en manque, ou il y en a trop, sur la rangée du haut ou du bas).', [], e));
     } else {
-      res.push(constat('equilibre', 'info', 'Équilibre : score ' + e.score + ' (0 = les deux camps atteignent les villes au même coût en rations).', [], e));
-      if (e.sansSymetrique.length) {
-        res.push(constat('equilibre', 'alerte', 'Villes sans ville symétrique par demi-tour : ' + liste(e.sansSymetrique) + ' ; elles sont comparées à elles-mêmes.', e.sansSymetrique));
+      if (e.comparable) {
+        res.push(constat('equilibre', 'info', 'Équilibre : score ' + e.score + ' (0 = les deux camps atteignent les villes au même coût en rations).', [], e));
+      } else {
+        res.push(constat('equilibre', 'alerte', 'Équilibre non comparable : ' + e.raison + ' Le score n’est pas calculé ; les coûts par ville restent affichés.',
+          e.casesSansSymetrique.concat(e.sansSymetrique.filter(function (k) { return e.casesSansSymetrique.indexOf(k) === -1; })), e));
       }
       if (e.horsAtteinte.length) {
         res.push(constat('equilibre', 'alerte', 'Villes hors d’atteinte d’un camp : ' + liste(e.horsAtteinte) + ' ; elles ne comptent pas dans le score.', e.horsAtteinte));

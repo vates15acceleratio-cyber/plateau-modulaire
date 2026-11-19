@@ -17,6 +17,23 @@
   window.addEventListener('unhandledrejection', function (ev) { erreursJs.push('promesse rejetée : ' + (ev.reason && ev.reason.message || ev.reason)); });
   document.addEventListener('securitypolicyviolation', function (ev) { violations.push(ev.violatedDirective + ' ' + (ev.blockedURI || '') + ' ' + String(ev.sourceFile || '').split('/').pop() + ':' + ev.lineNumber); });
 
+  // Stockage : la recette ne touche JAMAIS à la bibliothèque du poste. Un stockage en mémoire (dont les écritures
+  // sont comptées) est donné à l'atelier avant son démarrage : cet écouteur est posé avant celui de src/app.js.
+  // Seule exception : recette.html#persistance=ecrire|lire, qui vérifie le vrai stockage du navigateur (à lancer
+  // sur un dossier de profil temporaire).
+  var persistance = /persistance=(ecrire|lire)/.exec(window.location.hash);
+  var ecritures = [], stockageRecette = null;
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!window.AT || !AT.app || !AT.bibliotheque || persistance) return;
+    var memoire = AT.bibliotheque.stockageMemoire();
+    stockageRecette = {
+      getItem: memoire.getItem,
+      setItem: function (k, v) { memoire.setItem(k, v); ecritures.push(String(k)); },
+      removeItem: memoire.removeItem
+    };
+    AT.app.stockage = stockageRecette;
+  });
+
   function verifier(nom, condition, detail) {
     if (condition) { ok += 1; lignes.push('OK    ' + nom); } else { echecs += 1; lignes.push('ÉCHEC ' + nom + (detail !== undefined ? ' → ' + detail : '')); }
   }
@@ -1069,6 +1086,58 @@
     AT.app.montrer('plateau');
     $('#pl-graine').value = '1';
     clic($('#pl-generer'));
+    AT.app.montrer('partie');
+  });
+
+  // ================================================================== F bis. création à la main : modèle (lot D)
+  // L'interface de création viendra après (lot E) : ici, l'interface EXISTANTE devant un document fait à la main.
+  scenario('Création à la main : modèle (pièce personnelle, M1, équilibre non comparable)', function () {
+    var vp = AT.app.vues.plateau, vq = AT.app.vues.partie, P = AT.plateau, B = AT.bibliotheque;
+    AT.app.montrer('plateau');
+    var doc = P.ajouterModele(P.vierge('main'), { nom: 'Crête', quantite: 2, cases: [{ q: 0, r: 0, terrain: 'montagne' }, { q: 1, r: 0, terrain: 'foret' }, { q: 1, r: 1, terrain: 'plaine' }] }).plateau;
+    [['X1', 2, 0], ['V', 0, -2], ['P', 0, 2], ['V', 0, 3], ['P', 1, -2]].forEach(function (x) { doc = P.poser(doc, x[0], x[1], x[2], 0).plateau; });
+    doc = P.avecCamps(P.peindre(doc, '-2,0', 'montagne').plateau);
+    verifier('fichier avec une pièce personnelle et une montagne d’une case : ouvert et dessiné', vp.ouvrirTexte(P.serialiser(doc)) === true && casesDessinees(vp.vue) === 15, casesDessinees(vp.vue));
+    var texte = $('#pl-controles').textContent;
+    verifier('contrôle 1 : « à prévoir en plus du catalogue » et « montagne d’une case » en alerte, sans erreur d’inventaire',
+      /Tuiles à prévoir en plus du catalogue \(1\) : 1 × Montagne d’une case/.test(texte) && /1 montagne d’une case sur le plateau/.test(texte)
+      && /Pièces personnelles restantes \(1\) : 1 × Crête/.test(texte) && !$('#pl-controles [data-regle="inventaire"][data-niveau="erreur"]'), texte.slice(0, 300));
+    verifier('équilibre non comparable : tableau des coûts par ville gardé, score remplacé par une explication',
+      $$('#pl-equilibre tbody tr').length === 3 && /Score d’équilibre : non comparable\. Plateau non symétrique par demi-tour/.test($('#pl-score').textContent)
+      && !/null|undefined|NaN/.test(texte) && vp.bilan().equilibre.score === null, $('#pl-score') && $('#pl-score').textContent);
+    clicCase(vp.vue, '3,0');
+    verifier('pièce personnelle sélectionnée : nommée, ses 3 cases marquées', /Pièce sélectionnée : Crête \(3 cases\)/.test($('#pl-outil').textContent) && marques(vp.vue, 'at-selection') === 3, $('#pl-outil').textContent);
+    clic($('#pl-tourner'));
+    var crete = vp.plateau().pieces.filter(function (p) { return p.modele === 'X1'; })[0];
+    verifier('pièce personnelle tournée ; le document garde ses pièces personnelles', crete.rotation === 1 && vp.plateau().modeles.length === 1 && casesDessinees(vp.vue) === 15, crete.rotation);
+    clicCase(vp.vue, '-2,0');
+    verifier('montagne d’une case sélectionnée : nommée', /Pièce sélectionnée : Montagne d’une case \(1 case\)/.test($('#pl-outil').textContent), $('#pl-outil').textContent);
+    verifier('le plateau fait à la main s’enregistre et se relit', P.lire(vp.texteEnregistrement()).ok === true && /"modeles"/.test(vp.texteEnregistrement()));
+    AT.app.montrer('partie');
+    clic($('#pa-nouvelle'));
+    verifier('partie sur ce plateau : créée, dessinée, enregistrée puis rouverte avec ses pièces personnelles',
+      casesDessinees(vq.vue) === 15 && vq.etat().plateau.modeles[0].id === 'X1' && vq.ouvrirTexte(vq.texteEnregistrement()) === true && vq.etat().plateau.modeles[0].nom === 'Crête', casesDessinees(vq.vue));
+    AT.app.montrer('plateau');
+    clic($('#pl-vider'));
+    verifier('vider le plateau : les pièces personnelles restent dans le document', vp.plateau().pieces.length === 0 && vp.plateau().modeles.length === 1);
+    $('#pl-graine').value = '1';
+    clic($('#pl-generer'));
+    verifier('générer sur un document à pièces personnelles : plateau généré, pièces reportées non posées, note affichée',
+      vp.plateau().pieces.length === 64 && vp.plateau().modeles.length === 1 && $('#pl-avis').hidden && /1 pièce personnelle est conservée dans le plateau, non posée/.test($('#barre-etat').textContent)
+      && /Pièces personnelles restantes \(2\) : 2 × Crête/.test($('#pl-controles').textContent) && vp.bilan().erreurs === 0, $('#barre-etat').textContent);
+    AT.app.montrer('inventaire');
+    verifier('inventaire : le catalogue imprimé ne compte ni M1 ni les pièces personnelles',
+      $$('#inv-pieces tbody tr').length === 13 && /Catalogue : 64 pièces, 91 cases/.test($('#inv-totaux').textContent) && !$('#inv-pieces [data-modele="M1"]') && !$('#inv-pieces [data-modele="X1"]'), $('#inv-totaux').textContent);
+    // Bibliothèque : module chargé ; le stockage du navigateur est seulement LU ici (rien n'est écrit sur ce poste).
+    var stockage = B.stockageNavigateur(), lu = B.charger(stockage), travail = B.chargerTravail(stockage);
+    verifier('bibliothèque : lecture du stockage du navigateur sans exception (présent ou non)',
+      (stockage === null || typeof stockage.getItem === 'function') && typeof lu.ok === 'boolean' && Array.isArray(lu.liste) && typeof travail.ok === 'boolean', String(lu.raison));
+    var memoire = B.stockageMemoire(), ajout = B.ajouter(B.vide(), 'Essai', doc);
+    verifier('bibliothèque : ajouter, enregistrer et recharger un plateau fait à la main (stockage en mémoire)',
+      ajout.ok && B.enregistrer(memoire, ajout.liste).ok && JSON.stringify(B.charger(memoire).liste[0].plateau) === JSON.stringify(doc));
+    // Retour à l'état attendu par la suite : plateau généré sans pièce personnelle, onglet Partie.
+    AT.app.montrer('plateau');
+    vp.ouvrirTexte(P.serialiser(AT.generateur.generer(1, vp.reglages()).plateau));
     AT.app.montrer('partie');
   });
 

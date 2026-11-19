@@ -448,8 +448,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   /**
    * Génère un plateau. `graine` : entier ou chaîne. options (facultatives) :
    *   seuilContact (2 ou 3), mesureContact ('cotes' | 'pieces'), tentatives (essais de remplissage par forme),
-   *   et tout réglage de AT.catalogue.REGLAGES.generateur (retouches, formes, echanges, essaisForme…), ecartVilles, couts.
-   * Renvoie {ok, plateau, score, raison, forme, essais, formesEssayees, tiragesForme, echecs, controles} :
+   *   et tout réglage de AT.catalogue.REGLAGES.generateur (retouches, formes, echanges, essaisForme…), ecartVilles, couts ;
+   *   modeles : pièces personnelles du document courant (AT.plateau.modeles(plateau)). Le générateur ne connaît que
+   *   le catalogue de base : elles sont REPORTÉES dans le plateau généré (champ `modeles`), non posées, et `note` le dit.
+   * Renvoie {ok, plateau, score, raison, note, forme, essais, formesEssayees, tiragesForme, echecs, controles} :
    *   ok = true : `plateau` utilise toutes les pièces et passe tous les contrôles de niveau erreur ;
    *   ok = false : plateau = null et `raison` explique l'échec ; `echecs` compte les essais ratés par étape
    *   (forme, montagnes, villes, monoblocs, contact, inventaire, controles).
@@ -457,7 +459,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   function generer(graine, options) {
     var R = reglages(options);
     var res = {
-      ok: false, plateau: null, score: null, raison: null, forme: null, essais: 0, formesEssayees: 0, tiragesForme: 0,
+      ok: false, plateau: null, score: null, raison: null, note: null, forme: null, essais: 0, formesEssayees: 0, tiragesForme: 0,
       echecs: { forme: 0, montagnes: 0, villes: 0, monoblocs: 0, contact: 0, inventaire: 0, controles: 0 }, controles: null
     };
     if (C.REGLAGES.mesuresContact.indexOf(R.mesureContact) === -1) { res.raison = 'Mesure de contact inconnue.'; return res; }
@@ -466,6 +468,13 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     // Échec immédiat et nommé si le catalogue ou le rayon sort de ce que le générateur sait poser.
     var cause = incompatibilite(R);
     if (cause) { res.raison = cause; res.incompatible = true; return res; }
+    // Pièces personnelles du document : validées ici, reportées telles quelles dans le plateau généré.
+    var persos = [];
+    if (options && options.modeles !== undefined && options.modeles !== null) {
+      var avis = P.validerModeles(options.modeles);
+      if (!avis.ok) { res.raison = 'Pièces personnelles du document invalides : ' + avis.erreurs[0]; return res; }
+      persos = avis.modeles;
+    }
     var graineUtile = (typeof graine === 'number' || typeof graine === 'string') ? graine : 0;
     var alea = AT.alea.creer(graineUtile);
     var optionsControles = { seuilContact: R.seuilContact, mesureContact: R.mesureContact, ecartVilles: R.ecartVilles, couts: R.couts };
@@ -506,6 +515,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     res.score = meilleur.score;
     res.forme = meilleur.forme;
     res.controles = meilleur.controles;
+    if (persos.length) {
+      res.plateau.modeles = persos;
+      res.controles = K.tout(res.plateau, optionsControles);      // le bilan rendu décrit le plateau rendu
+      res.note = 'Le générateur ne pose que le catalogue de base : ' + persos.length
+        + (persos.length > 1 ? ' pièces personnelles sont conservées dans le plateau, non posées.' : ' pièce personnelle est conservée dans le plateau, non posée.');
+    }
     return res;
   }
 

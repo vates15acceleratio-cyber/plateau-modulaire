@@ -35,7 +35,7 @@ body { font: 13px/1.35 "Segoe UI", Arial, Helvetica, sans-serif; color: var(--en
 
 /* Écran à trois colonnes (Plateau et Partie) */
 .at-ecran { height: 100%; min-height: 0; }
-.at-ecran-plateau, .at-ecran-partie { display: grid; grid-template-columns: 290px minmax(0, 1fr) 350px; }
+.at-ecran-plateau, .at-ecran-partie { display: grid; grid-template-columns: 320px minmax(0, 1fr) 340px; }
 .at-colonne { overflow: auto; padding: 6px 8px; min-height: 0; }
 .at-colonne-gauche { border-right: 1px solid var(--trait); }
 .at-colonne-droite { border-left: 1px solid var(--trait); }

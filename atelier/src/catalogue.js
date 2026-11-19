@@ -3,9 +3,10 @@
  * Aucun accès au DOM, aucune dépendance. Source : docs/02-atelier-cahier-des-charges.md, §1 et §2.
  *
  * Tout ce qui est ici est PROVISOIRE (à valider par l'utilisateur) :
- *  - MODELES    : les 13 modèles de pièces (64 pièces, 91 cases) ;
+ *  - MODELES    : les 13 modèles de pièces (64 pièces, 91 cases) ; MODELES_HORS_CATALOGUE : M1, hors catalogue imprimé ;
  *  - EVENEMENTS : la réserve de 8 tuiles d'événement (uniques, posées par-dessus une case) ;
- *  - REGLAGES   : coûts en rations, seuil et mesure de contact, villes, trous, réglages du générateur, bornes des fichiers.
+ *  - REGLAGES   : coûts en rations, seuil et mesure de contact, villes, trous, réglages du générateur, bornes des fichiers,
+ *                  des pièces personnelles et de la bibliothèque.
  *
  * Ce qui se change ICI SEULEMENT (plateau, contrôles, inventaire, retouche à la main et générateur suivent) :
  *  - les noms ; les coûts en rations ; le seuil et la mesure de contact ; l'écart entre villes ; le niveau du constat « trous » ;
@@ -69,6 +70,16 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   var ORDRE_MODELES = ['N1', 'M4', 'M5', 'V', 'F3', 'F31', 'F21', 'S3', 'S31', 'S21', 'P', 'F', 'S'];
 
   /*
+   * Modèles de base HORS CATALOGUE IMPRIMÉ (cahier des charges §8.1) : connus de modele(), posables seulement
+   * « hors stock » (quantité 0), jamais comptés dans les totaux ni dans ORDRE_MODELES, ignorés du générateur.
+   * M1 sert au pinceau ; la décision en vigueur reste « montagnes en blocs de 4 ou 5 cases » (le contrôle 1 le rappelle).
+   */
+  var MODELES_HORS_CATALOGUE = {
+    M1: { id: 'M1', nom: 'Montagne d’une case', nombre: 0, horsCatalogue: true, cases: forme([[0, 0]], 'montagne') }
+  };
+  var ORDRE_HORS_CATALOGUE = ['M1'];
+
+  /*
    * Réserve d'événements. `sur` = condition de pose sur le terrain d'ORIGINE de la case :
    *   terrains      : liste des terrains acceptés (absent = tout terrain) ;
    *   franchissable : true = la case doit être franchissable ;
@@ -124,13 +135,38 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       montagnesEcart: 2                     // distance minimale entre deux blocs de montagne (2 = une case entre eux)
     },
     // Bornes de validation d'un plateau lu dans un fichier.
-    bornes: { coordonnee: 30, pieces: 200, recouvrements: 16, longueurGraine: 64, longueurId: 16, tailleFichier: 200000 }
+    bornes: { coordonnee: 30, pieces: 200, recouvrements: 16, longueurGraine: 64, longueurId: 16, tailleFichier: 200000 },
+    // Pièces personnelles portées par le document du plateau (§8.1). Jamais de ville (règle A2).
+    perso: {
+      casesMin: 2, casesMax: 6,             // cases d'une pièce personnelle, d'un seul tenant, case (0,0) comprise
+      quantiteMax: 9,                       // exemplaires d'une pièce personnelle (1 au moins)
+      modelesMax: 24,                       // pièces personnelles dans un document
+      longueurNom: 40,                      // caractères du nom (1 au moins)
+      chiffresId: 4,                        // identifiant : « X » suivi de 1 à 4 chiffres, sans zéro en tête
+      terrains: ['plaine', 'foret', 'marais', 'montagne']
+    },
+    // Pinceau (§8.2) : modèle d'une case posé pour chaque terrain.
+    pinceau: { plaine: 'P', foret: 'F', marais: 'S', montagne: 'M1', ville: 'V' },
+    // Bibliothèque de plateaux (§8.1) : bornes de ce qui est lu ou écrit dans le stockage du navigateur.
+    bibliotheque: {
+      prefixe: 'atelier-plateau:',          // préfixe des clés du stockage
+      plateauxMax: 40,                      // plateaux enregistrés au plus
+      longueurNom: 60,                      // caractères du nom d'un plateau (1 au moins)
+      tailleMax: 4000000                    // caractères du texte de la bibliothèque (lecture, écriture, import)
+    }
   };
 
   var possede = Object.prototype.hasOwnProperty;
 
-  /** Modèle de pièce par identifiant, ou null (identifiant inconnu, y compris '__proto__' et compagnie). */
-  function modele(id) { return (typeof id === 'string' && possede.call(MODELES, id)) ? MODELES[id] : null; }
+  /**
+   * Modèle de pièce DE BASE par identifiant (catalogue imprimé ou hors catalogue), ou null (identifiant inconnu,
+   * y compris '__proto__' et compagnie). Les pièces personnelles d'un document se cherchent par AT.plateau.modele.
+   */
+  function modele(id) {
+    if (typeof id !== 'string') return null;
+    if (possede.call(MODELES, id)) return MODELES[id];
+    return possede.call(MODELES_HORS_CATALOGUE, id) ? MODELES_HORS_CATALOGUE[id] : null;
+  }
 
   /** Événement par identifiant, ou null. */
   function evenement(id) { return (typeof id === 'string' && possede.call(EVENEMENTS, id)) ? EVENEMENTS[id] : null; }
@@ -166,7 +202,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   }
 
   AT.catalogue = {
-    MODELES: MODELES, ORDRE_MODELES: ORDRE_MODELES, EVENEMENTS: EVENEMENTS, ORDRE_EVENEMENTS: ORDRE_EVENEMENTS,
+    MODELES: MODELES, ORDRE_MODELES: ORDRE_MODELES,
+    MODELES_HORS_CATALOGUE: MODELES_HORS_CATALOGUE, ORDRE_HORS_CATALOGUE: ORDRE_HORS_CATALOGUE,
+    EVENEMENTS: EVENEMENTS, ORDRE_EVENEMENTS: ORDRE_EVENEMENTS,
     REGLAGES: REGLAGES,
     modele: modele, evenement: evenement, estMonobloc: estMonobloc, coutTerrain: coutTerrain,
     totaux: totaux, monoblocsAvecVille: monoblocsAvecVille
