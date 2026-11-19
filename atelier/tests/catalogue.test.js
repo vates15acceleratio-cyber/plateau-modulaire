@@ -87,7 +87,7 @@ test('réglages provisoires regroupés : coûts, contact, villes', () => {
   const R = C.REGLAGES;
   assert.deepStrictEqual([R.couts.plaine, R.couts.foret, R.couts.marais, R.couts.ville, R.couts.montagne], [1, 2, 2, 1, null]);
   assert.strictEqual(R.seuilContact, 3);
-  assert.strictEqual(R.mesureContact, 'cotes');
+  assert.strictEqual(R.mesureContact, 'pieces');
   assert.deepStrictEqual(R.seuilsContact, [2, 3]);
   assert.deepStrictEqual(R.mesuresContact, ['cotes', 'pieces']);
   assert.strictEqual(R.nombreVilles, 7);

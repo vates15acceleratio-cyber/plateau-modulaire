@@ -59,7 +59,7 @@ Chaque contrôle renvoie `{regle, niveau ('erreur' | 'alerte' | 'info'), message
 2. Pas de chevauchement ; plateau d'un seul tenant ; toutes les cases franchissables reliées entre elles. Un **trou** dans le plateau (zone vide fermée) est signalé en alerte (réglage `REGLAGES.trous` ; ajout de la revue, la règle revient à l'utilisateur).
 3. A2 : aucune ville dans un monobloc hors noyau. Noyau présent, centré en (0,0).
 4. Villes : 7 ; écart ≥ 4 pas entre toutes les paires (par les cases franchissables) ; 2 villes sur la rangée du haut, 2 sur la rangée du bas ; ce sont bien les deux villes les plus proches de chaque côté, sans égalité avec une troisième.
-5. A6, contact : seuil paramétré (3 par défaut). Deux mesures, toutes deux calculées et affichées : **côtés** (nombre de cases voisines occupées par une autre pièce) et **pièces** (nombre de pièces voisines distinctes). La mesure retenue par défaut est « côtés » (provisoire).
+5. A6, contact : seuil paramétré (3 par défaut). Deux mesures, toutes deux calculées et affichées : **côtés** (nombre de cases voisines occupées par une autre pièce) et **pièces** (nombre de pièces voisines distinctes). La mesure retenue par défaut est « pièces » : c’est la lecture littérale de « 3 autres tuiles », et elle implique aussi 3 côtés ; « côtés » reste au choix.
 6. Équilibre : pour chaque ville, coût minimal en rations depuis les villes de déploiement de Vert et depuis celles de Rouge ; score = somme des écarts entre une ville et sa symétrique vue de l'autre camp (0 = parfaitement équilibré). Répartition des terrains (%).
 7. Événements posés : condition de pose respectée ; pas de coupure du plateau.
 

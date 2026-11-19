@@ -7,7 +7,7 @@ Le catalogue des pièces, les tuiles d'événement et les Troupes sont des **pro
 ## Onglet « Plateau »
 
 - **Générer** : saisissez une graine (un nombre ou un mot) puis « Générer ». La même graine redonne toujours le même plateau. « Graine suivante » passe au nombre suivant.
-- **Réglages** : seuil de contact (3 tuiles par défaut, ou 2) et mesure (côtés ou pièces voisines). Ils servent au générateur et aux contrôles.
+- **Réglages** : seuil de contact (3 tuiles par défaut, ou 2) et mesure (pièces voisines distinctes par défaut, ou côtés). Ils servent au générateur et aux contrôles.
 - **Retoucher à la main** :
   - cliquez une pièce du plateau pour la sélectionner, puis « Tourner » (touche R), « Déplacer » ou « Retirer » (touche Suppr) ;
   - cliquez une pièce du « Stock restant » puis une case pour la poser ; un aperçu suit la souris (rouge si la place est prise) ; R la tourne ; Échap arrête ;

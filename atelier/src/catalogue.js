@@ -97,7 +97,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     // A6 : chaque tuile touche au moins `seuilContact` autres tuiles, selon la mesure retenue.
     seuilContact: 3,
     seuilsContact: [2, 3],
-    mesureContact: 'cotes',                 // 'cotes' (cases voisines occupées par une autre pièce) ou 'pieces' (pièces voisines distinctes)
+    mesureContact: 'pieces',                // 'cotes' (cases voisines occupées par une autre pièce) ou 'pieces' (pièces voisines distinctes)
     mesuresContact: ['cotes', 'pieces'],
     // Villes.
     nombreVilles: 7,

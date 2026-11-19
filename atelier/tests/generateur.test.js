@@ -94,11 +94,11 @@ for (const options of COMBINAISONS) {
   });
 }
 
-test('réglage par défaut : seuil 3, mesure « côtés »', () => {
+test('réglage par défaut : seuil 3, mesure « pièces »', () => {
   const res = G.generer(3);
   assert.ok(res.ok, res.raison);
-  verifierPlateau(res, { seuilContact: 3, mesureContact: 'cotes' });
-  assert.deepStrictEqual(G.generer(3, { seuilContact: 3, mesureContact: 'cotes' }).plateau, res.plateau);
+  verifierPlateau(res, { seuilContact: 3, mesureContact: 'pieces' });
+  assert.deepStrictEqual(G.generer(3, { seuilContact: 3, mesureContact: 'pieces' }).plateau, res.plateau);
 });
 
 test('les plateaux générés ne sont pas tous l’hexagone régulier : la forme du bord varie', () => {
