@@ -120,3 +120,36 @@ L'utilisateur veut créer lui-même des plateaux, en plus du générateur. Il a 
 - **Mes monoblocs** : éditeur (petite grille : cliquer pour ajouter / retirer une case, choisir son terrain ; nom ; quantité), liste, modifier / supprimer (refus si posé), « copier depuis un plateau de la bibliothèque ». Visibles dans l'onglet Inventaire, à part du catalogue imprimé.
 - **Bibliothèque** : enregistrer le plateau courant sous un nom, ouvrir, dupliquer, renommer, supprimer (confirmation), vignette et résumé (cases, erreurs / alertes), exporter tout / importer ; sauvegarde automatique du travail en cours et reprise à l'ouverture.
 - Nouveaux fichiers : `src/vue-creation.js`, `src/vue-monoblocs.js`, `src/vue-bibliotheque.js`, `styles/creation.css` ; mêmes contraintes (CSP, pas de `style=`, pas d'`innerHTML`).
+
+## 9. Catalogue 2 : monoblocs seulement, villes posées après la construction (décisions de l'utilisateur, 2026-11-19, seconde série)
+Voir `docs/00-direction.md`. Ce chapitre remplace le catalogue du §2 et les règles de villes des §1 et §3. Compléments au §8.1 déjà en place : compteur d'identifiants de fiche, copies de secours, attache `ouvert` dans le travail en cours, nom et quantité d'une pièce posée modifiables, noyau jamais retiré par la gomme.
+
+### 9.1 Règles
+| N° | Règle de l'utilisateur | Traduction (les réglages marqués provisoires restent des paramètres) |
+|---|---|---|
+| B1 | Terrain uniquement en monoblocs de 3 ou 4 cases ; le noyau ne bouge pas ; montagnes en blocs. | Plus de pièce P / F / S d'une case dans le catalogue imprimé. |
+| B2 | Quelques tuiles uniques de **remplissage** permises si le tout-monobloc est trop compliqué. | Pièce `R` (plaine d'une case), en petit nombre ; le nombre minimal utile est **mesuré** (§9.3). Elles restent l'exception : le générateur en pose le moins possible. |
+| B3 | Le plateau est **construit par les joueurs**, puis ils **disposent les villes aux extrémités**. | Deux phases : **construction** (pièces de terrain), puis **villes**. Un plateau construit sans villes n'est pas en erreur : il est « à l'étape des villes ». |
+| B4 | Villes de déploiement **posées SUR une case de Plaine** après la construction ; **2 par joueur**. | Tuile `VD` posée par-dessus (couche de recouvrement, avec propriétaire `vert` / `rouge`) ; sur une Plaine du **bord haut** (Vert) ou du **bord bas** (Rouge), hors noyau. « Bord haut / bas » : case de bord du plateau située dans les `profondeurExtremite` rangées extrêmes (provisoire : mesurer 1 et 2). `camps` est déduit de ces tuiles. |
+| B5 | Villes neutres : **tuiles** placées **aux extrémités sur les côtés**, **pas sur une Plaine**. | Pièce `VN` (ville d'une case, ×2), ajoutée contre le bord du plateau, une sur le flanc gauche et une sur le flanc droit (provisoire : dans le tiers central des rangées). |
+| B6 | Maintenu : 3 tuiles au moins entre deux villes. | 4 pas entre toutes les paires de villes (centre, 2 neutres, 4 de déploiement), comptés en cases franchissables (provisoire : à confirmer maintenant qu'une tuile fait 3 ou 4 cases). |
+| B7 | Maintenu : contact ≥ 3 autres tuiles. | Mesure « pièces » pour les monoblocs. Tuile de remplissage et ville neutre : seuil propre, à **mesurer** (une tuile seule collée au bord touche souvent 2 pièces). |
+| A2 relue | « Jamais de ville en monobloc sauf le noyau ». | Aucune ville **imprimée** dans un monobloc ; une `VD` posée par-dessus une Plaine de monobloc est permise (c'est une tuile à part). |
+
+### 9.2 Catalogue 2 (provisoire)
+Noyau `N1` (7 cases), montagnes `M4` et `M5`, 21 monoblocs de terrain = 75 cases (53 plaines, 11 forêts, 11 marais, soit 70,7 / 14,7 / 14,7 %) :
+- 12 pièces de 4 cases : 5 tout en plaine ; 2 « 1 forêt + 3 plaines » ; 2 « 1 marais + 3 plaines » ; 1 « 2 forêts + 2 plaines » ; 1 « 2 marais + 2 plaines » ; 1 « 1 forêt + 1 marais + 2 plaines ».
+- 9 pièces de 3 cases : 3 tout en plaine ; 1 « 3 forêts » ; 1 « 3 marais » ; 1 « 2 forêts + 1 plaine » ; 1 « 2 marais + 1 plaine » ; 1 « 1 forêt + 2 plaines » ; 1 « 1 marais + 2 plaines ».
+- Formes variées (triangle, ligne, coude ; losange, zigzag, coude long, T…), sans miroir obligatoire. Si une tuile de remplissage `R` est retenue, la répartition doit rester à 70 / 15 / 15 à un point près.
+- Villes : `VN` ×2 (tuiles d'une case), `VD` ×4 (tuiles posées par-dessus, 2 par joueur). Réserve d'événements inchangée ; un événement ne se pose pas sur une case portant une `VD`.
+
+### 9.3 Mesure de faisabilité (avant toute interface) : `docs/07-mesures-catalogue-2.md`
+Sur 300 graines au moins : (a) taux de réussite et temps du générateur selon le nombre de tuiles de remplissage en stock (0, 2, 4, 6, 9), et nombre réellement posé ; (b) contact des monoblocs, des remplissages et des villes neutres aux seuils 2 et 3 ; (c) nombre de Plaines admissibles pour les villes de déploiement (profondeur 1 et 2) et de places pour les villes neutres, plateaux sans solution ; (d) part des plateaux symétriques par demi-tour, et équilibre **sans symétrie** : écart entre Vert et Rouge du coût en rations vers le centre, vers chaque ville neutre et vers les villes de déploiement adverses ; (e) variété des formes. Conclusion en clair, avec une recommandation chiffrée sur le nombre de tuiles de remplissage.
+
+### 9.4 Modèle et outil
+- Le générateur **construit comme des joueurs** (à partir du noyau, pièce après pièce) plutôt que de remplir une forme tirée d'avance, puis pose les villes en cherchant le meilleur équilibre. Même graine = même plateau.
+- Contrôles en deux groupes : construction (inventaire, chevauchement, continuité, trous, contact) et villes (nombre, écart, placement, équilibre). Équilibre redéfini sans symétrie (d).
+- `villes()`, `camps` et `cases()` gardent leur forme pour que la table de jeu fonctionne ; test d'intégration avec `partie.creer`.
+- **Anciens plateaux** (fichiers et bibliothèque faits avec le premier catalogue) : ils s'ouvrent toujours ; version du format augmentée ; leurs tuiles d'une case P / F / S / V restent lisibles comme pièces « hors catalogue ».
+- Pinceau : toute tuile d'une case peinte est hors catalogue (sauf remplissage en stock) ; le pinceau « ville » est remplacé par les outils de la phase villes.
+- Interface (lot suivant) : étape « Villes » après la construction (cases admissibles en surbrillance, refus expliqué), inventaire du catalogue 2, palette et « reste à faire » adaptés, onglet Partie inchangé dans son principe.
