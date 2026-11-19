@@ -5,6 +5,14 @@
 .at-nom-plateau { font-weight: 600; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .at-sauvegarde { font-size: 12px; color: #c9c7d6; white-space: nowrap; }
 .at-sauvegarde-erreur { color: #ffb4a8; font-weight: 600; }
+/* Écran large : la barre reste sur une ligne ; un nom long ou la mention « provisoire » sont abrégés par des points de suspension. */
+@media (min-width: 1001px) {
+  .at-barre { flex-wrap: nowrap; }
+  .at-titre, .at-onglets { flex: none; }
+  .at-nom-plateau { flex: none; max-width: 420px; }
+  .at-sauvegarde { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .at-provisoire { flex: 0 2 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
 
 /* Bascule des modes de l'onglet Plateau */
 .at-modes { display: flex; flex-wrap: wrap; gap: 3px; margin: 0 0 4px; }
@@ -36,7 +44,7 @@
 .at-pinceau-message:empty { display: none; }
 
 /* Éditeur de monoblocs */
-.at-mono-grille { display: block; width: 100%; max-width: 250px; height: auto; margin: 4px auto; background: var(--papier); border: 1px solid var(--trait); border-radius: 4px; touch-action: manipulation; user-select: none; }
+.at-mono-grille { display: block; width: 100%; max-width: 205px; height: auto; margin: 4px auto; background: var(--papier); border: 1px solid var(--trait); border-radius: 4px; touch-action: manipulation; user-select: none; }
 .at-mono-case { cursor: pointer; }
 .at-mono-case:hover { stroke: #1e64dc; stroke-width: 3; }
 .at-mono-apercu { display: flex; align-items: center; gap: 8px; min-height: 40px; margin: 4px 0; }
@@ -45,6 +53,7 @@
 .at-mono-carte:first-child { border-top: 0; }
 .at-mono-texte { min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
 #mo-nom { flex: 1 1 120px; }
+#mo-terrains { grid-template-columns: repeat(4, 1fr); }
 #mo-source { flex: 1 1 120px; max-width: 100%; }
 
 /* Bibliothèque */
@@ -65,7 +74,7 @@
 
 @media (max-width: 1000px) {
   .at-nom-plateau { max-width: 100%; }
-  .at-mono-grille { max-width: 320px; }
+  .at-mono-grille { max-width: 300px; }
 }
 
 @media print {

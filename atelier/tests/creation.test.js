@@ -236,13 +236,14 @@ test('poser une pièce personnelle : cases, rotation, stock, refus au-delà de l
   assert.deepStrictEqual(retrait.plateau.modeles, p.modeles);
 });
 
-test('modifier, supprimer : refusés avec explication tant que des exemplaires sont posés', () => {
+test('modifier la forme, supprimer : refusés avec explication tant que des exemplaires sont posés', () => {
+  // Lot E : le nom et la quantité d'une pièce posée se changent (tests/creation-interface.test.js) ; sa forme, non.
   const libre = avecCrete();
   const pose = P.poser(libre, 'X1', 3, 0, 0);
-  const m = P.modifierModele(pose.plateau, 'X1', { nom: 'Autre' });
+  const m = P.modifierModele(pose.plateau, 'X1', { nom: 'Autre', cases: DUO().cases });
   assert.strictEqual(m.ok, false);
   assert.strictEqual(m.plateau, pose.plateau);
-  assert.match(m.raison, /Modification refusée : 1 exemplaire de « Crête » est posé sur le plateau\. Retirez-le d’abord\./);
+  assert.match(m.raison, /Modification de la forme refusée : 1 exemplaire de « Crête » est posé sur le plateau\. Retirez-le d’abord\./);
   assert.deepStrictEqual(m.pieces, [pose.id]);
   const deux = P.poser(pose.plateau, 'X1', -4, 0, 0);
   const s = P.supprimerModele(deux.plateau, 'X1');

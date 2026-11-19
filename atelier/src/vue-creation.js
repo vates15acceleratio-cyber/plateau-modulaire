@@ -130,7 +130,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       horsStock: 0,          // tuiles posées au-delà du stock
       evenements: 0,         // tuiles d'événement renvoyées en réserve
       refusNoyau: 0, refusMonobloc: 0, vides: 0, autres: 0,
-      monobloc: null,        // premier monobloc (ou noyau) rencontré : {piece, modele, nom, noyau, cases, raison}
+      monobloc: null,        // premier monobloc (ou noyau) rencontré : {piece, nom, noyau, cases, raison}
+      nomMonobloc: null,     // nom du premier monobloc rencontré, noyau exclu (pour le message)
       raison: null           // première raison de refus
     };
   }
@@ -148,10 +149,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       if (r.vide) trait.vides += 1;
       else if (r.monobloc) {
         if (r.noyau) trait.refusNoyau += 1; else trait.refusMonobloc += 1;
-        if (!trait.monobloc) {
-          var m = P.modele(trait.plateau, r.modele || (P.cases(trait.plateau, { sansRecouvrements: true })[cle] || {}).modele);
-          trait.monobloc = { piece: r.piece, noyau: !!r.noyau, nom: m ? m.nom : 'monobloc', cases: r.cases || [cle], raison: r.raison };
-        }
+        var m = P.modele(trait.plateau, r.modele || (P.cases(trait.plateau, { sansRecouvrements: true })[cle] || {}).modele);
+        if (!trait.monobloc) trait.monobloc = { piece: r.piece, noyau: !!r.noyau, nom: m ? m.nom : 'monobloc', cases: r.cases || [cle], raison: r.raison };
+        if (!r.noyau && !trait.nomMonobloc && m) trait.nomMonobloc = m.nom;
       } else trait.autres += 1;
       if (!trait.raison) trait.raison = r.raison;
       return false;
@@ -204,7 +204,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       } else {
         var quoi = [];
         if (trait.refusNoyau) quoi.push('le noyau');
-        if (trait.refusMonobloc) quoi.push(trait.monobloc && !trait.monobloc.noyau ? 'le monobloc « ' + trait.monobloc.nom + ' »' : 'un monobloc');
+        if (trait.refusMonobloc) quoi.push(trait.nomMonobloc ? 'le monobloc « ' + trait.nomMonobloc + ' »' : 'un monobloc');
         morceaux.push('Le pinceau ne modifie pas ' + quoi.join(' ni ') + ' (' + pluriel(refus, 'case laissée', 'cases laissées')
           + '). Pour le remplacer, retirez-le d’abord (gomme, avec confirmation).');
         niveau = trait.changees ? 'alerte' : 'erreur';

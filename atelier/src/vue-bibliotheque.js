@@ -132,6 +132,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         return false;
       }
       liste = nouvelle;
+      resumes = Object.create(null);        // deux enregistrements peuvent porter la même date à la milliseconde : pas de résumé périmé
       return true;
     }
 
@@ -365,6 +366,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       montrer: function (oui) { visible = !!oui; if (visible) rafraichir(); },
       liste: function () { return liste; }, ouvert: function () { return ouvert; }, avis: function () { return avisStockage; },
       detacher: function () { if (ouvert) { noterOuvert(null); } },
+      /** Rattache le plateau courant à une entrée (annuler / rétablir) ; une entrée supprimée entre-temps détache. */
+      attacher: function (id) { var cible = id && B.trouver(liste, id) ? id : null; if (cible !== ouvert) noterOuvert(cible); },
       activer: function () { actif = true; }, planifier: planifier, sauverTravail: sauverTravail, reprendre: reprendre,
       enregistrerSous: enregistrerSous, mettreAJour: mettreAJour, ouvrir: ouvrir, dupliquer: dupliquer, renommer: renommer,
       supprimer: supprimer, exporter: exporter, importerTexte: importerTexte,

@@ -96,11 +96,11 @@ test('app : graine saisie (les chiffres seuls deviennent un entier)', () => {
 });
 
 test('app : paramètres de l’adresse', () => {
-  assert.deepStrictEqual(A.lireParametres('#onglet=partie&graine=12&partie=5'), { onglet: 'partie', graine: 12, partie: 5 });
-  assert.deepStrictEqual(A.lireParametres(''), { onglet: null, graine: null, partie: null });
-  assert.deepStrictEqual(A.lireParametres('#onglet=pirate&graine=mon%20plateau'), { onglet: null, graine: 'mon plateau', partie: null });
-  assert.deepStrictEqual(A.lireParametres('#graine=%E0%A4%A&onglet=inventaire'), { onglet: 'inventaire', graine: null, partie: null });
-  assert.deepStrictEqual(A.lireParametres('#__proto__=x&constructor=y'), { onglet: null, graine: null, partie: null });
+  assert.deepStrictEqual(A.lireParametres('#onglet=partie&graine=12&partie=5'), { onglet: 'partie', graine: 12, partie: 5, mode: null });
+  assert.deepStrictEqual(A.lireParametres(''), { onglet: null, graine: null, partie: null, mode: null });
+  assert.deepStrictEqual(A.lireParametres('#onglet=pirate&graine=mon%20plateau'), { onglet: null, graine: 'mon plateau', partie: null, mode: null });
+  assert.deepStrictEqual(A.lireParametres('#graine=%E0%A4%A&onglet=inventaire'), { onglet: 'inventaire', graine: null, partie: null, mode: null });
+  assert.deepStrictEqual(A.lireParametres('#__proto__=x&constructor=y'), { onglet: null, graine: null, partie: null, mode: null });
   assert.strictEqual(A.nomSur('<img src=x>'), '_img_src_x_');
   assert.strictEqual(A.nomSur(''), 'sans-nom');
 });

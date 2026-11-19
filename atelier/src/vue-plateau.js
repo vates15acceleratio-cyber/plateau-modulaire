@@ -94,6 +94,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   function creer(ctx) {
     var R = AT.rendu, el = R.el, K = AT.controles;
     var historique = [P.vide(1)], rang = 0;
+    // Entrée de la bibliothèque à laquelle chaque pas d'historique est attaché (null = aucune) : Annuler après
+    // « Ouvrir » rend le plateau précédent AVEC son attache, pour que « Mettre à jour » n'écrase jamais une autre fiche.
+    var attaches = [null];
     var reglages = { seuilContact: C.REGLAGES.seuilContact, mesureContact: C.REGLAGES.mesureContact };
     var selection = null;        // identifiant de la pièce sélectionnée
     var caseSelection = null;    // case cliquée lors de la sélection (pour retirer une tuile d'événement)
@@ -143,22 +146,30 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     function changer(nouveau, options) {
       var o = options || {};
       epingle = null;                 // les cases épinglées d'un constat ne valent que pour l'ancien plateau
+      attaches[rang] = biblio.ouvert();          // l'attache du pas que l'on quitte (ouvrir / détacher l'ont peut-être changée)
       historique = historique.slice(0, rang + 1);
+      attaches = attaches.slice(0, rang + 1);
       historique.push(o.brut ? nouveau : P.avecCamps(nouveau));
-      if (historique.length > TAILLE_HISTORIQUE) historique.shift();
+      attaches.push(biblio.ouvert());
+      if (historique.length > TAILLE_HISTORIQUE) { historique.shift(); attaches.shift(); }
       rang = historique.length - 1;
       rafraichir(o.garderVue !== false);
       biblio.planifier();
     }
 
+    /** Détache le plateau courant de l'entrée ouverte de la bibliothèque. À appeler APRÈS changer() : l'attache vaut pour le nouveau pas. */
+    function detacher() { biblio.detacher(); biblio.rafraichir(); }
+
     function annuler() {
       if (rang === 0) { ctx.message('Rien à annuler.', 'info'); return; }
-      rang -= 1; quitterModes(); rafraichir(true); biblio.planifier(); ctx.message('Retouche annulée.', 'info');
+      attaches[rang] = biblio.ouvert();
+      rang -= 1; biblio.attacher(attaches[rang]); quitterModes(); rafraichir(true); biblio.planifier(); ctx.message('Retouche annulée.', 'info');
     }
 
     function retablir() {
       if (rang >= historique.length - 1) { ctx.message('Rien à rétablir.', 'info'); return; }
-      rang += 1; quitterModes(); rafraichir(true); biblio.planifier(); ctx.message('Retouche rétablie.', 'info');
+      attaches[rang] = biblio.ouvert();
+      rang += 1; biblio.attacher(attaches[rang]); quitterModes(); rafraichir(true); biblio.planifier(); ctx.message('Retouche rétablie.', 'info');
     }
 
     function quitterModes() { selection = null; caseSelection = null; aPoser = null; epingle = null; }
@@ -179,8 +190,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       }
       avisGeneration.hidden = true;
       quitterModes();
-      biblio.detacher();                // un plateau généré n'est plus celui de l'entrée ouverte de la bibliothèque
       changer(r.plateau, { garderVue: false });
+      detacher();                       // un plateau généré n'est plus celui de l'entrée ouverte de la bibliothèque
       ctx.message('Plateau généré (graine ' + g + ', score d’équilibre ' + r.score + ').' + (r.note ? ' ' + r.note : ''), 'info');
       return true;
     }
@@ -250,8 +261,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       quitterModes();
       var vierge = P.vierge('fait main');
       if (P.modeles(plateau()).length) vierge.modeles = P.modeles(plateau());
-      biblio.detacher();
       changer(vierge, { garderVue: false });
+      detacher();
       ctx.message('Nouveau plateau vierge : le noyau est posé au centre (Annuler pour revenir au plateau précédent).', 'info');
     }
 
@@ -599,6 +610,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       if (!r.ok || !r.plateau) return { repris: false, modifie: null, raison: r.ok ? null : r.raison, corrompu: !!r.corrompu };
       quitterModes();
       historique = [r.plateau];
+      attaches = [biblio.ouvert()];
       rang = 0;
       rafraichir(false);
       return { repris: true, modifie: r.modifie, raison: null };
@@ -622,8 +634,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var r = P.lire(texte);
       if (!r.ok) { ctx.message('Fichier refusé : ' + r.erreurs[0], 'erreur'); return false; }
       quitterModes();
-      biblio.detacher();
       changer(r.plateau, { brut: true, garderVue: false });
+      detacher();
       ctx.message('Plateau ouvert (' + r.plateau.pieces.length + ' pièces). Les contrôles sont à jour.', 'info');
       return true;
     }
