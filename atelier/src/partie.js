@@ -66,11 +66,27 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     actions: 99,        // compteur d'actions
     tour: 100000,
     grainePlateau: 64,  // longueur d'une graine de plateau en texte : la même que AT.catalogue.REGLAGES.bornes.longueurGraine
-    // Pièces personnelles portées par le plateau : les mêmes bornes que AT.catalogue.REGLAGES.perso.
-    persoModeles: 24, persoCases: 6, persoQuantite: 9, persoNom: 40
+    // Pièces personnelles portées par le plateau : valeurs de REPLI seulement. Les bornes en vigueur sont lues dans
+    // AT.catalogue.REGLAGES.perso au moment de valider (voir bornesPerso), pour suivre un réglage changé là-bas.
+    persoModeles: 24, persoCases: 6, persoCasesMin: 2, persoQuantite: 9, persoNom: 40, persoChiffres: 4
   };
-  var MOTIF_PERSO = /^X[1-9]\d{0,3}$/;
-  var TERRAINS_PERSO = ['plaine', 'foret', 'marais', 'montagne'];   // jamais de ville dans un monobloc (règle A2)
+  var TERRAINS_PERSO = ['plaine', 'foret', 'marais', 'montagne'];   // repli ; jamais de ville dans un monobloc (règle A2)
+
+  /**
+   * Bornes des pièces personnelles, lues dans AT.catalogue.REGLAGES.perso AU MOMENT de valider (repli : LIMITES).
+   * La ville n'est jamais un terrain permis, quel que soit le réglage (règle A2).
+   */
+  function bornesPerso() {
+    var r = (AT.catalogue && AT.catalogue.REGLAGES && AT.catalogue.REGLAGES.perso) || {};
+    var entier = function (v, repli) { return (typeof v === 'number' && isFinite(v) && Math.floor(v) === v && v >= 1) ? v : repli; };
+    var chiffres = entier(r.chiffresId, LIMITES.persoChiffres);
+    var terrains = (Array.isArray(r.terrains) ? r.terrains : TERRAINS_PERSO).filter(function (t) { return typeof t === 'string' && t !== 'ville'; });
+    return {
+      modeles: entier(r.modelesMax, LIMITES.persoModeles), casesMin: entier(r.casesMin, LIMITES.persoCasesMin), casesMax: entier(r.casesMax, LIMITES.persoCases),
+      quantite: entier(r.quantiteMax, LIMITES.persoQuantite), nom: entier(r.longueurNom, LIMITES.persoNom),
+      motif: new RegExp('^X[1-9][0-9]{0,' + (chiffres - 1) + '}$'), terrains: terrains
+    };
+  }
 
   /** Bornes acceptées pour chaque réglage (création et relecture d'un fichier). */
   var BORNES_REGLAGES = {
@@ -289,23 +305,24 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * Le lot A (env.plateau.valider) ajoute ses propres règles (un seul tenant, case (0,0), identifiants de base).
    */
   function validerModelesPlateau(liste) {
-    exiger(Array.isArray(liste) && liste.length <= LIMITES.persoModeles, 'Plateau : liste de pièces personnelles invalide (' + LIMITES.persoModeles + ' au plus).');
+    var L = bornesPerso();
+    exiger(Array.isArray(liste) && liste.length <= L.modeles, 'Plateau : liste de pièces personnelles invalide (' + L.modeles + ' au plus).');
     var ids = Object.create(null);
     return liste.map(function (m, i) {
       var ou = 'Plateau, pièce personnelle ' + (i + 1);
       clesExactes(m, ['id', 'nom', 'cases', 'quantite'], ou);
-      exiger(typeof m.id === 'string' && MOTIF_PERSO.test(m.id), ou + ' : identifiant invalide (« X » suivi de chiffres).');
+      exiger(typeof m.id === 'string' && L.motif.test(m.id), ou + ' : identifiant invalide (« X » suivi de chiffres).');
       exiger(ids[m.id] !== true, ou + ' : identifiant en double.');
       ids[m.id] = true;
-      exiger(typeof m.nom === 'string' && m.nom.trim().length >= 1 && m.nom.length <= LIMITES.persoNom && !/[\u0000-\u001f\u007f]/.test(m.nom),
-        ou + ' : nom invalide (1 à ' + LIMITES.persoNom + ' caractères).');
-      exiger(estEntier(m.quantite, 1, LIMITES.persoQuantite), ou + ' : quantité invalide (1 à ' + LIMITES.persoQuantite + ').');
-      exiger(Array.isArray(m.cases) && m.cases.length >= 2 && m.cases.length <= LIMITES.persoCases, ou + ' : 2 à ' + LIMITES.persoCases + ' cases attendues.');
+      exiger(typeof m.nom === 'string' && m.nom.trim().length >= 1 && m.nom.length <= L.nom && !/[\u0000-\u001f\u007f]/.test(m.nom),
+        ou + ' : nom invalide (1 à ' + L.nom + ' caractères).');
+      exiger(estEntier(m.quantite, 1, L.quantite), ou + ' : quantité invalide (1 à ' + L.quantite + ').');
+      exiger(Array.isArray(m.cases) && m.cases.length >= L.casesMin && m.cases.length <= L.casesMax, ou + ' : ' + L.casesMin + ' à ' + L.casesMax + ' cases attendues.');
       var vues = Object.create(null);
       var cases = m.cases.map(function (c) {
         clesExactes(c, ['q', 'r', 'terrain'], ou);
-        exiger(estEntier(c.q, -LIMITES.persoCases, LIMITES.persoCases) && estEntier(c.r, -LIMITES.persoCases, LIMITES.persoCases), ou + ' : case invalide.');
-        exiger(TERRAINS_PERSO.indexOf(c.terrain) >= 0, ou + ' : terrain invalide (jamais de ville dans un monobloc).');
+        exiger(estEntier(c.q, -L.casesMax, L.casesMax) && estEntier(c.r, -L.casesMax, L.casesMax), ou + ' : case invalide.');
+        exiger(L.terrains.indexOf(c.terrain) >= 0, ou + ' : terrain invalide (jamais de ville dans un monobloc).');
         exiger(vues[c.q + ',' + c.r] !== true, ou + ' : case en double.');
         vues[c.q + ',' + c.r] = true;
         return { q: c.q, r: c.r, terrain: c.terrain };

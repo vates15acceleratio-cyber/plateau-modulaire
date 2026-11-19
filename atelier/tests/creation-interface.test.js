@@ -194,7 +194,7 @@ test('gomme : tuiles d’une case retirées ; monobloc seulement après confirma
   const glisse = VC.bilanTrait(VC.tracer(pl, { type: 'gomme' }, ['-3,0', '-2,0', '-1,0', '6,6']));
   assert.strictEqual(glisse.change, true);
   assert.match(glisse.message, /2 tuiles gommées\./);
-  assert.match(glisse.message, /1 case laissée : la gomme ne retire un monobloc \(ou le noyau\) qu’après confirmation/);
+  assert.match(glisse.message, /Le noyau est fixe : la gomme ne le retire jamais \(1 case laissée\)\. Seuls « Vider le plateau » et « Nouveau plateau vierge » le font\./);
   assert.strictEqual(glisse.confirmer, null, 'jamais de confirmation au milieu d’un trait');
   assert.strictEqual(glisse.plateau.pieces.length, 2);
   const seul = VC.bilanTrait(VC.tracer(pl, { type: 'gomme' }, ['4,0']));
@@ -203,8 +203,15 @@ test('gomme : tuiles d’une case retirées ; monobloc seulement après confirma
   assert.ok(seul.confirmer && seul.confirmer.nom === 'Bois' && seul.confirmer.noyau === false);
   assert.deepStrictEqual(seul.confirmer.cases.slice().sort(), ['3,0', '3,1', '4,0']);
   assert.strictEqual(seul.confirmer.piece, pl.pieces[1].id);
+  // Noyau fixe (règle de l'utilisateur) : la gomme ne propose JAMAIS de le retirer, même cliqué seul.
   const coeur = VC.bilanTrait(VC.tracer(pl, { type: 'gomme' }, ['0,0']));
-  assert.ok(coeur.confirmer && coeur.confirmer.noyau === true && coeur.confirmer.cases.length === 7);
+  assert.strictEqual(coeur.confirmer, null);
+  assert.strictEqual(coeur.change, false);
+  assert.strictEqual(coeur.niveau, 'erreur');
+  assert.match(coeur.message, /Le noyau est fixe : la gomme ne le retire jamais/);
+  const mixte = VC.bilanTrait(VC.tracer(pl, { type: 'gomme' }, ['0,0', '4,0']));
+  assert.strictEqual(mixte.confirmer, null);
+  assert.match(mixte.message, /1 case de monobloc laissée : la gomme ne retire un monobloc qu’après confirmation/);
   const vide = VC.bilanTrait(VC.tracer(pl, { type: 'gomme' }, ['6,6']));
   assert.strictEqual(vide.change, false);
   assert.match(vide.message, /rien à gommer/);

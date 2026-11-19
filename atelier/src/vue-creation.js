@@ -174,7 +174,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   /**
    * Compte rendu d'un trait terminé : {change, plateau (camps recalculés si le trait a changé quelque chose),
    * message, niveau ('info' | 'alerte' | 'erreur'), confirmer (monobloc à retirer après confirmation, ou null)}.
-   * `confirmer` n'est proposé que pour la gomme, sur un trait d'UNE case tombé sur un monobloc ou le noyau.
+   * `confirmer` n'est proposé que pour la gomme, sur un trait d'UNE case tombé sur un monobloc. Le NOYAU est fixe
+   * (règle de l'utilisateur) : la gomme ne le retire jamais, seuls « Vider le plateau » et un nouveau plateau le font.
    */
   function bilanTrait(trait) {
     var gomme = trait.outil.type === 'gomme', morceaux = [], niveau = 'info', confirmer = null;
@@ -193,13 +194,18 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     }
     var refus = trait.refusNoyau + trait.refusMonobloc;
     if (refus) {
-      if (gomme && trait.cases === 1 && trait.monobloc) {
+      if (gomme && trait.cases === 1 && trait.monobloc && !trait.monobloc.noyau) {
         confirmer = trait.monobloc;
-        morceaux.push(trait.monobloc.noyau ? 'Cette case appartient au noyau : confirmez pour le retirer en entier.'
-          : 'Cette case appartient au monobloc « ' + trait.monobloc.nom + ' » : confirmez pour le retirer en entier.');
+        morceaux.push('Cette case appartient au monobloc « ' + trait.monobloc.nom + ' » : confirmez pour le retirer en entier.');
         niveau = 'alerte';
       } else if (gomme) {
-        morceaux.push(pluriel(refus, 'case laissée', 'cases laissées') + ' : la gomme ne retire un monobloc (ou le noyau) qu’après confirmation ; cliquez-le seul.');
+        if (trait.refusNoyau) {
+          morceaux.push('Le noyau est fixe : la gomme ne le retire jamais (' + pluriel(trait.refusNoyau, 'case laissée', 'cases laissées')
+            + '). Seuls « Vider le plateau » et « Nouveau plateau vierge » le font.');
+        }
+        if (trait.refusMonobloc) {
+          morceaux.push(pluriel(trait.refusMonobloc, 'case de monobloc laissée', 'cases de monobloc laissées') + ' : la gomme ne retire un monobloc qu’après confirmation ; cliquez-le seul.');
+        }
         niveau = trait.changees ? 'alerte' : 'erreur';
       } else {
         var quoi = [];
@@ -380,6 +386,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
     return {
       element: element, reste: zoneReste,
+      /** Vrai tant qu'une pièce de la palette est glissée (bouton enfoncé, seuil de mouvement dépassé). */
+      glisseEnCours: function () { return !!(glisse && glisse.actif); },
       rafraichir: function () { rafraichirPalette(); rafraichirReste(); }
     };
   }
@@ -426,12 +434,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       dire(b.message, b.niveau);
       if (b.confirmer) {
         var cible = b.confirmer;
-        acces.confirmer((cible.noyau ? 'Retirer le noyau en entier (' : 'Retirer le monobloc « ' + cible.nom + ' » en entier (') + cible.cases.length + ' cases) ?',
+        acces.confirmer('Retirer le monobloc « ' + cible.nom + ' » en entier (' + cible.cases.length + ' cases) ?',
           'Retirer', function () {
             var r = P.retirer(acces.plateau(), cible.piece);
             if (!r.ok) { dire(r.raison, 'erreur'); return; }
             acces.changer(r.plateau);
-            dire((cible.noyau ? 'Noyau retiré' : 'Monobloc « ' + cible.nom + ' » retiré') + ' : il retourne au stock.'
+            dire('Monobloc « ' + cible.nom + ' » retiré : il retourne au stock.'
               + (r.evenementsRetires.length ? ' ' + pluriel(r.evenementsRetires.length, 'tuile d’événement retourne', 'tuiles d’événement retournent') + ' en réserve.' : ''), 'info');
           });
       }
@@ -457,7 +465,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         el('p', { classe: 'at-aide', texte: 'Choisissez un terrain ou la gomme, puis cliquez ou glissez sur les cases, y compris les cases vides de la grille. Un trait s’annule en une fois (Ctrl+Z).' }),
         zoneOutils,
         zoneMessage,
-        el('p', { classe: 'at-aide', texte: 'Le pinceau pose des tuiles d’une case : celles du stock d’abord, puis « hors stock » (annoncé, à prévoir en plus du catalogue). Il ne touche ni aux monoblocs ni au noyau ; la gomme ne les retire qu’après confirmation. Maj + glisser déplace la vue.' })
+        el('p', { classe: 'at-aide', texte: 'Le pinceau pose des tuiles d’une case : celles du stock d’abord, puis « hors stock » (annoncé, à prévoir en plus du catalogue). Il ne touche ni aux monoblocs ni au noyau. La gomme retire un monobloc après confirmation ; elle ne retire jamais le noyau, qui est fixe. Maj + glisser déplace la vue.' })
       ])
     ]);
     rafraichir();

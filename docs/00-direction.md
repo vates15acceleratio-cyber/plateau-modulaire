@@ -53,6 +53,7 @@ Elles priment sur la proposition d'inventaire du 2026-11-18 ci-dessous. Détail 
 3. **Villes de déploiement** : posées **SUR une case de Plaine** après la construction du plateau ; **deux par joueur**, pas plus.
 4. **Villes neutres** : ce sont des **tuiles** placées **aux extrémités, sur les côtés** du plateau, et **pas sur une Plaine**.
 5. Transport : **paquet web simple à installer** (dossier compressé, lanceurs Windows et Mac). La partie « jeu » viendra plus tard.
+6. **Tolérance** (même jour) : quelques **tuiles uniques de remplissage** sont permises si le « tout en monoblocs » se révèle trop compliqué. Elles restent l'exception : en mesurer le nombre minimal nécessaire.
 
 ## Proposition d'inventaire (à valider ; dessinée dans `tuiles/sortie/types_de_tuiles.pdf`)
 Décisions de l'utilisateur du 2026-11-18 : **2 montagnes** (au lieu de 3) ; tuiles simples à **70 % de plaines, 15 % de forêts, 15 % de marais** ; **7 villes**, au moins **3 tuiles entre deux villes** voisines.

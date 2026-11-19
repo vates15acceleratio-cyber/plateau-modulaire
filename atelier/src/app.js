@@ -10,6 +10,8 @@
  *
  * Au démarrage, sans paramètre « graine », le travail en cours sauvegardé dans le navigateur est repris
  * (vue-bibliotheque.js) ; sinon, ou avec « graine », un plateau est généré.
+ * Avec « graine », le travail sauvegardé n'est PAS remplacé tant que l'utilisateur n'a rien modifié : la sauvegarde
+ * automatique n'écrit qu'après un changement (revue, M1).
  * AT.app.stockage (facultatif, à poser avant le démarrage) remplace le stockage du navigateur : la recette
  * automatique y met un stockage en mémoire pour ne jamais toucher à la bibliothèque du poste.
  */

@@ -351,7 +351,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   /**
    * Gomme : retire la tuile d'UNE case qui occupe `cle` (ses tuiles d'événement repartent en réserve).
    * Sur une case de monobloc ou du noyau, rien n'est retiré : le résultat le signale (monobloc = true, noyau,
-   * `piece`, `modele`, `cases` du monobloc), pour que l'interface demande confirmation puis appelle retirer(plateau, piece).
+   * `piece`, `modele`, `cases` du monobloc). Pour un monobloc, l'interface demande confirmation puis appelle
+   * retirer(plateau, piece). Le NOYAU est fixe (règle de l'utilisateur) : la gomme ne le retire jamais ; seuls
+   * « Vider le plateau » et un nouveau plateau le font.
    * Renvoie {ok, plateau, id, modele, evenementsRetires} ou {ok: false, plateau, raison, vide | monobloc, ...}.
    */
   function gommer(plateau, cle) {
@@ -364,8 +366,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     var ici = occupees[cle], m = modele(plateau, ici.modele);
     if (m && (m.noyau || m.cases.length > 1)) {
       var piece = (plateau.pieces || []).filter(function (x) { return x.id === ici.piece; })[0];
-      r = refus(plateau, (m.noyau ? 'Cette case appartient au noyau' : 'Cette case appartient au monobloc « ' + m.nom + ' »')
-        + ' (' + m.cases.length + ' cases) : la gomme ne le retire qu’après confirmation.');
+      r = refus(plateau, m.noyau
+        ? 'Cette case appartient au noyau (' + m.cases.length + ' cases), qui est fixe : la gomme ne le retire jamais.'
+        : 'Cette case appartient au monobloc « ' + m.nom + ' » (' + m.cases.length + ' cases) : la gomme ne le retire qu’après confirmation.');
       r.monobloc = true; r.noyau = !!m.noyau; r.piece = ici.piece; r.modele = ici.modele;
       r.cases = piece ? casesPiece(piece, plateau).map(function (c) { return c.cle; }) : [cle];
       return r;
@@ -809,8 +812,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   /**
    * Modifie une pièce personnelle : `changements` peut porter nom, cases, quantite (le reste est gardé).
-   * Tant que des exemplaires sont posés, seuls le NOM et la QUANTITÉ se changent, et la quantité ne descend pas
-   * sous le nombre d'exemplaires posés ; changer la forme ou un terrain est refusé avec explication
+   * Tant que des exemplaires sont posés, seuls le NOM et la QUANTITÉ se changent, et une quantité CHANGÉE ne descend
+   * pas sous le nombre d'exemplaires posés ; changer la forme ou un terrain est refusé avec explication
    * (champ `pieces` : identifiants des exemplaires posés).
    * Renvoie {ok, plateau, id, modele} ou {ok: false, plateau, raison, pieces | erreurs}.
    */
@@ -824,7 +827,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         return x !== null && typeof x === 'object' && x.q === a.q && x.r === a.r && x.terrain === a.terrain;
       }));
       if (!memesCases) return refusPose(plateau, 'Modification de la forme', actuel, poses);
-      if (c.quantite !== undefined && Number.isInteger(c.quantite) && c.quantite < poses.length) {
+      // Une quantité INCHANGÉE est toujours acceptée, même si un fichier porte plus d'exemplaires posés que prévu :
+      // on peut alors encore renommer la pièce (le contrôle 1 signale le dépassement).
+      if (c.quantite !== undefined && Number.isInteger(c.quantite) && c.quantite < poses.length && c.quantite !== actuel.quantite) {
         var r = refus(plateau, 'Quantité refusée : ' + poses.length + (poses.length > 1 ? ' exemplaires' : ' exemplaire') + ' de « ' + actuel.nom + ' » '
           + (poses.length > 1 ? 'sont posés' : 'est posé') + ' sur le plateau ; la quantité ne peut pas descendre en dessous.');
         r.pieces = poses;
@@ -933,6 +938,16 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         if (!C.modele(p.modele) && !(typeof p.modele === 'string' && idsPersos[p.modele] === true)) { erreurs.push(ou + ' : modèle inconnu du catalogue.'); bon = false; }
         if (!entierBorne(p.q) || !entierBorne(p.r)) { erreurs.push(ou + ' : position invalide (entiers entre -' + B.coordonnee + ' et ' + B.coordonnee + ').'); bon = false; }
         if (!Number.isInteger(p.rotation) || p.rotation < 0 || p.rotation > 5) { erreurs.push(ou + ' : rotation invalide (0 à 5).'); bon = false; }
+        if (bon) {
+          // Toutes les cases de la pièce restent dans les bornes, pas seulement son ancre : sinon un événement ou un
+          // camp posé sur une case lointaine donnerait un fichier refusé à la relecture (clés bornées elles aussi).
+          var m = C.modele(p.modele) || persos.filter(function (x) { return x.id === p.modele; })[0];
+          var dehors = m.cases.some(function (c) {
+            var t = H.tourner(c.q, c.r, p.rotation);
+            return !entierBorne(p.q + t.q) || !entierBorne(p.r + t.r);
+          });
+          if (dehors) { erreurs.push(ou + ' : une de ses cases sort des limites du plateau (entre -' + B.coordonnee + ' et ' + B.coordonnee + ').'); bon = false; }
+        }
         if (!bon) return;
         ids[p.id] = true;
         pieces.push({ id: p.id, modele: p.modele, q: p.q, r: p.r, rotation: p.rotation });

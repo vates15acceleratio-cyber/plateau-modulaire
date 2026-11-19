@@ -51,6 +51,17 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   // ------------------------------------------------------------------ 1. inventaire
 
   /**
+   * Vrai si une forme [{q, r, terrain}] porte de la montagne SANS être un bloc de 4 ou 5 cases tout en montagne
+   * (décision en vigueur : « montagnes en blocs de 4 ou 5 cases »). Sans montagne : faux.
+   */
+  function montagneHorsBloc(cases) {
+    var liste = Array.isArray(cases) ? cases : [];
+    var n = liste.filter(function (c) { return c && c.terrain === 'montagne'; }).length;
+    if (!n) return false;
+    return !(n === liste.length && (n === 4 || n === 5));
+  }
+
+  /**
    * Inventaire. Erreurs : pièce de modèle inconnu ; monobloc (ou noyau) posé plus de fois que prévu.
    * Alertes : pièces restantes (catalogue imprimé, puis pièces personnelles) ; tuiles d'UNE case posées hors stock
    * par le pinceau (« à prévoir en plus du catalogue », détail par modèle) ; toute montagne d'une case.
@@ -104,6 +115,17 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     if (montagnes.length) {
       res.push(constat('inventaire', 'alerte', pluriel(montagnes.length, 'montagne') + ' d’une case sur le plateau : la décision en vigueur est « montagnes en blocs de 4 ou 5 cases ».',
         casesDe(montagnes), { montagnesUneCase: montagnes.length }));
+    }
+    // Même rappel pour un monobloc personnel qui porte de la montagne sans être un bloc de 4 ou 5 cases tout en montagne.
+    var horsBloc = pieces.filter(function (p) {
+      var m = P.modele(plateau, p.modele);
+      return !!m && m.perso === true && montagneHorsBloc(m.cases);
+    });
+    if (horsBloc.length) {
+      var noms = [];
+      horsBloc.forEach(function (p) { var nom = P.modele(plateau, p.modele).nom; if (noms.indexOf(nom) === -1) noms.push(nom); });
+      res.push(constat('inventaire', 'alerte', pluriel(horsBloc.length, 'monobloc personnel', 'monoblocs personnels') + ' avec de la montagne hors bloc de 4 ou 5 cases (' + noms.join(', ')
+        + ') : la décision en vigueur est « montagnes en blocs de 4 ou 5 cases ».', casesDe(horsBloc), { montagnesHorsBloc: horsBloc.length }));
     }
     return res;
   }
@@ -411,7 +433,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   AT.controles = {
     inventaire: inventaire, continuite: continuite, monoblocs: monoblocs, villes: villes, contact: contact,
     controleEquilibre: controleEquilibre, evenements: evenements, tout: tout,
-    contacts: contacts, equilibre: equilibre, repartition: repartition
+    contacts: contacts, equilibre: equilibre, repartition: repartition,
+    montagneHorsBloc: montagneHorsBloc
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = AT.controles;

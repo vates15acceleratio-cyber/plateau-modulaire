@@ -94,9 +94,11 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   function creer(ctx) {
     var R = AT.rendu, el = R.el, K = AT.controles;
     var historique = [P.vide(1)], rang = 0;
-    // Entrée de la bibliothèque à laquelle chaque pas d'historique est attaché (null = aucune) : Annuler après
-    // « Ouvrir » rend le plateau précédent AVEC son attache, pour que « Mettre à jour » n'écrase jamais une autre fiche.
-    var attaches = [null];
+    // Fiche de la bibliothèque à laquelle chaque pas d'historique est attaché (null = aucune), et pas où commence un
+    // nouveau DOCUMENT (plateau généré, vierge, fichier ou fiche ouverts). Annuler après « Ouvrir » rend le plateau
+    // précédent AVEC sa propre attache : « Mettre à jour » n'écrase jamais une autre fiche. « Enregistrer sous »
+    // attache toute la lignée du document : annuler en deçà de l'enregistrement garde donc l'attache.
+    var attaches = [null], debuts = [true];
     var reglages = { seuilContact: C.REGLAGES.seuilContact, mesureContact: C.REGLAGES.mesureContact };
     var selection = null;        // identifiant de la pièce sélectionnée
     var caseSelection = null;    // case cliquée lors de la sélection (pour retirer une tuile d'événement)
@@ -142,33 +144,49 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     }
 
     // ---------------------------------------------------------------- historique
-    /** Nouveau plateau courant. options.brut : ne pas recalculer les camps (fichier ouvert) ; options.garderVue. */
+    /**
+     * Nouveau plateau courant. options.brut : ne pas recalculer les camps (fichier ouvert) ; options.garderVue ;
+     * options.nouveauDocument : le plateau n'est plus celui de la fiche ouverte (généré, vierge, fichier, autre fiche).
+     */
     function changer(nouveau, options) {
-      var o = options || {};
+      var o = options || {}, attache = o.nouveauDocument ? null : attaches[rang];
       epingle = null;                 // les cases épinglées d'un constat ne valent que pour l'ancien plateau
-      attaches[rang] = biblio.ouvert();          // l'attache du pas que l'on quitte (ouvrir / détacher l'ont peut-être changée)
       historique = historique.slice(0, rang + 1);
       attaches = attaches.slice(0, rang + 1);
+      debuts = debuts.slice(0, rang + 1);
       historique.push(o.brut ? nouveau : P.avecCamps(nouveau));
-      attaches.push(biblio.ouvert());
-      if (historique.length > TAILLE_HISTORIQUE) { historique.shift(); attaches.shift(); }
+      attaches.push(attache);
+      debuts.push(!!o.nouveauDocument);
+      if (historique.length > TAILLE_HISTORIQUE) { historique.shift(); attaches.shift(); debuts.shift(); }
       rang = historique.length - 1;
+      biblio.attacher(attaches[rang]);
       rafraichir(o.garderVue !== false);
       biblio.planifier();
     }
 
-    /** Détache le plateau courant de l'entrée ouverte de la bibliothèque. À appeler APRÈS changer() : l'attache vaut pour le nouveau pas. */
-    function detacher() { biblio.detacher(); biblio.rafraichir(); }
+    /**
+     * Attache à la fiche `id` (ou détache, null) toute la LIGNÉE du plateau courant : les pas d'historique du même
+     * document, avant et après le pas courant. Appelé par la bibliothèque (enregistrer sous, ouvrir, supprimer).
+     */
+    function lierLignee(id) {
+      var i = rang;
+      while (i > 0 && !debuts[i]) i -= 1;
+      for (var k = i; k < historique.length && (k === i || !debuts[k]); k++) attaches[k] = id;
+    }
+
+    /** Vrai pendant un trait de pinceau, le glisser d'une pièce posée ou un glisser depuis la palette. */
+    function gesteEnCours() { return vue.gesteEnCours() || (guide !== null && guide.glisseEnCours()); }
 
     function annuler() {
+      // Annuler au milieu d'un geste ferait revenir, au relâchement, ce que l'on vient d'annuler.
+      if (gesteEnCours()) { ctx.message('Geste en cours : relâchez d’abord la souris, puis annulez.', 'info'); return; }
       if (rang === 0) { ctx.message('Rien à annuler.', 'info'); return; }
-      attaches[rang] = biblio.ouvert();
       rang -= 1; biblio.attacher(attaches[rang]); quitterModes(); rafraichir(true); biblio.planifier(); ctx.message('Retouche annulée.', 'info');
     }
 
     function retablir() {
+      if (gesteEnCours()) { ctx.message('Geste en cours : relâchez d’abord la souris, puis rétablissez.', 'info'); return; }
       if (rang >= historique.length - 1) { ctx.message('Rien à rétablir.', 'info'); return; }
-      attaches[rang] = biblio.ouvert();
       rang += 1; biblio.attacher(attaches[rang]); quitterModes(); rafraichir(true); biblio.planifier(); ctx.message('Retouche rétablie.', 'info');
     }
 
@@ -190,8 +208,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       }
       avisGeneration.hidden = true;
       quitterModes();
-      changer(r.plateau, { garderVue: false });
-      detacher();                       // un plateau généré n'est plus celui de l'entrée ouverte de la bibliothèque
+      changer(r.plateau, { garderVue: false, nouveauDocument: true });      // un plateau généré n'est plus celui de la fiche ouverte
       ctx.message('Plateau généré (graine ' + g + ', score d’équilibre ' + r.score + ').' + (r.note ? ' ' + r.note : ''), 'info');
       return true;
     }
@@ -233,6 +250,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
     function retirerSelection() {
       if (!selection) return;
+      // Le noyau est fixe (règle de l'utilisateur) : ni la gomme ni « Retirer » ne l'enlèvent.
+      var visee = pieceDe(selection), modeleVise = visee ? P.modele(plateau(), visee.modele) : null;
+      if (modeleVise && modeleVise.noyau) {
+        ctx.message('Le noyau est fixe : il ne se retire pas. Seuls « Vider le plateau » et « Nouveau plateau vierge » le font.', 'erreur');
+        return;
+      }
       var r = P.retirer(plateau(), selection);
       if (!r.ok) { ctx.message(r.raison, 'erreur'); return; }
       selection = null; caseSelection = null; aPoser = null;
@@ -261,8 +284,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       quitterModes();
       var vierge = P.vierge('fait main');
       if (P.modeles(plateau()).length) vierge.modeles = P.modeles(plateau());
-      changer(vierge, { garderVue: false });
-      detacher();
+      changer(vierge, { garderVue: false, nouveauDocument: true });
       ctx.message('Nouveau plateau vierge : le noyau est posé au centre (Annuler pour revenir au plateau précédent).', 'info');
     }
 
@@ -601,7 +623,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     /** Ouvre un plateau de la bibliothèque (annulable comme une retouche). */
     function ouvrirDocument(nouveau) {
       quitterModes();
-      changer(nouveau, { brut: true, garderVue: false });
+      changer(nouveau, { brut: true, garderVue: false, nouveauDocument: true });
     }
 
     /** Reprend le travail en cours sauvegardé, s'il y en a un. Renvoie {repris, modifie, raison}. */
@@ -611,6 +633,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       quitterModes();
       historique = [r.plateau];
       attaches = [biblio.ouvert()];
+      debuts = [true];
       rang = 0;
       rafraichir(false);
       return { repris: true, modifie: r.modifie, raison: null };
@@ -634,8 +657,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var r = P.lire(texte);
       if (!r.ok) { ctx.message('Fichier refusé : ' + r.erreurs[0], 'erreur'); return false; }
       quitterModes();
-      changer(r.plateau, { brut: true, garderVue: false });
-      detacher();
+      changer(r.plateau, { brut: true, garderVue: false, nouveauDocument: true });
       ctx.message('Plateau ouvert (' + r.plateau.pieces.length + ' pièces). Les contrôles sont à jour.', 'info');
       return true;
     }
@@ -684,7 +706,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       choisirModele: choisirModele, choisirEvenement: choisirEvenement,
       glisserModele: glisserModele, deposerModele: deposerModele, annulerGlisse: annulerGlisse,
       nouveauVierge: nouveauVierge, vider: viderPlateau, retirerInconnues: retirerInconnues,
-      ouvrirDocument: ouvrirDocument, indiquer: ctx.indiquerPlateau,
+      ouvrirDocument: ouvrirDocument, indiquer: ctx.indiquerPlateau, lier: lierLignee,
       bibliotheque: function () { return biblio.liste(); }
     };
     biblio = AT.vueBibliotheque.creer(accesCommun, { stockage: ctx.stockage });

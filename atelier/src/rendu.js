@@ -543,6 +543,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       element: el('div', { classe: 'at-vue' }, [barre, racine]), barre: barre, svg: racine,
       afficher: afficher, marquer: marquer, cadrer: cadrer, zoomer: zoomer, pointEcran: pointEcran,
       caseSousEcran: caseSousEcran,
+      /** Vrai tant qu'un geste confié par surAppui est en cours (bouton enfoncé). */
+      gesteEnCours: function () { return geste !== null; },
       curseur: function () { return curseur; }
     };
   }

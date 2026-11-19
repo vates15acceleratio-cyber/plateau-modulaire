@@ -99,7 +99,7 @@ test('renommer, remplacer, dupliquer, supprimer', () => {
   assert.match(B.dupliquer(liste, 'b9', D2).raison, /introuvable/);
   const s = B.supprimer(d.liste, 'b1');
   assert.deepStrictEqual(s.liste.map((e) => e.id), ['b2', 'b3']);
-  assert.strictEqual(B.prochainId(s.liste), 'b1', 'le plus petit numéro libre');
+  assert.strictEqual(B.prochainId(s.liste), 'b4', 'jamais le numéro d’une fiche supprimée (revue I3)');
   assert.match(B.supprimer(liste, 'b9').raison, /introuvable/);
   assert.strictEqual(JSON.stringify(liste), fige, 'la liste de départ n’a jamais été modifiée');
 });
@@ -202,8 +202,8 @@ test('stockage : enregistrer puis charger ; clés à préfixe ; clé absente = b
   const s = B.stockageMemoire(), liste = remplie(2);
   assert.strictEqual(B.cleListe(), 'atelier-plateau:bibliotheque');
   assert.strictEqual(B.cleTravail(), 'atelier-plateau:travail');
-  assert.deepStrictEqual(B.charger(s), { ok: true, liste: [], ecartees: 0, avis: [], raison: null });
-  assert.deepStrictEqual(B.enregistrer(s, liste), { ok: true, raison: null });
+  assert.deepStrictEqual(B.charger(s), { ok: true, liste: [], ecartees: 0, avis: [], raison: null, brut: null, suivant: 1 });
+  assert.deepStrictEqual(B.enregistrer(s, liste), { ok: true, raison: null, texte: B.exporter(liste) });
   assert.strictEqual(s.getItem('atelier-plateau:bibliotheque'), B.exporter(liste));
   const lu = B.charger(s);
   assert.ok(lu.ok, lu.raison);
@@ -278,7 +278,7 @@ test('stockage : contenu corrompu, absent ou plein, sans jamais d’exception', 
 
 test('travail en cours : sauvegarde automatique, reprise, effacement, contenu validé', () => {
   const s = B.stockageMemoire(), pl = plateau(7);
-  assert.deepStrictEqual(B.chargerTravail(s), { ok: true, plateau: null, modifie: null, raison: null });
+  assert.deepStrictEqual(B.chargerTravail(s), { ok: true, plateau: null, modifie: null, ouvert: null, raison: null, brut: null });
   assert.deepStrictEqual(B.enregistrerTravail(s, pl, D1), { ok: true, raison: null });
   const lu = B.chargerTravail(s);
   assert.ok(lu.ok, lu.raison);

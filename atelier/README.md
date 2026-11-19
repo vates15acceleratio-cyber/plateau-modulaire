@@ -1,6 +1,28 @@
 # Atelier du plateau
 
-Outil hors ligne pour concevoir le plateau hexagonal et jouer des parties fictives. Rien à installer : **double-cliquez `index.html`** (Edge, Chrome ou Firefox). Aucune connexion n'est utilisée.
+Outil hors ligne pour concevoir le plateau hexagonal et jouer des parties fictives. Rien à installer, aucune connexion n'est utilisée.
+
+## Lancer l'atelier
+
+- **Le plus simple** : double-cliquez `index.html` (Edge, Chrome ou Firefox) : il s'ouvre dans un onglet du navigateur.
+- **Dans sa propre fenêtre**, sans barre d'adresse :
+  - Windows : double-cliquez `Atelier.bat`. Il ouvre la page avec Edge (sinon Chrome, sinon le navigateur par défaut).
+  - Mac : clic droit sur `Atelier.command`, puis « Ouvrir » (la première fois, macOS demande une confirmation). Il ouvre la page avec Chrome (sinon Edge, sinon le navigateur par défaut).
+  - Les deux lanceurs n'installent rien et n'envoient rien sur Internet. Si le dossier de l'atelier a un `#` ou un `%` dans son chemin, ils ouvrent la page dans le navigateur par défaut (ces deux caractères fausseraient l'adresse de la fenêtre à part).
+- **La bibliothèque est propre au navigateur et au poste.** Vos plateaux enregistrés et le travail en cours sont gardés par le navigateur qui a ouvert la page, sur cet ordinateur. Un autre navigateur, un autre poste ou une autre session d'utilisateur partent d'une bibliothèque vide. Le lanceur et le double-clic sur `index.html` partagent la même bibliothèque s'ils ouvrent le même navigateur. Pour emporter vos plateaux : mode « Bibliothèque », « Exporter toute la bibliothèque », puis « Importer… » de l'autre côté.
+
+## Le paquet à transmettre
+
+Pour donner l'atelier à quelqu'un (clé USB, courriel), fabriquez l'archive depuis la racine du dépôt :
+
+```
+python -I atelier/outils/empaqueter.py
+```
+
+Elle est écrite dans `dist/atelier-plateau.zip` : la page, ses scripts et ses styles, les deux lanceurs et un `LISEZ-MOI.txt` (ni tests ni outils). Le destinataire la décompresse où il veut et lance comme ci-dessus.
+
+- Seuls les fichiers **enregistrés dans git** sont emballés : un brouillon laissé dans `src/` ou `styles/` n'y entre jamais.
+- Si l'un des fichiers à emballer a des modifications non enregistrées (non committées), le script **refuse** et le dit : le paquet ne correspondrait à aucune version. `--brouillon` fabrique quand même un paquet d'essai (à ne pas transmettre) ; `--sortie <fichier>` l'écrit ailleurs que dans `dist/`.
 
 Le catalogue des pièces, les tuiles d'événement et les Troupes sont des **propositions provisoires, à valider**.
 
@@ -37,7 +59,9 @@ Choisissez un terrain (plaine, forêt, marais, montagne, ville) ou la **gomme**,
 - Un trait entier s'annule en une fois.
 - Le pinceau pose des tuiles d'une case : celles du stock d'abord, puis **hors stock**. Le message le dit, et le contrôle 1 liste les « tuiles à prévoir en plus du catalogue ». La montagne peinte est une tuile d'une case hors catalogue (la décision en vigueur reste « montagnes en blocs de 4 ou 5 cases » : le contrôle 1 le rappelle).
 - Le pinceau ne modifie ni un monobloc ni le noyau : le message dit lequel.
-- La gomme retire une tuile d'une case. Sur un monobloc ou le noyau, cliquez-le seul : une fenêtre demande confirmation, puis la pièce entière est retirée.
+- La gomme retire une tuile d'une case. Sur un monobloc, cliquez-le seul : une fenêtre demande confirmation, puis la pièce entière est retirée.
+- **Le noyau est fixe** : ni la gomme, ni « Retirer » (touche Suppr) ne l’enlèvent. Seuls « Vider le plateau » et « Nouveau plateau vierge » (mode « Créer à la main ») le font.
+- Annuler et Rétablir attendent la fin du geste : pendant un trait (bouton de la souris enfoncé), ils sont ignorés.
 
 ### Mes monoblocs
 
@@ -45,16 +69,20 @@ Choisissez un terrain (plaine, forêt, marais, montagne, ville) ou la **gomme**,
 - Donnez un **nom** et une **quantité** (1 à 9 exemplaires), regardez l'aperçu, puis « Ajouter à mes monoblocs ». Les messages sous l'aperçu disent ce qui manque.
 - La pièce apparaît dans la palette du mode « Créer à la main ». Elle est enregistrée **dans le plateau** : elle le suit dans son fichier et dans la bibliothèque.
 - **Modifier / Supprimer** dans la liste. Une pièce déjà posée ne se supprime pas et sa forme ne se change pas (retirez d'abord ses exemplaires) ; son nom et sa quantité se changent, tant que la quantité couvre les exemplaires posés.
+- Une pièce qui porte de la **montagne** sans être un bloc de 4 ou 5 cases tout en montagne reste permise, mais l'éditeur le rappelle et, une fois posée, le contrôle 1 la signale en alerte (décision en vigueur : « montagnes en blocs de 4 ou 5 cases »), comme la montagne d'une case du pinceau.
 - **Copier depuis un plateau de la bibliothèque** : reprend les monoblocs d'un autre plateau enregistré.
 
 ### Bibliothèque
 
-- **Enregistrer** : donnez un nom puis « Enregistrer sous ce nom ». Le nom du plateau s'affiche dans la barre du haut, avec « (modifié) » dès qu'il diffère de sa version enregistrée ; « Mettre à jour » enregistre par-dessus.
+- **Enregistrer** : donnez un nom puis « Enregistrer sous ce nom ». Le nom du plateau s'affiche dans la barre du haut, avec « (modifié) » dès qu'il diffère de sa version enregistrée ; « Mettre à jour » enregistre par-dessus. Annuler des retouches ne détache pas le plateau de sa fiche.
+- **Nom déjà pris** : il est numéroté tout seul (« Mon plateau (2) ») et le message le dit. Deux fiches n'ont jamais le même nom.
 - Chaque fiche montre une vignette, le nombre de cases, de pièces et de villes, le nombre d'erreurs et d'alertes, et la date. Boutons : **Ouvrir** (annulable), **Dupliquer**, **Renommer**, **Supprimer** (avec confirmation ; ne s'annule pas).
 - **Exporter toute la bibliothèque** écrit un fichier ; **Importer…** ajoute les plateaux d'un tel fichier sans rien écraser. C'est la façon de passer d'un poste ou d'un navigateur à un autre.
-- **Sauvegarde automatique** : le travail en cours est sauvegardé tout seul après chaque changement, et **repris à la prochaine ouverture** de la page (un message le dit en bas). « Générer » ou « Nouveau plateau vierge » repart d'autre chose.
+- **Sauvegarde automatique** : le travail en cours est sauvegardé tout seul après chaque changement, et **repris à la prochaine ouverture** de la page (un message le dit en bas). « Générer » ou « Nouveau plateau vierge » repart d'autre chose. Le plateau repris retrouve aussi sa fiche de la bibliothèque. Ouvrir la page avec `#graine=…` dans l'adresse affiche un plateau généré sans toucher au travail sauvegardé, tant que vous ne modifiez rien.
+- **Plusieurs fenêtres de l'atelier** ouvertes en même temps : chacune relit la bibliothèque avant d'y écrire, donc aucune n'efface les fiches de l'autre, et la liste se met à jour toute seule. Si la même fiche est modifiée dans deux fenêtres, la plus récente gagne et le message le dit. Une fiche supprimée ailleurs ne peut plus être « mise à jour » : enregistrez sous un nom.
 - **Où c'est gardé** : dans le navigateur, sur ce poste (40 plateaux au plus). La bibliothèque n'est **pas partagée** entre navigateurs, ni entre la page ouverte par double-clic (`file://`) et la même page servie par le serveur local (`http://127.0.0.1:8770`) : ce sont deux bibliothèques séparées (vérifié avec Edge). Vider les données de navigation l'efface : exportez-la de temps en temps.
-- Si le navigateur refuse le stockage, s'il est plein ou si son contenu est illisible, un avis s'affiche et l'outil continue de marcher ; les fichiers (« Enregistrer », « Exporter toute la bibliothèque ») restent disponibles.
+- **Stockage refusé ou plein** : un avis s'affiche et la bibliothèque continue **en mémoire** jusqu'à la fermeture de la page. Cliquez « Exporter toute la bibliothèque » pour ne rien perdre ; les fichiers (« Enregistrer ») restent disponibles.
+- **Contenu illisible** (abîmé, ou écrit par une version plus récente de l'atelier) : il n'est jamais effacé sans copie. Avant le premier enregistrement qui le remplacerait, son texte d'origine est gardé dans le navigateur sous une clé de secours datée (5 copies au plus) ; l'avis le dit et « Exporter les copies de secours » les sort dans un fichier. Les avis s'ajoutent les uns aux autres, aucun n'en cache un autre.
 
 ## Onglet « Inventaire »
 
@@ -118,6 +146,8 @@ Depuis le dossier `atelier/` :
 | `src/alea.js` … `src/generateur.js` | cœur du plateau (lot A) |
 | `src/cartes.js`, `src/paquets.js`, `src/partie.js` | table de jeu (lot B) |
 | `src/bibliotheque.js` | bibliothèque de plateaux et travail en cours : logique et stockage du navigateur injecté |
+| `Atelier.bat`, `Atelier.command` | lanceurs Windows et Mac (fenêtre à part) |
+| `outils/empaqueter.py` | fabrique le paquet à transmettre (`dist/atelier-plateau.zip`) |
 | `outils/serveur.js`, `outils/recette.html`, `outils/recette.js` | serveur local, recette automatique |
 | `outils/verifier-regles.js`, `outils/mesures-faisabilite.js` | vérification indépendante des règles, mesures de faisabilité |
 | `tests/` | tests Node |

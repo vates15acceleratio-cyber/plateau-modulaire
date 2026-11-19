@@ -1412,7 +1412,7 @@
     rang = vp.etat().rang;
     glisserCases(vue, ['-2,0', '-1,0', '0,0']);
     verifier('gomme en glissant sur le noyau : il n’est pas retiré, pas de fenêtre, le message dit comment faire',
-      !dialogue.open && pieceEn(vp, '0,0').modele === 'N1' && !pieceEn(vp, '-2,0') && vp.etat().rang === rang + 1 && /qu’après confirmation/.test($('#pi-message').textContent), $('#pi-message').textContent);
+      !dialogue.open && pieceEn(vp, '0,0').modele === 'N1' && !pieceEn(vp, '-2,0') && vp.etat().rang === rang + 1 && /Le noyau est fixe : la gomme ne le retire jamais \(2 cases laissées\)/.test($('#pi-message').textContent), $('#pi-message').textContent);
 
     // Clavier.
     clic($('#pi-terrain-foret'));
@@ -1566,11 +1566,12 @@
     clic($('#bi-enregistrer'));
     verifier('enregistrer sous un nom : une fiche, écrite dans le stockage', bib.liste().length === 1 && $$('#bi-liste .at-bib-fiche').length === 1 && ecritures.slice(avant).indexOf(B.cleListe()) !== -1
       && B.charger(stockageRecette).liste.length === 1 && JSON.stringify(B.charger(stockageRecette).liste[0].plateau) === JSON.stringify(vp.plateau()));
+    var id1 = bib.liste()[0].id, id2 = null;
     verifier('fiche : vignette SVG, résumé (cases, pièces, erreurs / alertes), date', $$('#bi-liste .at-bib-fiche svg.at-vignette').length === 1 && $$('#bi-liste .at-vignette polygon').length >= 91
       && /91 cases, 64 pièces, 7 villes ; aucune erreur, aucune alerte/.test($('#bi-liste').textContent) && /Modifié le \d\d\/\d\d\/\d{4} à \d\d:\d\d/.test($('#bi-liste').textContent), $('#bi-liste').textContent);
     verifier('nom saisi affiché comme du texte, dans la fiche et dans la barre', $$('#atelier b').length === 0 && /Essai <b>gras<\/b>/.test($('#bi-liste .at-bib-nom').textContent)
       && $('#at-nom-plateau').textContent === 'Plateau : « Essai <b>gras</b> »', $('#at-nom-plateau').textContent);
-    verifier('plateau ouvert : « à jour », bouton de mise à jour désactivé', /à jour dans la bibliothèque/.test($('#bi-etat').textContent) && $('#bi-mettre-a-jour').disabled && bib.ouvert() === 'b1');
+    verifier('plateau ouvert : « à jour », bouton de mise à jour désactivé', /à jour dans la bibliothèque/.test($('#bi-etat').textContent) && $('#bi-mettre-a-jour').disabled && bib.ouvert() === id1);
     saisir($('#bi-nom'), '   ');
     $('#bi-nom').placeholder = '';
     clic($('#bi-enregistrer'));
@@ -1589,34 +1590,35 @@
       && /92 cases, 65 pièces/.test($('#bi-liste').textContent) && $('#at-nom-plateau').textContent === 'Plateau : « Essai <b>gras</b> »', $('#bi-liste').textContent);
 
     // Dupliquer, renommer, ouvrir, supprimer.
-    clic($('#bi-liste [data-dupliquer="b1"]'));
+    clic($('#bi-liste [data-dupliquer="' + id1 + '"]'));
+    id2 = bib.liste()[1].id;
     verifier('dupliquer : seconde fiche « (copie) »', bib.liste().length === 2 && /\(copie\)$/.test(bib.liste()[1].nom) && $$('#bi-liste .at-bib-fiche').length === 2);
-    clic($('#bi-liste [data-renommer="b2"]'));
-    var champ = $('#bi-liste [data-nouveau-nom="b2"]');
+    clic($('#bi-liste [data-renommer="' + id2 + '"]'));
+    var champ = $('#bi-liste [data-nouveau-nom="' + id2 + '"]');
     verifier('renommer : champ de saisie dans la fiche, avec le focus', !!champ && document.activeElement === champ && /\(copie\)$/.test(champ.value));
     champ.value = 'Variante marais';
-    clic($('#bi-liste [data-valider-nom="b2"]'));
+    clic($('#bi-liste [data-valider-nom="' + id2 + '"]'));
     verifier('renommer : nom changé et enregistré', bib.liste()[1].nom === 'Variante marais' && B.charger(stockageRecette).liste[1].nom === 'Variante marais' && !$('#bi-liste [data-nouveau-nom]'));
     plateauDeReference();
     mode('bibliotheque');
     verifier('générer ou ouvrir un fichier détache le plateau de l’entrée ouverte', bib.ouvert() === null && $('#at-nom-plateau').textContent === 'Plateau : sans nom');
     var rang = vp.etat().rang;
-    clic($('#bi-liste [data-ouvrir="b2"]'));
+    clic($('#bi-liste [data-ouvrir="' + id2 + '"]'));
     verifier('ouvrir : le plateau de la fiche est affiché, la barre porte son nom', JSON.stringify(vp.plateau()) === JSON.stringify(bib.liste()[1].plateau) && vp.plateau().pieces.length === 65
-      && $('#at-nom-plateau').textContent === 'Plateau : « Variante marais »' && $('#bi-liste [data-entree="b2"]').classList.contains('at-bib-ouverte'), $('#at-nom-plateau').textContent);
+      && $('#at-nom-plateau').textContent === 'Plateau : « Variante marais »' && $('#bi-liste [data-entree="' + id2 + '"]').classList.contains('at-bib-ouverte'), $('#at-nom-plateau').textContent);
     verifier('ouvrir est annulable', vp.etat().rang === rang + 1);
     clic($('#pl-annuler'));
     verifier('annuler : retour au plateau précédent, détaché de la fiche ouverte (« Mettre à jour » ne peut pas écraser une autre fiche)', vp.plateau().pieces.length === 64 && bib.ouvert() === null
       && $('#at-nom-plateau').textContent === 'Plateau : sans nom' && !$('#bi-mettre-a-jour'), $('#at-nom-plateau').textContent);
     clic($('#pl-retablir'));
-    verifier('rétablir : le plateau ouvert revient avec son attache', vp.plateau().pieces.length === 65 && bib.ouvert() === 'b2' && $('#at-nom-plateau').textContent === 'Plateau : « Variante marais »', $('#at-nom-plateau').textContent);
-    clic($('#bi-liste [data-supprimer-entree="b1"]'));
+    verifier('rétablir : le plateau ouvert revient avec son attache', vp.plateau().pieces.length === 65 && bib.ouvert() === id2 && $('#at-nom-plateau').textContent === 'Plateau : « Variante marais »', $('#at-nom-plateau').textContent);
+    clic($('#bi-liste [data-supprimer-entree="' + id1 + '"]'));
     verifier('supprimer : confirmation demandée', $('#at-confirmation').open === true && /Supprimer « Essai <b>gras<\/b> » de la bibliothèque/.test($('#at-confirmation').textContent) && bib.liste().length === 2);
     clic($('#at-confirmer-non'));
     verifier('supprimer, renoncer : rien ne change', bib.liste().length === 2 && $('#at-confirmation').open === false);
-    clic($('#bi-liste [data-supprimer-entree="b1"]'));
+    clic($('#bi-liste [data-supprimer-entree="' + id1 + '"]'));
     clic($('#at-confirmer-oui'));
-    verifier('supprimer, confirmer : la fiche disparaît, du stockage aussi', bib.liste().length === 1 && bib.liste()[0].id === 'b2' && B.charger(stockageRecette).liste.length === 1 && $$('#bi-liste .at-bib-fiche').length === 1);
+    verifier('supprimer, confirmer : la fiche disparaît, du stockage aussi', bib.liste().length === 1 && bib.liste()[0].id === id2 && B.charger(stockageRecette).liste.length === 1 && $$('#bi-liste .at-bib-fiche').length === 1);
 
     // Exporter tout, importer.
     telecharges.length = 0;
@@ -1663,7 +1665,8 @@
     plein.activer();
     messages.length = 0;
     var refuse = plein.enregistrerSous('Trop gros');
-    verifier('stockage plein : enregistrement refusé avec explication, liste intacte', refuse === false && plein.liste().length === 0 && /erreur : Stockage du navigateur plein/.test(messages.join(' | ')) && /plein/.test(plein.avis()), messages.join(' | '));
+    verifier('stockage plein : la fiche est gardée en mémoire pour la session, avec un message clair', refuse === true && plein.liste().length === 1 && plein.enMemoire() === true
+      && /alerte : .*gardé en mémoire seulement/.test(messages.join(' | ')) && /plein/.test(plein.avis()), messages.join(' | '));
     indications.length = 0;
     var sauvegarde = plein.sauverTravail();
     verifier('stockage plein : sauvegarde automatique impossible, indiquée sans exception', sauvegarde.ok === false && indications.length > 0 && indications[indications.length - 1].niveau === 'erreur'
@@ -1735,6 +1738,322 @@
     plateauDeReference();
     AT.app.montrer('partie');
     clic($('#pa-nouvelle'));
+  });
+
+  // ================================================================== corrections après la revue (docs/06-revue-creation.md)
+  /**
+   * Une « autre fenêtre » de l'atelier : une vraie vue Bibliothèque de plus, sur le stockage donné, avec son propre
+   * plateau courant. Sert à rejouer les scénarios à deux fenêtres sans ouvrir de fenêtre.
+   */
+  function fenetre(stockage, plateauInitial) {
+    var vp = AT.app.vues.plateau;
+    var etat = { plateau: plateauInitial, messages: [], indications: [], fichiers: [] };
+    var acces = {
+      plateau: function () { return etat.plateau; }, reglages: vp.reglages, ouvrirDocument: function (p) { etat.plateau = p; },
+      message: function (t, n) { etat.messages.push(n + ' : ' + t); }, confirmer: function (t, l, f) { f(); },
+      telecharger: function (nom, contenu) { etat.fichiers.push({ nom: nom, contenu: String(contenu) }); }, ouvrirFichier: function () {},
+      indiquer: function (i) { etat.indications.push(i); }
+    };
+    etat.vue = AT.vueBibliotheque.creer(acces, { stockage: stockage, ecouter: false });
+    etat.vue.montrer(true);
+    etat.dernier = function () { return etat.messages[etat.messages.length - 1] || ''; };
+    return etat;
+  }
+
+  scenario('Revue : bibliothèque à plusieurs fenêtres, attache, identifiants, copies de secours (I1 à I4)', async function () {
+    var vp = AT.app.vues.plateau, P = AT.plateau, B = AT.bibliotheque, bib = vp.bibliotheque;
+    var pl = function (graine, cle) { return P.avecCamps(P.peindre(P.vierge(graine), cle || '3,0', 'foret').plateau); };
+    plateauDeReference();
+
+    // I1 : deux fenêtres sur le même stockage ; chacune enregistre ; rien n'est effacé.
+    var s = B.stockageMemoire(), a = fenetre(s, pl('A')), b = fenetre(s, pl('B'));
+    a.vue.enregistrerSous('Fait dans A');
+    b.vue.enregistrerSous('Fait dans B');
+    var dansStockage = function () { return B.charger(s).liste.map(function (e) { return e.nom; }).join(' | '); };
+    verifier('I1 : deux fenêtres enregistrent chacune une fiche : le stockage garde les deux, sous deux identifiants', dansStockage() === 'Fait dans A | Fait dans B'
+      && B.charger(s).liste[0].id !== B.charger(s).liste[1].id && b.vue.liste().length === 2, dansStockage());
+    a.plateau = pl('A', '4,0');
+    var majA = a.vue.mettreAJour();
+    verifier('I1 : « Mettre à jour » dans la première fenêtre ne perd pas la fiche de la seconde', majA === true && dansStockage() === 'Fait dans A | Fait dans B' && a.vue.liste().length === 2
+      && JSON.stringify(B.charger(s).liste[0].plateau) === JSON.stringify(a.plateau) && JSON.stringify(B.charger(s).liste[1].plateau) === JSON.stringify(b.plateau), dansStockage() + ' / ' + a.dernier());
+    b.vue.renommer(b.vue.ouvert(), 'Renommé dans B');
+    a.vue.dupliquer(a.vue.ouvert());
+    verifier('I1 : renommer dans l’une, dupliquer dans l’autre : les deux changements sont gardés', dansStockage() === 'Fait dans A | Renommé dans B | Fait dans A (copie)', dansStockage());
+    // Conflit sur la même fiche : la plus récente gagne, et on le dit.
+    var idA = a.vue.ouvert();
+    b.vue.ouvrir(idA);
+    await attendre(5);
+    b.plateau = pl('A', '5,0');
+    b.vue.mettreAJour();
+    await attendre(5);
+    a.plateau = pl('A', '6,0');
+    var conflit = a.vue.mettreAJour();
+    verifier('I1 : même fiche modifiée dans les deux fenêtres : la plus récente gagne et le message le dit', conflit === true && /alerte : .*aussi été modifiée dans une autre fenêtre : votre version, la plus récente, la remplace/.test(a.dernier())
+      && JSON.stringify(B.trouver(B.charger(s).liste, idA).plateau) === JSON.stringify(a.plateau) && B.charger(s).liste.length === 3, a.dernier());
+    b.plateau = pl('A', '5,1');
+    await attendre(5);
+    b.vue.mettreAJour();                       // B modifie encore la fiche…
+    a.vue.dupliquer(B.charger(s).liste[1].id); // … A écrit une AUTRE fiche entre-temps…
+    await attendre(5);
+    a.plateau = pl('A', '6,1');
+    a.vue.mettreAJour();                       // … puis met à jour la fiche : le conflit doit quand même être dit
+    verifier('I1 : le conflit reste annoncé même si la fenêtre a écrit une autre fiche entre-temps', /aussi été modifiée dans une autre fenêtre/.test(a.dernier())
+      && JSON.stringify(B.trouver(B.charger(s).liste, idA).plateau) === JSON.stringify(a.plateau) && B.charger(s).liste.length === 4, a.dernier());
+    a.plateau = pl('A', '6,2');
+    a.vue.mettreAJour();
+    verifier('I1 : sans modification ailleurs, une mise à jour ordinaire n’annonce aucun conflit', /^info : /.test(a.dernier()) && !/autre fenêtre/.test(a.dernier()), a.dernier());
+    b.vue.supprimer(idA);
+    a.plateau = pl('A', '7,0');
+    var apresSuppression = a.vue.mettreAJour();
+    verifier('I3 : « Mettre à jour » vérifie que la fiche existe encore : supprimée ailleurs, la mise à jour est refusée et expliquée', apresSuppression === false && /n’existe plus dans la bibliothèque/.test(a.dernier())
+      && B.charger(s).liste.length === 3 && a.vue.ouvert() === null, a.dernier());
+
+    // I1 : l'événement « storage » d'une autre fenêtre met à jour la liste affichée.
+    mode('bibliotheque');
+    var avantEvenement = bib.liste().length;
+    var ailleurs = B.ajouter(bib.liste(), 'Venu d’une autre fenêtre', pl('ailleurs'), undefined, { minimum: B.charger(stockageRecette).suivant });
+    B.enregistrer(stockageRecette, ailleurs.liste, B.numero(ailleurs.id) + 1);
+    window.dispatchEvent(new StorageEvent('storage', { key: B.cleListe() }));
+    verifier('I1 : événement « storage » : la liste affichée se met à jour toute seule, avec un avis', bib.liste().length === avantEvenement + 1 && $$('#bi-liste .at-bib-fiche').length === avantEvenement + 1
+      && /Venu d’une autre fenêtre/.test($('#bi-liste').textContent) && !$('#bi-avis').hidden && /modifiée dans une autre fenêtre/.test($('#bi-avis').textContent), $('#bi-avis').textContent);
+    window.dispatchEvent(new StorageEvent('storage', { key: 'autre-application:cle' }));
+    verifier('I1 : un événement « storage » d’une autre clé est ignoré', bib.liste().length === avantEvenement + 1);
+    clic($('#bi-liste [data-supprimer-entree="' + ailleurs.id + '"]')); clic($('#at-confirmer-oui'));
+
+    // I2 : l'attache est écrite avec le travail en cours, en une écriture.
+    var s2 = B.stockageMemoire(), x = fenetre(s2, pl('X'));
+    x.vue.enregistrerSous('Fiche X');
+    var idX = x.vue.ouvert();
+    x.plateau = pl('Y');
+    x.vue.enregistrerSous('Fiche Y');
+    var idY = x.vue.ouvert();
+    x.vue.activer();
+    x.vue.ouvrir(idX);
+    x.plateau = P.avecCamps(P.peindre(x.plateau, '0,3', 'marais').plateau);
+    x.vue.planifier();
+    x.vue.sauverTravail();
+    var ecrit = JSON.parse(s2.getItem(B.cleTravail()));
+    verifier('I2 : le travail en cours porte le plateau ET sa fiche ; plus de clé « ouvert » à part', ecrit.ouvert === idX && JSON.stringify(ecrit.plateau) === JSON.stringify(x.plateau) && s2.getItem('atelier-plateau:ouvert') === null, JSON.stringify(Object.keys(ecrit)));
+    x.vue.ouvrir(idY);          // … et la page se recharge avant la sauvegarde suivante : rien n'est écrit
+    var apres = fenetre(s2, null), reprise = apres.vue.reprendre();
+    verifier('I2 : rechargement juste après « Ouvrir » une autre fiche : le plateau repris garde SA fiche (jamais le plateau de X sous le nom de Y)',
+      reprise.ok && JSON.stringify(reprise.plateau) === JSON.stringify(ecrit.plateau) && reprise.ouvert === idX && apres.vue.ouvert() === idX, reprise.ouvert + ' / ' + apres.vue.ouvert());
+    var s3 = B.stockageMemoire();
+    s3.setItem(B.cleTravail(), JSON.stringify({ format: 'atelier-travail', version: 1, modifie: '2026-11-19T10:00:00.000Z', plateau: pl('ancien') }));
+    s3.setItem('atelier-plateau:ouvert', 'b1');
+    var ancien = fenetre(s3, null), repriseAncienne = ancien.vue.reprendre();
+    ancien.plateau = repriseAncienne.plateau;
+    verifier('I2 : ancien stockage (travail sans attache, clé « ouvert » à part) : relu sans erreur, sans attache', repriseAncienne.ok && !!repriseAncienne.plateau && ancien.vue.ouvert() === null && ancien.vue.avis() === null, String(ancien.vue.avis()));
+    ancien.vue.activer();
+    ancien.plateau = pl('ancien', '4,0');
+    ancien.vue.planifier(); ancien.vue.sauverTravail();
+    verifier('I2 : à la première sauvegarde, l’ancienne clé « ouvert » disparaît', s3.getItem('atelier-plateau:ouvert') === null && B.chargerTravail(s3).ok);
+
+    // I3 : scénario de la revue, dans la vraie page. Un identifiant de fiche supprimée n'est pas redonné.
+    mode('pinceau');
+    clic($('#pi-terrain-foret'));
+    verifier('I3 : bibliothèque vide au départ', bib.liste().length === 0, bib.liste().length);
+    bib.enregistrerSous('Plateau A');
+    var idPlateauA = bib.ouvert();
+    clicCase(vp.vue, '7,-7');
+    mode('creer');
+    clic($('#cr-vierge'));
+    mode('bibliotheque');
+    clic($('#bi-liste [data-supprimer-entree="' + idPlateauA + '"]')); clic($('#at-confirmer-oui'));
+    bib.enregistrerSous('Plateau Z');
+    var idZ = bib.ouvert(), contenuZ = JSON.stringify(bib.liste()[0].plateau);
+    verifier('I3 : la fiche suivante ne reprend pas l’identifiant de la fiche supprimée', bib.liste().length === 1 && idZ !== idPlateauA && B.numero(idZ) > B.numero(idPlateauA), idPlateauA + ' → ' + idZ);
+    verifier('I3 : le compteur des fiches a sa propre clé ; l’enveloppe de la bibliothèque reste à trois champs (une copie plus ancienne de l’atelier la relit)',
+      stockageRecette.getItem(B.cleCompteur()) === String(B.numero(idZ) + 1) && Object.keys(JSON.parse(stockageRecette.getItem(B.cleListe()))).join() === 'format,version,plateaux', stockageRecette.getItem(B.cleCompteur()));
+    clic($('#pl-annuler'));
+    verifier('I3 : Annuler ramène l’ancien plateau A, qui n’est PAS rattaché à la fiche Z', vp.plateau().pieces.length === 65 && bib.ouvert() === null && $('#at-nom-plateau').textContent === 'Plateau : sans nom' && !$('#bi-mettre-a-jour'),
+      $('#at-nom-plateau').textContent);
+    verifier('I3 : « Mettre à jour » est alors refusé ; la fiche Z garde son contenu', bib.mettreAJour() === false && JSON.stringify(bib.liste()[0].plateau) === contenuZ && JSON.stringify(B.charger(stockageRecette).liste[0].plateau) === contenuZ);
+    clic($('#pl-retablir'));
+    verifier('I3 : Rétablir : le plateau vierge revient avec sa fiche Z', bib.ouvert() === idZ && vp.plateau().pieces.length === 1 && $('#at-nom-plateau').textContent === 'Plateau : « Plateau Z »', $('#at-nom-plateau').textContent);
+
+    // M5 : annuler en deçà de « Enregistrer sous » garde l'attache.
+    mode('pinceau');
+    clicCase(vp.vue, '3,0');
+    clicCase(vp.vue, '4,0');
+    mode('bibliotheque');
+    bib.enregistrerSous('Mon plateau');
+    var idMon = bib.ouvert();
+    clic($('#pl-annuler'));
+    verifier('M5 : annuler en deçà de l’enregistrement : le plateau reste attaché à sa fiche, marquée « modifié »', bib.ouvert() === idMon && $('#at-nom-plateau').textContent === 'Plateau : « Mon plateau » (modifié)'
+      && !!$('#bi-mettre-a-jour') && !$('#bi-mettre-a-jour').disabled, $('#at-nom-plateau').textContent);
+    clic($('#pl-annuler'));
+    verifier('M5 : un pas plus loin (avant la retouche) : même document, toujours attaché à « Mon plateau »', bib.ouvert() === idMon);
+    clic($('#pl-retablir')); clic($('#pl-retablir'));
+
+    // M6 : nom déjà pris.
+    saisir($('#bi-nom'), 'mon PLATEAU');
+    clic($('#bi-enregistrer'));
+    var noms = bib.liste().map(function (e) { return e.nom; });
+    verifier('M6 : nom déjà pris : numéroté automatiquement et annoncé', noms.indexOf('mon PLATEAU (2)') !== -1 && /Le nom « mon PLATEAU » est déjà pris : plateau enregistré dans la bibliothèque sous le nom « mon PLATEAU \(2\) »/.test($('#barre-etat').textContent)
+      && /at-etat-alerte/.test(etatBarre()) && $('#at-nom-plateau').textContent === 'Plateau : « mon PLATEAU (2) »', noms.join(' | ') + ' / ' + $('#barre-etat').textContent);
+    bib.renommer(bib.ouvert(), 'Plateau Z');
+    verifier('M6 : renommer vers un nom pris : numéroté aussi', bib.liste().filter(function (e) { return e.nom === 'Plateau Z (2)'; }).length === 1 && /déjà pris : plateau renommé « Plateau Z \(2\) »/.test($('#barre-etat').textContent), $('#barre-etat').textContent);
+    var tousNoms = bib.liste().map(function (e) { return e.nom.toLowerCase(); });
+    verifier('M6 : aucun nom en double dans la bibliothèque', tousNoms.filter(function (n, i) { return tousNoms.indexOf(n) !== i; }).length === 0, tousNoms.join(' | '));
+
+    // I4 : contenu illisible ou d'une version inconnue : jamais écrasé sans copie de secours ; les avis se cumulent.
+    var s4 = B.stockageMemoire();
+    var futur = JSON.stringify({ format: 'atelier-bibliotheque', version: 2, plateaux: [{ id: 'b1', nouveau: 'champ d’une version future' }] });
+    s4.setItem(B.cleListe(), futur);
+    s4.setItem(B.cleTravail(), '{travail abîmé');
+    var w = fenetre(s4, pl('W'));
+    var repriseW = w.vue.reprendre();
+    w.vue.rafraichir();
+    var avisW = w.vue.avis() || '';
+    verifier('I4 : bibliothèque d’une version inconnue ET travail illisible : les deux avis sont affichés ensemble', repriseW.ok === false && /Version de bibliothèque non reconnue/.test(avisW) && /Travail en cours illisible/.test(avisW)
+      && w.vue.element.querySelectorAll('#bi-avis p').length === 2 && s4.getItem(B.cleListe()) === futur, avisW);
+    var enregistreW = w.vue.enregistrerSous('Après');
+    var copies = B.listerSecours(s4);
+    verifier('I4 : premier enregistrement : le contenu d’origine est d’abord copié sous une clé de secours datée', enregistreW === true && copies.length === 1 && copies[0].texte === futur && copies[0].origine === 'bibliotheque'
+      && /^atelier-plateau:secours:bibliotheque:\d{4}-\d\d-\d\dT/.test(copies[0].cle) && B.charger(s4).liste.length === 1, copies.map(function (c) { return c.cle; }).join());
+    verifier('I4 : la copie de secours est annoncée à l’écran et le bouton d’export apparaît', /copie de secours/.test(w.vue.avis()) && /Travail en cours illisible/.test(w.vue.avis()) && !w.vue.element.querySelector('#bi-exporter-secours').hidden, w.vue.avis());
+    w.vue.activer();
+    w.plateau = pl('W', '5,0');
+    w.vue.planifier(); w.vue.sauverTravail();
+    copies = B.listerSecours(s4);
+    verifier('I4 : le travail illisible est copié lui aussi avant d’être remplacé', copies.length === 2 && copies[1].origine === 'travail' && copies[1].texte === '{travail abîmé' && B.chargerTravail(s4).ok === true, copies.length);
+    clic(w.vue.element.querySelector('#bi-exporter-secours'));
+    verifier('I4 : « Exporter les copies de secours » : un fichier qui contient les textes d’origine', w.fichiers.length === 1 && w.fichiers[0].nom === 'copies-de-secours-atelier.json'
+      && JSON.parse(w.fichiers[0].contenu).copies.length === 2 && JSON.parse(w.fichiers[0].contenu).copies[0].texte === futur);
+    // Fiches écartées (réglage changé, autre copie de l'atelier) : la fiche écartée n'est pas perdue à l'écriture suivante.
+    var s5 = B.stockageMemoire(), deuxFiches = B.ajouter(B.ajouter(B.vide(), 'Ordinaire', pl('o')).liste, 'Sept cases', pl('s')).liste;
+    var brut = JSON.parse(B.exporter(deuxFiches));
+    brut.plateaux[1].plateau.modeles = [{ id: 'X1', nom: 'Sept', quantite: 1, cases: [0, 1, 2, 3, 4, 5, 6].map(function (q) { return { q: q, r: 0, terrain: 'plaine' }; }) }];
+    s5.setItem(B.cleListe(), JSON.stringify(brut));
+    var e5 = fenetre(s5, pl('e'));
+    verifier('I4 : une fiche illisible est écartée avec un avis, sans rien effacer', e5.vue.liste().length === 1 && /1 plateau illisible a été écarté/.test(e5.vue.avis()) && s5.getItem(B.cleListe()) === JSON.stringify(brut), e5.vue.avis());
+    e5.vue.renommer(e5.vue.liste()[0].id, 'Renommée');
+    copies = B.listerSecours(s5);
+    verifier('I4 : renommer la fiche ordinaire : le contenu d’origine (avec la fiche écartée) est gardé en copie de secours', copies.length === 1 && JSON.parse(copies[0].texte).plateaux.length === 2
+      && JSON.parse(copies[0].texte).plateaux[1].nom === 'Sept cases' && B.charger(s5).liste[0].nom === 'Renommée', copies.length);
+    var suivante = e5.vue.enregistrerSous('Nouvelle');
+    verifier('I3 : le numéro de la fiche écartée n’est pas redonné à une nouvelle fiche', suivante === true && B.numero(e5.vue.ouvert()) > 2, e5.vue.ouvert());
+
+    // M1 : un plateau généré par « #graine= » ne remplace pas le travail sauvegardé tant que rien n'est modifié.
+    var s6 = B.stockageMemoire(), fait = pl('fait main');
+    B.enregistrerTravail(s6, fait);
+    var texteTravail = s6.getItem(B.cleTravail());
+    var g = fenetre(s6, AT.generateur.generer(12, vp.reglages()).plateau);
+    g.vue.activer();                       // démarrage avec « #graine= » : pas de reprise, sauvegarde armée
+    var fermeture = g.vue.sauverTravail(); // fermeture de la page (pagehide)
+    verifier('M1 : page ouverte avec « #graine= » puis fermée sans rien modifier : le travail sauvegardé est intact', fermeture.ok === true && s6.getItem(B.cleTravail()) === texteTravail);
+    g.plateau = P.avecCamps(P.peindre(g.plateau, '9,-9', 'plaine').plateau);
+    g.vue.planifier(); g.vue.sauverTravail();
+    verifier('M1 : après une modification, le travail en cours devient le plateau modifié', JSON.stringify(B.chargerTravail(s6).plateau) === JSON.stringify(g.plateau));
+
+    // M7 : stockage plein : la bibliothèque continue en mémoire, avec la consigne d'exporter.
+    var plein = fenetre(B.stockageMemoire({ quota: 50 }), pl('plein'));
+    var memoire = plein.vue.enregistrerSous('Gardé en mémoire');
+    verifier('M7 : stockage plein : la fiche est gardée en mémoire pour la session', memoire === true && plein.vue.liste().length === 1 && plein.vue.enMemoire() === true && plein.vue.ouvert() === plein.vue.liste()[0].id
+      && plein.vue.element.querySelectorAll('.at-bib-fiche').length === 1);
+    verifier('M7 : message et avis clairs, qui invitent à « Exporter toute la bibliothèque »', /alerte : .*gardé en mémoire seulement.*« Exporter toute la bibliothèque »/.test(plein.dernier())
+      && /continue en mémoire pour cette session/.test(plein.vue.avis()) && /Exporter toute la bibliothèque/.test(plein.vue.avis()), plein.dernier());
+    plein.vue.activer();
+    plein.plateau = pl('plein', '4,0');
+    plein.vue.planifier();
+    var sauvegardePleine = plein.vue.sauverTravail();
+    verifier('M7 / I4 : stockage plein, sauvegarde automatique impossible : l’avis du travail s’AJOUTE à celui de la bibliothèque, aucun ne remplace l’autre',
+      sauvegardePleine.ok === false && /la bibliothèque continue en mémoire pour cette session/.test(plein.vue.avis()) && /le travail en cours n’est plus sauvegardé automatiquement/.test(plein.vue.avis())
+      && plein.vue.element.querySelectorAll('#bi-avis p').length === 2 && plein.indications[plein.indications.length - 1].niveau === 'erreur', plein.vue.avis());
+    plein.vue.enregistrerSous('Seconde');
+    verifier('M7 / I4 : un nouvel enregistrement en mémoire ne fait pas disparaître l’avis du travail', /le travail en cours n’est plus sauvegardé automatiquement/.test(plein.vue.avis()) && /continue en mémoire/.test(plein.vue.avis()), plein.vue.avis());
+    plein.vue.exporter();
+    verifier('M7 : la bibliothèque en mémoire continue de servir et s’exporte', plein.vue.liste().length === 2 && plein.fichiers.length === 1 && JSON.parse(plein.fichiers[0].contenu).plateaux.length === 2);
+
+    // Remise en état.
+    mode('bibliotheque');
+    while (bib.liste().length) { clic($('#bi-liste [data-supprimer-entree]')); clic($('#at-confirmer-oui')); }
+    verifier('bibliothèque remise à vide', bib.liste().length === 0 && B.charger(stockageRecette).liste.length === 0);
+    plateauDeReference();
+    AT.app.montrer('partie');
+  });
+
+  scenario('Revue : gestes en cours, noyau fixe, montagne hors bloc (M2, questions 1 et 3)', async function () {
+    var vp = AT.app.vues.plateau, vue = vp.vue;
+    plateauDeReference();
+    mode('creer');
+    clic($('#cr-vierge'));
+    mode('pinceau');
+    clic($('#pi-terrain-foret'));
+    clicCase(vue, '3,0');
+    var rang = vp.etat().rang;
+
+    // M2 : Annuler / Rétablir pendant un trait sont ignorés.
+    var p4 = vue.pointEcran('4,0'), p5 = vue.pointEcran('5,0');
+    pointeur(vue.svg, 'pointerdown', p4);
+    touche('z', { ctrlKey: true });
+    var pendant = { rang: vp.etat().rang, barre: $('#barre-etat').textContent };
+    clic($('#pl-annuler'));
+    touche('y', { ctrlKey: true });
+    pointeur(vue.svg, 'pointermove', p5);
+    pointeur(vue.svg, 'pointerup', p5);
+    vue.svg.dispatchEvent(new MouseEvent('click', { clientX: p5.x, clientY: p5.y, bubbles: true, cancelable: true }));
+    verifier('M2 : Ctrl+Z et le bouton Annuler pendant un trait de pinceau : ignorés, avec un message', pendant.rang === rang && /Geste en cours/.test(pendant.barre), JSON.stringify(pendant));
+    verifier('M2 : le trait se termine normalement : une étape, les trois forêts sont là', vp.etat().rang === rang + 1 && ['3,0', '4,0', '5,0'].every(function (k) { return pieceEn(vp, k) && pieceEn(vp, k).modele === 'F'; }));
+    touche('z', { ctrlKey: true });
+    verifier('M2 : après le relâchement, Ctrl+Z annule le trait entier et seulement lui', vp.etat().rang === rang && !!pieceEn(vp, '3,0') && !pieceEn(vp, '4,0') && !pieceEn(vp, '5,0'));
+    mode('creer');
+    rang = vp.etat().rang;
+    var pendantGlisse = null;
+    glisserPalette('M4', vue.pointEcran('3,2'), function () {
+      touche('z', { ctrlKey: true });
+      pendantGlisse = { rang: vp.etat().rang, piece: !!pieceEn(vp, '3,0') };
+    });
+    verifier('M2 : Ctrl+Z pendant un glisser depuis la palette : ignoré, la pièce est posée au relâchement', pendantGlisse.rang === rang && pendantGlisse.piece && vp.etat().rang === rang + 1 && !!pieceEn(vp, '3,2'), JSON.stringify(pendantGlisse));
+    var avantDeplacement = vp.etat().rang;
+    glisserCases(vue, ['3,2', '4,2', '-4,3'], null, function () { touche('z', { ctrlKey: true }); pendantGlisse = { rang: vp.etat().rang }; });
+    verifier('M2 : Ctrl+Z pendant le glisser d’une pièce posée : ignoré', pendantGlisse.rang === avantDeplacement && vp.etat().rang === avantDeplacement + 1 && !!pieceEn(vp, '-4,3'));
+
+    // Question 3 : la gomme ne retire jamais le noyau.
+    mode('pinceau');
+    clic($('#pi-gomme'));
+    rang = vp.etat().rang;
+    clicCase(vue, '1,0');
+    verifier('noyau fixe : la gomme cliquée sur le noyau ne propose pas de le retirer (aucune fenêtre), et dit pourquoi', $('#at-confirmation').open !== true && pieceEn(vp, '0,0').modele === 'N1' && vp.etat().rang === rang
+      && /Le noyau est fixe : la gomme ne le retire jamais/.test($('#pi-message').textContent) && /« Vider le plateau » et « Nouveau plateau vierge »/.test($('#pi-message').textContent) && /at-etat-erreur/.test(etatBarre()), $('#pi-message').textContent);
+    verifier('noyau fixe : l’aide du pinceau le dit', /elle ne retire jamais le noyau, qui est fixe/.test($('#pi-panneau').textContent));
+    mode('creer');
+    rang = vp.etat().rang;
+    clicCase(vue, '0,0');
+    clic($('#pl-retirer'));
+    var apresBouton = { rang: vp.etat().rang, barre: $('#barre-etat').textContent };
+    touche('Delete');
+    verifier('noyau fixe : « Retirer » et la touche Suppr ne le retirent pas non plus, et disent pourquoi', apresBouton.rang === rang && vp.etat().rang === rang && pieceEn(vp, '0,0').modele === 'N1'
+      && /Le noyau est fixe : il ne se retire pas/.test(apresBouton.barre) && /at-etat-erreur/.test(etatBarre()), apresBouton.barre);
+    touche('Escape');
+    clic($('#pl-vider'));
+    verifier('noyau fixe : « Vider le plateau » reste le moyen de le retirer', vp.plateau().pieces.length === 0);
+    clic($('#pl-annuler'));
+
+    // Question 1 : monobloc personnel avec de la montagne hors bloc de 4 ou 5 cases.
+    mode('monoblocs');
+    clic($('#mo-effacer'));
+    clic($('#mo-terrain-montagne'));
+    ['0,0', '1,0', '1,1'].forEach(function (k) { $('#mo-grille [data-case="' + k + '"]').dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    saisir($('#mo-nom'), 'Trois pics');
+    verifier('montagne hors bloc : l’éditeur le rappelle sans bloquer', !!$('#mo-rappel-montagne') && /bloc de 4 ou 5 cases/.test($('#mo-rappel-montagne').textContent) && !$('#mo-valider').disabled, $('#mo-avis').textContent);
+    $('#mo-grille [data-case="0,1"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    verifier('bloc de 4 cases tout en montagne : plus de rappel', !$('#mo-rappel-montagne') && !$('#mo-valider').disabled);
+    $('#mo-grille [data-case="0,1"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    clic($('#mo-valider'));
+    var idPics = vp.plateau().modeles[vp.plateau().modeles.length - 1].id;
+    mode('creer');
+    verifier('montagne hors bloc : pièce non posée, pas d’alerte sur le plateau', !/hors bloc de 4 ou 5 cases/.test($('#pl-controles').textContent));
+    clic($('#pl-stock [data-modele="' + idPics + '"]'));
+    clicCase(vue, '4,-3');
+    touche('Escape');
+    var constat = $$('#pl-controles [data-regle="inventaire"]').filter(function (e) { return /hors bloc de 4 ou 5 cases/.test(e.textContent); })[0];
+    verifier('montagne hors bloc : une fois posée, le contrôle 1 la signale en alerte (pas en erreur), comme la montagne d’une case', !!constat && constat.getAttribute('data-niveau') === 'alerte'
+      && /1 monobloc personnel avec de la montagne hors bloc de 4 ou 5 cases \(Trois pics\) : la décision en vigueur est « montagnes en blocs de 4 ou 5 cases »/.test(constat.textContent), constat && constat.textContent);
+    verifier('aide de l’éditeur : bornes lues dans les réglages', new RegExp(AT.catalogue.REGLAGES.perso.casesMin + ' à ' + AT.catalogue.REGLAGES.perso.casesMax + ' cases qui se touchent').test($('#mo-panneau').textContent));
+    plateauDeReference();
+    AT.app.montrer('partie');
   });
 
   // ================================================================== états de démonstration du lot E (captures d'écran)
@@ -1879,20 +2198,15 @@
     verifier('repeindre une case qui porte une tuile d’événement : la tuile retourne en réserve, et c’est dit', avecEvenement.ok && vp.plateau().recouvrements.length === 0 && pieceEn(vp, '3,1').modele === 'S'
       && /1 tuile d’événement retourne en réserve/.test($('#pi-message').textContent), $('#pi-message').textContent);
 
-    // Gomme sur le noyau : confirmation, puis annulation.
+    // Gomme sur le noyau : il est fixe (règle de l'utilisateur après la revue), la gomme ne le retire jamais.
+    // (Les contrôles « noyau retiré après confirmation », « ville peinte au centre sans noyau » et « deux annulations »
+    // de la recette d'origine ne s'appliquent plus : ce chemin n'existe plus.)
     clic($('#pi-gomme'));
     rang = vp.etat().rang;
     clicCase(vue, '1,0');
     var dialogue = $('#at-confirmation');
-    verifier('gomme sur le noyau : confirmation demandée, noyau encore là', dialogue.open === true && /Retirer le noyau en entier \(7 cases\)/.test(dialogue.textContent) && !!pieceEn(vp, '0,0'), dialogue.textContent);
-    clic($('#at-confirmer-oui'));
-    verifier('noyau retiré après confirmation : 7 cases en moins, contrôle 3 en erreur, une étape', !pieceEn(vp, '0,0') && !pieceEn(vp, '1,0') && vp.etat().rang === rang + 1 && /Le noyau n’est pas posé/.test($('#pl-controles').textContent)
-      && /Noyau retiré/.test($('#pi-message').textContent), $('#pi-message').textContent);
-    clic($('#pi-terrain-ville'));
-    clicCase(vue, '0,0');
-    verifier('ville peinte au centre sans noyau : acceptée, le contrôle 3 réclame toujours le noyau', pieceEn(vp, '0,0') && pieceEn(vp, '0,0').modele === 'V' && /Le noyau n’est pas posé/.test($('#pl-controles').textContent) && relisible(vp));
-    touche('z', { ctrlKey: true }); touche('z', { ctrlKey: true });
-    verifier('deux annulations : le noyau est revenu', pieceEn(vp, '0,0') && pieceEn(vp, '0,0').modele === 'N1' && vp.etat().rang === rang);
+    verifier('gomme sur le noyau : aucune confirmation proposée, noyau encore là, rien ne change', dialogue.open !== true && !!pieceEn(vp, '0,0') && pieceEn(vp, '0,0').modele === 'N1' && vp.etat().rang === rang
+      && /Le noyau est fixe : la gomme ne le retire jamais/.test($('#pi-message').textContent) && relisible(vp), $('#pi-message').textContent);
 
     // Clic hors de la grille affichée (au-delà du rayon 7) et aux bornes du format.
     clic($('#pi-terrain-plaine'));

@@ -5,12 +5,17 @@
  * Dépend de AT.catalogue, AT.plateau, AT.controles, AT.bibliotheque ; AT.rendu pour le panneau.
  *
  * Le stockage est injecté (options.stockage) : localStorage du navigateur par défaut, stockage en mémoire dans la
- * recette automatique. S'il est absent, plein ou illisible, l'outil reste utilisable : la bibliothèque vit alors
- * en mémoire le temps de la session, et un avis permanent le dit. Aucune écriture au chargement du script.
+ * recette automatique. S'il est absent, plein ou refusé, l'outil reste utilisable : la bibliothèque vit alors en
+ * mémoire le temps de la session, et un avis permanent invite à exporter. Aucune écriture au chargement du script.
  *
- * Clés du stockage (préfixe « atelier-plateau: ») : « bibliotheque » et « travail » (AT.bibliotheque), plus
- * « ouvert » : identifiant de l'entrée de la bibliothèque dont le plateau courant est issu (pour « Mettre à jour »
- * après un rechargement de la page).
+ * Règles de sûreté (revue docs/06-revue-creation.md) :
+ *  - plusieurs fenêtres : le stockage est RELU avant chaque écriture (jamais d'écriture par-dessus une fiche ajoutée
+ *    ou modifiée ailleurs) et l'événement « storage » met la liste à jour ;
+ *  - l'attache « plateau ouvert » est écrite AVEC le travail en cours, dans la même écriture ;
+ *  - un identifiant de fiche n'est jamais réutilisé (compteur conservé dans le stockage) ;
+ *  - un contenu illisible ou d'une version inconnue n'est jamais remplacé sans copie de secours datée ;
+ *  - les avis permanents se cumulent (un par sujet) ;
+ *  - rien n'est écrit dans le travail en cours tant que l'utilisateur n'a rien modifié.
  */
 var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof globalThis !== 'undefined' ? globalThis : window).AT || {});
 
@@ -25,7 +30,6 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   var C = AT.catalogue, P = AT.plateau, K = AT.controles, B = AT.bibliotheque;
 
   var DELAI_SAUVEGARDE = 400;        // millisecondes d'attente après le dernier changement
-  var FORME_ID = /^b[1-9][0-9]{0,5}$/;
 
   // ================================================================== logique pure
 
@@ -78,63 +82,145 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   /**
    * `acces` : plateau(), reglages(), ouvrirDocument(plateau), message(texte, niveau), confirmer(texte, libelle, rappel),
-   *           telecharger(nom, contenu, type), ouvrirFichier(rappel), indiquer({nom, modifie, sauvegarde, niveau}).
-   * `options.stockage` : stockage injecté (undefined = celui du navigateur ; null = aucun).
-   * Renvoie {element, rafraichir(), liste(), ouvert(), detacher(), planifier(), sauverTravail(), reprendre(), …}.
+   *           telecharger(nom, contenu, type), ouvrirFichier(rappel), indiquer({nom, modifie, sauvegarde, niveau}),
+   *           lier(id) (facultatif : attache toute la lignée du plateau courant dans l'historique à une fiche).
+   * `options.stockage` : stockage injecté (undefined = celui du navigateur ; null = aucun) ;
+   * `options.ecouter` = false : ne pas écouter l'événement « storage ».
+   * Renvoie {element, rafraichir(), liste(), ouvert(), attacher(id), planifier(), sauverTravail(), reprendre(), …}.
    */
   function creer(acces, options) {
     var R = AT.rendu, el = R.el;
     var stockage = options && options.stockage !== undefined ? options.stockage : B.stockageNavigateur();
-    var avisStockage = null;           // avis permanent (stockage absent, corrompu, plein)
+    var avis = Object.create(null);    // avis permanents, par sujet : ils se cumulent, aucun ne remplace l'autre
+    var ORDRE_AVIS = ['absent', 'plein', 'travailPlein', 'bibliotheque', 'ecartees', 'travail', 'secours', 'secoursTravail', 'ailleurs'];
     var liste = [], ouvert = null;
-    var minuterie = null, actif = false, dernierTravail = null, etatSauvegarde = { texte: '', niveau: 'info' };
+    var compteur = 1;                  // plus petit numéro de fiche jamais attribué (un identifiant n'est jamais réutilisé)
+    var dernierBrut = null;            // texte de la bibliothèque tel que cette fenêtre l'a lu ou écrit en dernier
+    var enMemoire = false;             // la dernière écriture a échoué : la liste en mémoire fait foi pour la session
+    var aSecourir = null;              // texte illisible (ou portant des fiches écartées) à copier avant toute écriture
+    var travailASecourir = null, travailVu = false;
+    var connues = Object.create(null); // date « modifie » de la fiche ouverte, enregistrée ou mise à jour PAR cette fenêtre
+    var minuterie = null, actif = false, sale = false, dernierTravail = null, etatSauvegarde = { texte: '', niveau: 'info' };
     var renomme = null, resumes = Object.create(null), visible = false;
 
     var champNom = el('input', { type: 'text', id: 'bi-nom', maxlength: C.REGLAGES.bibliotheque.longueurNom, autocomplete: 'off', spellcheck: 'false' });
-    var zoneAvis = el('p', { classe: 'at-avis', id: 'bi-avis', hidden: true });
+    var zoneAvis = el('div', { classe: 'at-avis', id: 'bi-avis', hidden: true });
     var zoneCourant = el('div', { id: 'bi-courant' });
     var zoneListe = el('div', { classe: 'at-bib-liste', id: 'bi-liste' });
     var titreListe = el('legend', { id: 'bi-titre-liste' });
 
-    function cleOuvert() { return C.REGLAGES.bibliotheque.prefixe + 'ouvert'; }
+    function dire(sujet, texte) { avis[sujet] = texte; }
+    function taire(sujet) { delete avis[sujet]; }
+    function textesAvis() { return ORDRE_AVIS.filter(function (s) { return typeof avis[s] === 'string'; }).map(function (s) { return avis[s]; }); }
 
     // ---------------------------------------------------------------- stockage
     if (!stockage) {
       stockage = B.stockageMemoire();
-      avisStockage = 'Stockage du navigateur indisponible : la bibliothèque et le travail en cours ne seront pas conservés à la fermeture de la page. Utilisez « Exporter toute la bibliothèque » et « Enregistrer » (fichier).';
+      dire('absent', 'Stockage du navigateur indisponible : la bibliothèque et le travail en cours ne seront pas conservés à la fermeture de la page. Utilisez « Exporter toute la bibliothèque » et « Enregistrer » (fichier).');
     }
-    (function charger() {
+
+    /**
+     * Note la date de la fiche `id` telle que cette fenêtre vient de l'ouvrir ou de l'écrire. Seulement pour elle :
+     * une écriture sur une AUTRE fiche ne doit pas faire oublier qu'une autre fenêtre a modifié celle-ci entre-temps.
+     */
+    function retenir(id) { var e = id ? B.trouver(liste, id) : null; if (e) connues[id] = e.modifie; }
+
+    /**
+     * Relit la bibliothèque du stockage si son texte a changé depuis la dernière lecture ou écriture de CETTE fenêtre
+     * (une autre fenêtre de l'atelier a pu enregistrer entre-temps). Appelée avant toute écriture : on ne réécrit
+     * jamais par-dessus une fiche ajoutée ou modifiée ailleurs. Renvoie vrai si la liste en mémoire a changé.
+     */
+    function relire() {
       var lu = B.charger(stockage);
-      liste = lu.liste;
+      if (lu.absent) return false;
+      compteur = Math.max(compteur, lu.suivant);          // même si la liste n'a pas changé : une fiche a pu être créée puis supprimée ailleurs
+      if (lu.brut === dernierBrut) return false;
+      dernierBrut = lu.brut;
       if (!lu.ok) {
-        avisStockage = lu.raison + (lu.corrompu ? ' Elle est ignorée ; elle sera remplacée au prochain enregistrement dans la bibliothèque.' : '');
-      } else if (lu.ecartees) {
-        avisStockage = lu.ecartees + (lu.ecartees > 1 ? ' plateaux illisibles ont été écartés' : ' plateau illisible a été écarté') + ' de la bibliothèque enregistrée (' + lu.avis[0] + ').';
-      }
-      try {
-        var id = stockage.getItem(cleOuvert());
-        if (typeof id === 'string' && FORME_ID.test(id) && B.trouver(liste, id)) ouvert = id;
-      } catch (x) { ouvert = null; }
-    })();
-
-    function noterOuvert(id) {
-      ouvert = id;
-      try { if (id) stockage.setItem(cleOuvert(), id); else stockage.removeItem(cleOuvert()); } catch (x) { /* sans conséquence : seul « Mettre à jour » après rechargement en dépend */ }
-    }
-
-    /** Écrit la nouvelle liste ; en cas d'échec, la liste en cours est gardée et la raison est affichée. */
-    function persister(nouvelle) {
-      var r = B.enregistrer(stockage, nouvelle);
-      if (!r.ok) {
-        if (r.plein || r.absent) avisStockage = r.raison;
-        acces.message(r.raison, 'erreur');
-        rafraichir();
+        // Illisible ou d'une version inconnue : on ne l'efface pas. La liste en mémoire est gardée.
+        aSecourir = lu.brut;
+        dire('bibliotheque', lu.raison + ' Elle n’est pas effacée : une copie de secours en est gardée avant tout enregistrement dans la bibliothèque.');
         return false;
       }
-      liste = nouvelle;
-      resumes = Object.create(null);        // deux enregistrements peuvent porter la même date à la milliseconde : pas de résumé périmé
+      taire('bibliotheque');
+      if (lu.ecartees) {
+        aSecourir = lu.brut;
+        dire('ecartees', lu.ecartees + (lu.ecartees > 1 ? ' plateaux illisibles ont été écartés' : ' plateau illisible a été écarté') + ' de la bibliothèque enregistrée (' + lu.avis[0]
+          + '). Rien n’est effacé : une copie de secours du contenu d’origine est gardée avant tout enregistrement.');
+      }
+      if (enMemoire) {
+        // Des fiches n'existent qu'en mémoire (stockage plein) : fusion, la plus récente gagne.
+        var f = B.fusionner(liste, lu.liste);
+        liste = f.liste;
+      } else {
+        liste = lu.liste;
+      }
+      resumes = Object.create(null);
+      if (ouvert && !B.trouver(liste, ouvert)) lier(null);      // la fiche ouverte a été supprimée ailleurs
       return true;
     }
+
+    /**
+     * Écrit la nouvelle liste. Avant, garde une copie de secours d'un contenu illisible qu'elle remplacerait.
+     * Stockage plein ou refusé : la liste est gardée EN MÉMOIRE pour la session et un avis invite à exporter.
+     * Renvoie vrai si la liste en cours est bien `nouvelle` (dans le stockage ou en mémoire), faux si elle est refusée.
+     */
+    function ecrire(nouvelle) {
+      var r = null;
+      if (aSecourir !== null) {
+        var s = B.sauverSecours(stockage, 'bibliotheque', aSecourir);
+        if (s.ok) {
+          aSecourir = null;
+          dire('secours', 'Une copie de secours de la bibliothèque illisible a été gardée dans ce navigateur (« ' + s.cle + ' ») : « Exporter les copies de secours » la sort dans un fichier.');
+        } else {
+          r = s;                       // pas de copie possible : on n'écrase rien, on continue en mémoire
+        }
+      }
+      if (r === null) r = B.enregistrer(stockage, nouvelle, compteur);
+      resumes = Object.create(null);   // deux enregistrements peuvent porter la même date à la milliseconde : pas de résumé périmé
+      if (r.ok) {
+        liste = nouvelle;
+        dernierBrut = r.texte;
+        enMemoire = false;
+        taire('plein');
+        return true;
+      }
+      if (r.plein || r.absent) {
+        liste = nouvelle;
+        enMemoire = true;
+        dire('plein', 'Stockage du navigateur plein ou refusé : la bibliothèque continue en mémoire pour cette session, mais ses derniers changements ne seront pas conservés à la fermeture de la page. '
+          + 'Cliquez « Exporter toute la bibliothèque » pour ne rien perdre, ou supprimez des plateaux pour faire de la place.');
+        return true;
+      }
+      acces.message(r.raison, 'erreur');
+      rafraichir();
+      return false;
+    }
+
+    /** Message de fin d'action : en alerte, avec la consigne d'export, quand la liste n'a pu être gardée qu'en mémoire. */
+    function annoncer(texte, niveau) {
+      if (enMemoire) acces.message(texte + ' Attention : gardé en mémoire seulement (stockage plein ou refusé) : « Exporter toute la bibliothèque » pour ne rien perdre.', 'alerte');
+      else acces.message(texte, niveau || 'info');
+    }
+
+    /** Attache le plateau courant (et toute sa lignée dans l'historique) à une fiche, ou le détache (null). */
+    function lier(id) {
+      ouvert = id;
+      if (acces.lier) acces.lier(id);
+      planifier();
+    }
+
+    /** Une autre fenêtre de l'atelier a écrit dans le stockage : la liste affichée se met à jour. */
+    function surStockage(ev) {
+      var prefixe = C.REGLAGES.bibliotheque.prefixe;
+      if (ev && typeof ev.key === 'string' && ev.key.indexOf(prefixe) !== 0) return;
+      if (!relire()) return;
+      dire('ailleurs', 'La bibliothèque a été modifiée dans une autre fenêtre de l’atelier : la liste ci-dessous est à jour.');
+      rafraichir();
+    }
+    if (!(options && options.ecouter === false) && typeof window !== 'undefined' && window.addEventListener) window.addEventListener('storage', surStockage);
+
+    relire();
 
     // ---------------------------------------------------------------- sauvegarde automatique du travail en cours
     function indiquer() {
@@ -146,92 +232,149 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       });
     }
 
-    /** Écrit tout de suite le travail en cours (sans rien écrire s'il n'a pas changé). Renvoie {ok, raison}. */
+    /** Ce qui est écrit dans le travail en cours : le plateau ET la fiche à laquelle il est attaché. */
+    function signature() { return P.serialiser(acces.plateau()) + '\n' + (ouvert || ''); }
+
+    /**
+     * Écrit tout de suite le travail en cours : plateau et attache, en UNE écriture. Rien n'est écrit tant que
+     * l'utilisateur n'a rien modifié depuis l'ouverture de la page (un plateau généré par l'adresse « #graine= »
+     * ne remplace donc pas le travail sauvegardé), ni si rien n'a changé depuis la dernière écriture.
+     * Renvoie {ok, raison}.
+     */
     function sauverTravail() {
       if (minuterie !== null) { clearTimeout(minuterie); minuterie = null; }
-      var texte = P.serialiser(acces.plateau());
-      if (texte === dernierTravail) return { ok: true, raison: null };
-      var r = B.enregistrerTravail(stockage, acces.plateau());
+      if (!sale) return { ok: true, raison: null };
+      var texte = signature(), r;
+      if (texte === dernierTravail) { sale = false; return { ok: true, raison: null }; }
+      if (!travailVu) {
+        // Le travail en place n'a pas été relu à l'ouverture (adresse « #graine= ») : on ne remplace pas un contenu illisible sans copie.
+        var enPlace = B.chargerTravail(stockage);
+        if (!enPlace.ok && enPlace.corrompu) travailASecourir = enPlace.brut;
+        travailVu = true;
+      }
+      if (travailASecourir !== null) {
+        var s = B.sauverSecours(stockage, 'travail', travailASecourir);
+        if (s.ok) {
+          travailASecourir = null;
+          dire('secoursTravail', 'Une copie de secours du travail en cours illisible a été gardée dans ce navigateur (« ' + s.cle + ' ») : « Exporter les copies de secours » la sort dans un fichier.');
+        }
+        r = s.ok ? null : s;
+      }
+      if (!r) r = B.enregistrerTravail(stockage, acces.plateau(), undefined, ouvert);
       if (r.ok) {
         dernierTravail = texte;
+        sale = false;
         etatSauvegarde = { texte: 'Travail sauvegardé automatiquement à ' + dateLisible(new Date().toISOString()).slice(-5), niveau: 'info' };
+        taire('travailPlein');
+        try { stockage.removeItem(C.REGLAGES.bibliotheque.prefixe + 'ouvert'); } catch (x) { /* ancienne clé à part, désormais inutile */ }
       } else {
         etatSauvegarde = { texte: 'Sauvegarde automatique impossible', niveau: 'erreur' };
-        if (r.plein || r.absent) avisStockage = r.raison;
-        if (visible) rafraichir();
+        if (r.plein || r.absent) dire('travailPlein', 'Stockage du navigateur plein ou refusé : le travail en cours n’est plus sauvegardé automatiquement. Utilisez « Enregistrer » (fichier) et « Exporter toute la bibliothèque ».');
       }
-      indiquer();
+      if (visible) rafraichir(); else indiquer();
       return r;
     }
 
-    /** À appeler après chaque changement du plateau : une seule écriture, un peu après le dernier changement. */
+    /** À appeler après chaque changement du plateau ou de son attache : une seule écriture, un peu après le dernier changement. */
     function planifier() {
       if (!actif) return;
+      sale = true;
       if (minuterie !== null) clearTimeout(minuterie);
       minuterie = setTimeout(function () { minuterie = null; sauverTravail(); }, DELAI_SAUVEGARDE);
     }
 
     /**
-     * Travail en cours retrouvé dans le stockage : {ok, plateau (null s'il n'y en a pas), modifie, raison}.
-     * Ne change rien à l'écran : l'appelant décide de l'ouvrir.
+     * Travail en cours retrouvé dans le stockage : {ok, plateau (null s'il n'y en a pas), modifie, ouvert, raison}.
+     * L'attache est celle écrite avec le plateau (si la fiche existe encore). Ne change rien à l'écran.
      */
     function reprendre() {
       var r = B.chargerTravail(stockage);
-      if (r.ok && r.plateau) dernierTravail = P.serialiser(r.plateau);
-      if (!r.ok && r.corrompu) avisStockage = r.raison + ' Il est ignoré.';
+      travailVu = true;
+      if (r.ok && r.plateau) {
+        ouvert = (r.ouvert && B.trouver(liste, r.ouvert)) ? r.ouvert : null;
+        retenir(ouvert);
+        dernierTravail = P.serialiser(r.plateau) + '\n' + (ouvert || '');
+      }
+      if (!r.ok && r.corrompu) {
+        travailASecourir = r.brut;
+        dire('travail', r.raison + ' Il est ignoré, pas effacé : une copie de secours en est gardée avant qu’un nouveau travail le remplace.');
+      }
       return r;
     }
 
     // ---------------------------------------------------------------- actions
     function enregistrerSous(nom) {
+      relire();
       var voulu = nom === undefined ? champNom.value : nom;
-      var r = B.ajouter(liste, voulu, acces.plateau());
+      var r = B.ajouter(liste, voulu, acces.plateau(), undefined, { minimum: compteur, unique: true });
       if (!r.ok) { acces.message('Enregistrement refusé : ' + r.raison, 'erreur'); return false; }
-      if (!persister(r.liste)) return false;
-      noterOuvert(r.id);
+      compteur = Math.max(compteur, B.numero(r.id) + 1);
+      if (!ecrire(r.liste)) return false;
+      lier(r.id);
+      retenir(r.id);
       champNom.value = '';
       rafraichir();
-      acces.message('Plateau enregistré dans la bibliothèque sous le nom « ' + B.trouver(liste, r.id).nom + ' ».', 'info');
+      annoncer(r.renomme
+        ? 'Le nom « ' + String(voulu).trim() + ' » est déjà pris : plateau enregistré dans la bibliothèque sous le nom « ' + r.nom + ' ».'
+        : 'Plateau enregistré dans la bibliothèque sous le nom « ' + r.nom + ' ».', r.renomme ? 'alerte' : 'info');
       return true;
     }
 
     function mettreAJour() {
+      relire();
       var entree = ouvert ? B.trouver(liste, ouvert) : null;
-      if (!entree) { acces.message('Aucun plateau de la bibliothèque n’est ouvert : donnez un nom puis « Enregistrer sous ce nom ».', 'alerte'); return false; }
+      if (!entree) {
+        rafraichir();
+        acces.message('Mise à jour impossible : la fiche ouverte n’existe plus dans la bibliothèque (supprimée, peut-être dans une autre fenêtre). Donnez un nom puis « Enregistrer sous ce nom ».', 'alerte');
+        return false;
+      }
+      // La fiche a-t-elle changé ailleurs depuis que cette fenêtre l'a vue ? Notre version, plus récente, gagne : on le dit.
+      var conflit = connues[ouvert] !== undefined && connues[ouvert] !== entree.modifie;
       var r = B.remplacer(liste, ouvert, acces.plateau());
       if (!r.ok) { acces.message('Mise à jour refusée : ' + r.raison, 'erreur'); return false; }
-      if (!persister(r.liste)) return false;
+      if (!ecrire(r.liste)) return false;
+      retenir(ouvert);
       rafraichir();
-      acces.message('« ' + entree.nom + ' » mis à jour dans la bibliothèque.', 'info');
+      annoncer('« ' + entree.nom + ' » mis à jour dans la bibliothèque.'
+        + (conflit ? ' Cette fiche avait aussi été modifiée dans une autre fenêtre : votre version, la plus récente, la remplace.' : ''), conflit ? 'alerte' : 'info');
       return true;
     }
 
     function ouvrir(id) {
+      relire();
       var entree = B.trouver(liste, id);
-      if (!entree) { acces.message('Plateau introuvable dans la bibliothèque.', 'erreur'); return false; }
+      if (!entree) { rafraichir(); acces.message('Plateau introuvable dans la bibliothèque (supprimé, peut-être dans une autre fenêtre).', 'erreur'); return false; }
       acces.ouvrirDocument(entree.plateau);
-      noterOuvert(id);
+      lier(id);
+      retenir(id);
       rafraichir();
       acces.message('« ' + entree.nom + ' » ouvert (Annuler revient au plateau précédent).', 'info');
       return true;
     }
 
     function dupliquer(id) {
-      var r = B.dupliquer(liste, id);
-      if (!r.ok) { acces.message('Copie refusée : ' + r.raison, 'erreur'); return false; }
-      if (!persister(r.liste)) return false;
+      relire();
+      var r = B.dupliquer(liste, id, undefined, undefined, { minimum: compteur, unique: true });
+      if (!r.ok) { rafraichir(); acces.message('Copie refusée : ' + r.raison, 'erreur'); return false; }
+      compteur = Math.max(compteur, B.numero(r.id) + 1);
+      if (!ecrire(r.liste)) return false;
       rafraichir();
-      acces.message('Copie créée : « ' + B.trouver(liste, r.id).nom + ' ».', 'info');
+      annoncer('Copie créée : « ' + r.nom + ' ».');
       return true;
     }
 
     function renommer(id, nom) {
-      var r = B.renommer(liste, id, nom);
+      relire();
+      var avantRenommage = B.trouver(liste, id);
+      var r = B.renommer(liste, id, nom, undefined, { unique: true });
       if (!r.ok) { acces.message('Nouveau nom refusé : ' + r.raison, 'erreur'); return false; }
-      if (!persister(r.liste)) return false;
+      if (!ecrire(r.liste)) return false;
+      // Renommer ne touche pas au plateau de la fiche : si c'est la fiche ouverte et qu'aucune autre fenêtre ne l'a
+      // modifiée depuis, sa nouvelle date est la nôtre (sinon le conflit reste à annoncer à la prochaine mise à jour).
+      if (id === ouvert && avantRenommage && connues[id] === avantRenommage.modifie) retenir(id);
       renomme = null;
       rafraichir();
-      acces.message('Plateau renommé « ' + B.trouver(liste, id).nom + ' ».', 'info');
+      annoncer(r.renomme ? 'Le nom « ' + String(nom).trim() + ' » est déjà pris : plateau renommé « ' + r.nom + ' ».' : 'Plateau renommé « ' + r.nom + ' ».', r.renomme ? 'alerte' : 'info');
       return true;
     }
 
@@ -239,28 +382,40 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var entree = B.trouver(liste, id);
       if (!entree) return;
       acces.confirmer('Supprimer « ' + entree.nom + ' » de la bibliothèque ? Cette suppression ne s’annule pas.', 'Supprimer', function () {
+        relire();
         var r = B.supprimer(liste, id);
-        if (!r.ok) { acces.message(r.raison, 'erreur'); return; }
-        if (!persister(r.liste)) return;
-        if (ouvert === id) noterOuvert(null);
+        if (!r.ok) { rafraichir(); acces.message(r.raison, 'erreur'); return; }
+        if (!ecrire(r.liste)) return;
+        if (ouvert === id) lier(null);
         rafraichir();
-        acces.message('« ' + entree.nom + ' » supprimé de la bibliothèque. Le plateau affiché n’a pas changé.', 'info');
+        annoncer('« ' + entree.nom + ' » supprimé de la bibliothèque. Le plateau affiché n’a pas changé.');
       });
     }
 
     function exporter() {
+      relire();
       if (!liste.length) { acces.message('La bibliothèque est vide : rien à exporter.', 'alerte'); return false; }
       acces.telecharger('bibliotheque-plateaux.json', B.exporter(liste), 'application/json');
       return true;
     }
 
+    /** Sort dans un fichier les copies de secours gardées dans le navigateur (contenus illisibles remplacés). */
+    function exporterSecours() {
+      if (!B.listerSecours(stockage).length) { acces.message('Aucune copie de secours dans ce navigateur.', 'info'); return false; }
+      acces.telecharger('copies-de-secours-atelier.json', B.exporterSecours(stockage), 'application/json');
+      return true;
+    }
+
     /** Importe le texte d'un fichier d'export (fusion : rien n'est écrasé). Renvoie vrai si des plateaux sont ajoutés. */
     function importerTexte(texte) {
-      var r = B.importer(liste, texte);
+      relire();
+      var r = B.importer(liste, texte, { minimum: compteur, unique: true });
       if (!r.ok) { acces.message(r.raison, 'erreur'); return false; }
-      if (!persister(r.liste)) return false;
+      compteur = Math.max(compteur, B.suivantDe(r.liste));
+      if (!ecrire(r.liste)) return false;
       rafraichir();
-      acces.message(r.ajoutes + (r.ajoutes > 1 ? ' plateaux importés' : ' plateau importé') + ' dans la bibliothèque'
+      annoncer(r.ajoutes + (r.ajoutes > 1 ? ' plateaux importés' : ' plateau importé') + ' dans la bibliothèque'
+        + (r.renommes ? ' ; ' + r.renommes + (r.renommes > 1 ? ' noms déjà pris ont été numérotés' : ' nom déjà pris a été numéroté') : '')
         + (r.ecartees ? ' ; ' + r.ecartees + (r.ecartees > 1 ? ' entrées illisibles écartées' : ' entrée illisible écartée') : '') + '.', r.ecartees ? 'alerte' : 'info');
       return true;
     }
@@ -311,8 +466,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     function rafraichir() {
       indiquer();
       if (!visible) return;
-      zoneAvis.hidden = !avisStockage;
-      zoneAvis.textContent = avisStockage || '';
+      var textes = textesAvis();
+      zoneAvis.hidden = !textes.length;
+      R.remplacer(zoneAvis, textes.map(function (x) { return el('p', { texte: x }); }));
+      boutonSecours.hidden = !B.listerSecours(stockage).length;
       var entree = ouvert ? B.trouver(liste, ouvert) : null, courant = [];
       if (entree) {
         var modifie = !memePlateau(entree.plateau, acces.plateau());
@@ -337,6 +494,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
     champNom.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { enregistrerSous(champNom.value || champNom.placeholder); ev.preventDefault(); } });
 
+    var boutonSecours = el('button', { type: 'button', id: 'bi-exporter-secours', texte: 'Exporter les copies de secours', hidden: true,
+      title: 'Sortir dans un fichier les contenus illisibles gardés avant d’être remplacés', sur: { click: exporterSecours } });
+
     var element = el('div', { classe: 'at-mode-panneau', id: 'bi-panneau' }, [
       zoneAvis,
       el('fieldset', null, [
@@ -356,7 +516,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         el('legend', { texte: 'Sauvegarde dans un fichier' }),
         el('div', { classe: 'at-ligne' }, [
           el('button', { type: 'button', id: 'bi-exporter', texte: 'Exporter toute la bibliothèque', sur: { click: exporter } }),
-          el('button', { type: 'button', id: 'bi-importer', texte: 'Importer…', title: 'Ajouter les plateaux d’un fichier exporté (rien n’est écrasé)', sur: { click: function () { acces.ouvrirFichier(importerTexte); } } })
+          el('button', { type: 'button', id: 'bi-importer', texte: 'Importer…', title: 'Ajouter les plateaux d’un fichier exporté (rien n’est écrasé)', sur: { click: function () { acces.ouvrirFichier(importerTexte); } } }),
+          boutonSecours
         ])
       ])
     ]);
@@ -364,13 +525,19 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     return {
       element: element, rafraichir: rafraichir,
       montrer: function (oui) { visible = !!oui; if (visible) rafraichir(); },
-      liste: function () { return liste; }, ouvert: function () { return ouvert; }, avis: function () { return avisStockage; },
-      detacher: function () { if (ouvert) { noterOuvert(null); } },
-      /** Rattache le plateau courant à une entrée (annuler / rétablir) ; une entrée supprimée entre-temps détache. */
-      attacher: function (id) { var cible = id && B.trouver(liste, id) ? id : null; if (cible !== ouvert) noterOuvert(cible); },
+      liste: function () { return liste; }, ouvert: function () { return ouvert; },
+      /** Avis permanents en cours, réunis en un texte (null s'il n'y en a pas). */
+      avis: function () { var x = textesAvis(); return x.length ? x.join(' ') : null; },
+      enMemoire: function () { return enMemoire; },
+      /**
+       * Attache du pas d'historique que l'on rejoint (nouveau pas, annuler, rétablir) : la fiche `id` si elle existe
+       * encore, sinon aucune. Le travail en cours est réécrit avec cette attache.
+       */
+      attacher: function (id) { var cible = id && B.trouver(liste, id) ? id : null; if (cible !== ouvert) { ouvert = cible; planifier(); } },
       activer: function () { actif = true; }, planifier: planifier, sauverTravail: sauverTravail, reprendre: reprendre,
       enregistrerSous: enregistrerSous, mettreAJour: mettreAJour, ouvrir: ouvrir, dupliquer: dupliquer, renommer: renommer,
-      supprimer: supprimer, exporter: exporter, importerTexte: importerTexte,
+      supprimer: supprimer, exporter: exporter, exporterSecours: exporterSecours, importerTexte: importerTexte,
+      relire: function () { var change = relire(); if (change) rafraichir(); return change; }, surStockage: surStockage,
       stockage: function () { return stockage; }
     };
   }
