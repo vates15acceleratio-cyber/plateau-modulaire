@@ -47,6 +47,13 @@ Elles priment sur la proposition d'inventaire du 2026-11-18 ci-dessous. Détail 
 8. **Création à la main** (même jour, après la première livraison) : mode création guidé sur plateau vierge, pinceau libre hors catalogue, monoblocs dessinés par l'utilisateur, bibliothèque de plateaux. Voir `docs/02-atelier-cahier-des-charges.md` §8.
 9. **Finalité** (même jour) : un jeu pour **tester des parties en 1 contre 1 en local, deux joueurs sur le même écran**. L'outil doit être une **app transportable**, sous **Windows et Mac**. On reste sur le format web (pas de Godot) ; lanceur et empaquetage à faire après la création à la main.
 
+## Décisions du 2026-11-19, seconde série (priment sur les points 1 à 4 ci-dessus quand elles les contredisent)
+1. **Uniquement des monoblocs** pour le terrain (plaines, forêts, marais), de **3 ou 4 cases** : plus de tuile de terrain d'une seule case. Le **noyau central ne bouge pas**. Les montagnes restent des blocs.
+2. **Le plateau est construit par les joueurs**, puis ils **disposent les villes aux extrémités**.
+3. **Villes de déploiement** : posées **SUR une case de Plaine** après la construction du plateau ; **deux par joueur**, pas plus.
+4. **Villes neutres** : ce sont des **tuiles** placées **aux extrémités, sur les côtés** du plateau, et **pas sur une Plaine**.
+5. Transport : **paquet web simple à installer** (dossier compressé, lanceurs Windows et Mac). La partie « jeu » viendra plus tard.
+
 ## Proposition d'inventaire (à valider ; dessinée dans `tuiles/sortie/types_de_tuiles.pdf`)
 Décisions de l'utilisateur du 2026-11-18 : **2 montagnes** (au lieu de 3) ; tuiles simples à **70 % de plaines, 15 % de forêts, 15 % de marais** ; **7 villes**, au moins **3 tuiles entre deux villes** voisines.
 
