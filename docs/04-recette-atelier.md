@@ -125,3 +125,58 @@ Limites de cette suite :
 Recette relancée par le serveur local (`http://127.0.0.1:8793/outils/recette.html`, serveur arrêté ensuite) : **249 OK, 0 ÉCHEC**, avec la ligne INFO qui remplace le contrôle `file://`.
 
 Fichiers touchés en plus : `atelier/src/catalogue.js`, `atelier/src/generateur.js`, `atelier/outils/serveur.js`, `atelier/tests/serveur.test.js` (nouveau), `atelier/tests/generateur.test.js`.
+
+## Création à la main (recette du même jour, cahier des charges §8)
+
+### Chiffres
+
+| Vérification | Annoncé | Constaté avant mes changements | Après |
+|---|---|---|---|
+| `node --test` (depuis `atelier/`) | 237 OK | 237 OK, 0 échec | **239 OK, 0 échec** |
+| Recette Edge sans fenêtre, `file://`, budget 20000 | 393 OK | 393 OK, 0 ÉCHEC | **456 OK, 0 ÉCHEC** (15 s réelles) |
+| `node outils/verifier-regles.js 50` | 0 non conforme | 200 plateaux, 0 non conforme | **200 plateaux, 0 non conforme, 0 échec de génération** |
+| Persistance réelle (`#persistance=ecrire` puis `lire`, même profil temporaire neuf, sans fenêtre) | | | 6 OK puis 7 OK ; `index.html` relancé sur ce profil reprend le travail en cours (6 pièces, 12 cases) |
+
+### Point 6 : « côtés (retenue) » sur `docs/captures/creation-guidee.png`
+C'est l'état de la recette, pas un défaut d'initialisation. Le scénario « Générer » de `outils/recette.js` remettait la mesure sur « côtés » (écrit quand c'était le défaut) ; toute la suite, états de démonstration compris, tournait donc sous « côtés ». Une capture directe de `index.html#mode=creer&graine=12` sur un profil neuf affiche « pièces » (retenue). Corrigé dans la recette : elle revient à `REGLAGES.mesureContact`, et un contrôle le vérifie. Aucun des 393 contrôles n'a échoué sous « pièces ». **La capture de `docs/captures` est à refaire par l'orchestrateur.**
+
+### Défauts trouvés
+
+| Défaut | État |
+|---|---|
+| **Impression en mode « Créer à la main » ou « Pinceau »** : la grille vide en pointillés (rayon 7) sortait sur la page imprimée. | Corrigé (`src/rendu.js` : groupe `at-grille-vide` ; `styles/base.css` : masqué à l'impression). Vérifié sur un PDF rendu, avant et après. Le cadrage tient toujours compte de la grille : le plateau imprimé est un peu plus petit dans ces modes. |
+| **Mes monoblocs, quantité** : « 2.5 » était lu 2 et « 1e1 » lu 1, sans rien dire. | Corrigé (`src/vue-monoblocs.js`, `definition` : chiffres seulement, sinon refus avec le message habituel). Test Node ajouté. |
+| **Mes monoblocs, deux cases éloignées** : le message était « Position invalide. », qui ne dit pas quoi faire. | Corrigé (`avis` : « Les cases doivent se toucher : la pièce est en plusieurs morceaux. »). Test Node ajouté. |
+| La recette tournait sous une mesure de contact qui n'est plus le défaut (voir point 6). | Corrigé dans `outils/recette.js`. |
+
+Aucun autre défaut trouvé par les essais ci-dessous.
+
+### Essais ajoutés à `outils/recette.js` (4 scénarios « Testeur », 62 contrôles de plus)
+1. **Plateau complet construit à la main** : plateau vierge, puis les 63 pièces d'un plateau généré posées une à une par l'interface (clic, glisser-déposer des 8 monoblocs avec rotation par R pendant le geste, clavier) ; plateau identique au patron case pour case, « Plateau terminé », « Plateau conforme », palette épuisée, fichier relisible ; stock épuisé : ni clic ni glisser ne posent ; 63 annulations puis 63 rétablissements, états identiques ; les 13 modèles posés par glisser-déposer ; une pièce personnelle posée par clic et par glisser.
+2. **Pinceau** : 8e ville (hors stock annoncée, contrôle 4 en erreur, « 1 en trop ») ; trait entièrement sur le noyau (aucune étape d'annulation) ; trait interrompu (`pointercancel`) ; case portant une tuile d'événement repeinte ; noyau gommé après confirmation puis annulé ; clic très loin de la grille (jamais hors des bornes du format).
+3. **Mes monoblocs** : 1 case, 6 cases sans (0,0) (recentrée), 7 cases, non connexe ; nom vide, nom de 1000 caractères posé malgré la limite du champ (refusé), nom en HTML (texte dans la liste, la palette et l'inventaire) ; quantités invalides ; pièce chargée dans l'éditeur puis posée entre-temps (sa forme ne change pas) ; suppression d'une pièce posée refusée ; 25e pièce refusée ; palette à 37 boutons ; fichier de plateau et fichier de partie à 24 pièces personnelles rouverts à l'identique.
+4. **Entrées hostiles et bibliothèque aux limites** : 30 pièces personnelles fautives (ville, 7 cases, non connexe, sans (0,0), identifiants `P`, `constructor`, `__proto__`, doublons, quantités, noms, champs en trop, 25 pièces…) passées par les quatre entrées (fichier de plateau, fichier de partie, import de bibliothèque, contenu du stockage : liste et travail en cours) : jamais acceptées, états inchangés ; 40 plateaux puis le 41e, duplication et import dans une bibliothèque pleine (refus expliqués) ; même fichier importé deux fois (identifiants distincts) ; stockage qui lève une exception quelconque (aucune exception ne sort, avis affiché).
+
+Non-régression : tous les scénarios antérieurs passent (générer, partie fictive, export SVG et PNG) ; impression du mode « Générer » déjà vue plus haut.
+
+### Paquet (`python -I atelier/outils/empaqueter.py`)
+- Produit `dist/atelier-plateau.zip` (26 fichiers, 140 891 octets). **`dist/` est un nouvel artefact hors de `atelier/`** : à ignorer ou à suivre, au choix de l'orchestrateur.
+- Contenu : un seul dossier « Atelier du plateau », les 18 scripts de `src/`, ni tests ni outils.
+- `Atelier.command` : système Unix, mode 0755, aucune fin de ligne Windows, commence par `#!/bin/sh`. `Atelier.bat` : fins de ligne Windows gardées.
+- Page décompressée dans un dossier temporaire, ouverte sans fenêtre avec `#graine=7` : 64 pièces, 91 cases, « Plateau conforme », 4 feuilles de style, aucune erreur en console.
+
+### Lanceur `Atelier.bat` : vérifié sans le laisser démarrer Edge
+- Le `.bat` a été exécuté contre un **témoin** (faux `msedge.exe` qui note ses arguments, `ProgramFiles` redirigés) : il n'a donc lancé aucun navigateur. Depuis « Jeux de société à moi\Atelier du plateau », il passe exactement `--app=file:///…/Jeux de société à moi/Atelier du plateau/index.html` (un seul argument, accents intacts, fichier existant). Même résultat depuis un dossier avec parenthèses, esperluette et apostrophe.
+- Cette adresse, donnée à Edge sans fenêtre, charge la page et génère un plateau (espaces seuls, accents seuls, les deux, et le dossier à caractères spéciaux).
+- Non essayé : un chemin contenant `%` ou `#` (le lanceur ne les encode pas).
+- **Fenêtres visibles ouvertes par erreur de ma part, avant la consigne de l'utilisateur** : pour voir le mode application, j'ai lancé moi-même le vrai Edge (pas par le `.bat`) dix fois, quelques secondes chacune, sur des profils temporaires (`--user-data-dir`), puis fermé chaque fois le seul processus que j'avais lancé. L'Edge de l'utilisateur n'a pas été touché et sa bibliothèque n'a pas été lue. Deux effets à connaître : sur un profil neuf, Edge s'est connecté de lui-même au compte du poste (une fenêtre « synchronisation » est apparue dans l'un des essais) ; et les dossiers de ces profils (`p-app`, `p-app-1` à `p-app-5`, dans le dossier temporaire de la session) n'ont pas pu être supprimés (accès refusé). Aucun processus de ces essais ne tourne plus.
+- Ces essais n'ont rien établi de fiable sur le mode application avec un chemin accentué (résultats incohérents d'un essai à l'autre, sans doute dus au premier lancement du profil) : **l'ouverture réelle en fenêtre d'application depuis un dossier accentué reste à vérifier par l'utilisateur lui-même**, en double-cliquant le lanceur.
+
+### Non vérifié
+- `Atelier.bat` et `Atelier.command` lancés pour de bon (voir ci-dessus) ; le Mac.
+- Touche Échap dans la fenêtre de confirmation, sélecteur de fichier (« Ouvrir… », « Importer… ») : non simulables par la recette.
+- Stockage réel plein ou refusé par le navigateur (simulé par un stockage injecté).
+- Firefox et Chrome ; souris et tactile réels ; affichage des nouveaux modes sur écran étroit.
+
+### Fichiers touchés dans cette recette
+`atelier/src/vue-monoblocs.js`, `atelier/src/rendu.js`, `atelier/styles/base.css`, `atelier/outils/recette.js`, `atelier/tests/creation-interface.test.js`, `docs/04-recette-atelier.md` ; `dist/atelier-plateau.zip` produit par l'empaqueteur.

@@ -361,7 +361,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    */
   function creerVue(options) {
     var prefixe = nouveauPrefixe();
-    var gScene = svg('g'), gGrille = svg('g'), gInterface = svg('g', { classe: 'at-interface' });
+    var gScene = svg('g'), gGrille = svg('g', { classe: 'at-grille-vide' }), gInterface = svg('g', { classe: 'at-interface' });   // la grille vide ne s'imprime pas (styles/base.css)
     var racine = svg('svg', {
       classe: 'at-plateau-svg', tabindex: 0, role: 'application', focusable: 'true',
       'aria-label': (options.etiquette || 'Plateau') + ' Flèches : déplacer le curseur ; Entrée : agir sur la case ; + et − : zoom ; 0 : tout voir.'

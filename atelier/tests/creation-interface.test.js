@@ -382,3 +382,24 @@ test('app : paramètre d’adresse « mode » (modes de l’onglet Plateau)', ()
   assert.deepStrictEqual(VP.MODES.map((m) => m.id), ['generer', 'creer', 'pinceau', 'monoblocs', 'bibliotheque']);
   for (const m of VP.MODES) assert.strictEqual(A.lireParametres('#mode=' + m.id).mode, m.id);
 });
+
+test('correction : quantité d’une pièce personnelle écrite autrement qu’en chiffres refusée, jamais tronquée', () => {
+  const forme = [{ q: 0, r: 0, terrain: 'foret' }, { q: 1, r: 0, terrain: 'plaine' }];
+  for (const saisie of ['2.5', '3abc', '1e1', '', ' ', '-1', '0', '10', '2,5', '0x2', 'abc']) {
+    const d = VM.definition('Essai', saisie, forme);
+    assert.ok(VM.avis(d).some((m) => /Quantité : un nombre entier de 1 à 9/.test(m)), 'saisie « ' + saisie + ' » lue ' + d.quantite);
+  }
+  for (const [saisie, attendu] of [['1', 1], [' 9 ', 9], ['07', 7], [4, 4]]) {
+    const d = VM.definition('Essai', saisie, forme);
+    assert.strictEqual(d.quantite, attendu);
+    assert.deepStrictEqual(VM.avis(d), []);
+  }
+});
+
+test('correction : deux cases très éloignées dans l’éditeur = « les cases doivent se toucher », pas « position invalide »', () => {
+  const loin = VM.definition('Deux morceaux', 1, [{ q: -3, r: 0, terrain: 'foret' }, { q: 3, r: 0, terrain: 'foret' }]);
+  assert.deepStrictEqual(VM.avis(loin), ['Les cases doivent se toucher : la pièce est en plusieurs morceaux.']);
+  const proche = VM.definition('Deux morceaux', 1, [{ q: 0, r: 0, terrain: 'foret' }, { q: 2, r: 0, terrain: 'foret' }]);
+  assert.deepStrictEqual(VM.avis(proche), ['Les cases doivent se toucher : la pièce est en plusieurs morceaux.']);
+  assert.deepStrictEqual(VM.avis(VM.definition('Ligne', 1, [0, 1, 2, 3, 4, 5].map((q) => ({ q: q - 3, r: 0, terrain: 'plaine' })))), []);
+});

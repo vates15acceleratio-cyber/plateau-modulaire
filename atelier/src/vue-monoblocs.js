@@ -75,9 +75,14 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     return liste.map(function (c) { return { q: c.q - meilleur.q, r: c.r - meilleur.r, terrain: c.terrain }; });
   }
 
-  /** Définition prête pour AT.plateau.ajouterModele : nom nettoyé, quantité entière, forme recentrée. */
+  /**
+   * Définition prête pour AT.plateau.ajouterModele : nom nettoyé, quantité entière, forme recentrée.
+   * Une quantité saisie n'est acceptée que si elle est écrite en chiffres seulement : « 2.5 », « 3abc » ou « 1e1 »
+   * ne sont pas tronqués en silence, ils donnent NaN (refusé par avis()).
+   */
   function definition(nom, quantite, cases) {
-    var n = typeof quantite === 'number' ? quantite : parseInt(String(quantite), 10);
+    var texte = String(quantite === undefined || quantite === null ? '' : quantite).trim();
+    var n = typeof quantite === 'number' ? quantite : (/^[0-9]{1,4}$/.test(texte) ? parseInt(texte, 10) : NaN);
     return { nom: String(nom === undefined || nom === null ? '' : nom).trim(), quantite: Number.isInteger(n) ? n : NaN, cases: recentrer(cases) };
   }
 
@@ -92,6 +97,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     else if (cases.length > R.casesMax) res.push('Trop de cases : ' + cases.length + ' pour ' + R.casesMax + ' au plus. Retirez-en ' + (cases.length - R.casesMax) + '.');
     if (typeof d.nom !== 'string' || !d.nom.trim()) res.push('Donnez un nom à la pièce.');
     if (!Number.isInteger(d.quantite) || d.quantite < 1 || d.quantite > R.quantiteMax) res.push('Quantité : un nombre entier de 1 à ' + R.quantiteMax + '.');
+    // Cases qui ne se touchent pas : dit en clair, avant la règle générale (deux cases très éloignées y sont
+    // refusées comme « position invalide », ce qui ne dit pas quoi faire).
+    if (cases.length >= R.casesMin && cases.length <= R.casesMax && cases.every(function (c) { return Number.isInteger(c.q) && Number.isInteger(c.r); })
+      && P.composantes(cases.map(function (c) { return H.cle(c.q, c.r); })).length > 1) {
+      res.push('Les cases doivent se toucher : la pièce est en plusieurs morceaux.');
+    }
     if (res.length) return res;
     var v = P.validerModele({ id: 'X1', nom: d.nom, cases: cases, quantite: d.quantite });
     return v.ok ? [] : v.erreurs.map(function (e) {

@@ -104,7 +104,7 @@ input[type="text"], input[type="number"], select { border: 1px solid #8b887c; bo
 /* Impression : le plateau de l'onglet affiché, sa légende, rien d'autre */
 @media print {
   .at-atelier { display: block; height: auto; }
-  .at-barre, .at-etat, .at-colonne, .at-vue-barre, .at-barre-partie, .at-tour, .at-avis-partie, .at-contexte, .at-interface { display: none !important; }
+  .at-barre, .at-etat, .at-colonne, .at-vue-barre, .at-barre-partie, .at-tour, .at-avis-partie, .at-contexte, .at-interface, .at-grille-vide { display: none !important; }   /* ni marques, ni grille vide de la création */
   .at-principal { overflow: visible; }
   .at-ecran-plateau, .at-ecran-partie { display: block; height: auto; }
   .at-plateau-svg { height: 82vh; flex: none; border: 0; }
