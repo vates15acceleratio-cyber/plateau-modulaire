@@ -336,7 +336,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     exiger(estObjet(pl), 'Plateau : objet attendu.');
     var avecModeles = possede(pl, 'modeles');                       // champ facultatif
     var avecDeploiements = possede(pl, 'deploiements');             // champ facultatif (villes de déploiement, catalogue 2)
-    clesExactes(pl, champs.concat(avecModeles ? ['modeles'] : [], avecDeploiements ? ['deploiements'] : []), 'Plateau');
+    var avecProfondeur = possede(pl, 'profondeurExtremite');         // champ facultatif (rangées des extrémités retenues pour les villes)
+    clesExactes(pl, champs.concat(avecModeles ? ['modeles'] : [], avecDeploiements ? ['deploiements'] : [], avecProfondeur ? ['profondeurExtremite'] : []), 'Plateau');
     exiger(estEntier(pl.version, 0, 1000), 'Plateau : version invalide.');
     // La graine du plateau est moins contrainte que celle de la partie (chaîne vide ou null admis),
     // pour ne pas refuser un plateau que le lot A accepte.
@@ -384,6 +385,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         villesPosees.push({ cle: d.cle, camp: d.camp });
       });
       if (villesPosees.length) propre.deploiements = villesPosees;   // forme canonique : champ absent s'il n'y en a pas
+    }
+    if (avecProfondeur) {
+      exiger(estEntier(pl.profondeurExtremite, 1, 3), 'Plateau : profondeur des extrémités invalide (1 à 3).');
+      propre.profondeurExtremite = pl.profondeurExtremite;
     }
     clesExactes(pl.camps, JOUEURS, 'Plateau, camps');
     JOUEURS.forEach(function (j) {

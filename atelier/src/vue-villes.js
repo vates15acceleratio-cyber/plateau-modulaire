@@ -27,16 +27,20 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   var OUTILS = ['vert', 'rouge', 'neutre'];
   var NOMS_OUTILS = { vert: 'Ville de déploiement de Vert', rouge: 'Ville de déploiement de Rouge', neutre: 'Ville neutre' };
   var NOMS_CAMPS = { vert: 'Vert', rouge: 'Rouge' };
-  var PROFONDEURS = [1, 2, 3];
+  var PROFONDEURS = P.profondeursPermises();
 
   function pluriel(n, un, plusieurs) { return n + ' ' + (n > 1 ? plusieurs : un); }
 
   // ================================================================== logique pure
 
-  /** Profondeur des extrémités en vigueur : options.profondeurExtremite, sinon le réglage du catalogue. */
-  function profondeur(options) {
+  /**
+   * Profondeur des extrémités en vigueur : celle que le plateau a enregistrée (s'il est fourni et la porte), sinon
+   * options.profondeurExtremite, sinon le réglage du catalogue. Voir AT.plateau.profondeurExtremite.
+   */
+  function profondeur(options, plateau) {
     var p = options && options.profondeurExtremite;
-    return (Number.isInteger(p) && p >= 1) ? p : C.REGLAGES.villes.profondeurExtremite;
+    var demandee = (Number.isInteger(p) && p >= 1) ? p : C.REGLAGES.villes.profondeurExtremite;
+    return plateau ? P.profondeurExtremite(plateau, { profondeurExtremite: demandee }) : demandee;
   }
 
   /** Options passées au modèle : la profondeur des extrémités, et `libre` si la pose libre est cochée. */
@@ -114,7 +118,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         : NOMS_CAMPS[outil] + ' a ses ' + c[outil].voulues + ' villes de déploiement. Cliquez une ville pour la retirer.' };
     }
     if ((options && options.libre) || places(plateau, outil, options).length) return null;
-    var toutes = P.cases(plateau), prof = profondeur(options);
+    var toutes = P.cases(plateau), prof = profondeur(options, plateau);
     var phraseEcart = 'trop près d’une autre ville : il faut ' + ecart + ' pas entre deux villes (soit ' + (ecart - 1) + ' cases entre elles)';
 
     if (outil === 'neutre') {
@@ -202,22 +206,36 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   /**
    * Pose toutes les villes d'un coup, au meilleur équilibre (AT.generateur.chercherVilles) : les villes déjà posées
    * sont d'abord retirées. Même plateau et même graine = mêmes villes.
-   * Renvoie {ok, plateau, score, raison, manque}. options : profondeurExtremite, et les réglages des contrôles.
+   * Renvoie {ok, plateau, score, raison, manque}. options : profondeurExtremite (si le plateau n'a pas enregistré la
+   * sienne), et les réglages des contrôles. La profondeur employée est enregistrée dans le plateau rendu.
    */
   function poserAuto(plateau, graine, options) {
-    var G = AT.generateur, refus = function (raison, manque) { return { ok: false, plateau: plateau, score: null, raison: raison, manque: manque || null }; };
+    var G = AT.generateur, prep = preparerPose(plateau, options);
+    if (!prep.ok) return prep;
+    var v = G.chercherVilles(prep.terrain, AT.alea.creer(graine === undefined || graine === null ? 0 : graine), G.reglages(prep.options));
+    if (!v.ok) {
+      var cause = v.manque === 'ecart' || /Aucune paire/.test(v.raison || '') ? ' La cause est l’écart de ' + C.REGLAGES.ecartVilles + ' pas entre deux villes.' : '';
+      return prep.refus(v.raison + cause + ' Places trouvées : ' + v.places.vert + ' pour Vert, ' + v.places.rouge + ' pour Rouge, ' + v.places.gauche + ' sur le flanc gauche, ' + v.places.droite + ' sur le flanc droit.', v.manque);
+    }
+    return appliquerVilles(prep, v);
+  }
+
+  /** Préparation commune aux poses automatiques : plateau sans villes, terrain, réglages ; refus si le noyau manque. */
+  function preparerPose(plateau, options) {
+    var refus = function (raison, manque) { return { ok: false, plateau: plateau, score: null, raison: raison, manque: manque || null }; };
     var base = retirerToutes(plateau).plateau;
     var terrain = P.cases(base, { sansRecouvrements: true });
     var centre = possede.call(terrain, '0,0') ? C.modele(terrain['0,0'].modele) : null;
     if (!centre || !centre.noyau) return refus('Le noyau doit être posé au centre du plateau : l’équilibre se mesure depuis sa ville.');
-    var o = { profondeurExtremite: profondeur(options) };
+    var o = { profondeurExtremite: profondeur(options, plateau) };
     ['seuilContact', 'mesureContact'].forEach(function (k) { if (options && options[k] !== undefined) o[k] = options[k]; });
-    var v = G.chercherVilles(terrain, AT.alea.creer(graine === undefined || graine === null ? 0 : graine), G.reglages(o));
-    if (!v.ok) {
-      var cause = v.manque === 'ecart' || /Aucune paire/.test(v.raison || '') ? ' La cause est l’écart de ' + C.REGLAGES.ecartVilles + ' pas entre deux villes.' : '';
-      return refus(v.raison + cause + ' Places trouvées : ' + v.places.vert + ' pour Vert, ' + v.places.rouge + ' pour Rouge, ' + v.places.gauche + ' sur le flanc gauche, ' + v.places.droite + ' sur le flanc droit.', v.manque);
-    }
-    var pl = base, etape;
+    return { ok: true, base: base, terrain: terrain, options: o, refus: refus };
+  }
+
+  /** Pose sur le plateau préparé les six villes `v` ({vert, rouge, neutres}) et rend {ok, plateau, score, raison, manque}. */
+  function appliquerVilles(prep, v) {
+    var refus = prep.refus, o = prep.options;
+    var pl = P.avecProfondeurExtremite(prep.base, o.profondeurExtremite).plateau, etape;
     var liste = v.vert.map(function (k) { return ['vert', k]; }).concat(v.rouge.map(function (k) { return ['rouge', k]; }));
     for (var i = 0; i < liste.length; i++) {
       etape = P.poserVilleDeploiement(pl, liste[i][0], liste[i][1], { libre: true });      // les règles ont été vérifiées par chercherVilles
@@ -234,6 +252,30 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     return { ok: true, plateau: pl, score: AT.controles.equilibre(pl, o).score, raison: null, manque: null };
   }
 
+  /**
+   * « Autre proposition » : pose les villes selon la combinaison valide qui SUIT celle du plateau dans la liste de
+   * AT.generateur.propositionsVilles (de la mieux équilibrée à la moins équilibrée ; après la dernière, retour à la
+   * première). Sans villes posées, ou avec des villes qui ne sont pas une combinaison de la liste : la première.
+   * Aucun tirage : même plateau = même proposition, et la suite des propositions se retrouve après « Annuler ».
+   * Renvoie {ok, plateau, score, raison, manque, rang (1 à nombre), nombre, seule (true : il n'existe qu'une
+   * combinaison, et c'est celle du plateau)}.
+   */
+  function autreProposition(plateau, options) {
+    var G = AT.generateur, prep = preparerPose(plateau, options);
+    if (!prep.ok) return prep;
+    var liste = G.propositionsVilles(prep.terrain, G.reglages(prep.options));
+    if (!liste.length) return poserAuto(plateau, plateau.graine, options);      // même explication que la pose automatique
+    var etat = P.etatVilles(plateau), flancs = {};
+    etat.neutres.forEach(function (n) { if (n.flanc) flancs[n.flanc] = n.cle; });
+    var actuelle = G.signatureVilles({ vert: etat.vert, rouge: etat.rouge, neutres: { gauche: flancs.gauche, droite: flancs.droite } });
+    var rang = -1;
+    liste.forEach(function (x, i) { if (rang === -1 && G.signatureVilles(x) === actuelle) rang = i; });
+    var suivant = (rang + 1) % liste.length;
+    var r = appliquerVilles(prep, liste[suivant]);
+    r.rang = suivant + 1; r.nombre = liste.length; r.seule = liste.length === 1 && rang === 0;
+    return r;
+  }
+
   /** Premier outil qui a encore des villes à poser (vert, rouge, puis neutre), ou null si tout est posé. */
   function outilSuivant(plateau) {
     var c = compteurs(plateau);
@@ -243,7 +285,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   AT.vueVilles = {
     OUTILS: OUTILS, NOMS_OUTILS: NOMS_OUTILS, PROFONDEURS: PROFONDEURS,
     profondeur: profondeur, compteurs: compteurs, anneau: anneau, places: places, diagnostic: diagnostic, cliquer: cliquer,
-    retirerToutes: retirerToutes, poserAuto: poserAuto, outilSuivant: outilSuivant
+    retirerToutes: retirerToutes, poserAuto: poserAuto, autreProposition: autreProposition, outilSuivant: outilSuivant
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = AT.vueVilles;
@@ -253,7 +295,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   /**
    * `acces` (fourni par vue-plateau.js) : plateau(), bilan(), changer(plateau), message(texte, niveau),
-   *   reglages() (objet partagé avec les contrôles et le générateur : profondeurExtremite y est lue et écrite),
+   *   reglages() (objet partagé avec les contrôles et le générateur ; profondeurExtremite y suit le plateau courant :
+   *   le réglage est ENREGISTRÉ dans le document, la liste déroulante le modifie par changer()),
    *   redessiner() (après un changement de réglage ou d'outil).
    * Renvoie {element, rafraichir(), clic(cle), places(), outil(), libre()}.
    */
@@ -269,9 +312,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       return el('option', { value: p, texte: p + (p > 1 ? ' rangées' : ' rangée') + (p === C.REGLAGES.villes.profondeurExtremite ? ' (défaut)' : '') });
     }));
     var btnAuto = el('button', { type: 'button', id: 'vi-auto', classe: 'at-principal-bouton', texte: 'Poser les villes automatiquement', title: 'Retire les villes posées, puis pose les 6 villes au meilleur équilibre', sur: { click: auto } });
+    var btnAutre = el('button', { type: 'button', id: 'vi-autre', texte: 'Autre proposition', title: 'Pose les villes selon la combinaison suivante, de la mieux équilibrée à la moins équilibrée (même plateau = même suite)', sur: { click: autre } });
     var btnRetirer = el('button', { type: 'button', id: 'vi-retirer', texte: 'Retirer toutes les villes', sur: { click: toutRetirer } });
 
-    function options() { return { profondeurExtremite: profondeur(acces.reglages()), libre: libre }; }
+    function options() { return { profondeurExtremite: profondeur(acces.reglages(), acces.plateau()), libre: libre }; }
 
     function dire(texte, niveau) {
       zoneMessage.textContent = texte;
@@ -298,6 +342,16 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       if (!r.ok) { dire('Pose automatique impossible : ' + r.raison, 'erreur'); return; }
       acces.changer(r.plateau);
       dire('Villes posées automatiquement au meilleur équilibre (score ' + r.score + ' ; 0 = équilibré). Annuler pour revenir en arrière.', 'info');
+    }
+
+    function autre() {
+      var pl = acces.plateau(), o = options(), regl = acces.reglages();
+      ['seuilContact', 'mesureContact'].forEach(function (k) { if (regl[k] !== undefined) o[k] = regl[k]; });
+      var r = autreProposition(pl, o);
+      if (!r.ok) { dire('Autre proposition impossible : ' + r.raison, 'erreur'); return; }
+      if (r.seule) { dire('Il n’existe qu’une seule façon de poser les villes sur ce terrain avec ces règles : rien ne change.', 'info'); return; }
+      acces.changer(r.plateau);
+      dire('Autre proposition : n° ' + r.rang + ' sur ' + r.nombre + ', de la mieux équilibrée à la moins équilibrée (score ' + r.score + ' ; 0 = équilibré). Annuler pour revenir à la précédente.', 'info');
     }
 
     function toutRetirer() {
@@ -333,15 +387,19 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       zoneDiagnostic.textContent = d && d.cause !== 'complet' ? d.message : '';
       zoneDiagnostic.setAttribute('data-cause', d ? d.cause : '');
       caseLibre.checked = libre;
-      choixProfondeur.value = String(profondeur(acces.reglages()));
+      choixProfondeur.value = String(profondeur(acces.reglages(), pl));
       btnRetirer.disabled = !(c.vert.posees + c.rouge.posees + c.neutre.posees) && !P.deploiements(pl).length;
     }
 
     caseLibre.addEventListener('change', function () { libre = caseLibre.checked; acces.redessiner(); });
     choixProfondeur.addEventListener('change', function () {
-      acces.reglages().profondeurExtremite = parseInt(choixProfondeur.value, 10);
-      acces.redessiner();
-      acces.message('Extrémités : ' + choixProfondeur.value + (choixProfondeur.value === '1' ? ' rangée' : ' rangées') + ' en haut et en bas. Les places et les contrôles suivent ce réglage.', 'info');
+      // Le réglage est enregistré DANS le plateau (une étape d'annulation) : il se retrouve à la réouverture.
+      var valeur = parseInt(choixProfondeur.value, 10), pl = acces.plateau();
+      if (valeur === profondeur(acces.reglages(), pl)) return;
+      var r = P.avecProfondeurExtremite(pl, valeur);
+      if (!r.ok) { acces.message(r.raison, 'erreur'); acces.redessiner(); return; }
+      acces.changer(r.plateau);
+      acces.message('Extrémités : ' + valeur + (valeur === 1 ? ' rangée' : ' rangées') + ' en haut et en bas. Les places et les contrôles suivent ce réglage, enregistré avec le plateau (Annuler pour revenir en arrière).', 'info');
     });
 
     var element = el('div', { classe: 'at-mode-panneau', id: 'vi-panneau' }, [
@@ -352,13 +410,13 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         zoneOutils,
         zoneDiagnostic,
         zoneMessage,
-        el('div', { classe: 'at-ligne' }, [btnAuto]),
+        el('div', { classe: 'at-ligne' }, [btnAuto, btnAutre]),
         el('div', { classe: 'at-ligne' }, [btnRetirer])
       ]),
       el('fieldset', null, [
         el('legend', { texte: 'Réglages de l’étape' }),
         el('div', { classe: 'at-ligne' }, [el('label', { for: 'vi-profondeur', texte: 'Profondeur des extrémités' }), choixProfondeur]),
-        el('p', { classe: 'at-aide', texte: 'Nombre de rangées du haut (Vert) et du bas (Rouge) où une ville de déploiement peut se poser. Ce réglage n’est pas enregistré avec le plateau.' }),
+        el('p', { classe: 'at-aide', texte: 'Nombre de rangées du haut (Vert) et du bas (Rouge) où une ville de déploiement peut se poser. Ce réglage est enregistré avec le plateau : il se retrouve à la réouverture.' }),
         el('div', { classe: 'at-ligne' }, [caseLibre, el('label', { for: 'vi-libre', texte: 'Pose libre (essai hors règles)' })]),
         el('p', { classe: 'at-aide', texte: 'En pose libre, une ville se pose sur toute Plaine ou contre tout bord ; les contrôles signalent ce qui ne respecte pas les règles (extrémité, flanc, écart de 4 pas).' })
       ]),
@@ -374,7 +432,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       outil: function () { return outil; }, libre: function () { return libre; },
       /** À l'entrée dans le mode : l'outil est la première ville qui reste à poser (Vert, Rouge, puis neutre). */
       entrer: function () { outil = outilSuivant(acces.plateau()) || outil; },
-      choisir: choisir, auto: auto, toutRetirer: toutRetirer
+      choisir: choisir, auto: auto, autre: autre, toutRetirer: toutRetirer
     };
   }
 

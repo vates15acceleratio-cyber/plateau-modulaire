@@ -163,6 +163,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     // Phase « villes » (§9.1, B4 et B5).
     villes: {
       profondeurExtremite: 2,               // rangées du haut (Vert) ou du bas (Rouge) où se pose une ville de déploiement
+      profondeursExtremite: [1, 2, 3],      // valeurs permises (réglage de l'étape « Villes », champ `profondeurExtremite` d'un fichier)
       neutresTiersCentral: true,            // une ville neutre se pose dans le tiers central des rangées
       contactVilleNeutre: 2                 // cases du plateau qu'une ville neutre doit toucher au moins
     },

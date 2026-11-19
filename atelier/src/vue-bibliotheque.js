@@ -33,9 +33,15 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   // ================================================================== logique pure
 
-  /** Résumé d'un plateau pour sa fiche : {cases, pieces, villes, erreurs, alertes}. */
+  /**
+   * Résumé d'un plateau pour sa fiche : {cases, pieces, villes, erreurs, alertes}.
+   * La fiche est jugée avec SA profondeur des extrémités (celle qu'elle a enregistrée, sinon le réglage par défaut),
+   * jamais avec celle du plateau affiché : `reglages.profondeurExtremite` n'est pas transmis aux contrôles.
+   */
   function resume(plateau, reglages) {
-    var bilan = K.tout(plateau, reglages);
+    var options = {};
+    Object.keys(reglages || {}).forEach(function (k) { if (k !== 'profondeurExtremite') options[k] = reglages[k]; });
+    var bilan = K.tout(plateau, options);
     return {
       cases: Object.keys(P.cases(plateau, { sansRecouvrements: true })).length,
       pieces: (plateau.pieces || []).length,

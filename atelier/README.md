@@ -48,6 +48,7 @@ En tête de la colonne de gauche, six boutons choisissent le **mode de travail**
   - cliquez une pièce du plateau pour la sélectionner, puis « Tourner » (touche R), « Déplacer » ou « Retirer » (touche Suppr) ;
   - pour poser des pièces, passez en mode « Créer à la main » (voir plus bas) ;
   - « Annuler » (Ctrl+Z) et « Rétablir » (Ctrl+Y) reviennent sur chaque retouche, y compris une génération, un plateau vierge ou un plateau ouvert depuis la bibliothèque.
+- **Une ville neutre posée ne se retouche qu'à l'étape « Villes »** : dans les autres modes, « Tourner », « Déplacer », « Retirer » (touche Suppr), le glisser, le pinceau et la gomme la laissent en place, et le message renvoie à l'étape « Villes » (on y clique la ville pour la retirer, puis on la repose).
 - **Une retouche du terrain peut enlever une ville** : retirer, tourner, déplacer, repeindre ou gommer la pièce qui porte une ville de déploiement enlève cette ville avec sa Plaine. Le message le dit ; elle se repose à l'étape « Villes ».
 - **Anciens plateaux** : un plateau fait avec le premier catalogue (tuiles d'une case, villes posées pendant la construction) s'ouvre toujours, depuis un fichier ou la bibliothèque. Un bandeau discret le signale au-dessus du plateau et les contrôles s'y adaptent.
 - **Trous** : une case vide entièrement entourée de tuiles est signalée par le contrôle 2, en alerte (réglage `trous` de `src/catalogue.js` : `alerte`, `erreur` ou `ignore`).
@@ -82,10 +83,11 @@ Choisissez un terrain (plaine, forêt, marais, montagne) ou la **gomme**, puis c
 1. Choisissez la ville à poser : **déploiement de Vert**, **déploiement de Rouge** ou **ville neutre**. Chaque bouton montre son compteur (« 1 / 2 »). Les places admissibles s'allument sur le plateau.
 2. **Cliquez une place en surbrillance** pour poser la ville (au clavier : flèches puis Entrée sur le plateau). **Cliquez une ville posée** pour la retirer. Quand un camp a ses 2 villes, l'outil passe de lui-même à la ville suivante.
 3. Un refus est expliqué avec sa raison : noyau, case qui n'est pas une Plaine, hors de l'extrémité du camp, trop près d'une autre ville (« 3 pas, il en faut 4 »), flanc déjà pourvu…
-4. **Poser les villes automatiquement** : retire les villes posées puis place les 6 au meilleur équilibre (le même calcul que le générateur). **Retirer toutes les villes** : le terrain ne change pas.
+4. **Poser les villes automatiquement** : retire les villes posées puis place les 6 au meilleur équilibre (le même calcul que le générateur). **Autre proposition**, à côté : passe à la combinaison de villes suivante, de la mieux équilibrée à la moins équilibrée ; le message donne son rang (« n° 3 sur 96 ») et son score. Il n'y a aucun tirage : le même plateau donne toujours la même suite, et après la dernière on revient à la première. Chaque proposition s'annule. **Retirer toutes les villes** : le terrain ne change pas.
 5. **Aucune place ?** Un avis dit pourquoi (souvent l'écart de 4 pas avec une ville voisine) et propose, quand cela aide, d'élargir les extrémités.
 6. Réglages de l'étape :
-   - **Profondeur des extrémités** : 1, 2 (défaut) ou 3 rangées du haut et du bas où une ville de déploiement peut se poser. La surbrillance, la pose, la pose automatique, le générateur et les contrôles suivent ce réglage. Il n'est **pas enregistré avec le plateau** : un plateau fait à 3 rangées sera signalé « mal placé » à la réouverture tant que le réglage n'est pas remis.
+   - **Profondeur des extrémités** : 1, 2 (défaut) ou 3 rangées du haut et du bas où une ville de déploiement peut se poser. La surbrillance, la pose, la pose automatique, « Générer » et les contrôles suivent ce réglage. Il est **enregistré avec le plateau** (fichier, bibliothèque, partie, travail en cours) : un plateau fait à 3 rangées se rouvre à 3 rangées, sans erreur, et la liste déroulante le montre. Le changer est une retouche comme une autre (elle s'annule). Un fichier qui n'a pas ce réglage (plateau d'avant, ou fait à 2 rangées) prend 2 rangées. « Générer », « Nouveau plateau vierge » et « Vider le plateau » gardent le réglage du plateau affiché.
+   - Si « Générer » échoue parce que les extrémités sont trop peu profondes (cela arrive à 1 rangée), le message le dit et donne le nombre de rangées qui aurait suffi.
    - **Pose libre** : pour essayer hors règles. Une ville se pose alors sur toute Plaine (hors noyau) ou contre tout bord ; les contrôles signalent ce qui ne respecte pas les règles.
 
 Tout s'annule (Ctrl+Z), y compris la pose automatique, en une étape.
@@ -134,7 +136,9 @@ Une table libre : l'outil compte, mélange, lance les dés et prévient, mais **
 
 - **Pièces personnelles** : un plateau peut porter ses propres monoblocs (champ facultatif `modeles` du fichier : 2 à 6 cases, plaine / forêt / marais / montagne, jamais de ville, 1 à 9 exemplaires, 24 pièces au plus). Elles voyagent avec le fichier du plateau et avec celui de la partie.
 - **Tuiles d’une case** : le catalogue 2 n’en a que deux sortes, le remplissage (`R`) et la ville neutre (`VN`). Les tuiles `P`, `F`, `S` du pinceau et la montagne d’une case (`M1`) sont hors catalogue : le contrôle 1 annonce en alerte les « tuiles à prévoir en plus du catalogue » et rappelle la décision « montagnes en blocs de 4 ou 5 cases ».
-- **Villes de déploiement** : elles ne sont pas des pièces mais des tuiles posées par-dessus (champ `deploiements` du fichier : case et camp). Une entrée qui vise une case hors du plateau ou une case qui n’est pas une Plaine est signalée en erreur par le contrôle des villes ; « Retirer toutes les villes » l’enlève.
+- **Villes de déploiement** : elles ne sont pas des pièces mais des tuiles posées par-dessus (champ `deploiements` du fichier : case et camp). Un fichier dont une entrée vise une case absente du plateau, ou une case qui n’est pas une Plaine, est **refusé à l’ouverture**, avec la case en cause : l’atelier n’en écrit jamais (même la pose libre demande une Plaine du plateau, et retoucher la pièce qui porte une ville retire la ville). Une ville posée sur une Plaine mal choisie (noyau, hors de l’extrémité, trop près d’une autre) reste lisible : ce sont les contrôles qui la signalent.
+- **Profondeur des extrémités** : champ facultatif `profondeurExtremite` du fichier (1, 2 ou 3 ; absent = 2, le réglage par défaut). Toute autre valeur fait refuser le fichier.
+- **Anciens plateaux** : sur un plateau du premier catalogue, le contrôle 1 dit « Plateau de l’ancien catalogue » et compte ses tuiles d’une case à part ; il ne parle ni de pièces de terrain à poser ni de tuiles à prévoir en plus.
 - **Équilibre** : il se mesure sans symétrie, par l’écart de coût en rations entre Vert et Rouge vers le centre, vers chaque ville neutre et vers les villes de déploiement adverses ; il se calcule dès que les deux camps ont leurs villes de déploiement.
 - **Générer** sur un plateau qui a des pièces personnelles : elles sont gardées dans le plateau généré, non posées, et le message le dit.
 
@@ -151,7 +155,7 @@ Tab passe d'une commande à l'autre ; flèches gauche / droite entre les onglets
 Depuis le dossier `atelier/` :
 
 - Tests de la logique : `node --test`
-- Règles du plateau vérifiées sur des plateaux générés, sans passer par les contrôles de l’outil : `node outils/verifier-regles.js 50` (50 graines × 2 seuils × 2 mesures)
+- Règles du plateau (B1 à B7) vérifiées sur des plateaux générés, sans passer par les contrôles de l’outil : `node outils/verifier-regles.js 50` (50 graines × 8 combinaisons : 2 seuils × 2 mesures, puis 2 remplissages permis, extrémités de 1 rangée, de 3 rangées, de 3 rangées avec remplissages). À 1 rangée, des graines échouent faute de places pour les villes : elles sont comptées à part, ce ne sont pas des plateaux non conformes. `tests/verifier-regles.test.js` prouve que chaque règle enfreinte est détectée.
 - Serveur local facultatif : `node outils/serveur.js 8770` puis http://127.0.0.1:8770/
 - Recette automatique dans le navigateur : ouvrir `outils/recette.html` ; la dernière ligne du rapport doit être `TOTAL : N OK, 0 ÉCHEC`. Sans fenêtre, avec Edge (PowerShell) :
 
@@ -159,7 +163,9 @@ Depuis le dossier `atelier/` :
   Start-Process -FilePath "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" -ArgumentList @("--headless=new","--disable-gpu","--user-data-dir=<dossier temporaire>","--window-size=1366,768","--virtual-time-budget=20000","--dump-dom","file:///<dossier du projet>/atelier/outils/recette.html") -RedirectStandardOutput <fichier> -RedirectStandardError <fichier2> -Wait -NoNewWindow
   ```
 
-- La recette travaille sur un stockage en mémoire : elle ne touche jamais à la bibliothèque du poste. Le vrai stockage se vérifie à part, par deux lancements successifs sur le **même** dossier de profil : `outils/recette.html#persistance=ecrire` puis `outils/recette.html#persistance=lire` (lignes `PERSISTANCE …` et `TOTAL`).
+  La recette complète dure environ 1 min 40 s (elle génère plus de 300 plateaux).
+- La recette travaille sur un stockage en mémoire : elle ne touche jamais à la bibliothèque du poste. Le vrai stockage se vérifie à part, par deux lancements successifs sur le **même** dossier de profil : `outils/recette.html#persistance=ecrire` puis `outils/recette.html#persistance=lire` (lignes `PERSISTANCE …` et `TOTAL`) ; de même `#persistance=ecrire-villes` puis `#persistance=lire-villes` pour un plateau du catalogue 2 dont les villes sont posées à 3 rangées.
+- Mise au point de la recette : `outils/recette.html#seul=<texte>` ne lance que « Démarrage » et les scénarios dont le nom contient ce texte (le total n'est alors pas celui de la recette) ; `#durees` ajoute le temps réel de chaque scénario.
 - Adresses utiles pour une capture d'écran (ajouter `--screenshot=<fichier.png>` à la place de `--dump-dom`) : `index.html#onglet=plateau&graine=12`, `index.html#mode=creer` (ou `pinceau`, `villes`, `monoblocs`, `bibliotheque`), `index.html#onglet=inventaire`, `index.html#onglet=partie&partie=5` ; `outils/recette.html#arret=partie` laisse une partie en cours à l'écran, `#arret=creation`, `#arret=pinceau`, `#arret=villes`, `#arret=monoblocs`, `#arret=bibliotheque` un état de démonstration de chaque volet. Avec `#graine=`, le travail en cours n'est pas repris.
 
 ## Fichiers
@@ -176,6 +182,6 @@ Depuis le dossier `atelier/` :
 | `src/bibliotheque.js` | bibliothèque de plateaux et travail en cours : logique et stockage du navigateur injecté |
 | `Atelier.bat`, `Atelier.command` | lanceurs Windows et Mac (fenêtre à part) |
 | `outils/empaqueter.py` | fabrique le paquet à transmettre (`dist/atelier-plateau.zip`) |
-| `outils/serveur.js`, `outils/recette.html`, `outils/recette.js` | serveur local, recette automatique |
+| `outils/serveur.js`, `outils/recette.html`, `outils/recette.js`, `outils/recette-ancien.js` | serveur local, recette automatique, fichiers du premier catalogue que la recette rouvre (copies de `tests/fixtures-v1/`) |
 | `outils/verifier-regles.js`, `outils/mesures-faisabilite.js` | vérification indépendante des règles, mesures de faisabilité |
 | `tests/` | tests Node |

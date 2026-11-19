@@ -46,10 +46,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * le plateau reçu est rendu inchangé. Renvoie {ok, plateau, id, raison}.
    * La repose ne compte pas contre le stock (un déplacement ne change pas le nombre de pièces) : une tuile
    * posée hors stock, comme la montagne d'une case du pinceau, se déplace donc aussi.
+   * Une ville neutre ne se déplace pas ainsi (refus) : elle se retire et se repose à l'étape « Villes ».
    */
   function deplacerPiece(plateau, idPiece, q, r, rotation) {
     var piece = (plateau.pieces || []).filter(function (p) { return p.id === idPiece; })[0];
     if (!piece) return { ok: false, plateau: plateau, raison: 'Pièce introuvable sur le plateau.' };
+    if (refusRetoucheVille(plateau, idPiece)) return { ok: false, plateau: plateau, raison: P.RAISON_VILLE_NEUTRE };
     var retrait = P.retirer(plateau, idPiece);
     var pose = P.poser(retrait.plateau, piece.modele, q, r, rotation === undefined ? piece.rotation : rotation, { horsStock: true });
     if (!pose.ok) return { ok: false, plateau: plateau, raison: pose.raison };
@@ -74,6 +76,15 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       Object.keys(P.cases(plateau)).forEach(function (k) { res[k] = k; });
     }
     return res;
+  }
+
+  /**
+   * Une ville neutre posée ne se déplace, ne se tourne et ne se retire qu'à l'étape « Villes » : renvoie le message
+   * de refus si la pièce `idPiece` est une ville neutre, null sinon (retouche permise).
+   */
+  function refusRetoucheVille(plateau, idPiece) {
+    var piece = (plateau.pieces || []).filter(function (p) { return p.id === idPiece; })[0];
+    return piece && piece.modele === 'VN' ? P.RAISON_VILLE_NEUTRE : null;
   }
 
   /** Cases où la tuile d'événement peut être posée (liste de clés). */
@@ -221,7 +232,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       if (!r.ok) {
         avisGeneration.hidden = false;
         // Catalogue ou rayon hors de ce que le générateur sait poser : changer de graine n'y ferait rien.
-        avisGeneration.textContent = 'Échec de la génération avec la graine « ' + g + ' » : ' + r.raison + (r.incompatible ? '' : ' Essayez la graine suivante, ou le seuil de contact 2.');
+        // Profondeur des extrémités en cause : la raison le dit et donne le remède, on n'en propose pas un autre.
+        avisGeneration.textContent = 'Échec de la génération avec la graine « ' + g + ' » : ' + r.raison + (r.incompatible || r.profondeur ? '' : ' Essayez la graine suivante, ou le seuil de contact 2.');
         ctx.message('Échec de la génération : le plateau affiché n’a pas changé.', 'erreur');
         return false;
       }
@@ -266,6 +278,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         return;
       }
       if (!selection) { ctx.message('Sélectionnez d’abord une pièce du plateau ou du stock.', 'info'); return; }
+      if (refusRetoucheVille(plateau(), selection)) { ctx.message(P.RAISON_VILLE_NEUTRE, 'erreur'); return; }
       var r = P.tourner(plateau(), selection, 1);
       if (!r.ok) { ctx.message('Rotation impossible : ' + r.raison, 'erreur'); return; }
       var mention = mentionEvenements(plateau(), r.plateau) + mentionVilles(plateau(), r.plateau);
@@ -281,6 +294,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         ctx.message('Le noyau est fixe : il ne se retire pas. Seuls « Vider le plateau » et « Nouveau plateau vierge » le font.', 'erreur');
         return;
       }
+      if (refusRetoucheVille(plateau(), selection)) { ctx.message(P.RAISON_VILLE_NEUTRE, 'erreur'); return; }
       var r = P.retirer(plateau(), selection);
       if (!r.ok) { ctx.message(r.raison, 'erreur'); return; }
       selection = null; caseSelection = null; aPoser = null;
@@ -292,6 +306,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     function commencerDeplacement() {
       var piece = pieceDe(selection);
       if (!piece) return;
+      if (refusRetoucheVille(plateau(), selection)) { ctx.message(P.RAISON_VILLE_NEUTRE, 'erreur'); return; }
       aPoser = { type: 'deplacement', rotation: piece.rotation };
       rafraichirOutils();
     }
@@ -300,6 +315,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       quitterModes();
       var vide = P.vide(plateau().graine);
       if (P.modeles(plateau()).length) vide.modeles = P.modeles(plateau());      // les pièces personnelles restent dans le document
+      vide = P.avecProfondeurExtremite(vide, P.profondeurExtremite(plateau())).plateau;      // le réglage des extrémités aussi
       changer(vide);
       ctx.message('Plateau vidé : toutes les pièces sont au stock (Annuler pour revenir en arrière).', 'info');
     }
@@ -309,6 +325,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       quitterModes();
       var vierge = P.vierge('fait main');
       if (P.modeles(plateau()).length) vierge.modeles = P.modeles(plateau());
+      vierge = P.avecProfondeurExtremite(vierge, P.profondeurExtremite(plateau())).plateau;
       changer(vierge, { garderVue: false, nouveauDocument: true });
       ctx.message('Nouveau plateau vierge : le noyau est posé au centre (Annuler pour revenir au plateau précédent).', 'info');
     }
@@ -358,6 +375,14 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       if (!possede.call(toutes, cle)) return null;
       var piece = pieceDe(toutes[cle].piece), depart = H.decle(cle);
       if (!piece) return null;
+      // Une ville neutre ne se déplace pas en la glissant : un simple clic la sélectionne, un glisser est refusé.
+      if (refusRetoucheVille(plateau(), piece.id)) {
+        return {
+          bouger: function () {},
+          finir: function (k, aBouge) { if (aBouge) ctx.message(P.RAISON_VILLE_NEUTRE, 'erreur'); else surClic(cle); },
+          annuler: function () {}
+        };
+      }
       var decalage = { q: piece.q - depart.q, r: piece.r - depart.r };
       var fin = function () { aPoser = null; survol = null; };
       return {
@@ -649,6 +674,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
     function rafraichir(garderVue) {
       var pl = plateau();
+      // La profondeur des extrémités est celle du DOCUMENT affiché (champ enregistré, sinon le réglage par défaut) :
+      // elle suit donc l'ouverture d'un fichier ou d'une fiche, l'annulation et le rétablissement.
+      reglages.profondeurExtremite = P.profondeurExtremite(pl);
       vue.afficher(scene(pl, true), garderVue);
       infoPlateau.textContent = 'Graine du plateau : ' + pl.graine + ' ; ' + pl.pieces.length + ' pièce(s), ' + Object.keys(P.cases(pl)).length + ' case(s)';
       rafraichirControles();
@@ -861,7 +889,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     };
   }
 
-  AT.vuePlateau = { MODES: MODES, creer: creer, deplacerPiece: deplacerPiece, etiquettes: etiquettes, casesAdmissibles: casesAdmissibles };
+  AT.vuePlateau = { MODES: MODES, creer: creer, deplacerPiece: deplacerPiece, refusRetoucheVille: refusRetoucheVille, etiquettes: etiquettes, casesAdmissibles: casesAdmissibles };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = AT.vuePlateau;
 })();

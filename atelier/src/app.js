@@ -186,7 +186,13 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       message: message, telecharger: telecharger, ouvrirFichier: ouvrirFichier,
       confirmer: confirmer, indiquerPlateau: indiquerPlateau, stockage: AT.app.stockage,
       plateau: function () { return vues.plateau.plateau(); },
-      reglagesControles: function () { return vues.plateau.reglages(); },
+      // Réglages des contrôles pour un AUTRE document que le plateau affiché (le plateau d'une partie) : sans la
+      // profondeur des extrémités, qui est celle du document jugé (enregistrée, sinon le réglage par défaut).
+      reglagesControles: function () {
+        var source = vues.plateau.reglages(), copie = {};
+        Object.keys(source).forEach(function (k) { if (k !== 'profondeurExtremite') copie[k] = source[k]; });
+        return copie;
+      },
       montrer: montrer
     };
     var liste = el('nav', { classe: 'at-onglets', role: 'tablist', 'aria-label': 'Parties de l’atelier' });

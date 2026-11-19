@@ -180,3 +180,119 @@ Non-régression : tous les scénarios antérieurs passent (générer, partie fic
 
 ### Fichiers touchés dans cette recette
 `atelier/src/vue-monoblocs.js`, `atelier/src/rendu.js`, `atelier/styles/base.css`, `atelier/outils/recette.js`, `atelier/tests/creation-interface.test.js`, `docs/04-recette-atelier.md` ; `dist/atelier-plateau.zip` produit par l'empaqueteur.
+
+## Catalogue 2 et étape « Villes » (recette du même jour, cahier des charges §9)
+
+Rien n'a été committé ni installé. Edge seulement sans fenêtre (`--headless=new`), sur des profils temporaires ; `Atelier.bat` n'a pas été lancé.
+
+### Chiffres
+
+| Vérification | Annoncé | Constaté avant mes changements | Après |
+|---|---|---|---|
+| `node --test` (depuis `atelier/`) | 284 OK | 284 OK, 0 échec | **302 OK, 0 échec** (13 s) |
+| Recette Edge sans fenêtre, `file://`, budget 20000 | 584 OK | 584 OK, 0 ÉCHEC (52 s) | **675 OK, 0 ÉCHEC** (98 s réelles) |
+| `node outils/verifier-regles.js 50` | 250 plateaux, 0 non conforme | 250 plateaux, 0 non conforme, 0 échec de génération | **391 plateaux, 0 non conforme** ; 9 échecs de génération, tous à 1 rangée (voir plus bas) |
+| `node outils/verifier-regles.js 100` | | | **785 plateaux, 0 non conforme** ; 15 échecs de génération, tous à 1 rangée |
+| Persistance réelle (deux lancements du même profil temporaire) | | | `ecrire` / `lire` : 6 OK puis 7 OK ; `ecrire-villes` / `lire-villes` : 7 OK puis 8 OK |
+
+Le nombre de plateaux du vérificateur change parce qu'il essaie maintenant 8 combinaisons au lieu de 5 (ajout des extrémités de 1 et de 3 rangées). Sur les 5 combinaisons d'origine, les chiffres sont les mêmes qu'avant : 250 plateaux, 0 non conforme, 0 échec.
+
+Non-régression du générateur : l'empreinte des plateaux générés (graines 1 à 50 × les 5 combinaisons d'origine, la pose automatique sur 20 graines, les extrémités de 1 et 3 rangées sur 20 graines) est identique avant et après, au seul texte des trois échecs à 1 rangée près.
+
+### A. Corrections décidées par l'orchestrateur
+
+| N° | Ce qui est fait | Fichiers | Tests |
+|---|---|---|---|
+| 1 | Champ facultatif `profondeurExtremite` du plateau (1, 2 ou 3 ; **absent = 2**, le réglage par défaut, comme `modeles` et `deploiements` s'écrivent par leur absence). Validé strictement par `plateau.valider` et par `partie.validerPlateau`. Les contrôles, les places, la pose, la pose automatique et le résumé d'une fiche emploient d'abord la profondeur du document, puis l'option, puis le défaut (`plateau.profondeurExtremite(plateau, options)`). Le générateur l'écrit dans le plateau rendu. Dans l'interface, le plateau affiché est la seule source : la liste déroulante le montre et le modifie (une étape d'annulation) ; ouvrir un fichier ou une fiche, annuler, rétablir la remettent d'eux-mêmes. « Générer », « Nouveau plateau vierge » et « Vider » gardent le réglage du plateau affiché. La partie fictive l'emporte. Les champs du plateau sortent toujours dans le même ordre. | `src/plateau.js`, `src/catalogue.js`, `src/controles.js`, `src/generateur.js`, `src/partie.js`, `src/vue-partie.js`, `src/vue-plateau.js`, `src/vue-villes.js` | 4 tests « correction 1 » ; recette : scénarios « générer 20 graines » et « profondeur enregistrée » ; persistance `ecrire-villes` / `lire-villes` |
+| 2 | Une ville neutre posée ne se tourne, ne se déplace et ne se retire que par l'étape « Villes ». Ailleurs : « Tourner » (R), « Déplacer », « Retirer » (Suppr), le glisser en création guidée, le pinceau et la gomme la laissent en place, avec le message « Une ville neutre ne se déplace, ne se tourne et ne se retire qu'à l'étape « Villes »… ». `plateau.retirer` reste libre (l'étape « Villes » s'en sert). | `src/plateau.js` (`peindre`, `gommer`), `src/vue-plateau.js` (`refusRetoucheVille`, `deplacerPiece`) | test « correction 2 » ; recette : 7 contrôles de refus dans « Retouche », « Essais : vider puis reconstruire » et le scénario fait main |
+| 3 | Quand « Générer » échoue et que des terrains construits n'ont manqué de places de villes qu'à cause de la profondeur, le message le dit, donne le nombre de terrains concernés et la profondeur qui aurait suffi, et ne conseille plus « le seuil de contact 2 ». La cause n'est annoncée que si un essai plus profond **sur le même terrain** réussit ; cet essai se fait sur un aléa à part, donc les plateaux générés ne changent pas. | `src/generateur.js`, `src/vue-plateau.js` | test « correction 3 » ; recette : 3 échecs sur 40 générations à 1 rangée, tous expliqués ainsi |
+| 4 | Bouton « Autre proposition » dans la même ligne que « Poser les villes automatiquement ». Il passe à la combinaison valide suivante, de la mieux équilibrée à la moins équilibrée (`generateur.propositionsVilles`), en partant de celle du plateau ; après la dernière, retour à la première. Aucun tirage : même plateau = même suite, y compris après « Annuler ». Une étape d'annulation par proposition ; le message donne le rang, le nombre de combinaisons et le score. « Poser automatiquement » n'a pas changé (vérifié par l'empreinte). | `src/generateur.js`, `src/vue-villes.js` | 2 tests « correction 4 » ; recette : 5 propositions de suite, annuler, reprendre |
+| 5 | `plateau.valider` **refuse** une entrée `deploiements` qui vise une case absente du plateau ou une case dont la tuile du dessous n'est pas une Plaine. Voir le choix ci-dessous. | `src/plateau.js` | 3 tests « correction 5 », dont 2 457 retouches au hasard ; recette : 43 fichiers hostiles par quatre entrées |
+| 6 | Sur un plateau de l'ancien catalogue (il porte une tuile de ville d'une case), le contrôle 1 rend un seul constat, en « Conforme » : « Plateau de l'ancien catalogue : 55 tuiles d'une case de ce catalogue (39 × Plaine, 5 × Forêt, 5 × Marais, 6 × Ville). Il ne se compare pas à l'inventaire du catalogue 2. » Plus de « Pièces de terrain restantes (15) », de « Tuiles à prévoir en plus (55) » ni de « Tuiles facultatives non posées ». Une tuile qui n'est d'aucun catalogue (montagne d'une case) reste annoncée. Un plateau du catalogue 2 avec une forêt peinte n'est pas un ancien plateau : rien ne change pour lui. | `src/controles.js` | test « correction 6 », `tests/controles.test.js`, `tests/integration.test.js` ; recette : 4 contrôles |
+
+**Correction 5 : option retenue et raison.** Refus strict, sans exception pour la pose libre. La question était de savoir si un plateau enregistré par l'outil peut porter une telle entrée ; la réponse est non, pour trois raisons vérifiées dans le code puis par test :
+- la pose libre elle-même exige une Plaine du plateau, hors noyau (dans `refusDeploiementSurCases`, le contrôle du terrain passe avant la sortie « libre ») : testé sur toutes les cases d'un plateau et sur son pourtour ;
+- toute retouche du terrain (retirer, tourner, déplacer, repeindre, gommer) retire la ville avec la Plaine qui la portait ;
+- un test applique 2 457 retouches acceptées, tirées au hasard, depuis trois départs (plateau généré, plateau vierge, fichier valide dont deux pièces se chevauchent sous une ville) : après chacune, le fichier se relit et se réécrit à l'identique, et aucune ville n'est hors d'une Plaine.
+
+Une exception « pose libre » aurait demandé un marqueur de plus dans le fichier pour un cas qui n'existe pas. Ce qui reste accepté à la lecture et signalé par les contrôles : une ville sur une Plaine mal choisie (noyau, hors de l'extrémité, trop près d'une autre), c'est-à-dire tout ce que la pose libre sait produire. En cas de chevauchement, la « Plaine d'origine » est celle de la première pièce de la liste, comme dans `cases()`. Le contrôle des villes garde sa vérification pour un document monté en mémoire. Effet sur le contenu déjà stocké : une fiche de la bibliothèque qui porterait une telle entrée serait écartée à la lecture avec une copie de secours (comportement existant), sans rendre la bibliothèque illisible ; l'outil n'a jamais pu en écrire.
+
+Conséquence assumée : deux contrôles de la recette et un test Node attendaient l'ancien comportement (fichier accepté puis signalé) ; ils attendent maintenant le refus.
+
+### Défauts trouvés pendant les essais
+
+| Défaut | État |
+|---|---|
+| `copier()` rendait les champs du plateau dans un ordre qui dépendait de la retouche (une ville posée sur un plateau à pièces personnelles donnait `modeles` avant `deploiements`, le fichier relu l'inverse). Sans effet sur les fichiers, mais deux plateaux égaux pouvaient différer une fois écrits par `JSON.stringify`. | Corrigé (`src/plateau.js`, ordre fixe). Testé. |
+| **Une fiche ou une partie était jugée avec la profondeur du plateau affiché** quand elle n'avait pas la sienne (défaut introduit par ma correction 1, vu à la relecture) : plateau affiché à 1 rangée, une fiche à 2 rangées annonçait « 3 erreurs » sur sa carte et une partie ouverte « 3 erreur(s) aux contrôles », alors que toutes deux s'ouvrent sans erreur. À 3 rangées, de vraies erreurs étaient cachées. | Corrigé (`src/vue-bibliotheque.js`, `src/app.js` : la profondeur du plateau affiché n'est plus transmise aux contrôles d'un autre document). Test Node et 3 contrôles de recette ajoutés. |
+| Le vérificateur indépendant ne signalait pas une ville hors d'atteinte (distance infinie jamais comparée) et ne connaissait que 2 rangées. | Corrigé, voir C. |
+| Le vérificateur affichait « même graine = même plateau 2/5 » à 1 rangée, parce que 3 des 5 premières graines échouent. | Corrigé (compte sur les plateaux générés). |
+
+Aucun autre défaut de logique trouvé dans l'étape « Villes », la table de jeu, les exports ni la reprise du travail en cours.
+
+### B. Essais ajoutés à `outils/recette.js` (4 scénarios « Testeur C2 », 91 contrôles de plus qu'au départ)
+
+Tout passe par de vrais événements dans Edge sans fenêtre, page ouverte en `file://`, même politique de sécurité : aucune erreur JavaScript, aucune violation de la politique de sécurité.
+
+1. **Générer 20 graines × profondeur 1 / 2 / 3 × remplissages 0 / 2** (120 générations par l'interface). Tout plateau rendu est complet, sans erreur, à 7 villes, relisible, rouvert à l'identique, ses villes dans les rangées de sa profondeur (calcul refait dans la recette), profondeur enregistrée et réglage affiché d'accord.
+
+   | Profondeur | Remplissages permis | Générés | Échecs | Remplissages posés | Plateaux avec une ville au-delà de la 2e rangée |
+   |---|---|---|---|---|---|
+   | 1 | 0 | 17 | 3 (profondeur en cause, dit) | 0 | 0 |
+   | 1 | 2 | 20 | 0 | 10 | 0 |
+   | 2 | 0 | 20 | 0 | 0 | 0 |
+   | 2 | 2 | 20 | 0 | 14 | 0 |
+   | 3 | 0 | 20 | 0 | 0 | 15 |
+   | 3 | 2 | 20 | 0 | 13 | 17 |
+
+   À 3 rangées, 32 plateaux sur 40 ont une ville au-delà de la 2e rangée : ce sont eux qui repassaient en erreur à la réouverture avant la correction 1 (vérifié sur l'un d'eux, privé de son champ).
+2. **Plateau construit entièrement à la main, puis villes.** Les 23 pièces de terrain d'un patron posées une à une (clic, et une sur trois au clavier) ; « Passer à l'étape Villes » ; ville posée par clic, puis au clavier (flèches et Entrée) ; 5 refus de ville de déploiement (forêt, montagne, noyau, case vide, extrémité de l'autre camp) et 3 de ville neutre (case occupée, hors des flancs, flanc déjà pourvu), chacun avec la raison du modèle ; pose libre acceptée, signalée « mal placée », enregistrée et rouverte ; les 6 villes posées à la main jusqu'à « Plateau terminé » ; pose automatique égale au calcul pur ; « Autre proposition » 5 fois (96 combinaisons sur ce terrain), annuler, reprendre. Puis retirer, tourner et déplacer en la glissant la pièce qui porte une ville ; glisser, gommer et peindre une ville neutre (refusés) ; 32 annulations jusqu'au noyau seul et 32 rétablissements, chaque état relisible, les étapes « complet », « villes », « construction » traversées, plateau final identique.
+3. **Profondeur enregistrée, anciens fichiers, fichiers hostiles.** Réglage à 3, annulé, rétabli ; plateau généré à 3 rangées enregistré, rouvert après un plateau à 2 rangées (réglage relu, aucune erreur) ; ramené à 2 (« mal placée »), annulé ; fiche de bibliothèque jugée avec sa propre profondeur, rouverte sans « (modifié) », exportée et importée ; travail en cours ; fiches à 2 et à 3 rangées et partie à 2 rangées vues depuis un plateau affiché à 1 rangée (aucune erreur annoncée) ; partie créée, enregistrée et rouverte. **43 fichiers hostiles** sur `deploiements` et sur la profondeur (valeurs hors bornes, textes, listes, objets, HTML, `__proto__`, `constructor`, clés mal formées, ville hors du plateau, sur forêt, marais, montagne, ville du noyau, ville neutre, 9 villes, doublons, 3 villes pour un camp, ville sous un événement), chacun par quatre entrées (fichier de plateau, fichier de partie, import de bibliothèque, travail en cours du stockage) : jamais acceptés, états inchangés, aucune pollution de `Object.prototype`, aucun élément injecté. **Anciens fichiers** : `plateau-retouche.json` (67 pièces, bandeau, contrôle 1 adapté), `bibliotheque.json` (2 fiches importées, l'une rouverte), `partie.json` (ouverte, 91 cases, bataillon formé). Les trois sont embarqués dans `outils/recette-ancien.js` (copies exactes de `tests/fixtures-v1/`).
+4. **Partie fictive sur un plateau du catalogue 2, exports.** Bataillon formé sur une ville de déploiement ; avertissement sur celle de l'adversaire ; marche de 5 cases jusqu'à une ville neutre (coût de chaque case au journal, total égal au chemin le moins cher) ; capture de la ville neutre, puis d'une ville de déploiement adverse ; tuile d'événement refusée sur une ville de déploiement, puis posée sur une case permise ; partie enregistrée et rouverte à l'identique. Export SVG bien formé avec les 2 + 2 villes de déploiement et les 2 villes neutres ; export PNG décodé, où les couleurs des trois sortes de villes sont retrouvées.
+
+**Reprise du travail en cours sur deux lancements** (vrai stockage du navigateur, même profil temporaire) : plateau généré à 3 rangées avec une ville en troisième rangée, enregistré en fiche, puis une ville neutre retirée. Au second lancement : fiche retrouvée avec sa profondeur, travail repris (25 pièces, 6 villes), réglage affiché à 3, **aucune erreur**, « (modifié) », villes dessinées. Un troisième lancement, sur `index.html` cette fois, montre le même état (capture).
+
+Deux aides de mise au point ajoutées à la recette : `#seul=<texte>` (un seul scénario) et `#durees` (temps de chaque scénario).
+
+### C. Règles B1 à B7 vérifiées sans `AT.controles`
+
+`outils/verifier-regles.js` relu. Il refait bien lui-même voisinage, parcours, bords, flancs et comptes ; seule la position des cases d'une pièce vient de l'outil. Ce qu'il laissait passer, et qui est complété :
+- la profondeur des extrémités était figée à 2 : elle est maintenant un paramètre, avec trois combinaisons de plus (1 rangée, 3 rangées, 3 rangées avec remplissages), et la profondeur demandée doit être celle que le plateau a enregistrée ;
+- deux villes non reliées n'étaient pas signalées (B6) ;
+- rien ne prouvait qu'il détecte une faute : `tests/verifier-regles.test.js` enfreint chaque règle exprès (35 plateaux fautifs, de B1 à B7 et A2) et exige la faute attendue. Aucune n'a échappé.
+
+Résultat sur 100 graines : **785 plateaux, 0 non conforme**. Les 500 plateaux à 2 rangées et les 200 à 3 rangées sont tous générés ; à 1 rangée, 85 générés sur 100 et 15 échecs, tous expliqués par la profondeur. Écart minimal entre villes 4 pas partout ; contact minimal égal au seuil ; villes neutres touchant au moins 2 cases ; à 3 rangées, 75 et 74 plateaux sur 100 ont une ville au-delà de la 2e rangée.
+
+### D. Paquet (`python -I atelier/outils/empaqueter.py --brouillon --sortie <fichier temporaire>`)
+
+- 27 fichiers, 180 370 octets, un seul dossier « Atelier du plateau » ; `dist/` n'a pas été touché.
+- Les 23 fichiers référencés par `index.html` (19 scripts, 4 feuilles de style) sont tous dans l'archive, et l'archive ne contient aucun script ni style non référencé, ni test, ni outil.
+- `Atelier.command` : système Unix, mode 0755, 17 fins de ligne Unix, aucune fin de ligne Windows, commence par `#!/bin/sh`. `Atelier.bat` : fins de ligne Windows gardées.
+- C'est bien l'arbre de travail qui est emballé (le bouton « Autre proposition » et le champ de profondeur y sont) ; le script annonce « paquet BROUILLON : 10 fichiers diffèrent de la dernière version committée ».
+- Page décompressée dans un dossier temporaire, ouverte sans fenêtre avec `#mode=villes&graine=7` : 26 pièces, 93 cases, « Plateau conforme », 4 feuilles de style, mise en page vue sur capture.
+
+### Captures (dossier temporaire, hors projet)
+
+- **Bureau 1280 × 800, mode « Villes »** (graine 12) : trois colonnes, plateau entier avec ses 7 villes numérotées, compteurs 2 / 2, rien de coupé. « Autre proposition » est sous « Poser les villes automatiquement » : la colonne de gauche (environ 300 px) ne tient pas les deux boutons côte à côte.
+- **Largeur 375 px** (page dans un cadre, rognée sur le panneau) : le panneau « Villes » tient en largeur, les deux boutons sont côte à côte, rien ne déborde. Boutons d'environ 26 px de haut, sous les 44 px d'une cible tactile (point déjà soumis plus haut).
+- **Reprise du travail en cours** (troisième lancement du profil de persistance) : « Plateau : « Villes profondes 0 » (modifié) », liste sur « 3 rangées », « Aucune erreur, 1 alerte », places de la ville neutre manquante en surbrillance.
+- **Impression** (PDF produit par Edge puis rendu) : une page, plateau avec ses villes et légende ; depuis le mode « Villes », les places en surbrillance ne sortent pas.
+
+### Non vérifié
+
+- Souris, molette et tactile réels ; sélecteur de fichier (« Ouvrir… », « Importer… ») ; Firefox et Chrome ; `Atelier.bat` et `Atelier.command` lancés pour de bon ; le Mac.
+- États après interaction vus à l'écran : aucune capture d'un refus, d'une pose libre ou d'une « autre proposition » en cours (vérifiés par la recette, pas par l'œil).
+- Le cas « une seule combinaison de villes possible » d'« Autre proposition » (message « rien ne change ») : aucun terrain de ce genre rencontré.
+- Lisibilité de l'impression sur papier.
+
+### Points à connaître
+
+- **Réglage par défaut de la profondeur.** Un plateau fait à 2 rangées n'écrit pas le champ. Si le défaut du catalogue passait un jour à 1, ces plateaux seraient relus à 1 rangée et pourraient repasser en erreur ; s'il passait à 3, rien ne casserait. L'autre choix (toujours écrire le champ) change tous les fichiers générés ; il revient à l'orchestrateur.
+- **« 15 pièces de terrain à poser »** est aussi le texte de `controles.etape()`. Il n'est affiché nulle part pour un ancien plateau : son seul écran (`#pl-etape`, `src/vue-plateau.js`) montre à la place « Plateau de l'ancien catalogue », et la recette le vérifie. La fonction elle-même n'a pas été changée.
+- **Profils temporaires d'Edge** : ils n'ont pas pu être supprimés (accès refusé) ; aucun processus Edge ne tourne plus dessus. Ils sont dans le dossier temporaire de la session, sous les noms `prof1`, `profA` à `profD`, `profF`, `profP1`, `profP2`, `profS`, `profZ`.
+- **`docs/02-atelier-cahier-des-charges.md`** (non modifié, hors de mon périmètre) ne mentionne ni le champ `profondeurExtremite`, ni le refus des entrées `deploiements` hors Plaine, ni « Autre proposition », ni la règle de retouche des villes neutres.
+- La recette complète dure maintenant 98 s au lieu de 52 s (120 générations de plus).
+
+### Fichiers touchés dans cette recette
+
+`atelier/src/plateau.js`, `atelier/src/catalogue.js`, `atelier/src/controles.js`, `atelier/src/generateur.js`, `atelier/src/partie.js`, `atelier/src/vue-partie.js`, `atelier/src/vue-plateau.js`, `atelier/src/vue-villes.js`, `atelier/src/vue-bibliotheque.js`, `atelier/src/app.js`, `atelier/outils/recette.js`, `atelier/outils/recette-ancien.js`, `atelier/outils/verifier-regles.js`, `atelier/tests/corrections-villes.test.js` (nouveau), `atelier/tests/verifier-regles.test.js` (nouveau), `atelier/tests/controles.test.js`, `atelier/tests/integration.test.js`, `atelier/tests/villes-interface.test.js`, `atelier/README.md`, `docs/04-recette-atelier.md`.

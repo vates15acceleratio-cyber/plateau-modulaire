@@ -160,12 +160,15 @@ test('poserAuto : les 6 villes au meilleur équilibre, plateau complet et confor
   assert.match(seul.raison, /Places trouvées : 0 pour Vert/);
 });
 
-test('trou signalé : une ville de déploiement hors du plateau ou hors d’une Plaine est une erreur des contrôles, et se retire', () => {
+test('trou signalé : une ville de déploiement hors du plateau ou hors d’une Plaine est refusée à la lecture ; montée en mémoire, c’est une erreur des contrôles, et elle se retire', () => {
   const nu = terrain();
   // Hors du plateau : la case n'existe pas.
   const dehors = copie(nu);
   dehors.deploiements = [{ cle: '20,20', camp: 'vert' }];
-  assert.ok(P.valider(copie(dehors)).ok, 'le format l’accepte : ce sont les contrôles qui jugent');
+  const avis = P.valider(copie(dehors));
+  assert.strictEqual(avis.ok, false, 'un fichier ne peut plus porter une telle entrée');
+  assert.match(avis.erreurs.join(' | '), /Ville de déploiement n° 1 : aucune case du plateau en \(20,20\)/);
+  // Un document monté en mémoire reste jugé par les contrôles (défense en profondeur).
   const c1 = K.villes(dehors).filter((x) => x.niveau === 'erreur');
   assert.ok(c1.some((x) => /Ville de déploiement de Vert en \(20,20\) hors du plateau : aucune case à cet endroit/.test(x.message)), c1.map((x) => x.message).join(' | '));
   assert.ok(K.tout(dehors).villes.erreurs >= 1);

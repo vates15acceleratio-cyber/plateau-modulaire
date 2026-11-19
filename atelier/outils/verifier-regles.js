@@ -9,16 +9,22 @@
  *   B2  tuiles de remplissage : jamais plus que le nombre permis (0 par défaut pour le générateur) ;
  *   B3  toutes les pièces de construction du catalogue, une fois chacune ; pas de chevauchement, pas de trou,
  *       plateau d'un seul tenant, cases franchissables reliées ;
- *   B4  2 villes de déploiement par joueur, posées sur une Plaine du bord, hors noyau, dans les 2 rangées du haut
- *       (Vert) ou du bas (Rouge) ; `camps` = ces tuiles ;
+ *   B4  2 villes de déploiement par joueur, posées sur une Plaine du bord, hors noyau, dans les rangées du haut
+ *       (Vert) ou du bas (Rouge) : 2 rangées par défaut, 1 ou 3 quand le plateau a été généré avec ce réglage (la
+ *       profondeur demandée doit alors être celle que le plateau a enregistrée) ; `camps` = ces tuiles ;
  *   B5  2 villes neutres, tuiles ajoutées contre le bord, une par flanc, dans le tiers central des rangées,
  *       touchant au moins 2 cases ;
- *   B6  7 villes, toutes à 4 pas au moins les unes des autres (par les cases franchissables) ;
+ *   B6  7 villes, toutes reliées entre elles et à 4 pas au moins les unes des autres (par les cases franchissables) ;
  *   B7  contact : chaque monobloc touche au moins `seuil` autres tuiles ; une tuile de remplissage au moins 2 ;
  *   A2  aucune ville imprimée dans un monobloc hors noyau.
  *
+ * Combinaisons vérifiées : seuil 3 / 2 × mesure pièces / côtés (2 rangées, sans remplissage), puis seuil 3 « pièces »
+ * avec 2 remplissages permis, avec des extrémités de 1 rangée, de 3 rangées, et de 3 rangées avec 2 remplissages.
+ *
  * Usage, depuis atelier/ :  node outils/verifier-regles.js [nombre de graines = 50] [première graine = 1]
- * Code de sortie 0 si aucun plateau n'enfreint une règle, 1 sinon. Les générations en échec sont comptées, pas ignorées.
+ * Code de sortie 0 si aucun plateau n'enfreint une règle, 1 sinon. Les générations en échec sont comptées, pas ignorées
+ * (à 1 rangée, des graines échouent faute de places pour les villes : voir docs/07-mesures-catalogue-2.md).
+ * tests/verifier-regles.test.js prouve que chaque règle B1 à B7 est bien détectée quand on l'enfreint.
  */
 'use strict';
 const P = require('../src/plateau.js');
@@ -52,8 +58,14 @@ function casesEnfermees(occupees) {
 }
 
 /** Renvoie la liste des manquements d'un plateau (vide = conforme) et quelques mesures. */
-function verifier(plateau, seuil, mesure, remplissagesPermis) {
-  const fautes = [];
+function verifier(plateau, seuil, mesure, remplissagesPermis, profondeur) {
+  const fautes = [], rangeesExtremes = profondeur === undefined ? PROFONDEUR : profondeur;
+  // Format : un plateau généré est en version 2, sans tuile d'événement, et enregistre la profondeur de ses extrémités
+  // (champ absent pour 2 rangées, la valeur par défaut).
+  if (plateau.version !== 2) fautes.push('format : version ' + plateau.version);
+  if ((plateau.recouvrements || []).length) fautes.push('format : tuile d’événement sur un plateau généré');
+  const enregistree = plateau.profondeurExtremite === undefined ? PROFONDEUR : plateau.profondeurExtremite;
+  if (enregistree !== rangeesExtremes || plateau.profondeurExtremite === PROFONDEUR) fautes.push('B4 : profondeur des extrémités enregistrée (' + plateau.profondeurExtremite + ') ≠ profondeur demandée (' + rangeesExtremes + ')');
   // Cases du TERRAIN (tout sauf les villes neutres) et villes neutres, chevauchements.
   const cases = new Map(), neutres = [];
   for (const piece of plateau.pieces) {
@@ -117,7 +129,7 @@ function verifier(plateau, seuil, mesure, remplissagesPermis) {
     if (c.terrain !== 'plaine') fautes.push('B4 : ville de déploiement sur ' + c.terrain + ' en ' + d.cle);
     if (c.modele === 'N1') fautes.push('B4 : ville de déploiement sur le noyau en ' + d.cle);
     if (!voisines(d.cle).some((v) => !toutes.has(v))) fautes.push('B4 : ville de déploiement hors du bord en ' + d.cle);
-    if (d.camp === 'vert' ? r > haut + PROFONDEUR - 1 : r < bas - PROFONDEUR + 1) fautes.push('B4 : ville de ' + d.camp + ' hors des ' + PROFONDEUR + ' rangées extrêmes en ' + d.cle);
+    if (d.camp === 'vert' ? r > haut + rangeesExtremes - 1 : r < bas - rangeesExtremes + 1) fautes.push('B4 : ville de ' + d.camp + ' hors des ' + rangeesExtremes + ' rangée(s) extrême(s) en ' + d.cle);
   }
   for (const camp of ['vert', 'rouge']) {
     if (parCamp[camp].length !== PAR_CAMP) fautes.push('B4 : ' + parCamp[camp].length + ' ville(s) de déploiement pour ' + camp);
@@ -149,6 +161,7 @@ function verifier(plateau, seuil, mesure, remplissagesPermis) {
     const d = parcours(a, marchables);
     villes.slice(i + 1).forEach((b) => {
       const pas = d.has(b) ? d.get(b) : Infinity;
+      if (pas === Infinity) fautes.push('B6 : villes ' + a + ' et ' + b + ' non reliées par les cases franchissables');
       ecartMin = Math.min(ecartMin, pas);
       if (pas < ECART) fautes.push('B6 : villes ' + a + ' et ' + b + ' à ' + pas + ' pas');
     });
@@ -173,20 +186,27 @@ function lancer(nombre, premiere) {
   let total = 0, fautifs = 0, echecsTotal = 0;
   const lignes = [];
   const combinaisons = [];
-  for (const seuil of [3, 2]) for (const mesure of ['pieces', 'cotes']) combinaisons.push({ seuil, mesure, remplissages: 0 });
-  combinaisons.push({ seuil: 3, mesure: 'pieces', remplissages: 2 });
-  for (const { seuil, mesure, remplissages } of combinaisons) {
+  for (const seuil of [3, 2]) for (const mesure of ['pieces', 'cotes']) combinaisons.push({ seuil, mesure, remplissages: 0, profondeur: PROFONDEUR });
+  combinaisons.push({ seuil: 3, mesure: 'pieces', remplissages: 2, profondeur: PROFONDEUR });
+  combinaisons.push({ seuil: 3, mesure: 'pieces', remplissages: 0, profondeur: 1 });
+  combinaisons.push({ seuil: 3, mesure: 'pieces', remplissages: 0, profondeur: 3 });
+  combinaisons.push({ seuil: 3, mesure: 'pieces', remplissages: 2, profondeur: 3 });
+  for (const { seuil, mesure, remplissages, profondeur } of combinaisons) {
     let reussis = 0, echecs = 0, mauvais = 0, ecartMin = Infinity, contactMin = Infinity, contactNeutreMin = Infinity, identiques = 0, scoreMax = 0, scoreTotal = 0, poses = 0, tempsMax = 0;
     const repartitions = new Set(), formes = new Set();
     const options = { seuilContact: seuil, mesureContact: mesure, remplissages };
+    if (profondeur !== PROFONDEUR) options.profondeurExtremite = profondeur;
+    let villesLoin = 0, comparables = 0;      // comparables : plateaux générés parmi les 5 premières graines
     const debut = Date.now();
     for (let g = premiere; g < premiere + nombre; g++) {
       const t = Date.now();
       const r = G.generer(g, options);
       tempsMax = Math.max(tempsMax, Date.now() - t);
-      if (!r.ok) { echecs += 1; console.log('  ÉCHEC DE GÉNÉRATION graine ' + g + ' seuil ' + seuil + ' ' + mesure + ' : ' + r.raison); continue; }
+      if (!r.ok) { echecs += 1; console.log('  ÉCHEC DE GÉNÉRATION graine ' + g + ' seuil ' + seuil + ' ' + mesure + ', ' + profondeur + ' rangée(s) : ' + r.raison); continue; }
       reussis += 1;
-      const v = verifier(r.plateau, seuil, mesure, remplissages);
+      const v = verifier(r.plateau, seuil, mesure, remplissages, profondeur);
+      // À plus de 2 rangées : le même plateau jugé à 2 rangées dit combien de plateaux ont une ville plus loin du bord.
+      if (profondeur > PROFONDEUR && verifier(Object.assign({}, r.plateau, { profondeurExtremite: undefined }), seuil, mesure, remplissages, PROFONDEUR).fautes.some((x) => /hors des 2 rangée/.test(x))) villesLoin += 1;
       ecartMin = Math.min(ecartMin, v.ecartMin);
       contactMin = Math.min(contactMin, v.contactMin);
       contactNeutreMin = Math.min(contactNeutreMin, v.contactNeutreMin);
@@ -198,13 +218,13 @@ function lancer(nombre, premiere) {
       if (JSON.stringify(P.avecCamps(r.plateau).camps) !== JSON.stringify(r.plateau.camps)) v.fautes.push('camps du générateur ≠ campsAuto');
       const relu = P.lire(P.serialiser(r.plateau));
       if (!relu.ok || JSON.stringify(relu.plateau) !== JSON.stringify(r.plateau)) v.fautes.push('fichier non relisible à l’identique');
-      if (v.fautes.length) { mauvais += 1; console.log('  NON CONFORME graine ' + g + ' seuil ' + seuil + ' ' + mesure + ' : ' + v.fautes.slice(0, 5).join(' ; ')); }
-      if (g < premiere + 5 && JSON.stringify(G.generer(g, options).plateau) === JSON.stringify(r.plateau)) identiques += 1;
+      if (v.fautes.length) { mauvais += 1; console.log('  NON CONFORME graine ' + g + ' seuil ' + seuil + ' ' + mesure + ', ' + profondeur + ' rangée(s) : ' + v.fautes.slice(0, 5).join(' ; ')); }
+      if (g < premiere + 5) { comparables += 1; if (JSON.stringify(G.generer(g, options).plateau) === JSON.stringify(r.plateau)) identiques += 1; }
     }
     total += reussis; fautifs += mauvais; echecsTotal += echecs;
-    lignes.push('seuil ' + seuil + ', mesure ' + mesure + ', remplissages permis ' + remplissages + ' : ' + reussis + ' générés, ' + echecs + ' échec(s) de génération, ' + mauvais + ' non conforme(s) ; écart minimal entre villes '
+    lignes.push('seuil ' + seuil + ', mesure ' + mesure + ', remplissages permis ' + remplissages + ', extrémités de ' + profondeur + ' rangée(s)' + (profondeur > PROFONDEUR ? ' (' + villesLoin + ' plateaux avec une ville au-delà de la 2e rangée)' : '') + ' : ' + reussis + ' générés, ' + echecs + ' échec(s) de génération, ' + mauvais + ' non conforme(s) ; écart minimal entre villes '
       + ecartMin + ' pas ; contact minimal ' + contactMin + ' (villes neutres : ' + contactNeutreMin + ' cases) ; remplissages posés ' + poses + ' ; score d’équilibre moyen ' + (reussis ? (scoreTotal / reussis).toFixed(2) : '–') + ', maximal ' + scoreMax
-      + ' ; plaines/forêts/marais du terrain ' + [...repartitions].join(' ') + ' ; plateaux distincts ' + formes.size + ' ; même graine = même plateau ' + identiques + '/' + Math.min(5, nombre)
+      + ' ; plaines/forêts/marais du terrain ' + [...repartitions].join(' ') + ' ; plateaux distincts ' + formes.size + ' ; même graine = même plateau ' + identiques + '/' + comparables
       + ' ; ' + (Date.now() - debut) + ' ms (au plus ' + tempsMax + ' ms par plateau)');
   }
   lignes.forEach((l) => console.log(l));

@@ -448,8 +448,13 @@ test('ancien catalogue : un plateau enregistré en version 1 garde ses contrôle
   assert.match(villes[0].message, /7 villes/);
   assert.deepStrictEqual(K.villes(p), K.villesAnciennes(p));
   assert.strictEqual(bilan.villes.erreurs, 0);
-  // Ses tuiles d'une case sont annoncées « à prévoir en plus du catalogue » ; l'équilibre se calcule.
-  assert.ok(alertes(bilan.resultats).some((x) => x.regle === 'inventaire' && /à prévoir en plus du catalogue/.test(x.message)));
+  // Contrôle 1 adapté : « plateau de l'ancien catalogue », ni « pièces de terrain à poser » ni « tuiles à prévoir en plus ».
+  const inventaire = bilan.resultats.filter((x) => x.regle === 'inventaire');
+  assert.ok(inventaire.some((x) => x.niveau === 'info' && /^Plateau de l’ancien catalogue : 55 tuiles d’une case de ce catalogue \(39 × Plaine, 5 × Forêt, 5 × Marais, 6 × Ville \(ancien catalogue\)\)/.test(x.message)),
+    inventaire.map((x) => x.message).join(' | '));
+  assert.ok(!inventaire.some((x) => /à prévoir en plus du catalogue|Pièces de terrain restantes|pièces? de terrain à poser/.test(x.message)), inventaire.map((x) => x.message).join(' | '));
+  assert.strictEqual(erreurs(inventaire).length, 0);
+  // L'équilibre se calcule.
   assert.strictEqual(bilan.equilibre.calculable, true);
   assert.strictEqual(p.camps.vert.length, 2);
   assert.deepStrictEqual(P.campsAuto(p), p.camps);

@@ -297,8 +297,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * en retenant la combinaison au meilleur score d'équilibre (AT.controles.ecartsCamps) ; à score égal, le hasard choisit.
    * Renvoie {ok, raison, manque ('vert' | 'rouge' | 'gauche' | 'droite' | 'ecart' | null), vert: [clés], rouge: [clés],
    *          neutres: {gauche, droite}, score, places: {vert, rouge, gauche, droite} (nombres de places admissibles)}.
+   * `combinaisons` (facultatif) : tableau qui reçoit TOUTES les combinaisons valides {score, vert, rouge, neutres},
+   * dans l'ordre du parcours (voir propositionsVilles) ; le résultat et les tirages de l'aléa n'en dépendent pas.
    */
-  function chercherVilles(toutes, alea, R) {
+  function chercherVilles(toutes, alea, R, combinaisons) {
     var res = { ok: false, raison: null, manque: null, vert: [], rouge: [], neutres: { gauche: null, droite: null }, score: null, places: { vert: 0, rouge: 0, gauche: 0, droite: 0 } };
     var o = { profondeurExtremite: R.profondeurExtremite, ecartVilles: R.ecartVilles, contactVilleNeutre: R.contactVilleNeutre, neutresTiersCentral: R.neutresTiersCentral, couts: R.couts };
     var candidats = { vert: P.placesDeploiementSurCases(toutes, 'vert', o), rouge: P.placesDeploiementSurCases(toutes, 'rouge', o) };
@@ -359,6 +361,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
           if (!mieux) possible = false; else { choisis[flanc] = mieux.cle; note += mieux.ecart; }
         });
         if (!possible) continue;
+        if (combinaisons) combinaisons.push({ score: note, vert: H.trier(V), rouge: H.trier(Rg), neutres: { gauche: choisis.gauche, droite: choisis.droite } });
         if (meilleur === null || note < meilleur.score) { meilleur = { score: note, vert: V, rouge: Rg, neutres: choisis }; egaux = 1; }
         else if (note === meilleur.score) { egaux += 1; if (alea.entier(egaux) === 0) meilleur = { score: note, vert: V, rouge: Rg, neutres: choisis }; }
       }
@@ -368,6 +371,22 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     res.vert = H.trier(meilleur.vert); res.rouge = H.trier(meilleur.rouge);
     res.neutres = meilleur.neutres; res.score = meilleur.score;
     return res;
+  }
+
+  /** Signature d'une combinaison de villes (pour la reconnaître et la ranger) : les six cases, dans un ordre fixe. */
+  function signatureVilles(x) { return [x.vert.join(' '), x.rouge.join(' '), x.neutres.gauche, x.neutres.droite].join(' | '); }
+
+  /**
+   * Toutes les façons valides de poser les villes sur un terrain construit, de la mieux équilibrée à la moins
+   * équilibrée (à score égal : ordre fixe des cases). Aucun tirage : même terrain et mêmes réglages = même liste.
+   * Renvoie [{score, vert: [clés], rouge: [clés], neutres: {gauche, droite}}] ([] s'il n'y en a aucune).
+   */
+  function propositionsVilles(toutes, R) {
+    var liste = [];
+    chercherVilles(toutes, AT.alea.creer(0), R, liste);
+    var signatures = liste.map(signatureVilles), rangs = liste.map(function (x, i) { return i; });
+    rangs.sort(function (a, b) { return liste[a].score - liste[b].score || (signatures[a] < signatures[b] ? -1 : signatures[a] > signatures[b] ? 1 : 0); });
+    return rangs.map(function (i) { return liste[i]; });
   }
 
   // ------------------------------------------------------------------ ce que le générateur pose
@@ -402,8 +421,13 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     return null;
   }
 
-  /** Construit le plateau (objet JSON) : terrain, villes neutres, villes de déploiement, camps. */
-  function construire(graine, construction, villes) {
+  /** Profondeurs des extrémités permises au-delà de `p`, de la plus petite à la plus grande. */
+  function profondeursPlusGrandes(p) {
+    return P.profondeursPermises().filter(function (x) { return x > p; }).sort(function (a, b) { return a - b; });
+  }
+
+  /** Construit le plateau (objet JSON) : terrain, villes neutres, villes de déploiement, camps, profondeur des extrémités. */
+  function construire(graine, construction, villes, profondeur) {
     var plateau = P.vide(graine);
     plateau.pieces = construction.pieces.map(function (p, i) { return { id: 'p' + (i + 1), modele: p.modele, q: p.q, r: p.r, rotation: p.rotation }; });
     ['gauche', 'droite'].forEach(function (flanc) {
@@ -412,6 +436,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     });
     plateau.deploiements = villes.vert.map(function (k) { return { cle: k, camp: 'vert' }; }).concat(villes.rouge.map(function (k) { return { cle: k, camp: 'rouge' }; }));
     plateau.camps = { vert: villes.vert.slice(), rouge: villes.rouge.slice() };
+    // La profondeur des extrémités retenue pour ces villes est enregistrée dans le document (absente = réglage par défaut).
+    if (profondeur !== undefined && profondeur !== C.REGLAGES.villes.profondeurExtremite) plateau.profondeurExtremite = profondeur;
     return plateau;
   }
 
@@ -429,13 +455,15 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    *   de niveau erreur (étape « complet ») ; `score` est son score d'équilibre ; `remplissages` le nombre de tuiles
    *   de remplissage posées ;
    *   ok = false : plateau = null et `raison` explique l'échec ; `echecs` compte les essais ratés par étape
-   *   (pose, trou, franchissable, contact, contactRemplissage, villes, controles).
+   *   (pose, trou, franchissable, contact, contactRemplissage, villes, controles) ; `echecs.profondeur` compte, parmi
+   *   les échecs « villes », les terrains qui auraient eu leurs villes avec des extrémités plus profondes : la raison
+   *   le dit alors, et `profondeur` vaut {essais, conseillee (la plus petite profondeur qui aurait suffi)}.
    */
   function generer(graine, options) {
     var R = reglages(options);
     var res = {
       ok: false, plateau: null, score: null, raison: null, note: null, essais: 0, remplissages: 0,
-      echecs: { pose: 0, trou: 0, franchissable: 0, contact: 0, contactRemplissage: 0, villes: 0, controles: 0 }, controles: null
+      echecs: { pose: 0, trou: 0, franchissable: 0, contact: 0, contactRemplissage: 0, villes: 0, profondeur: 0, controles: 0 }, controles: null
     };
     if (C.REGLAGES.mesuresContact.indexOf(R.mesureContact) === -1) { res.raison = 'Mesure de contact inconnue.'; return res; }
     if (!Number.isInteger(R.seuilContact) || R.seuilContact < 0 || R.seuilContact > 6) { res.raison = 'Seuil de contact invalide.'; return res; }
@@ -457,16 +485,28 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       ecartVilles: R.ecartVilles, couts: R.couts, profondeurExtremite: R.profondeurExtremite,
       contactVilleNeutre: R.contactVilleNeutre, neutresTiersCentral: R.neutresTiersCentral
     };
-    var raisonVilles = null;
+    var raisonVilles = null, profondeurUtile = null;
 
     for (var t = 0; t < R.tentatives && !res.ok; t++) {
       res.essais += 1;
       var construction = batir(alea, cat.noyau, cat.pieces, cat.remplissage, R);
       if (!construction.ok) { res.echecs[construction.echec] += 1; continue; }
       var villes = chercherVilles(construction.cases, alea, R);
-      if (!villes.ok) { res.echecs.villes += 1; raisonVilles = villes.raison; continue; }
+      if (!villes.ok) {
+        res.echecs.villes += 1; raisonVilles = villes.raison;
+        // Ce terrain aurait-il ses villes avec des extrémités plus profondes ? Essai à part, sur un autre aléa : la
+        // suite des tirages de la génération n'en dépend pas.
+        var plusProfond = profondeursPlusGrandes(R.profondeurExtremite).filter(function (p) {
+          var Rp = {};
+          Object.keys(R).forEach(function (k) { Rp[k] = R[k]; });
+          Rp.profondeurExtremite = p;
+          return chercherVilles(construction.cases, AT.alea.creer(0), Rp).ok;
+        })[0];
+        if (plusProfond !== undefined) { res.echecs.profondeur += 1; if (profondeurUtile === null || plusProfond < profondeurUtile) profondeurUtile = plusProfond; }
+        continue;
+      }
       // Un plateau n'est rendu que s'il passe les contrôles et se trouve à l'étape « complet ».
-      var plateau = construire(graineUtile, construction, villes);
+      var plateau = construire(graineUtile, construction, villes, R.profondeurExtremite);
       var bilan = K.tout(plateau, optionsControles);
       if (!bilan.ok || bilan.etape !== 'complet') { res.echecs.controles += 1; continue; }
       res.ok = true;
@@ -480,6 +520,14 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var e = res.echecs;
       res.raison = 'Aucun plateau valide en ' + res.essais + ' essais (échecs : pose ' + e.pose + ', trou ' + (e.trou + e.franchissable) + ', contact ' + (e.contact + e.contactRemplissage)
         + ', villes ' + e.villes + ', contrôles ' + e.controles + ').' + (raisonVilles ? ' Dernier refus des villes : ' + raisonVilles : '');
+      // La profondeur des extrémités est en cause : des terrains construits n'ont manqué de places que pour cela.
+      if (e.profondeur) {
+        var prof = R.profondeurExtremite;
+        res.profondeur = { essais: e.profondeur, conseillee: profondeurUtile };
+        res.raison += ' La profondeur des extrémités (' + prof + (prof > 1 ? ' rangées' : ' rangée') + ' en haut et en bas) est en cause : ' + e.profondeur
+          + (e.profondeur > 1 ? ' terrains construits auraient eu leurs villes' : ' terrain construit aurait eu ses villes') + ' avec ' + profondeurUtile
+          + ' rangées. Changez le réglage « Profondeur des extrémités » (étape « Villes »), ou essayez la graine suivante.';
+      }
       return res;
     }
     if (persos.length) {
@@ -492,7 +540,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   }
 
   AT.generateur = {
-    generer: generer, batir: batir, chercherVilles: chercherVilles, reglages: reglages,
+    generer: generer, batir: batir, chercherVilles: chercherVilles, propositionsVilles: propositionsVilles, signatureVilles: signatureVilles, reglages: reglages,
     incompatibilite: incompatibilite, piecesDuCatalogue: piecesDuCatalogue
   };
 

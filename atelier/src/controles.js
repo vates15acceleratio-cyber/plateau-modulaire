@@ -18,7 +18,8 @@
  *
  * options (toutes facultatives, valeurs par défaut dans AT.catalogue.REGLAGES) :
  *   seuilContact (2 ou 3), mesureContact ('cotes' | 'pieces'), seuilContactRemplissage, ecartVilles, nombreVilles, couts,
- *   profondeurExtremite, contactVilleNeutre, neutresTiersCentral,
+ *   profondeurExtremite (ne sert que si le plateau n'a pas enregistré la sienne : voir AT.plateau.profondeurExtremite),
+ *   contactVilleNeutre, neutresTiersCentral,
  *   trous ('alerte' | 'erreur' | 'ignore' : niveau du constat quand le plateau a un trou).
  */
 var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof globalThis !== 'undefined' ? globalThis : window).AT || {});
@@ -76,9 +77,14 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * d'UNE case posées hors catalogue (pinceau, ancien catalogue : « à prévoir en plus du catalogue », détail par
    * modèle) ; toute montagne d'une case. Les tuiles de remplissage non posées sont une simple information ; les
    * villes neutres restantes sont l'affaire du contrôle des villes.
+   * Plateau de l'ancien catalogue (il porte une tuile de ville d'une case) : une seule information le dit ; ni
+   * « pièces de terrain restantes », ni « tuiles à prévoir en plus » pour ses tuiles P / F / S / V.
    */
   function inventaire(plateau) {
     var res = [], inconnues = 0, pieces = plateau.pieces || [];
+    // Plateau de l'ANCIEN catalogue (il porte des tuiles de ville d'une case) : ses tuiles d'une case ne sont pas du
+    // carton « à prévoir en plus », et les pièces de terrain du catalogue 2 ne sont pas « à poser » sur lui.
+    var ancien = pieces.some(function (p) { return p.modele === 'V'; }), nbAnciennes = 0, detailAnciennes = [];
     pieces.forEach(function (p) { if (!P.modele(plateau, p.modele)) inconnues += 1; });
     if (inconnues) res.push(constat('inventaire', 'erreur', pluriel(inconnues, 'pièce') + ' hors catalogue sur le plateau.', []));
     var stock = P.stock(plateau), restantes = [], nbRestantes = 0, restantesPerso = [], nbRestantesPerso = 0;
@@ -92,7 +98,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var s = stock[id], m = P.modele(plateau, id);
       if (s.restant < 0) {
         var posees = pieces.filter(function (p) { return p.modele === id; });
-        if (m.cases.length === 1) {
+        if (ancien && m.ancien === true) {
+          detailAnciennes.push(s.poses + ' × ' + m.nom);
+          nbAnciennes += s.poses;
+        } else if (m.cases.length === 1) {
           // Tuile d'une case posée hors stock (pinceau) : ce n'est pas une faute, c'est du carton à prévoir.
           enPlus.push((0 - s.restant) + ' × ' + m.nom);
           nbEnPlus -= s.restant;
@@ -108,12 +117,15 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         else if (C.estConstruction(m)) { restantes.push(s.restant + ' × ' + m.nom); nbRestantes += s.restant; }
       }
     });
-    if (nbRestantes) {
+    if (ancien) {
+      res.push(constat('inventaire', 'info', 'Plateau de l’ancien catalogue : ' + pluriel(nbAnciennes, 'tuile') + ' d’une case de ce catalogue (' + detailAnciennes.join(', ')
+        + '). Il ne se compare pas à l’inventaire du catalogue 2.', [], { ancien: true, tuilesAnciennes: nbAnciennes }));
+    } else if (nbRestantes) {
       res.push(constat('inventaire', 'alerte', 'Pièces de terrain restantes (' + nbRestantes + ') : ' + restantes.join(', ') + '.', [], { restantes: nbRestantes }));
     } else if (!res.length) {
       res.push(constat('inventaire', 'info', 'Toutes les pièces de terrain du catalogue sont posées (' + C.totaux().construction.pieces + ' pièces).', [], { restantes: 0 }));
     }
-    if (facultatives.length) res.push(constat('inventaire', 'info', 'Tuiles facultatives non posées : ' + facultatives.join(', ') + '.', []));
+    if (facultatives.length && !ancien) res.push(constat('inventaire', 'info', 'Tuiles facultatives non posées : ' + facultatives.join(', ') + '.', []));
     if (nbRestantesPerso) {
       res.push(constat('inventaire', 'alerte', 'Pièces personnelles restantes (' + nbRestantesPerso + ') : ' + restantesPerso.join(', ') + '.', [], { restantesPerso: nbRestantesPerso }));
     }
@@ -255,7 +267,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     var res = [], toutes = P.cases(plateau, BASE), terrain = P.cases(plateau, TERRAIN);
     var ecart = reglage(options, 'ecartVilles'), parCamp = C.REGLAGES.villesParCamp, couts = options && options.couts;
     var regles = { sansEcart: true, couts: couts };
-    ['profondeurExtremite', 'contactVilleNeutre', 'neutresTiersCentral'].forEach(function (nom) { if (options && options[nom] !== undefined) regles[nom] = options[nom]; });
+    ['contactVilleNeutre', 'neutresTiersCentral'].forEach(function (nom) { if (options && options[nom] !== undefined) regles[nom] = options[nom]; });
+    // Profondeur des extrémités : celle que le document a enregistrée, sinon l'option, sinon le réglage par défaut.
+    regles.profondeurExtremite = P.profondeurExtremite(plateau, options);
     var cles = H.trier(Object.keys(toutes).filter(function (k) { return toutes[k].terrain === 'ville'; }));
 
     // Entrée de déploiement visant une case qui n'existe pas : etatVilles() et cases() l'écartent sans rien dire,

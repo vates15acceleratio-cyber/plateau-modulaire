@@ -7,6 +7,7 @@
  *     pieces: [{id, modele, q, r, rotation}],       // ancre (q, r), rotation en sixièmes de tour (0 à 5)
  *     recouvrements: [{evenement, cle}],            // tuiles d'événement posées par-dessus une case
  *     deploiements: [{cle, camp}],                  // FACULTATIF : villes de déploiement posées par-dessus une Plaine (§9)
+ *     profondeurExtremite: 1 | 2 | 3,               // FACULTATIF : rangées des extrémités retenues pour ces villes (absent = réglage par défaut)
  *     camps: {vert: [cle, cle], rouge: [cle, cle]},  // villes de déploiement de chaque joueur, DÉDUITES de `deploiements`
  *     modeles: [{id, nom, cases: [{q, r, terrain}], quantite}] }   // FACULTATIF : pièces personnelles du document (§8.1)
  *
@@ -62,11 +63,59 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       }
     };
     if (listeDeploiements(plateau).length) p.deploiements = listeDeploiements(plateau).map(function (x) { return { cle: x.cle, camp: x.camp }; });
+    if (profondeurValide(plateau.profondeurExtremite)) p.profondeurExtremite = plateau.profondeurExtremite;
     if (listeModeles(plateau).length) p.modeles = listeModeles(plateau).map(copieModele);
     if (remplacements) Object.keys(remplacements).forEach(function (k) { p[k] = remplacements[k]; });
     if (possede.call(p, 'modeles') && !(Array.isArray(p.modeles) && p.modeles.length)) delete p.modeles;   // forme canonique : champ absent
     if (possede.call(p, 'deploiements') && !(Array.isArray(p.deploiements) && p.deploiements.length)) delete p.deploiements;
-    return p;
+    // Forme canonique : la profondeur des extrémités n'est écrite que si elle diffère du réglage par défaut.
+    if (possede.call(p, 'profondeurExtremite') && (!profondeurValide(p.profondeurExtremite) || p.profondeurExtremite === profondeurParDefaut())) delete p.profondeurExtremite;
+    // Champs toujours dans le même ordre, quel que soit celui des remplacements (comparaisons de textes, fichiers).
+    var range = {};
+    ORDRE_CHAMPS.forEach(function (k) { if (possede.call(p, k)) range[k] = p[k]; });
+    Object.keys(p).forEach(function (k) { if (!possede.call(range, k)) range[k] = p[k]; });
+    return range;
+  }
+
+  // ------------------------------------------------------------------ profondeur des extrémités (§9.1, B4)
+
+  var ORDRE_CHAMPS = ['version', 'graine', 'pieces', 'recouvrements', 'camps', 'deploiements', 'profondeurExtremite', 'modeles'];
+
+  /** Profondeurs permises pour les extrémités (rangées du haut et du bas où se pose une ville de déploiement). */
+  function profondeursPermises() {
+    var liste = C.REGLAGES.villes && C.REGLAGES.villes.profondeursExtremite;
+    return Array.isArray(liste) && liste.length ? liste.slice() : [1, 2, 3];
+  }
+
+  function profondeurParDefaut() { return (C.REGLAGES.villes && C.REGLAGES.villes.profondeurExtremite) || 2; }
+
+  function profondeurValide(v) { return Number.isInteger(v) && profondeursPermises().indexOf(v) !== -1; }
+
+  /**
+   * Profondeur des extrémités en vigueur pour ce plateau : celle que le DOCUMENT a enregistrée (champ facultatif
+   * `profondeurExtremite`, écrit quand les villes ont été posées avec un autre réglage que celui par défaut), sinon
+   * options.profondeurExtremite, sinon le réglage du catalogue. Un fichier sans ce champ prend donc le réglage par défaut.
+   */
+  function profondeurExtremite(plateau, options) {
+    if (plateau && typeof plateau === 'object' && profondeurValide(plateau.profondeurExtremite)) return plateau.profondeurExtremite;
+    return reglageVilles(options, 'profondeurExtremite', 2);
+  }
+
+  /**
+   * Nouveau plateau qui enregistre la profondeur des extrémités `valeur` (1 à 3). La valeur par défaut du catalogue
+   * s'écrit par l'absence du champ. Renvoie {ok, plateau} ou {ok: false, plateau (inchangé), raison}.
+   */
+  function avecProfondeurExtremite(plateau, valeur) {
+    if (!profondeurValide(valeur)) return refus(plateau, 'Profondeur des extrémités invalide (' + profondeursPermises().join(', ') + ' rangées).');
+    return { ok: true, plateau: copier(plateau, { profondeurExtremite: valeur }) };
+  }
+
+  /** Options des règles de pose d'une ville de déploiement, avec la profondeur des extrémités en vigueur pour ce plateau. */
+  function optionsVilles(plateau, options) {
+    var o = {};
+    Object.keys(options || {}).forEach(function (k) { o[k] = options[k]; });
+    o.profondeurExtremite = profondeurExtremite(plateau, options);
+    return o;
   }
 
   /** Liste interne (non copiée) des villes de déploiement du document ; [] si le champ est absent ou mal formé. */
@@ -349,7 +398,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * Pinceau : met une tuile d'UNE case du terrain voulu ('plaine', 'foret', 'marais', 'montagne' : modèles de
    * REGLAGES.pinceau) sur la case `cle`. Ces tuiles sont hors catalogue : elles sont posées hors stock (résultat :
    * horsStock = true et `note` le dit), sauf une Plaine tant qu'il reste une tuile de remplissage en stock.
-   * Les villes ne se peignent pas : voir poserVilleDeploiement et poserVilleNeutre.
+   * Les villes ne se peignent pas : voir poserVilleDeploiement et poserVilleNeutre. Une case qui porte une ville
+   * neutre n'est ni repeinte ni gommée (refus, villeNeutre = true) : elle se retouche à l'étape « Villes ».
    * Une tuile d'une case déjà là est remplacée (ses tuiles d'événement et sa ville de déploiement repartent en
    * réserve) ; si elle a déjà ce terrain, rien ne change (inchange = true).
    * Refus avec raison sur une case de monobloc (monobloc = true) ou du noyau (noyau = true) : `piece` la désigne.
@@ -369,6 +419,11 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     var occupees = cases(plateau, { sansRecouvrements: true });
     if (possede.call(occupees, cle)) {
       var ici = occupees[cle], modeleIci = modele(plateau, ici.modele);
+      if (ici.modele === VILLE_NEUTRE) {
+        var rv = refus(plateau, RAISON_VILLE_NEUTRE);
+        rv.villeNeutre = true; rv.piece = ici.piece;
+        return rv;
+      }
       if (modeleIci && (modeleIci.noyau || modeleIci.cases.length > 1)) {
         var r = refus(plateau, modeleIci.noyau
           ? 'Le pinceau ne modifie pas le noyau.'
@@ -414,6 +469,11 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       return r;
     }
     var ici = occupees[cle], m = modele(plateau, ici.modele);
+    if (ici.modele === VILLE_NEUTRE) {
+      r = refus(plateau, RAISON_VILLE_NEUTRE);
+      r.villeNeutre = true; r.piece = ici.piece;
+      return r;
+    }
     if (m && (m.noyau || m.cases.length > 1)) {
       var piece = (plateau.pieces || []).filter(function (x) { return x.id === ici.piece; })[0];
       r = refus(plateau, m.noyau
@@ -637,6 +697,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   // ------------------------------------------------------------------ places des villes (§9, phase « villes »)
 
   var VILLE_NEUTRE = 'VN', VILLE_ANCIENNE = 'V';
+  // Une ville neutre posée ne se retouche que par l'étape « Villes » (ni pinceau, ni gomme, ni retouche de pièce).
+  var RAISON_VILLE_NEUTRE = 'Une ville neutre ne se déplace, ne se tourne et ne se retire qu’à l’étape « Villes » (mode « Villes » : cliquez la ville pour la retirer, puis reposez-la).';
 
   /** Réglage de la phase « villes » : options[nom], sinon REGLAGES.villes[nom], sinon la valeur de repli. */
   function reglageVilles(options, nom, repli) {
@@ -832,14 +894,14 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       return { ok: false, raison: NOMS_CAMPS[camp] + ' a déjà ses ' + parCamp + ' villes de déploiement : retirez-en une avant d’en poser une autre.' };
     }
     if (listeDeploiements(plateau).length >= C.REGLAGES.bornes.deploiements) return { ok: false, raison: 'Trop de villes de déploiement sur le plateau.' };
-    var raison = refusDeploiementSurCases(cases(plateau), camp, cle, options);
+    var raison = refusDeploiementSurCases(cases(plateau), camp, cle, optionsVilles(plateau, options));
     return raison ? { ok: false, raison: raison } : { ok: true };
   }
 
   /** Cases où le camp peut poser une ville de déploiement : clés triées ([] s'il a déjà toutes les siennes). */
   function placesDeploiement(plateau, camp, options) {
     if (CAMPS.indexOf(camp) === -1 || etatVilles(plateau)[camp].length >= C.REGLAGES.villesParCamp) return [];
-    return placesDeploiementSurCases(cases(plateau), camp, options);
+    return placesDeploiementSurCases(cases(plateau), camp, optionsVilles(plateau, options));
   }
 
   /**
@@ -1256,7 +1318,11 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     var attendus = ['version', 'graine', 'pieces', 'recouvrements', 'camps'];
     if (possede.call(objet, 'modeles')) attendus.push('modeles');          // champ facultatif (pièces personnelles)
     if (possede.call(objet, 'deploiements')) attendus.push('deploiements'); // champ facultatif (villes de déploiement)
+    if (possede.call(objet, 'profondeurExtremite')) attendus.push('profondeurExtremite'); // champ facultatif (rangées des extrémités)
     if (!champsExacts(objet, attendus, 'Plateau', erreurs)) return echec();
+    if (possede.call(objet, 'profondeurExtremite') && !profondeurValide(objet.profondeurExtremite)) {
+      erreurs.push('Profondeur des extrémités invalide (un entier parmi ' + profondeursPermises().join(', ') + ').');
+    }
     if (VERSIONS_LUES.indexOf(objet.version) === -1) erreurs.push('Version de plateau non reconnue.');
     var graineOk = (typeof objet.graine === 'number' && Number.isSafeInteger(objet.graine))
       || (typeof objet.graine === 'string' && objet.graine.length <= B.longueurGraine);
@@ -1367,7 +1433,23 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     if (erreurs.length) return echec();
     var propre = { version: VERSION, graine: objet.graine, pieces: pieces, recouvrements: recouvrements, camps: camps };
     if (poseesLa.length) propre.deploiements = poseesLa;
+    // Forme canonique : le réglage par défaut s'écrit par l'absence du champ.
+    if (possede.call(objet, 'profondeurExtremite') && objet.profondeurExtremite !== profondeurParDefaut()) propre.profondeurExtremite = objet.profondeurExtremite;
     if (persos.length) propre.modeles = persos;
+    // Une ville de déploiement est une tuile posée PAR-DESSUS une Plaine du plateau (B4) : une entrée qui vise une
+    // case absente, ou une case dont la tuile du dessous n'est pas une Plaine, est refusée. L'outil n'en produit
+    // jamais (même en pose libre, la pose exige une Plaine du plateau ; toute retouche du terrain retire la ville
+    // avec sa Plaine) : un plateau enregistré par l'outil se relit donc toujours. En cas de chevauchement, la case
+    // est celle de la première pièce de la liste, comme dans cases().
+    if (poseesLa.length) {
+      var dessous = cases(propre, { sansRecouvrements: true, sansVilles: true });
+      poseesLa.forEach(function (x, i) {
+        var ou = 'Ville de déploiement n° ' + (i + 1);
+        if (!possede.call(dessous, x.cle)) erreurs.push(ou + ' : aucune case du plateau en (' + x.cle + ').');
+        else if (dessous[x.cle].origine !== 'plaine') erreurs.push(ou + ' : la case (' + x.cle + ') n’est pas une Plaine (' + dessous[x.cle].origine + ').');
+      });
+      if (erreurs.length) return echec();
+    }
     return { ok: true, plateau: propre, erreurs: [] };
   }
 
@@ -1386,6 +1468,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   AT.plateau = {
     VERSION: VERSION, VERSIONS_LUES: VERSIONS_LUES.slice(),
     deploiements: deploiements, etatVilles: etatVilles,
+    profondeurExtremite: profondeurExtremite, avecProfondeurExtremite: avecProfondeurExtremite, profondeursPermises: profondeursPermises,
     placesDeploiement: placesDeploiement, placesNeutres: placesNeutres,
     peutPoserVilleDeploiement: peutPoserVilleDeploiement, poserVilleDeploiement: poserVilleDeploiement, retirerVilleDeploiement: retirerVilleDeploiement,
     peutPoserVilleNeutre: peutPoserVilleNeutre, poserVilleNeutre: poserVilleNeutre, retirerVilleNeutre: retirerVilleNeutre,
@@ -1394,7 +1477,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     modele: modele, modeles: modeles, idsModeles: idsModeles,
     validerModele: validerModele, validerModeles: validerModeles, prochainIdModele: prochainIdModele,
     ajouterModele: ajouterModele, modifierModele: modifierModele, supprimerModele: supprimerModele, copierModeles: copierModeles,
-    poser: poser, retirer: retirer, tourner: tourner, peindre: peindre, gommer: gommer,
+    poser: poser, retirer: retirer, tourner: tourner, peindre: peindre, gommer: gommer, RAISON_VILLE_NEUTRE: RAISON_VILLE_NEUTRE,
     villesRangeesExtremes: villesRangeesExtremes, campsAuto: campsAuto, avecCamps: avecCamps,
     pasSurCases: pasSurCases, rationsSurCases: rationsSurCases, distancesPas: distancesPas, distancesRations: distancesRations,
     chemin: chemin, composantes: composantes, coupures: coupures, trous: trous,

@@ -147,7 +147,11 @@ test('pièce personnelle : enregistrer, rouvrir, créer une partie, enregistrer 
   assert.deepStrictEqual(recharge.etat.plateau.camps, p.camps);
   // Les contrôles du plateau rechargé répondent (alertes de la création à la main comprises).
   const bilan = K.tout(recharge.etat.plateau);
-  assert.ok(bilan.resultats.some((x) => /Tuiles à prévoir en plus du catalogue \(5\) : 1 × Montagne d’une case, 2 × Plaine, 2 × Ville \(ancien catalogue\)/.test(x.message)));
+  // Ce plateau porte des tuiles de ville d'une case : c'est un plateau de l'ancien catalogue. Ses tuiles P et V sont
+  // comptées à part ; seule la montagne d'une case (pinceau) reste « à prévoir en plus ».
+  assert.ok(bilan.resultats.some((x) => /^Plateau de l’ancien catalogue : 4 tuiles d’une case de ce catalogue \(2 × Plaine, 2 × Ville \(ancien catalogue\)\)/.test(x.message)),
+    bilan.resultats.map((x) => x.message).join(' | '));
+  assert.ok(bilan.resultats.some((x) => /Tuiles à prévoir en plus du catalogue \(1\) : 1 × Montagne d’une case\./.test(x.message)));
   assert.ok(bilan.resultats.some((x) => /Pièces personnelles restantes \(1\) : 1 × Crête/.test(x.message)));
   assert.strictEqual(bilan.equilibre.calculable, true);
 });
