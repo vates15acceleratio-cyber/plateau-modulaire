@@ -1,0 +1,112 @@
+/* base.css : coquille de l'atelier (barre, onglets, colonnes, boutons, tableaux, barre d'état, impression). */
+
+:root {
+  --fond: #f3f1ec;
+  --papier: #ffffff;
+  --encre: #1c1c1c;
+  --discret: #5a5a55;
+  --trait: #c9c5ba;
+  --accent: #1e64dc;
+  --vert: #007a4d;
+  --rouge: #d8321c;
+  --erreur: #b3200e;
+  --alerte: #8a5a00;
+  --conforme: #1d6b3a;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html, body { height: 100%; margin: 0; }
+body { font: 13px/1.35 "Segoe UI", Arial, Helvetica, sans-serif; color: var(--encre); background: var(--fond); }
+
+.at-atelier { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; height: 100vh; }
+
+/* Barre du haut et onglets */
+.at-barre { display: flex; align-items: center; gap: 16px; padding: 4px 10px; background: #2b2a33; color: #fff; flex-wrap: wrap; }
+.at-titre { font-size: 15px; }
+.at-onglets { display: flex; gap: 4px; }
+.at-onglets button { border: 1px solid #77758a; background: #3d3c49; color: #fff; padding: 5px 14px; border-radius: 4px 4px 0 0; font-size: 14px; }
+.at-onglets button[aria-selected="true"] { background: var(--fond); color: var(--encre); border-color: var(--fond); font-weight: 600; }
+.at-provisoire { margin-left: auto; font-size: 12px; color: #ffe08a; }
+
+.at-principal { min-height: 0; overflow: hidden; }
+.at-panneau { height: 100%; }
+
+/* Écran à trois colonnes (Plateau et Partie) */
+.at-ecran { height: 100%; min-height: 0; }
+.at-ecran-plateau, .at-ecran-partie { display: grid; grid-template-columns: 290px minmax(0, 1fr) 350px; }
+.at-colonne { overflow: auto; padding: 6px 8px; min-height: 0; }
+.at-colonne-gauche { border-right: 1px solid var(--trait); }
+.at-colonne-droite { border-left: 1px solid var(--trait); }
+.at-centre { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+/* Éléments communs */
+h2 { font-size: 14px; margin: 8px 0 4px; }
+h3 { font-size: 13px; margin: 8px 0 3px; }
+p { margin: 4px 0; }
+fieldset { border: 1px solid var(--trait); border-radius: 4px; margin: 0 0 8px; padding: 4px 8px 8px; background: var(--papier); min-width: 0; }
+legend { font-weight: 600; padding: 0 4px; }
+button, input, select { font: inherit; }
+button { border: 1px solid #8b887c; background: #fbfaf7; border-radius: 4px; padding: 3px 8px; cursor: pointer; color: var(--encre); }
+button:hover:not(:disabled) { background: #e9e6dc; }
+button:disabled { opacity: .5; cursor: default; }
+button[aria-pressed="true"] { background: #dbe7fb; border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, tr:focus-visible, svg:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+.at-principal-bouton { background: #2b2a33; color: #fff; border-color: #2b2a33; }
+.at-principal-bouton:hover:not(:disabled) { background: #46455a; }
+.at-petit { padding: 1px 7px; min-width: 24px; }
+input[type="text"], input[type="number"], select { border: 1px solid #8b887c; border-radius: 3px; padding: 2px 4px; background: #fff; min-width: 0; }
+.at-champ-graine { width: 110px; }
+.at-champ-nombre { width: 56px; }
+.at-ligne { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 4px 0; }
+.at-aide { color: var(--discret); }
+.at-identifiant { color: var(--discret); font-weight: normal; font-size: 12px; }
+
+.at-avis { background: #fdeceb; border-left: 4px solid var(--erreur); padding: 4px 6px; margin: 6px 0 0; }
+.at-bandeau-provisoire { background: #fff4cf; border: 1px solid #d8b740; border-radius: 4px; padding: 5px 8px; font-weight: 600; }
+.at-etiquette-provisoire { display: inline-block; background: #fff4cf; border: 1px solid #d8b740; border-radius: 3px; padding: 0 4px; font-size: 11px; color: #5c4600; }
+
+.at-niveau-erreur { color: var(--erreur); }
+.at-niveau-alerte { color: var(--alerte); }
+.at-niveau-info { color: var(--conforme); }
+.at-badge { display: inline-block; border: 1px solid currentColor; border-radius: 3px; padding: 0 4px; font-size: 11px; font-weight: 600; background: #fff; }
+
+.at-table { border-collapse: collapse; width: 100%; background: var(--papier); }
+.at-table th, .at-table td { border: 1px solid var(--trait); padding: 2px 5px; text-align: left; vertical-align: middle; }
+.at-table thead th { background: #e9e6dc; font-size: 12px; }
+.at-table tbody tr:hover { background: #f4f1e6; }
+.at-table .at-nombre { text-align: right; width: 80px; }
+
+/* Barre d'état */
+.at-etat { min-height: 24px; padding: 3px 10px; border-top: 1px solid var(--trait); background: #e9e6dc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.at-etat-erreur { background: #fdeceb; color: var(--erreur); font-weight: 600; }
+.at-etat-alerte { background: #fff4cf; color: #5c4600; font-weight: 600; }
+
+/* Fenêtre des Troupes */
+.at-dialogue { border: 1px solid #555; border-radius: 6px; padding: 10px 14px; max-width: min(760px, 96vw); max-height: 90vh; overflow: auto; }
+.at-dialogue::backdrop { background: rgba(0, 0, 0, .4); }
+.at-dialogue-entete { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+
+/* Écran étroit : les colonnes s'empilent et la page défile */
+@media (max-width: 1000px) {
+  .at-atelier { height: auto; min-height: 100vh; }
+  .at-principal { overflow: visible; }
+  .at-ecran-plateau, .at-ecran-partie { display: flex; flex-direction: column; height: auto; }
+  .at-centre { order: -1; }          /* le plateau d'abord, les panneaux dessous */
+  .at-colonne { overflow: visible; border: 0; }
+  .at-plateau-svg { height: 70vh; flex: none; }
+  .at-provisoire { margin-left: 0; }
+  .at-table .at-nombre { width: auto; }     /* tableaux : pas de largeur imposée sur un écran étroit */
+  .at-etat { white-space: normal; position: sticky; bottom: 0; }
+}
+
+/* Impression : le plateau de l'onglet affiché, sa légende, rien d'autre */
+@media print {
+  .at-atelier { display: block; height: auto; }
+  .at-barre, .at-etat, .at-colonne, .at-vue-barre, .at-barre-partie, .at-tour, .at-avis-partie, .at-contexte, .at-interface { display: none !important; }
+  .at-principal { overflow: visible; }
+  .at-ecran-plateau, .at-ecran-partie { display: block; height: auto; }
+  .at-plateau-svg { height: 82vh; flex: none; border: 0; }
+  body { background: #fff; }
+}

@@ -30,6 +30,10 @@ def dessiner(page, ops):
             p = [(cx, cy - r), (cx + r * math.sqrt(3) / 2, cy + r / 2), (cx - r * math.sqrt(3) / 2, cy + r / 2)]
             sh.draw_polyline([pt(*q) for q in p] + [pt(*p[0])])
             sh.finish(fill=rgb(fond), color=rgb(trait), width=ep * K, closePath=True)
+        elif t == 'poly':
+            _, pts, fond, trait, ep = op
+            sh.draw_polyline([pt(*q) for q in pts] + [pt(*pts[0])])
+            sh.finish(fill=rgb(fond), color=rgb(trait), width=ep * K, closePath=True)
         elif t == 'cercle':
             _, cx, cy, r, fond, trait, ep = op
             sh.draw_circle(pt(cx, cy), r * K)
@@ -42,6 +46,10 @@ def dessiner(page, ops):
             _, x, y, s, taille, couleur = op
             larg = pymupdf.get_text_length(s, fontname='helv', fontsize=taille)
             page.insert_text(pymupdf.Point(x * K - larg / 2, y * K), s, fontname='helv', fontsize=taille, color=rgb(couleur))
+            continue
+        elif t == 'textg':
+            _, x, y, s, taille, couleur = op
+            page.insert_text(pymupdf.Point(x * K, y * K), s, fontname='helv', fontsize=taille, color=rgb(couleur))
             continue
         sh.commit()
 

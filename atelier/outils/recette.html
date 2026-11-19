@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <!-- Même politique de sécurité que index.html : la recette tourne dans les conditions réelles. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; child-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recette de l'atelier (parcours automatiques dans le navigateur)</title>
+  <link rel="stylesheet" href="../styles/base.css">
+  <link rel="stylesheet" href="../styles/plateau.css">
+  <link rel="stylesheet" href="../styles/partie.css">
+  <link rel="stylesheet" href="recette.css">
+</head>
+<body>
+  <!-- Même conteneur que index.html : la page est construite par src/app.js. -->
+  <div id="atelier" class="at-atelier"></div>
+  <div id="recette"><pre id="rapport">Recette en cours…</pre></div>
+
+  <!-- Chargé en premier pour capter les erreurs de tous les autres scripts. -->
+  <script src="recette.js"></script>
+  <script src="../src/alea.js"></script>
+  <script src="../src/hex.js"></script>
+  <script src="../src/catalogue.js"></script>
+  <script src="../src/plateau.js"></script>
+  <script src="../src/controles.js"></script>
+  <script src="../src/generateur.js"></script>
+  <script src="../src/cartes.js"></script>
+  <script src="../src/paquets.js"></script>
+  <script src="../src/partie.js"></script>
+  <script src="../src/rendu.js"></script>
+  <script src="../src/vue-plateau.js"></script>
+  <script src="../src/vue-inventaire.js"></script>
+  <script src="../src/vue-partie.js"></script>
+  <script src="../src/app.js"></script>
+</body>
+</html>

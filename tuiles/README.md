@@ -14,6 +14,9 @@ Chaque terrain se reconnaît à son motif, pas seulement à sa couleur (à véri
 ## Contenu
 - `essais/geometrie.py` : géométrie commune (hexagones, motifs, repères de coupe, mise en page, contrôles).
 - `essais/echantillon_pymupdf.py` et `essais/echantillon_protograf.py` : la même feuille d'échantillon, dessinée par deux outils.
+- `essais/jeu_tuiles.py` : feuille A3 des types de tuiles (plaine, forêt, marais, ville, deux montagnes en blocs de 5 et 4 cases), proposition à valider.
+- `essais/schema_deploiement.py` : schéma comparant trois façons de matérialiser les cases de déploiement (réflexion).
+- `essais/plateau_exemple.py [graine]` : plateau d'exemple complet de 91 cases (illustration seulement).
 - `essais/apercu.py` : rend les PDF en PNG (couleur et gris) et mesure les hexagones.
 - `sortie/` : PDF et PNG produits (jetables, régénérables).
 
@@ -25,6 +28,7 @@ Depuis la racine du dépôt :
 .venv/Scripts/python.exe -I tuiles/essais/echantillon_pymupdf.py            # feuille d'impression
 .venv/Scripts/python.exe -I tuiles/essais/echantillon_pymupdf.py controle   # + coupe (rouge) et sécurité (bleu)
 .venv/Scripts/python.exe -I tuiles/essais/echantillon_protograf.py [controle]
+.venv/Scripts/python.exe -I tuiles/essais/jeu_tuiles.py [controle]          # types de tuiles, A3
 .venv/Scripts/python.exe -I tuiles/essais/apercu.py tuiles/sortie/echantillon_pymupdf.pdf
 ```
 
@@ -35,4 +39,5 @@ Depuis la racine du dépôt :
 - protograf lit les **épaisseurs de trait en points**, pas dans l'unité de la page (conversion `ep × 72 / 25,4`).
 - protograf ne remplit que des hexagones, des triangles réguliers, des cercles et des rectangles : pas de polygone quelconque rempli.
 - protograf lit lui-même `sys.argv` : vider les arguments avant de l'appeler.
+- Un bloc de montagne a des repères radiaux aux seuls sommets saillants du contour ; les angles rentrants n'en ont pas (à faire valider par le prépresse).
 - Les repères de coupe d'un hexagone sont six traits radiaux face aux sommets ; la gouttière de 16 mm évite que ceux de deux tuiles voisines se croisent. À faire valider par l'advisor prépresse.

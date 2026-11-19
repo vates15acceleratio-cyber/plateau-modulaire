@@ -26,7 +26,14 @@ Toujours répondre à l'utilisateur **en français**. Code, identifiants et comm
 - Dans un script Python qui écrit du texte français, utiliser `’` plutôt que l'apostrophe droite dans les chaînes entre apostrophes.
 - Rendu d'un PDF : pymupdf (`import pymupdf`). PDF d'une page HTML : Edge sans fenêtre via PowerShell `Start-Process` (voir comment les règles ont été exportées : `--headless=new --no-pdf-header-footer --print-to-pdf=...`).
 
-## État (2026-11-18)
-- Branche `hexagonal-tuiles` (non poussée, non fusionnée) : archivage de l'outil carré, dossier `tuiles/` avec l'échantillon de 8 tuiles, nouveau `docs/`. **Commencer par `git fetch` puis `git pull`** : le travail se fait aussi sur un autre poste.
-- Prochaine étape : concevoir les vraies tuiles (répartition par terrain, coût en rations, noyau), puis les autres mécaniques (or, rations, marché, phases), puis les cartes et jetons.
-- À confirmer avec l'utilisateur : méthode de travail (équipe d'agents et versionneur) et numérotation des versions du nouveau projet ; avec l'archivage, le `CHANGELOG.md` est dans `archives/plateau-carre/`.
+## Atelier du plateau (`atelier/`)
+- Page unique hors ligne, sans dépendance ni modules ES (`atelier/index.html`, ouverte en `file://`) : onglets Plateau (générateur à graine, retouche à la main, 7 contrôles), Inventaire (catalogue de 64 pièces / 91 cases, réserve de 8 tuiles d'événement), Partie fictive (table libre : dés, paquets, pions, journal). Contrat : `docs/02-atelier-cahier-des-charges.md` ; mode d'emploi : `atelier/README.md`.
+- Tests : `node --test` lancé **depuis `atelier/`** (0 échec) ; règles sur plateaux générés : `node atelier/outils/verifier-regles.js 50` ; recette navigateur : `atelier/outils/recette.html` dans Edge sans fenêtre via PowerShell `Start-Process` (`--headless=new --disable-gpu --user-data-dir=<temp> --virtual-time-budget=20000 --dump-dom`), chercher `TOTAL : N OK, 0 ÉCHEC`. Serveur local : `node atelier/outils/serveur.js 8770`.
+- Ne pas affaiblir la CSP de `atelier/index.html` (aucun script, style ni attribut `style=` en ligne ; pas d'`innerHTML` avec des données).
+- Catalogue, effets des événements et Troupes sont **provisoires** (étiquetés tels quels) : ne rien présenter comme décidé.
+
+## État (2026-11-19)
+- Branche `atelier-plateau` (non poussée, non fusionnée), partie de `hexagonal-tuiles` plus les fichiers en cours de l'autre arbre de travail (inventaire, plateau d'exemple) : atelier du plateau livré, `node --test` 189 OK, recette 250 OK, 200 plateaux générés conformes. Rapports `docs/02` à `docs/05`. **Commencer par `git fetch` puis `git pull`.**
+- Méthode confirmée par l'utilisateur : équipe d'agents (advisor, développeurs par lot, testeur, relecteur, versionneur).
+- En attente de l'utilisateur : validation du catalogue et des 8 événements ; seuil de contact 3 ou 2 ; trous permis ou non ; former sur une ville (contredit V2.3 §6) ; numérotation des versions du nouveau projet ; questions de `docs/05-revue-atelier.md`.
+- Ensuite : feuilles d'impression des monoblocs et des tuiles d'événement (`tuiles/`), puis or, rations, marché, cartes et jetons.

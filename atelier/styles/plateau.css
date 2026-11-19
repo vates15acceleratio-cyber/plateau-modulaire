@@ -1,0 +1,46 @@
+/* plateau.css : vue SVG du plateau (états d'interface), onglet Plateau, onglet Inventaire. */
+
+/* Vue du plateau */
+.at-vue { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.at-vue-barre { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 4px 8px; border-bottom: 1px solid var(--trait); }
+.at-info-plateau { margin-left: auto; color: var(--discret); font-size: 12px; }
+.at-plateau-svg { flex: 1 1 auto; min-height: 0; width: 100%; background: var(--papier); touch-action: none; user-select: none; }
+
+/* États d'interface dessinés par-dessus les cases (jamais exportés) */
+.at-interface polygon { pointer-events: none; }
+.at-surbrillance { fill: rgba(255, 200, 0, .5); stroke: #a35f00; stroke-width: 4; }
+.at-selection { fill: rgba(30, 100, 220, .16); stroke: #1e64dc; stroke-width: 4; }
+.at-admissible { fill: rgba(0, 150, 90, .26); stroke: #00703f; stroke-width: 3; stroke-dasharray: 2 4; stroke-linecap: round; }
+.at-fantome { fill: rgba(30, 100, 220, .38); stroke: #1e64dc; stroke-width: 3; stroke-dasharray: 6 4; }
+.at-fantome-refus { fill: rgba(216, 50, 28, .42); stroke: #b3200e; }
+.at-curseur { fill: none; stroke: #000; stroke-width: 3.5; stroke-dasharray: 4 3; }
+
+/* Légende */
+.at-legende { display: flex; flex-wrap: wrap; gap: 2px 12px; padding: 4px 8px; border-top: 1px solid var(--trait); font-size: 12px; background: var(--papier); }
+.at-legende-item { display: inline-flex; align-items: center; gap: 4px; }
+.at-pastille { vertical-align: middle; flex: none; }
+.at-puce { display: inline-block; width: 18px; height: 18px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 11px; text-align: center; line-height: 18px; }
+.at-puce-vert { background: var(--vert); }
+.at-puce-rouge { background: var(--rouge); }
+.at-trait-epais { display: inline-block; width: 22px; border-top: 4px solid #1f1f1f; }
+.at-trait-noyau { border-top-color: #5b2a86; border-top-width: 5px; }
+
+/* Outils de retouche et stock */
+.at-outil { margin: 6px 0; padding: 4px 6px; background: #f4f1e6; border-radius: 4px; min-height: 44px; }
+.at-grille-stock { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.at-piece-stock { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; padding: 3px 2px; font-size: 12px; min-height: 46px; }
+.at-dessin-piece { flex: none; }
+
+/* Contrôles */
+.at-bilan { font-weight: 700; font-size: 14px; padding: 4px 6px; background: var(--papier); border: 1px solid currentColor; border-radius: 4px; }
+.at-constats { list-style: none; margin: 4px 0; padding: 0; }
+.at-regle { font-weight: 600; margin-top: 6px; }
+.at-constat { display: block; width: 100%; text-align: left; border: 1px solid var(--trait); border-radius: 4px; background: var(--papier); padding: 3px 5px; margin: 2px 0; }
+div.at-constat { cursor: default; }
+.at-voir { color: var(--discret); font-size: 12px; }
+
+/* Inventaire */
+.at-ecran-inventaire { overflow: auto; padding: 8px 16px 16px; }
+.at-inventaire-contenu { max-width: 1100px; margin: 0 auto; }
+.at-table-large { margin: 6px 0 14px; }
+.at-cellule-dessin { text-align: center; width: 90px; }

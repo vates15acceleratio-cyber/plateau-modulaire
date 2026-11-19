@@ -9,6 +9,15 @@
         "8765"
       ],
       "port": 8765
+    },
+    {
+      "name": "atelier",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "atelier/outils/serveur.js",
+        "8770"
+      ],
+      "port": 8770
     }
   ]
 }

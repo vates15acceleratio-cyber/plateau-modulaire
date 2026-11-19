@@ -1,0 +1,64 @@
+/* partie.css : onglet Partie fictive (barre, tour, joueurs, cartes, dés, journal). */
+
+.at-partie { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.at-barre-partie { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 4px 8px; border-bottom: 1px solid var(--trait); background: var(--papier); }
+.at-rappel { margin-left: auto; color: var(--discret); font-size: 12px; }
+.at-vide { padding: 24px; max-width: 720px; font-size: 14px; }
+.at-ecran-partie { flex: 1 1 auto; grid-template-columns: 330px minmax(0, 1fr) 350px; }
+
+/* Tour, avertissements, contexte */
+.at-tour { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 4px 8px; border-bottom: 1px solid var(--trait); }
+.at-tour-texte { font-weight: 700; font-size: 14px; padding: 1px 8px; border-radius: 4px; color: #fff; }
+.at-camp-vert { background: var(--vert); }
+.at-camp-rouge { background: var(--rouge); }
+.at-victoire { color: #5c4600; background: #ffe08a; border: 1px solid #b38f00; border-radius: 4px; padding: 0 6px; }
+.at-avis-partie { padding: 4px 8px; background: #fff4cf; border-bottom: 2px solid #d8b740; }
+.at-avertissement { margin: 0; }
+.at-contexte { padding: 3px 8px; border-top: 1px solid var(--trait); background: var(--papier); min-height: 34px; }
+
+/* Joueurs */
+.at-joueur { background: var(--papier); border: 1px solid var(--trait); border-top-width: 5px; border-radius: 4px; padding: 4px 8px 8px; margin-bottom: 8px; }
+.at-joueur-vert { border-top-color: var(--vert); }
+.at-joueur-rouge { border-top-color: var(--rouge); }
+.at-joueur-titre { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.at-badge-actif { background: #2b2a33; color: #fff; border-radius: 3px; padding: 0 6px; font-size: 11px; }
+.at-gloire-valeur { font-size: 15px; min-width: 52px; text-align: center; }
+.at-compteurs { color: var(--discret); }
+
+/* Cartes */
+.at-main { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.at-carte { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; padding: 3px 6px; border-radius: 5px; background: #fffdf6; }
+.at-carte-nom { font-weight: 700; }
+.at-carte-chiffres { font-size: 11px; color: var(--discret); }
+.at-carte-evenement { width: 100%; margin: 4px 0; }
+.at-texte-carte { font-size: 12px; }
+.at-carte-actions { margin: 4px 0; padding: 4px 6px; background: #dbe7fb; border-radius: 4px; }
+.at-carte-campement { margin: 6px 0; padding: 5px 8px; background: #fffdf6; border: 1px solid #8b887c; border-left: 5px solid #6e421a; border-radius: 4px; }
+
+/* Bataillons */
+.at-bataillon { border: 1px solid var(--trait); border-radius: 4px; padding: 3px 5px; margin: 3px 0; }
+.at-bataillon-reserve { color: var(--discret); background: #f4f1e6; }
+.at-bataillon-choisi { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.at-bataillon-titre { width: 100%; text-align: left; font-weight: 600; }
+.at-troupes { margin: 3px 0; padding-left: 16px; }
+.at-troupes li { margin: 2px 0; }
+.at-troupe-nom { font-weight: 600; }
+
+/* Dés, opérations, journal */
+.at-de { display: inline-block; min-width: 24px; height: 24px; line-height: 22px; margin: 0 2px; text-align: center; font-weight: 700; font-size: 14px; border: 1px solid #1c1c1c; border-radius: 5px; background: #fff; }
+.at-operations { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+.at-operations button { text-align: left; font-size: 12px; }
+.at-regard { margin: 6px 0; padding: 4px 6px; background: #f4f1e6; border-radius: 4px; }
+.at-regard ol { margin: 4px 0; padding-left: 20px; }
+.at-regard li { margin: 2px 0; }
+.at-journal { margin: 4px 0; padding-left: 34px; font-size: 12px; }
+.at-journal li { margin: 1px 0; }
+.at-journal-tour { color: var(--discret); }
+.at-journal-vert .at-journal-tour { color: var(--vert); font-weight: 600; }
+.at-journal-rouge .at-journal-tour { color: var(--rouge); font-weight: 600; }
+#pa-note { flex: 1 1 120px; }
+
+@media (max-width: 1000px) {
+  .at-partie { height: auto; }
+  .at-rappel { margin-left: 0; }
+}

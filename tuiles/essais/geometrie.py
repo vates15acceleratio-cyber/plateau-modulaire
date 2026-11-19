@@ -46,14 +46,14 @@ def dans_polygone(x, y, pts):
     return dedans
 
 
-def positions(rng, n, ecart, plat_utile=31.0, ymax=7.0):
+def positions(rng, n, ecart, plat_utile=31.0, ymax=7.0, ymin=-15.0):
     """n points à au moins `ecart` les uns des autres, dans un hexagone réduit, au-dessus du libellé."""
     zone = sommets(0, 0, plat_utile)
     pts = []
     essais = 0
     while len(pts) < n and essais < 4000:
         essais += 1
-        x, y = rng.uniform(-14, 14), rng.uniform(-15, ymax)
+        x, y = rng.uniform(-14, 14), rng.uniform(ymin, ymax)
         if not dans_polygone(x, y, zone):
             continue
         if all(math.hypot(x - a, y - b) >= ecart for a, b in pts):
@@ -61,14 +61,14 @@ def positions(rng, n, ecart, plat_utile=31.0, ymax=7.0):
     return pts
 
 
-def motif(terrain, cx, cy, rng):
+def motif(terrain, cx, cy, rng, ymin=-15.0):
     ops = []
     if terrain == 'plaine':
-        for x, y in positions(rng, 9, 6.0):
+        for x, y in positions(rng, 9, 6.0, ymin=ymin):
             for dx in (-1.3, 0.0, 1.3):
                 ops.append(('ligne', [(cx + x, cy + y), (cx + x + dx, cy + y - (3.2 if dx == 0 else 2.6))], '#3a5a2a', 0.35))
     elif terrain == 'foret':
-        for x, y in positions(rng, 6, 7.0, ymax=8.0):
+        for x, y in positions(rng, 6, 7.0, ymax=6.0, ymin=ymin):
             ops.append(('ligne', [(cx + x, cy + y + 2.4), (cx + x, cy + y + 4.0)], '#2b1d10', 0.5))
             ops.append(('tri', cx + x, cy + y, 3.2, '#1f3d24', '#ffffff', 0.3))
     elif terrain == 'marais':
@@ -76,7 +76,7 @@ def motif(terrain, cx, cy, rng):
         for yv in (-9, -3, 3):
             pts = [(cx + x, cy + yv + 0.9 * math.sin((x + dec) * 2 * math.pi / 5)) for x in [i * 0.5 for i in range(-22, 23)]]
             ops.append(('ligne', pts, '#1c4f63', 0.45))
-        for x, y in positions(rng, 4, 8.0, ymax=2.0):
+        for x, y in positions(rng, 4, 8.0, ymax=2.0, ymin=ymin):
             ops.append(('ligne', [(cx + x, cy + y), (cx + x, cy + y - 5.0)], '#4a3b22', 0.4))
             ops.append(('cercle', cx + x, cy + y - 5.4, 0.9, '#4a3b22', None, 0))
     elif terrain == 'montagne':
@@ -152,3 +152,57 @@ def verifier(pos):
                 for j, poly in enumerate(bleus):
                     assert j == i or not dans_polygone(x, y, poly), ('repère dans un autre fond perdu', i, j)
     return True
+
+
+# ---------------------------------------------------------------- blocs de plusieurs hexagones
+def centre_hex(q, r):
+    """Centre (en mm, relatif à l'origine du bloc) de la case axiale (q, r), pointe en haut."""
+    return (PLAT * (q + r / 2), PLAT * SQ3 / 2 * r)
+
+
+def contour(cases):
+    """Contour extérieur d'un bloc de cases (sans trou) : liste de sommets en ordre, relative à l'origine."""
+    aretes = {}
+    for q, r in cases:
+        cx, cy = centre_hex(q, r)
+        s = [(round(x, 4), round(y, 4)) for x, y in sommets(cx, cy, PLAT)]
+        for k in range(6):
+            aretes[(s[k], s[(k + 1) % 6])] = True
+    ext = {a: b for (a, b) in aretes if (b, a) not in aretes}
+    depart = next(iter(ext))
+    pts, cur = [depart], ext[depart]
+    while cur != depart:
+        pts.append(cur)
+        cur = ext[cur]
+    assert len(pts) == len(ext), 'le bloc a un trou ou plusieurs contours'
+    return pts
+
+
+def distance_contour(x, y, pts):
+    d = 1e9
+    for i in range(len(pts)):
+        x1, y1 = pts[i]
+        x2, y2 = pts[(i + 1) % len(pts)]
+        dx, dy = x2 - x1, y2 - y1
+        t = max(0.0, min(1.0, ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy)))
+        d = min(d, math.hypot(x - (x1 + t * dx), y - (y1 + t * dy)))
+    return d
+
+
+def repere_bloc(pts):
+    """Repères radiaux aux sommets convexes du contour (comme pour une tuile seule). Les sommets concaves n'en ont pas."""
+    res = []
+    n = len(pts)
+    for i in range(n):
+        p, v, nx = pts[i - 1], pts[i], pts[(i + 1) % n]
+        cz = (v[0] - p[0]) * (nx[1] - v[1]) - (v[1] - p[1]) * (nx[0] - v[0])
+        if cz <= 0:
+            continue
+        a = (p[0] - v[0], p[1] - v[1]); b = (nx[0] - v[0], nx[1] - v[1])
+        la, lb = math.hypot(*a), math.hypot(*b)
+        ix, iy = a[0] / la + b[0] / lb, a[1] / la + b[1] / lb
+        li = math.hypot(ix, iy)
+        ox, oy = -ix / li, -iy / li
+        r0 = FOND_PERDU / math.sin(math.radians(60)) + 1.5
+        res.append(((v[0] + ox * r0, v[1] + oy * r0), (v[0] + ox * (r0 + 3), v[1] + oy * (r0 + 3))))
+    return res
