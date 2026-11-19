@@ -183,6 +183,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         dernierBrut = r.texte;
         enMemoire = false;
         taire('plein');
+        taire('ailleurs');             // l'avis « modifiée dans une autre fenêtre » a été vu : il s'efface à l'action suivante
         return true;
       }
       if (r.plein || r.absent) {

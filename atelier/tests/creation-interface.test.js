@@ -416,7 +416,7 @@ test('app : paramètre d’adresse « mode » (modes de l’onglet Plateau)', ()
   assert.strictEqual(A.lireParametres('#onglet=plateau&mode=bibliotheque&graine=3').mode, 'bibliotheque');
   assert.strictEqual(A.lireParametres('#mode=pirate').mode, null);
   assert.strictEqual(A.lireParametres('#mode=__proto__').mode, null);
-  assert.deepStrictEqual(VP.MODES.map((m) => m.id), ['generer', 'creer', 'pinceau', 'monoblocs', 'bibliotheque']);
+  assert.deepStrictEqual(VP.MODES.map((m) => m.id), ['generer', 'creer', 'pinceau', 'villes', 'monoblocs', 'bibliotheque']);
   for (const m of VP.MODES) assert.strictEqual(A.lireParametres('#mode=' + m.id).mode, m.id);
 });
 

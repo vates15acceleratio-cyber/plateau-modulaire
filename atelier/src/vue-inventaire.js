@@ -51,6 +51,64 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     return res;
   }
 
+  /** Rôles du catalogue 2, dans l'ordre d'affichage de l'inventaire. */
+  var ROLES = [
+    { id: 'noyau', titre: 'Noyau', note: 'fixe, au centre' },
+    { id: 'montagne', titre: 'Montagnes', note: 'blocs de 4 et 5 cases, infranchissables' },
+    { id: 'quatre', titre: 'Monoblocs de 4 cases', note: 'terrain' },
+    { id: 'trois', titre: 'Monoblocs de 3 cases', note: 'terrain' },
+    { id: 'remplissage', titre: 'Tuiles de remplissage', note: 'facultatives : elles peuvent rester dans la boîte' },
+    { id: 'ville', titre: 'Villes neutres', note: 'tuiles ajoutées contre les flancs, à l’étape « Villes »' }
+  ];
+
+  /**
+   * Inventaire du catalogue 2 PAR RÔLE (fonction pure), à partir de bilan(). Renvoie {
+   *   roles: [{id, titre, note, lignes: [lignes de bilan()], pieces, cases, poses}]   (dans l'ordre de ROLES),
+   *   deploiements: {total, parCamp, poses, restantes, vert, rouge}   (tuiles posées PAR-DESSUS une Plaine),
+   *   terrain: {cases, plaine, foret, marais}   (monoblocs de terrain seuls : la répartition visée 70 / 15 / 15),
+   *   remplissage: {pieces, plaine}, montagne: cases, villes: nombre total de villes d'un plateau complet,
+   *   ancien: {present, lignes: [{id, nom, cases, poses}], pieces}   (tuiles du premier catalogue sur CE plateau ;
+   *            present = le plateau porte une tuile de ville d'une case, marque d'un vrai plateau de l'ancien catalogue) }.
+   */
+  function parRole(plateau) {
+    var C = AT.catalogue, P = AT.plateau, b = bilan(plateau), parId = {};
+    b.lignes.forEach(function (x) { parId[x.id] = x; });
+    var roleDe = function (id) {
+      var m = C.MODELES[id];
+      if (m.role === 'terrain') return m.cases.length === 4 ? 'quatre' : 'trois';
+      return m.role;
+    };
+    var roles = ROLES.map(function (r) {
+      var lignes = C.ORDRE_MODELES.filter(function (id) { return roleDe(id) === r.id; }).map(function (id) { return parId[id]; });
+      var pieces = 0, cases = 0, poses = 0;
+      lignes.forEach(function (x) { pieces += x.total; cases += x.total * x.cases; poses += x.poses; });
+      return { id: r.id, titre: r.titre, note: r.note, lignes: lignes, pieces: pieces, cases: cases, poses: poses };
+    });
+    var terrain = { cases: 0, plaine: 0, foret: 0, marais: 0 }, remplissage = { pieces: 0, plaine: 0 }, montagne = 0;
+    C.ORDRE_MODELES.forEach(function (id) {
+      var m = C.MODELES[id];
+      if (m.role === 'terrain') m.cases.forEach(function (c) { terrain.cases += m.nombre; if (terrain[c.terrain] !== undefined) terrain[c.terrain] += m.nombre; });
+      if (m.role === 'remplissage') { remplissage.pieces += m.nombre; remplissage.plaine += m.nombre * m.cases.length; }
+      if (m.role === 'montagne') montagne += m.nombre * m.cases.length;
+    });
+    var etat = P.etatVilles(plateau), VD = C.VILLE_DEPLOIEMENT, posees = etat.vert.length + etat.rouge.length;
+    var stock = P.stock(plateau), anciennes = [], nbAnciennes = 0, aUneVille = false;
+    C.ORDRE_HORS_CATALOGUE.forEach(function (id) {
+      var m = C.MODELES_HORS_CATALOGUE[id];
+      if (!m.ancien || !stock[id] || !stock[id].poses) return;
+      anciennes.push({ id: id, nom: m.nom, cases: m.cases.length, poses: stock[id].poses });
+      nbAnciennes += stock[id].poses;
+      if (id === 'V') aUneVille = true;
+    });
+    return {
+      roles: roles,
+      deploiements: { total: VD.nombre, parCamp: VD.parCamp, poses: posees, restantes: Math.max(0, VD.nombre - posees), vert: etat.vert.length, rouge: etat.rouge.length },
+      terrain: terrain, remplissage: remplissage, montagne: montagne,
+      villes: 1 + (C.MODELES.VN ? C.MODELES.VN.nombre : 0) + VD.nombre,
+      ancien: { present: aUneVille, lignes: aUneVille ? anciennes : [], pieces: aUneVille ? nbAnciennes : 0 }
+    };
+  }
+
   function creer(ctx) {
     var R = AT.rendu, el = R.el, C = AT.catalogue, P = AT.plateau;
     var zone = el('div', { classe: 'at-inventaire-contenu' });
@@ -81,12 +139,56 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
           el('td', { classe: 'at-nombre', texte: x.restantes })
         ]);
       };
-      var lignes = b.lignes.map(ligneModele);
+      // Catalogue 2 par rôle : un titre par rôle dans le même tableau, puis les villes de déploiement posées par-dessus.
+      var roles = parRole(plateau), lignes = [];
+      var titreRole = function (id, titre, note, compte) {
+        return el('tr', { classe: 'at-role', 'data-role': id }, el('th', { colspan: 6, scope: 'colgroup' }, [titre + ' : ' + compte, el('span', { classe: 'at-role-note', texte: ' — ' + note })]));
+      };
+      roles.roles.forEach(function (r) {
+        if (!r.lignes.length) return;
+        lignes.push(titreRole(r.id, r.titre, r.note, r.pieces + (r.pieces > 1 ? ' pièces' : ' pièce') + ', ' + r.cases + (r.cases > 1 ? ' cases' : ' case')));
+        r.lignes.forEach(function (x) { lignes.push(ligneModele(x)); });
+      });
+      var vd = roles.deploiements, VD = C.VILLE_DEPLOIEMENT;
+      lignes.push(titreRole('deploiement', 'Villes de déploiement', 'tuiles posées PAR-DESSUS une Plaine du bord, ' + vd.parCamp + ' par joueur ; elles n’ajoutent aucune case', vd.total + ' tuiles'));
+      lignes.push(el('tr', { 'data-deploiement': VD.id }, [
+        el('td', { classe: 'at-cellule-dessin' }, [R.pastilleTuile('vd-vert', 0.42), R.pastilleTuile('vd-rouge', 0.42)]),
+        el('th', { scope: 'row' }, [VD.nom, el('span', { classe: 'at-identifiant', texte: ' ' + VD.id })]),
+        el('td', { texte: '1 case : posée sur une plaine (Vert : ' + vd.vert + ' posée' + (vd.vert > 1 ? 's' : '') + ' ; Rouge : ' + vd.rouge + ' posée' + (vd.rouge > 1 ? 's' : '') + ')' }),
+        el('td', { classe: 'at-nombre', texte: vd.total }),
+        el('td', { classe: 'at-nombre', texte: vd.poses }),
+        el('td', { classe: 'at-nombre', texte: vd.restantes })
+      ]));
+      var tr = roles.terrain;
+      var partTerrain = function (n) { return tr.cases ? (100 * n / tr.cases).toFixed(1).replace('.', ',') + ' %' : '–'; };
+      // Ancien catalogue : seulement si le plateau ouvert en porte (tuile de ville d'une case).
+      var blocAncien = roles.ancien.present ? [
+        el('h2', { id: 'inv-titre-ancien', texte: 'Ancien catalogue (sur ce plateau)' }),
+        el('p', { classe: 'at-aide', texte: 'Ce plateau a été fait avec le premier catalogue : ses tuiles d’une case restent lisibles, mais ne font plus partie du catalogue imprimé.' }),
+        el('table', { classe: 'at-table at-table-large', id: 'inv-ancien' }, [
+          entetes(['Dessin', 'Tuile', 'Contenu', 'Posées']),
+          el('tbody', null, roles.ancien.lignes.map(function (x) {
+            return el('tr', { 'data-modele': x.id }, [
+              el('td', { classe: 'at-cellule-dessin' }, R.dessinModele(x.id, { echelle: 0.3, titre: x.nom })),
+              el('th', { scope: 'row' }, [x.nom, el('span', { classe: 'at-identifiant', texte: ' ' + x.id })]),
+              el('td', { texte: '1 case : ' + contenuCases(C.MODELES_HORS_CATALOGUE[x.id]) }),
+              el('td', { classe: 'at-nombre', texte: x.poses })
+            ]);
+          }))
+        ])
+      ] : [];
       var hors = b.horsCatalogue;
+      if (roles.ancien.present) {
+        // Les tuiles de l'ancien catalogue ont leur propre section : elles ne sont pas « à prévoir en plus ».
+        var autres = hors.detail.filter(function (d) { return !roles.ancien.lignes.some(function (x) { return x.id === d.id; }); }), nbAutres = 0;
+        autres.forEach(function (d) { nbAutres += d.nombre; });
+        hors = { pieces: nbAutres, cases: nbAutres, detail: autres, ancien: roles.ancien.pieces };
+      }
       var texteHors = hors.pieces
         ? 'Tuiles hors catalogue posées : ' + hors.pieces + ' (' + hors.detail.map(function (d) { return d.nombre + ' × ' + d.nom; }).join(', ')
           + '). Elles sont à prévoir en plus du catalogue imprimé et ne changent pas ses totaux.'
         : 'Tuiles hors catalogue posées : aucune.';
+      if (hors.ancien) texteHors += ' Les ' + hors.ancien + ' tuiles de l’ancien catalogue de ce plateau sont comptées à part, plus bas.';
       if (b.inconnues) texteHors += ' ' + b.inconnues + (b.inconnues > 1 ? ' pièces' : ' pièce') + ' d’un modèle inconnu (voir le mode « Créer à la main »).';
       var blocPersos = b.persos.length
         ? el('table', { classe: 'at-table at-table-large', id: 'inv-monoblocs' }, [
@@ -94,8 +196,6 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
           el('tbody', null, b.persos.map(ligneModele))
         ])
         : el('p', { classe: 'at-aide', id: 'inv-monoblocs-vide', texte: 'Aucune pièce personnelle dans ce plateau (onglet Plateau, mode « Mes monoblocs »).' });
-      var t = totaux.parTerrain, libres = (t.plaine || 0) + (t.foret || 0) + (t.marais || 0);
-      var part = function (n) { return (100 * n / libres).toFixed(1).replace('.', ',') + ' %'; };
 
       var recouvrements = {};
       plateau.recouvrements.forEach(function (x) { recouvrements[x.evenement] = x.cle; });
@@ -116,8 +216,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         el('p', { classe: 'at-bandeau-provisoire', id: 'inv-provisoire', texte: 'Proposition provisoire, à valider : les pièces, leurs quantités, les tuiles d’événement et leurs effets ne sont pas arrêtés.' }),
         el('h2', { texte: 'Pièces du catalogue' }),
         el('p', { id: 'inv-totaux', texte: 'Catalogue : ' + totaux.pieces + ' pièces, ' + totaux.cases + ' cases (dont ' + totaux.construction.pieces + ' pièces de terrain pour ' + totaux.construction.cases + ' cases, et ' + totaux.facultatives + ' tuiles de remplissage facultatives). Sur le plateau courant : ' + poses + ' pièces posées (' + casesPosees + ' cases), ' + b.restantes + ' restantes.' }),
-        el('p', { id: 'inv-repartition', texte: 'Répartition : ' + (t.ville || 0) + ' villes, ' + (t.montagne || 0) + ' cases de montagne, ' + (t.plaine || 0) + ' plaines (' + part(t.plaine || 0) + '), '
-          + (t.foret || 0) + ' forêts (' + part(t.foret || 0) + '), ' + (t.marais || 0) + ' marais (' + part(t.marais || 0) + ') ; les pourcentages sont calculés hors villes et montagnes.' }),
+        el('p', { id: 'inv-repartition', texte: 'Répartition du terrain (les ' + tr.cases + ' cases des monoblocs de 3 et 4 cases) : ' + tr.plaine + ' plaines (' + partTerrain(tr.plaine) + '), '
+          + tr.foret + ' forêts (' + partTerrain(tr.foret) + '), ' + tr.marais + ' marais (' + partTerrain(tr.marais) + ') ; visé : ' + C.REGLAGES.repartitionVisee.plaine + ' / ' + C.REGLAGES.repartitionVisee.foret + ' / '
+          + C.REGLAGES.repartitionVisee.marais + '. En plus : ' + roles.montagne + ' cases de montagne, les 6 plaines du noyau, ' + roles.remplissage.plaine + ' plaines de remplissage facultatives, et ' + roles.villes
+          + ' villes sur un plateau complet (celle du noyau, ' + (C.MODELES.VN ? C.MODELES.VN.nombre : 0) + ' neutres, ' + C.VILLE_DEPLOIEMENT.nombre + ' de déploiement).' }),
         el('table', { classe: 'at-table at-table-large', id: 'inv-pieces' }, [
           entetes(['Dessin', 'Pièce', 'Contenu', 'Total', 'Posées', 'Restantes']),
           el('tbody', null, lignes)
@@ -125,6 +227,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         el('p', { id: 'inv-villes', texte: 'Villes : la ville du noyau, ' + (C.MODELES.VN ? C.MODELES.VN.nombre : 0) + ' villes neutres (tuiles ajoutées contre les flancs) et ' + C.VILLE_DEPLOIEMENT.nombre
           + ' tuiles de ville de déploiement, posées par-dessus une Plaine après la construction (' + C.VILLE_DEPLOIEMENT.parCamp + ' par joueur) ; ' + P.deploiements(plateau).length + ' posée(s) sur le plateau courant.' }),
         el('p', { id: 'inv-hors-catalogue', classe: hors.pieces ? 'at-niveau-alerte' : 'at-aide', texte: texteHors }),
+        blocAncien,
         el('h2', { texte: 'Mes monoblocs' }),
         el('p', { classe: 'at-aide', texte: 'Pièces personnelles de ce plateau, à part du catalogue imprimé : elles ne comptent pas dans ses totaux.' }),
         blocPersos,
@@ -140,7 +243,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     return { element: el('div', { classe: 'at-ecran at-ecran-inventaire' }, zone), montrer: montrer };
   }
 
-  AT.vueInventaire = { creer: creer, bilan: bilan };
+  AT.vueInventaire = { creer: creer, bilan: bilan, parRole: parRole, ROLES: ROLES };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = AT.vueInventaire;
 })();

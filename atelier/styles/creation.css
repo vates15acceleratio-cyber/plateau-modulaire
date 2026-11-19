@@ -80,3 +80,44 @@
 @media print {
   .at-confirmation { display: none !important; }
 }
+
+/* ---- Lot G : catalogue 2 et étape « Villes » ---- */
+
+/* Bouton du mode « Villes » mis en avant quand la construction est terminée */
+.at-modes button[data-propose="oui"] { border-color: var(--conforme); box-shadow: inset 0 0 0 2px var(--conforme); background: #e9f6ee; }
+
+/* Outils de l'étape « Villes » : une ville à choisir, avec son compteur */
+.at-villes-etape { font-weight: 600; margin: 4px 0; padding: 4px 6px; border-radius: 4px; background: #f4f1e6; }
+.at-villes-etape[data-etape="villes"] { background: #e9f6ee; color: var(--conforme); }
+.at-villes-etape[data-etape="complet"] { background: #e9f6ee; color: var(--conforme); }
+.at-villes-outils { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin: 6px 0; }
+.at-villes-outil { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 2px; font-size: 12px; text-align: center; }
+.at-villes-compteur { font-size: 13px; }
+.at-villes-complet .at-villes-compteur { color: var(--conforme); }
+
+/* Palette : mention « facultatif » des tuiles de remplissage */
+.at-piece-facultatif { font-size: 10px; color: #5c4600; background: #fff4cf; border: 1px solid #d8b740; border-radius: 3px; padding: 0 3px; }
+
+/* « Reste à faire » par étape */
+.at-reste-etape { margin: 6px 0 1px; padding-top: 3px; border-top: 1px solid var(--trait); }
+.at-reste-etape[data-etat="faite"] { color: var(--conforme); }
+.at-reste-etape[data-etat="ensuite"] { color: var(--discret); font-weight: normal; }
+.at-reste-proposition { margin: 4px 0; padding: 4px 6px; background: #e9f6ee; border-radius: 4px; font-weight: 600; }
+
+/* Contrôles : ligne d'étape en tête et deux groupes titrés */
+.at-etape { margin: 0 0 6px; padding: 5px 7px; border-radius: 4px; border: 1px solid var(--trait); background: var(--papier); }
+.at-etape strong { display: block; font-size: 14px; }
+.at-etape-villes, .at-etape-complet { border-color: var(--conforme); }
+.at-etape-villes strong, .at-etape-complet strong { color: var(--conforme); }
+.at-etape-detail { color: var(--discret); font-size: 12px; }
+.at-etape-ancien { border-color: #d8b740; background: #fffbe6; }
+.at-groupe { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-top: 10px; padding: 3px 6px; background: #2b2a33; color: #fff; border-radius: 4px; font-weight: 700; font-size: 14px; }
+.at-groupe-etat { font-size: 12px; font-weight: 600; background: #fff; border-radius: 3px; padding: 0 5px; }
+#pl-adverses th, #pl-adverses td { background: #f4f1e6; font-weight: 600; }
+
+/* Bandeau discret d'un plateau de l'ancien catalogue */
+.at-bandeau-ancien { margin: 0; padding: 3px 8px; font-size: 12px; color: #5c4600; background: #fff4cf; border-bottom: 1px solid #d8b740; }
+
+/* Inventaire : titres de rôle dans le tableau du catalogue */
+.at-role th { background: #2b2a33; color: #fff; font-size: 13px; text-align: left; }
+.at-role-note { font-weight: normal; color: #d9d7e6; }

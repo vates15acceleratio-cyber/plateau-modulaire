@@ -258,6 +258,13 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     ['profondeurExtremite', 'contactVilleNeutre', 'neutresTiersCentral'].forEach(function (nom) { if (options && options[nom] !== undefined) regles[nom] = options[nom]; });
     var cles = H.trier(Object.keys(toutes).filter(function (k) { return toutes[k].terrain === 'ville'; }));
 
+    // Entrée de déploiement visant une case qui n'existe pas : etatVilles() et cases() l'écartent sans rien dire,
+    // alors qu'elle est dans le document (et compte pour la borne de valider) : c'est une erreur, à retirer.
+    P.deploiements(plateau).forEach(function (x) {
+      if (possede.call(terrain, x.cle)) return;
+      res.push(constat('villes', 'erreur', 'Ville de déploiement de ' + NOMS_CAMPS[x.camp] + ' en (' + x.cle + ') hors du plateau : aucune case à cet endroit. Retirez-la (étape « Villes », « Retirer toutes les villes »).', []));
+    });
+
     // Villes de déploiement : une Plaine du bord haut (Vert) ou du bord bas (Rouge), hors noyau.
     ['vert', 'rouge'].forEach(function (camp) {
       if (etat[camp].length > parCamp) {

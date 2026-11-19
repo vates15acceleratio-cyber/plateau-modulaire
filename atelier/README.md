@@ -26,20 +26,34 @@ Elle est écrite dans `dist/atelier-plateau.zip` : la page, ses scripts et ses s
 
 Le catalogue des pièces, les tuiles d'événement et les Troupes sont des **propositions provisoires, à valider**.
 
+## Le plateau en deux étapes (catalogue 2)
+
+Le plateau se fait comme le feront les joueurs, en deux étapes :
+
+1. **Construction du terrain.** Le noyau au centre (il ne bouge pas), 2 blocs de montagne, et 21 monoblocs de terrain de 3 ou 4 cases (plaines, forêts, marais). Il n'y a plus de tuile de terrain d'une case, sauf 2 **tuiles de remplissage** (une plaine), facultatives : elles peuvent rester dans la boîte.
+2. **Villes**, une fois le terrain construit :
+   - **ville de déploiement** : une tuile posée **par-dessus une Plaine** du bord, en haut pour Vert, en bas pour Rouge, hors noyau ; 2 par joueur. Sur le plateau, la Plaine reste visible autour de la tuile, bordée de la couleur du camp ;
+   - **ville neutre** : une tuile **ajoutée** contre le bord, une sur le flanc gauche et une sur le flanc droit, à mi-hauteur ; liseré doré ;
+   - entre deux villes (celle du noyau comprise) : 4 pas au moins, soit 3 cases entre elles.
+
+Un plateau dont le terrain est construit mais qui n'a pas encore ses villes **n'est pas en erreur** : il est « à l'étape des villes ».
+
 ## Onglet « Plateau »
 
-En tête de la colonne de gauche, cinq boutons choisissent le **mode de travail** : « Générer », « Créer à la main », « Pinceau », « Mes monoblocs », « Bibliothèque ». « Annuler » (Ctrl+Z) et « Rétablir » (Ctrl+Y) restent visibles dans tous les modes. Les fichiers et les images sont dans le mode « Générer ».
+En tête de la colonne de gauche, six boutons choisissent le **mode de travail** : « Générer », « Créer à la main », « Pinceau », « Villes », « Mes monoblocs », « Bibliothèque ». « Annuler » (Ctrl+Z) et « Rétablir » (Ctrl+Y) restent visibles dans tous les modes. Les fichiers et les images sont dans le mode « Générer ». Quand le terrain est construit, le bouton « Villes » se met en avant (liseré vert) : c'est le moment de poser les villes.
 
-- **Générer** : saisissez une graine (un nombre ou un mot) puis « Générer ». La même graine redonne toujours le même plateau. « Graine suivante » passe au nombre suivant.
-- **Réglages** : seuil de contact (3 tuiles par défaut, ou 2) et mesure (pièces voisines distinctes par défaut, ou côtés). Ils servent au générateur et aux contrôles.
+- **Générer** : saisissez une graine (un nombre ou un mot) puis « Générer ». La même graine redonne toujours le même plateau. « Graine suivante » passe au nombre suivant. Le générateur construit le terrain pièce après pièce, comme des joueurs, puis pose les villes au meilleur équilibre.
+- **Réglages** : seuil de contact (3 tuiles par défaut, ou 2), mesure (pièces voisines distinctes par défaut, ou côtés) et **tuiles de remplissage permises** (aucune par défaut, jusqu'aux 2 du catalogue : le générateur en pose le moins possible, et le message dit combien). Ils servent au générateur et aux contrôles.
 - **Retoucher à la main** (modes « Générer » et « Créer à la main ») :
   - cliquez une pièce du plateau pour la sélectionner, puis « Tourner » (touche R), « Déplacer » ou « Retirer » (touche Suppr) ;
   - pour poser des pièces, passez en mode « Créer à la main » (voir plus bas) ;
   - « Annuler » (Ctrl+Z) et « Rétablir » (Ctrl+Y) reviennent sur chaque retouche, y compris une génération, un plateau vierge ou un plateau ouvert depuis la bibliothèque.
-- **Villes de déploiement** : ce sont les villes de la rangée du haut (Vert) et de la rangée du bas (Rouge), recalculées à chaque retouche. Avec 3 villes ou plus sur une de ces rangées, aucune n’est retenue pour ce camp et le contrôle 4 le signale ; le plateau reste enregistrable.
+- **Une retouche du terrain peut enlever une ville** : retirer, tourner, déplacer, repeindre ou gommer la pièce qui porte une ville de déploiement enlève cette ville avec sa Plaine. Le message le dit ; elle se repose à l'étape « Villes ».
+- **Anciens plateaux** : un plateau fait avec le premier catalogue (tuiles d'une case, villes posées pendant la construction) s'ouvre toujours, depuis un fichier ou la bibliothèque. Un bandeau discret le signale au-dessus du plateau et les contrôles s'y adaptent.
 - **Trous** : une case vide entièrement entourée de tuiles est signalée par le contrôle 2, en alerte (réglage `trous` de `src/catalogue.js` : `alerte`, `erreur` ou `ignore`).
 - **Tuiles d'événement (essai de pose)**, en mode « Créer à la main », sous la palette : choisissez une tuile, les cases permises s'allument, cliquez-en une. Pour l'enlever, cliquez la case puis « Retirer la tuile d'événement ».
-- **Contrôles** (colonne de droite), mis à jour à chaque retouche : les 7 contrôles avec leur niveau (erreur, alerte, conforme). Survolez un constat pour voir les cases concernées, cliquez-le pour les garder affichées. Dessous : le coût en rations de chaque ville depuis Vert et depuis Rouge, le score d'équilibre (0 = équilibré) et la répartition des terrains.
+- **Contrôles** (colonne de droite), mis à jour à chaque retouche. En tête, l'**étape** : « Construction en cours », « Construction terminée : posez les villes » ou « Plateau complet ». Puis deux groupes titrés : **Construction** (inventaire, chevauchement et continuité, monoblocs et noyau, contact) et **Villes** (villes, équilibre), chacun avec son état ; les tuiles d'événement à l'essai sont jugées à part. Survolez un constat pour voir les cases concernées, cliquez-le pour les garder affichées.
+- **Équilibre** (sous les contrôles) : le coût en rations de chaque ville depuis les villes de déploiement de Vert et de Rouge. Le score additionne l'écart entre les deux camps vers le centre, vers chaque ville neutre, et vers les villes de déploiement adverses (ligne du bas) ; 0 = équilibré. Dessous, la répartition des terrains.
 - **Sur les cases** (au-dessus du plateau) : affiche sur chaque case ses contacts, son coût en rations depuis un camp, ou ses coordonnées.
 - **Vue** : molette pour zoomer, cliquer-glisser pour déplacer, « Tout voir » pour recadrer. En mode « Pinceau », et sur une pièce en mode « Créer à la main », glisser sert à peindre ou à déplacer la pièce : tenez **Maj** en glissant pour déplacer la vue.
 - **Fichier et image** : « Enregistrer » et « Ouvrir » (fichier JSON), « Image SVG », « Image PNG », « Imprimer ».
@@ -47,21 +61,34 @@ En tête de la colonne de gauche, cinq boutons choisissent le **mode de travail*
 ### Créer à la main (création guidée)
 
 1. « **Nouveau plateau vierge** » : il ne reste que le noyau, au centre. Les cases pointillées autour sont la grille vide (jusqu'à 7 cases du centre) : on peut cliquer dessus. « Vider le plateau » retire aussi le noyau. Vos monoblocs personnels sont gardés.
-2. **Palette** : toutes les pièces du catalogue, puis vos monoblocs, avec leur dessin et le nombre qu'il en reste (« × 3 »). Une pièce épuisée est grisée.
+2. **Palette** du catalogue 2, par rôle : noyau et montagnes, monoblocs de 4 cases, monoblocs de 3 cases, tuiles de remplissage (marquées « facultatif »), puis vos monoblocs, avec leur dessin et le nombre qu'il en reste (« × 1 »). Une pièce épuisée est grisée. **Les villes ne sont pas dans la palette** : elles se posent à l'étape « Villes ».
 3. **Poser** : cliquez une pièce puis une case, ou **glissez** la pièce de la palette sur le plateau. L'aperçu est **vert** si la pose est possible, **rouge** sinon (place prise, stock épuisé). **R** (ou « Tourner ») tourne la pièce, même pendant le glisser. Échap arrête.
 4. **Déplacer une pièce posée** : glissez-la, ou sélectionnez-la puis « Déplacer ».
-5. **Ce qu'il reste à faire** (en haut à droite) : pièces restantes par type, villes manquantes, villes de déploiement manquantes en haut (Vert) et en bas (Rouge), erreurs en cours. Quand tout est coché : « Plateau terminé ».
+5. **Ce qu'il reste à faire** (en haut à droite), par étape : « 1. Construction du terrain » (pièces de terrain restantes, remplissages en réserve) puis « 2. Villes » (villes de déploiement de chaque camp, villes neutres), et les erreurs en cours. Quand le terrain est construit, le bouton « Passer à l'étape Villes » apparaît. Quand tout est coché : « Plateau terminé ».
 
 ### Pinceau libre
 
-Choisissez un terrain (plaine, forêt, marais, montagne, ville) ou la **gomme**, puis cliquez ou glissez sur les cases, vides ou non.
+Choisissez un terrain (plaine, forêt, marais, montagne) ou la **gomme**, puis cliquez ou glissez sur les cases, vides ou non. Les villes ne se peignent pas : elles se posent à l'étape « Villes ».
 
 - Un trait entier s'annule en une fois.
-- Le pinceau pose des tuiles d'une case : celles du stock d'abord, puis **hors stock**. Le message le dit, et le contrôle 1 liste les « tuiles à prévoir en plus du catalogue ». La montagne peinte est une tuile d'une case hors catalogue (la décision en vigueur reste « montagnes en blocs de 4 ou 5 cases » : le contrôle 1 le rappelle).
+- Le pinceau pose des tuiles d'une case, qui sont **hors catalogue** (le catalogue 2 est fait de monoblocs) : une plaine est prise d'abord parmi les tuiles de remplissage en stock, le reste est annoncé par le message, et le contrôle 1 liste les « tuiles à prévoir en plus du catalogue ». La montagne peinte est une tuile d'une case hors catalogue (la décision en vigueur reste « montagnes en blocs de 4 ou 5 cases » : le contrôle 1 le rappelle).
 - Le pinceau ne modifie ni un monobloc ni le noyau : le message dit lequel.
 - La gomme retire une tuile d'une case. Sur un monobloc, cliquez-le seul : une fenêtre demande confirmation, puis la pièce entière est retirée.
 - **Le noyau est fixe** : ni la gomme, ni « Retirer » (touche Suppr) ne l’enlèvent. Seuls « Vider le plateau » et « Nouveau plateau vierge » (mode « Créer à la main ») le font.
 - Annuler et Rétablir attendent la fin du geste : pendant un trait (bouton de la souris enfoncé), ils sont ignorés.
+
+### Villes (étape « Villes »)
+
+1. Choisissez la ville à poser : **déploiement de Vert**, **déploiement de Rouge** ou **ville neutre**. Chaque bouton montre son compteur (« 1 / 2 »). Les places admissibles s'allument sur le plateau.
+2. **Cliquez une place en surbrillance** pour poser la ville (au clavier : flèches puis Entrée sur le plateau). **Cliquez une ville posée** pour la retirer. Quand un camp a ses 2 villes, l'outil passe de lui-même à la ville suivante.
+3. Un refus est expliqué avec sa raison : noyau, case qui n'est pas une Plaine, hors de l'extrémité du camp, trop près d'une autre ville (« 3 pas, il en faut 4 »), flanc déjà pourvu…
+4. **Poser les villes automatiquement** : retire les villes posées puis place les 6 au meilleur équilibre (le même calcul que le générateur). **Retirer toutes les villes** : le terrain ne change pas.
+5. **Aucune place ?** Un avis dit pourquoi (souvent l'écart de 4 pas avec une ville voisine) et propose, quand cela aide, d'élargir les extrémités.
+6. Réglages de l'étape :
+   - **Profondeur des extrémités** : 1, 2 (défaut) ou 3 rangées du haut et du bas où une ville de déploiement peut se poser. La surbrillance, la pose, la pose automatique, le générateur et les contrôles suivent ce réglage. Il n'est **pas enregistré avec le plateau** : un plateau fait à 3 rangées sera signalé « mal placé » à la réouverture tant que le réglage n'est pas remis.
+   - **Pose libre** : pour essayer hors règles. Une ville se pose alors sur toute Plaine (hors noyau) ou contre tout bord ; les contrôles signalent ce qui ne respecte pas les règles.
+
+Tout s'annule (Ctrl+Z), y compris la pose automatique, en une étape.
 
 ### Mes monoblocs
 
@@ -86,28 +113,29 @@ Choisissez un terrain (plaine, forêt, marais, montagne, ville) ou la **gomme**,
 
 ## Onglet « Inventaire »
 
-Toutes les pièces du catalogue imprimé dessinées, avec le nombre total, posé et restant sur le plateau courant, les totaux (64 pièces, 91 cases, jamais modifiés), puis à part : la ligne « Tuiles hors catalogue posées » (tuiles du pinceau au-delà du stock, montagne d'une case comprise), la section « Mes monoblocs », et la réserve des 8 tuiles d'événement (condition de pose, effet).
+Le catalogue 2 dessiné **par rôle** : noyau, montagnes, monoblocs de 4 cases, monoblocs de 3 cases, tuiles de remplissage (facultatives), villes neutres, puis les villes de déploiement (4 tuiles posées par-dessus une Plaine, qui n'ajoutent aucune case), avec le nombre total, posé et restant sur le plateau courant. En tête : les totaux du catalogue imprimé (28 pièces, 95 cases, jamais modifiés) et la répartition du terrain (53 plaines, 11 forêts, 11 marais sur les 75 cases des monoblocs, soit 70,7 / 14,7 / 14,7 %). À part : la ligne « Tuiles hors catalogue posées » (tuiles d'une case du pinceau), la section « Ancien catalogue » seulement si le plateau ouvert en porte, la section « Mes monoblocs », et la réserve des 8 tuiles d'événement (condition de pose, effet).
 
 ## Onglet « Partie fictive »
 
 Une table libre : l'outil compte, mélange, lance les dés et prévient, mais **n'arbitre pas**. Un avertissement peut toujours être passé avec « Faire quand même ».
 
 1. Choisissez une graine de partie et le premier joueur (Vert ou Rouge), puis « Nouvelle partie » : elle se joue sur le plateau de l'onglet Plateau. Même graine et même plateau = mêmes mélanges et mêmes dés.
-2. **Former un bataillon** : cliquez une carte de la main, puis une ville de déploiement surlignée (ou le bouton « Former en … »).
+2. **Former un bataillon** : cliquez une carte de la main, puis une ville de déploiement surlignée (ou le bouton « Former en … »). Les villes de déploiement sont les tuiles posées à l'étape « Villes ».
 3. **Renforcer** : cliquez une carte, puis un bataillon du même joueur (ou « Renforcer avec la carte choisie »).
 4. **Déplacer** : cliquez un pion, puis une case voisine. Le coût en rations est écrit sur chaque case voisine (✕ = infranchissable).
 5. **Ville capturée** : cliquez la ville (ou le pion qui s'y trouve), puis « À Vert », « À Rouge » ou « Neutre ».
 6. **Dés** : nombre de dés puis « Lancer », ou « Lancer ses dés » sur un bataillon (somme des dés de ses Troupes).
 7. **Carte Campement** : « Piocher pour Vert / Rouge » (ou « Carte Campement » sur un bataillon). Le texte exact s'affiche ; appliquez-le avec les boutons « Appliquer l'effet à la main » (piocher, défausser, mélanger, regarder les 3 premières…).
-8. **Événement** : « Piocher un événement », puis cliquez une case surlignée pour poser la tuile. Un refus est expliqué en bas de l'écran. Si aucune case ne convient, « Défausser sans poser » envoie la carte à la défausse ; la tuile reste en réserve.
+8. **Événement** : « Piocher un événement », puis cliquez une case surlignée pour poser la tuile. Un refus est expliqué en bas de l'écran (une tuile d'événement ne se pose jamais sur une ville de déploiement, ni sur le noyau). Si aucune case ne convient, « Défausser sans poser » envoie la carte à la défausse ; la tuile reste en réserve.
 9. Gloire (+ / −, victoire signalée à 15), marqueurs de dégâts (+ / −), « Éliminer », « +1 action », « Fin du tour » (le joueur suivant pioche 1 carte).
 10. « Annuler » / « Rétablir », « Enregistrer » / « Ouvrir » (fichier JSON), notes dans le journal, « Troupes provisoires… » pour changer nom, moral, Puissance et dés.
 
 ## Création à la main : ce qu'il faut savoir du modèle
 
 - **Pièces personnelles** : un plateau peut porter ses propres monoblocs (champ facultatif `modeles` du fichier : 2 à 6 cases, plaine / forêt / marais / montagne, jamais de ville, 1 à 9 exemplaires, 24 pièces au plus). Elles voyagent avec le fichier du plateau et avec celui de la partie.
-- **Pose hors stock et montagne d’une case** (`M1`, hors catalogue imprimé) : le contrôle 1 annonce en alerte les « tuiles à prévoir en plus du catalogue » et rappelle la décision « montagnes en blocs de 4 ou 5 cases ».
-- **Équilibre** : sur un plateau qui n’est pas symétrique par demi-tour (forme ou villes), le score est « non comparable » ; le tableau des coûts par ville reste affiché.
+- **Tuiles d’une case** : le catalogue 2 n’en a que deux sortes, le remplissage (`R`) et la ville neutre (`VN`). Les tuiles `P`, `F`, `S` du pinceau et la montagne d’une case (`M1`) sont hors catalogue : le contrôle 1 annonce en alerte les « tuiles à prévoir en plus du catalogue » et rappelle la décision « montagnes en blocs de 4 ou 5 cases ».
+- **Villes de déploiement** : elles ne sont pas des pièces mais des tuiles posées par-dessus (champ `deploiements` du fichier : case et camp). Une entrée qui vise une case hors du plateau ou une case qui n’est pas une Plaine est signalée en erreur par le contrôle des villes ; « Retirer toutes les villes » l’enlève.
+- **Équilibre** : il se mesure sans symétrie, par l’écart de coût en rations entre Vert et Rouge vers le centre, vers chaque ville neutre et vers les villes de déploiement adverses ; il se calcule dès que les deux camps ont leurs villes de déploiement.
 - **Générer** sur un plateau qui a des pièces personnelles : elles sont gardées dans le plateau généré, non posées, et le message le dit.
 
 ## Changer le catalogue
@@ -132,7 +160,7 @@ Depuis le dossier `atelier/` :
   ```
 
 - La recette travaille sur un stockage en mémoire : elle ne touche jamais à la bibliothèque du poste. Le vrai stockage se vérifie à part, par deux lancements successifs sur le **même** dossier de profil : `outils/recette.html#persistance=ecrire` puis `outils/recette.html#persistance=lire` (lignes `PERSISTANCE …` et `TOTAL`).
-- Adresses utiles pour une capture d'écran (ajouter `--screenshot=<fichier.png>` à la place de `--dump-dom`) : `index.html#onglet=plateau&graine=12`, `index.html#mode=creer` (ou `pinceau`, `monoblocs`, `bibliotheque`), `index.html#onglet=inventaire`, `index.html#onglet=partie&partie=5` ; `outils/recette.html#arret=partie` laisse une partie en cours à l'écran, `#arret=creation`, `#arret=pinceau`, `#arret=monoblocs`, `#arret=bibliotheque` un état de démonstration de chaque volet. Avec `#graine=`, le travail en cours n'est pas repris.
+- Adresses utiles pour une capture d'écran (ajouter `--screenshot=<fichier.png>` à la place de `--dump-dom`) : `index.html#onglet=plateau&graine=12`, `index.html#mode=creer` (ou `pinceau`, `villes`, `monoblocs`, `bibliotheque`), `index.html#onglet=inventaire`, `index.html#onglet=partie&partie=5` ; `outils/recette.html#arret=partie` laisse une partie en cours à l'écran, `#arret=creation`, `#arret=pinceau`, `#arret=villes`, `#arret=monoblocs`, `#arret=bibliotheque` un état de démonstration de chaque volet. Avec `#graine=`, le travail en cours n'est pas repris.
 
 ## Fichiers
 
@@ -142,7 +170,7 @@ Depuis le dossier `atelier/` :
 | `src/rendu.js` | dessin SVG du plateau, vue avec zoom, export SVG et PNG |
 | `src/app.js` | onglets, barre d'état, fichiers, raccourcis |
 | `src/vue-plateau.js`, `src/vue-inventaire.js`, `src/vue-partie.js` | les trois onglets |
-| `src/vue-creation.js`, `src/vue-monoblocs.js`, `src/vue-bibliotheque.js`, `styles/creation.css` | création à la main : palette et pinceau, éditeur de monoblocs, bibliothèque et sauvegarde automatique |
+| `src/vue-creation.js`, `src/vue-villes.js`, `src/vue-monoblocs.js`, `src/vue-bibliotheque.js`, `styles/creation.css` | création à la main : palette et pinceau, étape « Villes », éditeur de monoblocs, bibliothèque et sauvegarde automatique |
 | `src/alea.js` … `src/generateur.js` | cœur du plateau (lot A) |
 | `src/cartes.js`, `src/paquets.js`, `src/partie.js` | table de jeu (lot B) |
 | `src/bibliotheque.js` | bibliothèque de plateaux et travail en cours : logique et stockage du navigateur injecté |

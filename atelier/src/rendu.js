@@ -29,6 +29,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   var COULEURS_CAMPS = { vert: '#007A4D', rouge: '#D8321C' };
   var NOMS_CAMPS = { vert: 'Vert', rouge: 'Rouge' };
   var INITIALES_CAMPS = { vert: 'V', rouge: 'R' };
+  var COULEUR_NEUTRE = '#8A6400';        // liseré des villes neutres
 
   /**
    * L'arête n° i d'une case va du sommet i au sommet i + 1 (AT.hex.sommets, à partir du sommet du haut).
@@ -240,9 +241,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     var plateau = scene.plateau, toutes = P.cases(plateau), cles = H.trier(Object.keys(toutes));
     var gCases = svg('g'), gContours = svg('g'), gDessus = svg('g');
 
-    // Cases : couleur et motif du terrain effectif.
+    // Cases : couleur et motif du terrain effectif. Sous une ville de déploiement, la Plaine d'origine reste
+    // dessinée : la ville est une tuile posée PAR-DESSUS (voir decorTuile).
     cles.forEach(function (k) {
-      gCases.appendChild(polygoneCase(k, { fill: remplissage(prefixe, toutes[k].terrain), stroke: '#6E6A58', 'stroke-width': 1 }));
+      gCases.appendChild(polygoneCase(k, { fill: remplissage(prefixe, toutes[k].ville ? toutes[k].origine : toutes[k].terrain), stroke: '#6E6A58', 'stroke-width': 1 }));
     });
 
     // Contour épais autour de chaque monobloc ; plus épais encore pour le noyau.
@@ -267,6 +269,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       gDessus.appendChild(texteSvg(c.x, c.y, toutes[k].evenement, { 'font-size': 12, 'font-weight': 'bold', fill: '#111111' }));
     });
 
+    // Tuiles particulières du catalogue 2 : ville de déploiement posée par-dessus, ville neutre, remplissage.
+    cles.forEach(function (k) {
+      var type = typeTuile(toutes[k]);
+      if (type) decorTuile(gDessus, k, type, prefixe);
+    });
+
     // Pions par case (pour décaler la pastille d'une ville occupée).
     var pionsParCase = {};
     (scene.pions || []).forEach(function (pion) { (pionsParCase[pion.cle] = pionsParCase[pion.cle] || []).push(pion); });
@@ -283,8 +291,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         gDessus.appendChild(texteSvg(c.x, y - (occupee ? 0 : 3), String(numeros[k]), { 'font-size': occupee ? 12 : 14, 'font-weight': 'bold', fill: '#FFFFFF' }));
         if (!occupee) gDessus.appendChild(texteSvg(c.x, y + 10, INITIALES_CAMPS[camp], { 'font-size': 9, 'font-weight': 'bold', fill: '#FFFFFF' }));
       } else {
-        gDessus.appendChild(svg('circle', { cx: arrondi(c.x), cy: arrondi(y), r: r, fill: '#FFFFFF', stroke: '#1F1F1F', 'stroke-width': 2 }));
-        gDessus.appendChild(texteSvg(c.x, y, String(numeros[k]), { 'font-size': occupee ? 12 : 15, 'font-weight': 'bold', fill: '#111111' }));
+        var neutre = toutes[k].modele === 'VN';
+        gDessus.appendChild(svg('circle', { cx: arrondi(c.x), cy: arrondi(y), r: r, fill: '#FFFFFF', stroke: neutre ? COULEUR_NEUTRE : '#1F1F1F', 'stroke-width': neutre ? 3 : 2 }));
+        gDessus.appendChild(texteSvg(c.x, y - (neutre && !occupee ? 3 : 0), String(numeros[k]), { 'font-size': occupee ? 12 : (neutre ? 13 : 15), 'font-weight': 'bold', fill: '#111111' }));
+        if (neutre && !occupee) gDessus.appendChild(texteSvg(c.x, y + 9, 'N', { 'font-size': 8, 'font-weight': 'bold', fill: COULEUR_NEUTRE }));
       }
       var proprio = scene.proprietaires && possede.call(scene.proprietaires, k) ? scene.proprietaires[k] : null;
       if (proprio && COULEURS_CAMPS[proprio]) {      // fanion du propriétaire, en haut à droite de la case
@@ -320,6 +330,37 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     racine.appendChild(gCases);
     racine.appendChild(gContours);
     racine.appendChild(gDessus);
+  }
+
+  /** Type de tuile particulière d'une case de AT.plateau.cases() : 'vd-vert', 'vd-rouge', 'vn', 'remplissage', ou null. */
+  function typeTuile(c) {
+    if (!c) return null;
+    if (c.ville && (c.camp === 'vert' || c.camp === 'rouge')) return 'vd-' + c.camp;
+    if (c.modele === 'VN') return 'vn';
+    if (c.modele === 'R') return 'remplissage';
+    return null;
+  }
+
+  /**
+   * Dessin d'une tuile particulière sur la case `cle`, tout en attributs SVG (l'export reste autonome) :
+   *   'vd-vert' / 'vd-rouge' : ville de déploiement, tuile plus petite posée PAR-DESSUS la Plaine (qui reste visible
+   *                            autour), bordée d'un liseré à la couleur du camp ;
+   *   'vn'                   : ville neutre, tuile entière à double liseré doré ;
+   *   'remplissage'          : tuile de remplissage, Plaine d'une case à liseré pointillé et point central.
+   */
+  function decorTuile(g, cle, type, prefixe) {
+    var p = H.decle(cle), c = H.centre(p.q, p.r, PLAT);
+    if (type === 'vd-vert' || type === 'vd-rouge') {
+      var couleur = COULEURS_CAMPS[type === 'vd-vert' ? 'vert' : 'rouge'];
+      g.appendChild(polygoneCase(cle, { fill: '#000000', 'fill-opacity': 0.28, stroke: 'none' }, 0.15));                     // ombre : la tuile est posée dessus
+      g.appendChild(polygoneCase(cle, { fill: remplissage(prefixe, 'ville'), stroke: couleur, 'stroke-width': 4, 'stroke-linejoin': 'round' }, 0.22));
+    } else if (type === 'vn') {
+      g.appendChild(polygoneCase(cle, { fill: 'none', stroke: COULEUR_NEUTRE, 'stroke-width': 4, 'stroke-linejoin': 'round' }, 0.07));
+      g.appendChild(polygoneCase(cle, { fill: 'none', stroke: COULEUR_NEUTRE, 'stroke-width': 1.5 }, 0.2));
+    } else if (type === 'remplissage') {
+      g.appendChild(polygoneCase(cle, { fill: 'none', stroke: '#5E4A12', 'stroke-width': 2.5, 'stroke-dasharray': '3 5', 'stroke-linecap': 'round' }, 0.14));
+      g.appendChild(svg('circle', { cx: arrondi(c.x), cy: arrondi(c.y), r: 4, fill: '#5E4A12' }));
+    }
   }
 
   /** Cadre d'affichage d'un plateau : ses cases, l'hexagone de départ (rayon 5) et la grille vide affichée, avec une marge. */
@@ -435,7 +476,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       scene = nouvelleScene;
       dessinerScene(gScene, scene, prefixe);
       dessinerGrille(gGrille, scene.grille);
-      cadreScene = cadrePlateau(scene.plateau, undefined, scene.grille);
+      cadreScene = cadrePlateau(scene.plateau, undefined, (scene.grille || []).concat(scene.autour || []));      // `autour` : cases vides à garder dans le cadre, sans les dessiner
       if (premiere || !garderVue) cadrer();
     }
 
@@ -621,6 +662,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     cases.forEach(function (x) {
       racine.appendChild(polygoneCase(x.cle, { fill: remplissage(prefixe, x.terrain), stroke: '#6E6A58', 'stroke-width': 1.5 }));
     });
+    // Tuiles d'une case du catalogue 2 : mêmes repères que sur le plateau (remplissage, ville neutre).
+    if (idModele === 'R') decorTuile(racine, '0,0', 'remplissage', prefixe);
+    if (idModele === 'VN') decorTuile(racine, '0,0', 'vn', prefixe);
     if (cles.length > 1) {
       var m = P.modele(o.plateau, idModele);
       racine.appendChild(svg('path', { d: cheminContour(cles), fill: 'none', stroke: m && m.noyau ? '#5B2A86' : '#1F1F1F', 'stroke-width': 5, 'stroke-linecap': 'round' }));
@@ -641,6 +685,23 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     return racine;
   }
 
+  /**
+   * Pastille de légende d'une tuile particulière ('vd-vert', 'vd-rouge', 'vn', 'remplissage') : la même case que sur
+   * le plateau, en petit. Pour une ville de déploiement, la Plaine du dessous est visible autour.
+   */
+  function pastilleTuile(type, echelle) {
+    var prefixe = nouveauPrefixe(), c = cadre(['0,0'], PLAT, 3), e = echelle || 0.34;
+    var racine = svg('svg', {
+      classe: 'at-pastille', width: Math.round(c.l * e), height: Math.round(c.h * e),
+      viewBox: [c.x, c.y, c.l, c.h].map(arrondi).join(' '), 'aria-hidden': 'true'
+    });
+    var fond = type === 'vn' ? 'ville' : 'plaine';
+    racine.appendChild(definitions(prefixe, ['plaine', 'ville']));
+    racine.appendChild(polygoneCase('0,0', { fill: remplissage(prefixe, fond), stroke: '#6E6A58', 'stroke-width': 2 }));
+    decorTuile(racine, '0,0', type, prefixe);
+    return racine;
+  }
+
   /** Nom affiché d'un terrain. */
   function nomTerrain(terrain) { return possede.call(TERRAINS, terrain) ? TERRAINS[terrain].nom : String(terrain); }
 
@@ -653,7 +714,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     // DOM et SVG
     el: el, svg: svg, vider: vider, remplacer: remplacer, polygoneCase: polygoneCase, definitions: definitions, remplissage: remplissage,
     nouveauPrefixe: nouveauPrefixe, cheminContour: cheminContour,
-    creerVue: creerVue, svgAutonome: svgAutonome, versPng: versPng, dessinModele: dessinModele, pastilleTerrain: pastilleTerrain,
+    creerVue: creerVue, svgAutonome: svgAutonome, versPng: versPng, dessinModele: dessinModele, pastilleTerrain: pastilleTerrain, pastilleTuile: pastilleTuile, typeTuile: typeTuile,
     vignette: vignette
   };
 

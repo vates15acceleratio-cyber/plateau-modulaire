@@ -29,6 +29,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     { id: 'generer', nom: 'Générer' },
     { id: 'creer', nom: 'Créer à la main' },
     { id: 'pinceau', nom: 'Pinceau' },
+    { id: 'villes', nom: 'Villes' },
     { id: 'monoblocs', nom: 'Mes monoblocs' },
     { id: 'bibliotheque', nom: 'Bibliothèque' }
   ];
@@ -86,8 +87,14 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     inventaire: '1. Inventaire', continuite: '2. Chevauchement et continuité', monoblocs: '3. Monoblocs et noyau',
     contact: '4. Contact entre tuiles', villes: '5. Villes', equilibre: '6. Équilibre et terrains', evenements: '7. Tuiles d’événement'
   };
-  // Construction (1 à 4), puis villes (5 et 6), puis événements.
-  var ORDRE_REGLES = ['inventaire', 'continuite', 'monoblocs', 'contact', 'villes', 'equilibre', 'evenements'];
+  // Les contrôles s'affichent en deux groupes titrés (§9.4), puis les tuiles d'événement, jugées à part.
+  var GROUPES = [
+    { id: 'construction', nom: 'Construction', regles: ['inventaire', 'continuite', 'monoblocs', 'contact'] },
+    { id: 'villes', nom: 'Villes', regles: ['villes', 'equilibre'] },
+    { id: 'evenements', nom: 'Tuiles d’événement (essai)', regles: ['evenements'] }
+  ];
+  var TITRES_ETAPES = { construction: 'Construction en cours', villes: 'Construction terminée : posez les villes', complet: 'Plateau complet'
+  };
   var NOMS_NIVEAUX = { erreur: 'Erreur', alerte: 'Alerte', info: 'Conforme' };
 
   // ------------------------------------------------------------------ la vue
@@ -100,13 +107,18 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     // précédent AVEC sa propre attache : « Mettre à jour » n'écrase jamais une autre fiche. « Enregistrer sous »
     // attache toute la lignée du document : annuler en deçà de l'enregistrement garde donc l'attache.
     var attaches = [null], debuts = [true];
-    var reglages = { seuilContact: C.REGLAGES.seuilContact, mesureContact: C.REGLAGES.mesureContact };
+    // Réglages partagés par les contrôles, le générateur et l'étape « Villes ». Jamais écrits dans AT.catalogue.REGLAGES.
+    var reglages = {
+      seuilContact: C.REGLAGES.seuilContact, mesureContact: C.REGLAGES.mesureContact,
+      profondeurExtremite: C.REGLAGES.villes.profondeurExtremite,          // rangées des extrémités (étape « Villes »)
+      remplissages: C.REGLAGES.generateur.remplissages                     // tuiles de remplissage permises au générateur
+    };
     var selection = null;        // identifiant de la pièce sélectionnée
     var caseSelection = null;    // case cliquée lors de la sélection (pour retirer une tuile d'événement)
     var aPoser = null;           // {type: 'piece', modele, rotation} | {type: 'evenement', id} | {type: 'deplacement', rotation, decalage}
     var survol = null, epingle = null, affichage = 'rien', bilan = null;
     var mode = 'generer';        // mode de la colonne de gauche (voir MODES)
-    var guide = null, pinceau = null, monoblocs = null, biblio = null;      // panneaux des modes (créés à l'assemblage)
+    var guide = null, pinceau = null, monoblocs = null, biblio = null, villes = null;      // panneaux des modes (créés à l'assemblage)
 
     function plateau() { return historique[rang]; }
 
@@ -126,7 +138,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       ['rien', 'rien'], ['cotes', 'contacts (côtés)'], ['pieces', 'contacts (pièces)'],
       ['rations-vert', 'rations depuis Vert'], ['rations-rouge', 'rations depuis Rouge'], ['coordonnees', 'coordonnées']
     ].map(function (x) { return el('option', { value: x[0], texte: x[1] }); }));
+    var stockRemplissage = C.MODELES.R ? C.MODELES.R.nombre : 0, choixRemplissages = el('select', { id: 'pl-remplissages' });
+    for (var nr = 0; nr <= stockRemplissage; nr++) choixRemplissages.appendChild(el('option', { value: nr, texte: nr === 0 ? 'aucune (défaut)' : nr + (nr > 1 ? ' tuiles au plus' : ' tuile au plus') }));
+    choixRemplissages.value = String(reglages.remplissages);
     var avisGeneration = el('p', { classe: 'at-avis', id: 'pl-avis', hidden: true });
+    var bandeauAncien = el('p', { classe: 'at-bandeau-ancien', id: 'pl-ancien', hidden: true,
+      texte: 'Plateau de l’ancien catalogue (tuiles d’une case, villes posées pendant la construction) : il reste lisible et modifiable, et les contrôles s’y adaptent.' });
     var zoneOutil = el('div', { classe: 'at-outil', id: 'pl-outil' });
     var zoneControles = el('div', { id: 'pl-controles' });
     var infoPlateau = el('span', { classe: 'at-info-plateau', id: 'pl-info' });
@@ -199,7 +216,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       if (g === null) g = 1;
       champGraine.value = String(g);
       // Les pièces personnelles du document sont reportées dans le plateau généré (non posées) : r.note le dit.
-      var r = AT.generateur.generer(g, { seuilContact: reglages.seuilContact, mesureContact: reglages.mesureContact, modeles: P.modeles(plateau()) });
+      var r = AT.generateur.generer(g, { seuilContact: reglages.seuilContact, mesureContact: reglages.mesureContact, profondeurExtremite: reglages.profondeurExtremite,
+        remplissages: reglages.remplissages, modeles: P.modeles(plateau()) });
       if (!r.ok) {
         avisGeneration.hidden = false;
         // Catalogue ou rayon hors de ce que le générateur sait poser : changer de graine n'y ferait rien.
@@ -210,7 +228,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       avisGeneration.hidden = true;
       quitterModes();
       changer(r.plateau, { garderVue: false, nouveauDocument: true });      // un plateau généré n'est plus celui de la fiche ouverte
-      ctx.message('Plateau généré (graine ' + g + ', score d’équilibre ' + r.score + ').' + (r.note ? ' ' + r.note : ''), 'info');
+      ctx.message('Plateau généré (graine ' + g + ', score d’équilibre ' + r.score + (r.remplissages ? ', ' + r.remplissages + (r.remplissages > 1 ? ' tuiles' : ' tuile') + ' de remplissage' : '') + ').' + (r.note ? ' ' + r.note : ''), 'info');
       return true;
     }
 
@@ -222,6 +240,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var n = avant.recouvrements.length - apres.recouvrements.length;
       return n > 0 ? ' ' + n + (n > 1 ? ' tuiles d’événement retournent' : ' tuile d’événement retourne') + ' en réserve.' : '';
     }
+
+    /**
+     * Phrase à ajouter quand une retouche du terrain a enlevé une ville de déploiement (la Plaine qui la portait a
+     * été retirée, tournée ou déplacée) ; chaîne vide sinon.
+     */
+    function mentionVilles(avant, apres) { return AT.vueCreation.mentionVilles(avant, apres); }
 
     function choisirModele(id) {
       selection = null; caseSelection = null;
@@ -244,7 +268,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       if (!selection) { ctx.message('Sélectionnez d’abord une pièce du plateau ou du stock.', 'info'); return; }
       var r = P.tourner(plateau(), selection, 1);
       if (!r.ok) { ctx.message('Rotation impossible : ' + r.raison, 'erreur'); return; }
-      var mention = mentionEvenements(plateau(), r.plateau);
+      var mention = mentionEvenements(plateau(), r.plateau) + mentionVilles(plateau(), r.plateau);
       changer(r.plateau);
       ctx.message('Pièce tournée d’un sixième de tour.' + mention, mention ? 'alerte' : 'info');
     }
@@ -260,7 +284,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var r = P.retirer(plateau(), selection);
       if (!r.ok) { ctx.message(r.raison, 'erreur'); return; }
       selection = null; caseSelection = null; aPoser = null;
-      var mention = mentionEvenements(plateau(), r.plateau);
+      var mention = mentionEvenements(plateau(), r.plateau) + mentionVilles(plateau(), r.plateau);
       changer(r.plateau);
       ctx.message('Pièce retirée : elle retourne au stock.' + mention, mention ? 'alerte' : 'info');
     }
@@ -354,7 +378,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
           var r = deplacerPiece(plateau(), piece.id, p.q + decalage.q, p.r + decalage.r, rotation);
           if (!r.ok) { rafraichirOutils(); ctx.message('Déplacement refusé : ' + r.raison, 'erreur'); return; }
           selection = r.id; caseSelection = null;
-          var mention = mentionEvenements(plateau(), r.plateau);
+          var mention = mentionEvenements(plateau(), r.plateau) + mentionVilles(plateau(), r.plateau);
           changer(r.plateau);
           ctx.message('Pièce déplacée.' + mention, mention ? 'alerte' : 'info');
         },
@@ -372,6 +396,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     function surClic(cle) {
       var p = H.decle(cle), r;
       if (mode === 'pinceau') { pinceau.clic(cle); return; }
+      if (mode === 'villes') { villes.clic(cle); return; }
       if (mode === 'monoblocs' || mode === 'bibliotheque') return;       // dans ces modes, le plateau ne se retouche pas
       if (aPoser && aPoser.type === 'piece') {
         r = P.poser(plateau(), aPoser.modele, p.q, p.r, aPoser.rotation);
@@ -395,7 +420,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         r = deplacerPiece(plateau(), selection, p.q + dec.q, p.r + dec.r, aPoser.rotation);
         if (!r.ok) { ctx.message('Déplacement refusé : ' + r.raison, 'erreur'); return; }
         selection = r.id; caseSelection = null; aPoser = null;
-        var mention = mentionEvenements(plateau(), r.plateau);
+        var mention = mentionEvenements(plateau(), r.plateau) + mentionVilles(plateau(), r.plateau);
         changer(r.plateau);
         ctx.message('Pièce déplacée en (' + cle + ').' + mention, mention ? 'alerte' : 'info');
         return;
@@ -442,7 +467,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     function dessinerMarques() {
       var piece = selection ? pieceDe(selection) : null;
       vue.marquer('selection', piece ? P.casesPiece(piece, plateau()).map(function (c) { return c.cle; }) : [], 'at-selection');
-      vue.marquer('admissibles', aPoser && aPoser.type === 'evenement' ? casesAdmissibles(plateau(), aPoser.id) : [], 'at-admissible');
+      vue.marquer('admissibles', mode === 'villes' ? villes.places() : (aPoser && aPoser.type === 'evenement' ? casesAdmissibles(plateau(), aPoser.id) : []), 'at-admissible');
       vue.marquer('surbrillance', epingle ? epingle.cases : [], 'at-surbrillance');
       dessinerFantome();
     }
@@ -506,6 +531,11 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     function rafraichirOutils() {
       rafraichirZoneOutil();
       guide.rafraichir();
+      villes.rafraichir();
+      // L'étape « Villes » se propose d'elle-même quand la construction est terminée (bouton de mode mis en avant).
+      var proposer = !!bilan && bilan.etape === 'villes' && mode !== 'villes' && !estAncien(plateau());
+      boutonsModes.villes.setAttribute('data-propose', proposer ? 'oui' : 'non');
+      boutonsModes.villes.title = proposer ? 'Construction terminée : c’est le moment de poser les villes' : 'Poser les villes de déploiement et les villes neutres';
       if (mode === 'monoblocs') monoblocs.rafraichir();
       biblio.rafraichir();
       btnAnnuler.disabled = rang === 0;
@@ -518,10 +548,32 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       bilan = K.tout(pl, reglages);
       blocs.push(el('p', { classe: 'at-bilan ' + (bilan.erreurs ? 'at-niveau-erreur' : (bilan.alertes ? 'at-niveau-alerte' : 'at-niveau-info')), id: 'pl-bilan',
         texte: bilan.erreurs ? bilan.erreurs + ' erreur(s), ' + bilan.alertes + ' alerte(s)' : (bilan.alertes ? 'Aucune erreur, ' + bilan.alertes + ' alerte(s)' : 'Plateau conforme : aucune erreur, aucune alerte') }));
-      // Étape du plateau (§9.1) : construction en cours, villes à poser, ou complet.
-      if (bilan.etapeMessage) blocs.push(el('p', { classe: 'at-aide', id: 'pl-etape', 'data-etape': bilan.etape, texte: bilan.etapeMessage }));
+      // Étape du plateau (§9.1), en tête : construction en cours, villes à poser, ou complet. Un plateau construit
+      // sans villes n'est pas en erreur : il est « à l'étape des villes ».
+      var ancien = estAncien(pl);
+      // Ancien plateau : les étapes du catalogue 2 ne s'y appliquent pas (ses pièces ne sont pas celles du catalogue 2).
+      // À l'inverse, une tuile d'une case peinte au pinceau ne fait pas d'un plateau du catalogue 2 un « ancien plateau » :
+      // la mention du modèle est alors retirée de l'affichage.
+      var mentionAncien = ' Ce plateau porte des tuiles de l’ancien catalogue.';
+      blocs.unshift(el('p', { classe: 'at-etape at-etape-' + (ancien ? 'ancien' : bilan.etape), id: 'pl-etape', 'data-etape': ancien ? 'ancien' : bilan.etape }, ancien ? [
+        el('strong', { id: 'pl-etape-titre', texte: 'Plateau de l’ancien catalogue' }),
+        el('span', { classe: 'at-etape-detail', texte: ' Il se juge avec les contrôles de l’ancien catalogue ; les étapes du catalogue 2 (construction, puis villes) ne s’y appliquent pas.' })
+      ] : [
+        el('strong', { id: 'pl-etape-titre', texte: TITRES_ETAPES[bilan.etape] || '' }),
+        el('span', { classe: 'at-etape-detail', texte: ' ' + String(bilan.etapeMessage || '').split(mentionAncien).join('') })
+      ]));
+      bandeauAncien.hidden = !ancien;
       var liste = el('ul', { classe: 'at-constats' });
-      ORDRE_REGLES.forEach(function (regle) {
+      GROUPES.forEach(function (groupe) {
+        var dansGroupe = bilan.resultats.filter(function (x) { return groupe.regles.indexOf(x.regle) !== -1; });
+        var nbErreurs = dansGroupe.filter(function (x) { return x.niveau === 'erreur'; }).length, nbAlertes = dansGroupe.filter(function (x) { return x.niveau === 'alerte'; }).length;
+        var etatGroupe = nbErreurs ? nbErreurs + (nbErreurs > 1 ? ' erreurs' : ' erreur') : (nbAlertes ? nbAlertes + (nbAlertes > 1 ? ' alertes' : ' alerte') : 'conforme');
+        if (groupe.id === 'villes' && !nbErreurs && !ancien && bilan.etape !== 'complet') etatGroupe = bilan.etape === 'villes' ? 'à poser' : 'après la construction';
+        liste.appendChild(el('li', { classe: 'at-groupe', id: 'pl-groupe-' + groupe.id, 'data-groupe': groupe.id }, [
+          el('span', { classe: 'at-groupe-nom', texte: groupe.nom }),
+          el('span', { classe: 'at-groupe-etat ' + (nbErreurs ? 'at-niveau-erreur' : (nbAlertes ? 'at-niveau-alerte' : 'at-niveau-info')), texte: etatGroupe })
+        ]));
+      groupe.regles.forEach(function (regle) {
         var constats = bilan.resultats.filter(function (x) { return x.regle === regle; });
         liste.appendChild(el('li', { classe: 'at-regle', texte: NOMS_REGLES[regle] }));
         constats.forEach(function (x, i) {
@@ -530,12 +582,13 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
           var item;
           if (x.cases.length) {
             corps.push(el('span', { classe: 'at-voir', texte: epingleIci ? ' (cases affichées : cliquer pour masquer)' : ' (survoler ou cliquer : ' + x.cases.length + ' case(s))' }));
-            item = avecSurbrillance(el('button', { type: 'button', classe: 'at-constat', 'data-regle': regle, 'data-niveau': x.niveau, 'aria-pressed': epingleIci ? 'true' : 'false' }, corps), x.cases, cle);
+            item = avecSurbrillance(el('button', { type: 'button', classe: 'at-constat', 'data-regle': regle, 'data-groupe': groupe.id, 'data-niveau': x.niveau, 'aria-pressed': epingleIci ? 'true' : 'false' }, corps), x.cases, cle);
           } else {
-            item = el('div', { classe: 'at-constat', 'data-regle': regle, 'data-niveau': x.niveau }, corps);
+            item = el('div', { classe: 'at-constat', 'data-regle': regle, 'data-groupe': groupe.id, 'data-niveau': x.niveau }, corps);
           }
           liste.appendChild(el('li', null, item));
         });
+      });
       });
       blocs.push(liste);
 
@@ -546,9 +599,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         blocs.push(el('p', { classe: 'at-aide', texte: 'Non calculable : il faut les villes de déploiement des deux camps (elles se posent à l’étape « Villes », une fois le terrain construit).' }));
       } else {
         var corpsTable = el('tbody');
+        var NOMS_TYPES = { centre: ' (centre)', neutre: ' (neutre)', vert: ' (Vert)', rouge: ' (Rouge)' };
         e.villes.forEach(function (v) {
-          var camp = pl.camps.vert.indexOf(v.cle) !== -1 ? ' (Vert)' : (pl.camps.rouge.indexOf(v.cle) !== -1 ? ' (Rouge)' : '');
-          var ligne = el('tr', { tabindex: 0 }, [
+          var camp = NOMS_TYPES[v.type] || '';
+          var ligne = el('tr', { tabindex: 0, 'data-type': v.type || '' }, [
             el('th', { scope: 'row', texte: (numeros[v.cle] || '?') + camp }),
             el('td', { texte: '(' + v.cle + ')' }),
             el('td', { texte: v.vert === null ? '—' : v.vert }),
@@ -557,9 +611,18 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
           ]);
           corpsTable.appendChild(avecSurbrillance(ligne, [v.cle], 'ville/' + v.cle));
         });
+        // Villes de déploiement adverses : coûts de chaque camp vers les villes de l'autre, comparés rang par rang.
+        var adv = e.adverses || { vert: [], rouge: [], ecart: null };
+        var pied = el('tfoot', null, el('tr', { id: 'pl-adverses' }, [
+          el('th', { scope: 'row', colspan: 2, texte: 'Villes de déploiement adverses' }),
+          el('td', { texte: adv.vert.length ? adv.vert.join(' et ') : '—' }),
+          el('td', { texte: adv.rouge.length ? adv.rouge.join(' et ') : '—' }),
+          el('td', { texte: adv.ecart === null ? '—' : adv.ecart })
+        ]));
         blocs.push(el('table', { classe: 'at-table', id: 'pl-equilibre' }, [
           el('thead', null, el('tr', null, ['Ville', 'Case', 'Depuis Vert', 'Depuis Rouge', 'Écart'].map(function (t) { return el('th', { scope: 'col', texte: t }); }))),
-          corpsTable
+          corpsTable,
+          pied
         ]));
         blocs.push(el('p', { id: 'pl-score', texte: 'Score d’équilibre : ' + e.score + ' (0 = équilibré). Il additionne l’écart entre Vert et Rouge vers le centre et vers chaque ville neutre'
           + (e.adverses && e.adverses.ecart !== null ? ', et l’écart vers les villes de déploiement adverses (' + e.adverses.ecart + ').' : '.') }));
@@ -592,13 +655,23 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       rafraichirOutils();
     }
 
-    /** Scène à dessiner : la grille vide (rayon 7) s'ajoute dans les modes de création. */
+    /**
+     * Scène à dessiner : la grille vide (rayon 7) s'ajoute dans les modes de création ; à l'étape « Villes », le
+     * cadre s'élargit d'une case autour du plateau (les villes neutres se posent sur des cases vides, contre le bord).
+     */
     function scene(pl, avecEtiquettes) {
       var s = { plateau: pl };
       if (avecEtiquettes) s.etiquettes = etiquettes(pl, affichage);
       if (mode === 'creer' || mode === 'pinceau') s.grille = R.casesGrille(pl, AT.vueCreation.RAYON_GRILLE);
+      if (mode === 'villes') s.autour = AT.vueVilles.anneau(pl);
       return s;
     }
+
+    /** Un vrai plateau de l'ancien catalogue porte des tuiles de ville d'une case (une forêt peinte au pinceau ne suffit pas). */
+    function estAncien(pl) { return AT.vueCreation.estAncien(pl); }
+
+    /** Ce qui élargit le cadre selon le mode : il faut recadrer quand cela change. */
+    function cadreDuMode(m) { return (m === 'creer' || m === 'pinceau') ? 'grille' : (m === 'villes' ? 'anneau' : 'plateau'); }
 
     /** Aperçu d'un plateau provisoire (trait de pinceau en cours), hors historique et sans contrôles ; null : retour au plateau courant. */
     function apercu(provisoire) { vue.afficher(provisoire ? scene(provisoire, false) : scene(plateau(), true), true); }
@@ -606,19 +679,20 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     // ---------------------------------------------------------------- modes
     function choisirMode(nouveau) {
       if (!MODES.some(function (m) { return m.id === nouveau; })) return false;
-      var grilleAvant = mode === 'creer' || mode === 'pinceau';
+      var cadreAvant = cadreDuMode(mode);
       quitterModes();
       mode = nouveau;
-      var grilleApres = mode === 'creer' || mode === 'pinceau';
+      var cadreApres = cadreDuMode(mode), grilleApres = mode === 'creer' || mode === 'pinceau';
+      if (mode === 'villes') villes.entrer();
       MODES.forEach(function (m) {
         boutonsModes[m.id].setAttribute('aria-pressed', m.id === mode ? 'true' : 'false');
         panneauxModes[m.id].hidden = m.id !== mode;
       });
       zoneOutil.hidden = !(mode === 'generer' || mode === 'creer');
-      guide.reste.hidden = !grilleApres;
+      guide.reste.hidden = !(grilleApres || mode === 'villes');
       element.setAttribute('data-mode', mode);
       biblio.montrer(mode === 'bibliotheque');
-      rafraichir(grilleAvant === grilleApres);          // la grille change le cadre : on recadre
+      rafraichir(cadreAvant === cadreApres);            // la grille ou l'anneau changent le cadre : on recadre
       return true;
     }
 
@@ -684,6 +758,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     // ---------------------------------------------------------------- assemblage
     choixSeuil.addEventListener('change', function () { reglages.seuilContact = parseInt(choixSeuil.value, 10); rafraichir(true); });
     choixMesure.addEventListener('change', function () { reglages.mesureContact = choixMesure.value; rafraichir(true); });
+    choixRemplissages.addEventListener('change', function () { reglages.remplissages = parseInt(choixRemplissages.value, 10); });
     choixAffichage.addEventListener('change', function () { affichage = choixAffichage.value; rafraichir(true); });
     champGraine.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') generer(); });
 
@@ -693,8 +768,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
           return el('span', { classe: 'at-legende-item' }, [R.pastilleTerrain(C.EVENEMENTS[id].terrain, true), id + ' ' + C.EVENEMENTS[id].nom]);
         }))
         .concat([
-          el('span', { classe: 'at-legende-item' }, [el('span', { classe: 'at-puce at-puce-vert', texte: 'V' }), 'ville de déploiement de Vert (haut)']),
-          el('span', { classe: 'at-legende-item' }, [el('span', { classe: 'at-puce at-puce-rouge', texte: 'R' }), 'ville de déploiement de Rouge (bas)']),
+          el('span', { classe: 'at-legende-item' }, [R.pastilleTuile('vd-vert'), 'ville de déploiement de Vert, posée sur une Plaine (haut)']),
+          el('span', { classe: 'at-legende-item' }, [R.pastilleTuile('vd-rouge'), 'ville de déploiement de Rouge, posée sur une Plaine (bas)']),
+          el('span', { classe: 'at-legende-item' }, [R.pastilleTuile('vn'), 'ville neutre (tuile ajoutée sur un flanc)']),
+          el('span', { classe: 'at-legende-item' }, [R.pastilleTuile('remplissage'), 'tuile de remplissage (facultative)']),
           el('span', { classe: 'at-legende-item' }, [el('span', { classe: 'at-trait-epais' }), 'contour d’une pièce monobloc']),
           el('span', { classe: 'at-legende-item' }, [el('span', { classe: 'at-trait-epais at-trait-noyau' }), 'noyau'])
         ]));
@@ -704,17 +781,19 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       plateau: plateau, bilan: function () { return bilan; }, reglages: function () { return reglages; },
       changer: function (nouveau) { changer(nouveau); }, apercu: apercu,
       message: ctx.message, confirmer: ctx.confirmer, telecharger: ctx.telecharger, ouvrirFichier: ctx.ouvrirFichier,
-      etat: function () { return { aPoser: aPoser, selection: selection }; },
+      etat: function () { return { aPoser: aPoser, selection: selection, mode: mode }; },
       choisirModele: choisirModele, choisirEvenement: choisirEvenement,
       glisserModele: glisserModele, deposerModele: deposerModele, annulerGlisse: annulerGlisse,
       nouveauVierge: nouveauVierge, vider: viderPlateau, retirerInconnues: retirerInconnues,
       ouvrirDocument: ouvrirDocument, indiquer: ctx.indiquerPlateau, lier: lierLignee,
+      redessiner: function () { rafraichir(true); }, allerAuxVilles: function () { choisirMode('villes'); },
       bibliotheque: function () { return biblio.liste(); }
     };
     biblio = AT.vueBibliotheque.creer(accesCommun, { stockage: ctx.stockage });
     guide = AT.vueCreation.creerGuide(accesCommun);
     pinceau = AT.vueCreation.creerPinceau(accesCommun);
     monoblocs = AT.vueMonoblocs.creer(accesCommun);
+    villes = AT.vueVilles.creer(accesCommun);
 
     var boutonsModes = {}, panneauxModes = {};
     var bascule = el('div', { classe: 'at-modes', id: 'pl-modes', role: 'group', 'aria-label': 'Mode de travail sur le plateau' }, MODES.map(function (m) {
@@ -732,6 +811,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         ]),
         el('div', { classe: 'at-ligne' }, [el('label', { for: 'pl-seuil', texte: 'Seuil de contact' }), choixSeuil]),
         el('div', { classe: 'at-ligne' }, [el('label', { for: 'pl-mesure', texte: 'Mesure' }), choixMesure]),
+        el('div', { classe: 'at-ligne' }, [el('label', { for: 'pl-remplissages', texte: 'Tuiles de remplissage permises' }), choixRemplissages]),
+        el('p', { classe: 'at-aide', texte: 'Le générateur construit le terrain en monoblocs, comme des joueurs, puis pose les villes. Les tuiles de remplissage (une case de plaine) restent l’exception : il en pose le moins possible.' }),
         avisGeneration
       ]),
       el('fieldset', null, [
@@ -749,6 +830,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     ]);
     panneauxModes.creer = guide.element;
     panneauxModes.pinceau = pinceau.element;
+    panneauxModes.villes = villes.element;
     panneauxModes.monoblocs = monoblocs.element;
     panneauxModes.bibliotheque = biblio.element;
     MODES.forEach(function (m) { panneauxModes[m.id].hidden = m.id !== mode; });
@@ -760,7 +842,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       zoneOutil,
       MODES.map(function (m) { return panneauxModes[m.id]; })
     ]);
-    var centre = el('div', { classe: 'at-centre' }, [vue.element, legende]);
+    var centre = el('div', { classe: 'at-centre' }, [bandeauAncien, vue.element, legende]);
     var droite = el('div', { classe: 'at-colonne at-colonne-droite' }, [guide.reste, el('h2', { texte: 'Contrôles du plateau' }), zoneControles]);
     var element = el('div', { classe: 'at-ecran at-ecran-plateau', 'data-mode': mode }, [gauche, centre, droite]);
 
@@ -774,7 +856,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       imageExport: imageExport, exporterSvg: exporterSvg, exporterPng: exporterPng,
       etat: function () { return { selection: selection, aPoser: aPoser, rang: rang, longueur: historique.length, mode: mode }; },
       choisirMode: choisirMode, mode: function () { return mode; },
-      bibliotheque: biblio, monoblocs: monoblocs, pinceau: pinceau,
+      bibliotheque: biblio, monoblocs: monoblocs, pinceau: pinceau, villes: villes,
       reprendreTravail: reprendreTravail, activerSauvegarde: biblio.activer, sauverTravail: biblio.sauverTravail
     };
   }

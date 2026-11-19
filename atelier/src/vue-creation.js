@@ -69,6 +69,30 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     });
   }
 
+  /**
+   * Phrase qui annonce qu'une retouche du TERRAIN a enlevé des villes de déploiement (la Plaine qui les portait a
+   * été retirée, tournée, déplacée, repeinte ou gommée) ; chaîne vide si aucune n'a disparu. `avant` et `apres` :
+   * le plateau avant et après la retouche.
+   */
+  function mentionVilles(avant, apres) {
+    var restent = Object.create(null), perdues = [];
+    P.deploiements(apres).forEach(function (x) { restent[x.cle] = true; });
+    P.deploiements(avant).forEach(function (x) { if (restent[x.cle] !== true) perdues.push(x); });
+    if (!perdues.length) return '';
+    var noms = { vert: 'Vert', rouge: 'Rouge' };
+    return ' ' + (perdues.length > 1 ? perdues.length + ' villes de déploiement ont été retirées' : 'La ville de déploiement de ' + noms[perdues[0].camp] + ' a été retirée')
+      + ' avec la Plaine qui ' + (perdues.length > 1 ? 'les' : 'la') + ' portait : à reposer à l’étape « Villes ».';
+  }
+
+  /**
+   * Vrai pour un plateau fait avec le PREMIER catalogue : il porte au moins une tuile de ville d'une case (modèle V).
+   * Une plaine, une forêt ou un marais d'une case ne suffisent pas : le pinceau en pose aussi sur un plateau du
+   * catalogue 2. Sur un ancien plateau, les étapes du catalogue 2 (construction, puis villes) ne s'appliquent pas.
+   */
+  function estAncien(plateau) {
+    return !!plateau && (plateau.pieces || []).some(function (p) { return p.modele === 'V'; });
+  }
+
   /** Identifiants des pièces posées dont le modèle est inconnu du catalogue et du document. */
   function piecesInconnues(plateau) {
     return (plateau.pieces || []).filter(function (p) { return !P.modele(plateau, p.modele); }).map(function (p) { return p.id; });
@@ -229,6 +253,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       }
     }
     if (trait.autres) { morceaux.push(trait.raison || 'Case refusée.'); niveau = trait.changees ? 'alerte' : 'erreur'; }
+    // Une ville de déploiement dont la Plaine a été repeinte ou gommée part avec elle : on le dit.
+    var villesPerdues = mentionVilles(trait.depart, trait.plateau);
+    if (villesPerdues) { morceaux.push(villesPerdues.trim()); if (niveau === 'info') niveau = 'alerte'; }
     if (!morceaux.length) {
       morceaux.push(gomme ? 'Case vide : rien à gommer.' : (trait.cases ? 'Rien à changer : ' + (trait.cases > 1 ? 'ces cases ont' : 'cette case a') + ' déjà ce terrain.' : 'Rien n’a été peint.'));
     }
@@ -241,7 +268,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   AT.vueCreation = {
     RAYON_GRILLE: RAYON_GRILLE, TERRAINS_PINCEAU: TERRAINS_PINCEAU,
-    essaiPose: essaiPose, palette: palette, piecesInconnues: piecesInconnues, sansPiecesInconnues: sansPiecesInconnues,
+    essaiPose: essaiPose, palette: palette, piecesInconnues: piecesInconnues, sansPiecesInconnues: sansPiecesInconnues, mentionVilles: mentionVilles, estAncien: estAncien,
     resteAFaire: resteAFaire,
     outilValide: outilValide, nouveauTrait: nouveauTrait, etendreTrait: etendreTrait, tracer: tracer, bilanTrait: bilanTrait
   };
@@ -314,6 +341,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       }, [R.dessinModele(x.id, { echelle: 0.24, titre: x.nom, plateau: plateau })]);
       // Le nom d'une pièce personnelle vient d'un fichier : textContent seulement.
       b.appendChild(el('span', { classe: 'at-piece-nom', texte: x.nom + ' × ' + x.restant }));
+      if (x.facultatif) b.appendChild(el('span', { classe: 'at-piece-facultatif', texte: 'facultatif' }));
       return b;
     }
 
@@ -329,11 +357,23 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
           title: 'Essayer la tuile d’événement : ' + C.EVENEMENTS[id].nom, sur: { click: function () { acces.choisirEvenement(id); } }
         }, [R.pastilleTerrain(C.EVENEMENTS[id].terrain, true), el('span', { texte: id + ' ' + C.EVENEMENTS[id].nom })]);
       });
-      var contenu = [
-        el('h3', { texte: 'Pièces du catalogue (stock restant)' }),
-        el('div', { classe: 'at-grille-stock' }, base.map(function (x) { return boutonPiece(x, pl, aPoser); }))
+      // Catalogue 2 : noyau et montagnes, monoblocs de 4 cases, de 3 cases, puis les tuiles de remplissage (facultatives).
+      // Les villes neutres ne sont pas dans la palette : elles se posent à l'étape « Villes ».
+      var groupes = [
+        { id: 'socle', titre: 'Noyau et montagnes', pieces: base.filter(function (x) { return x.role === 'noyau' || x.role === 'montagne'; }) },
+        { id: 'quatre', titre: 'Monoblocs de 4 cases', pieces: base.filter(function (x) { return x.role === 'terrain' && x.cases === 4; }) },
+        { id: 'trois', titre: 'Monoblocs de 3 cases', pieces: base.filter(function (x) { return x.role === 'terrain' && x.cases !== 4; }) },
+        { id: 'remplissage', titre: 'Tuiles de remplissage (facultatif)', pieces: base.filter(function (x) { return x.role === 'remplissage'; }) }
       ];
-      if (!base.some(function (x) { return x.restant > 0; })) contenu.push(el('p', { classe: 'at-aide', texte: 'Toutes les pièces du catalogue sont posées.' }));
+      var contenu = [];
+      groupes.forEach(function (g) {
+        if (!g.pieces.length) return;
+        var restant = 0;
+        g.pieces.forEach(function (x) { restant += x.restant; });
+        contenu.push(el('h3', { 'data-groupe': g.id, texte: g.titre + ' (' + restant + ' en stock)' }));
+        contenu.push(el('div', { classe: 'at-grille-stock', 'data-groupe': g.id }, g.pieces.map(function (x) { return boutonPiece(x, pl, aPoser); })));
+      });
+      contenu.push(el('p', { classe: 'at-aide', id: 'cr-note-villes', texte: 'Les villes ne sont pas dans la palette : elles se posent à l’étape « Villes », une fois le terrain construit.' }));
       contenu.push(el('h3', { texte: 'Mes monoblocs' }));
       contenu.push(persos.length
         ? el('div', { classe: 'at-grille-stock', id: 'cr-persos' }, persos.map(function (x) { return boutonPiece(x, pl, aPoser); }))
@@ -361,21 +401,45 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     function rafraichirReste() {
       var r = resteAFaire(acces.plateau(), acces.bilan());
       var detailler = function (liste) { return liste.map(function (x) { return x.restant + ' × ' + x.nom; }).join(', '); };
-      var lignes = [
+      // Deux étapes (§9.1) : 1. construction du terrain ; 2. villes, une fois le terrain construit.
+      var construction = [
         ligneReste('pieces', !r.nbPieces, r.nbPieces ? 'Pièces de terrain à poser : ' + r.nbPieces : 'Terrain construit : toutes les pièces de terrain sont posées', r.nbPieces ? detailler(r.pieces) : null)
       ];
-      if (r.facultatives.length) lignes.push(ligneReste('facultatives', true, 'Tuiles de remplissage en réserve (facultatives) : ' + detailler(r.facultatives)));
-      if (r.nbPersos) lignes.push(ligneReste('persos', false, 'Monoblocs personnels à poser : ' + r.nbPersos, detailler(r.persos)));
-      lignes.push(ligneReste('villes', !r.villes.manquantes && !r.villes.enTrop, phraseCompte(r.villes, 'Villes')));
-      lignes.push(ligneReste('haut', !r.haut.manquantes && !r.haut.enTrop, phraseCompte(r.haut, 'Villes de déploiement en haut (Vert)')));
-      lignes.push(ligneReste('bas', !r.bas.manquantes && !r.bas.enTrop, phraseCompte(r.bas, 'Villes de déploiement en bas (Rouge)')));
-      if (r.neutres.voulues || r.neutres.posees) lignes.push(ligneReste('neutres', !r.neutres.manquantes && !r.neutres.enTrop, phraseCompte(r.neutres, 'Villes neutres (une par flanc)')));
-      lignes.push(ligneReste('erreurs', !r.erreurs.length, r.erreurs.length ? 'Erreurs en cours : ' + r.erreurs.length : 'Aucune erreur aux contrôles',
-        r.erreurs.length ? r.erreurs.slice(0, 4).join(' ') + (r.erreurs.length > 4 ? ' …' : '') : null));
-      var contenu = [
-        el('h2', { texte: 'Ce qu’il reste à faire' }),
-        el('ul', { classe: 'at-reste-liste' }, lignes)
+      if (r.facultatives.length) construction.push(ligneReste('facultatives', true, 'Tuiles de remplissage en réserve (facultatives) : ' + detailler(r.facultatives)));
+      if (r.nbPersos) construction.push(ligneReste('persos', false, 'Monoblocs personnels à poser : ' + r.nbPersos, detailler(r.persos)));
+      var villes = [
+        ligneReste('villes', !r.villes.manquantes && !r.villes.enTrop, phraseCompte(r.villes, 'Villes')),
+        ligneReste('haut', !r.haut.manquantes && !r.haut.enTrop, phraseCompte(r.haut, 'Villes de déploiement en haut (Vert)')),
+        ligneReste('bas', !r.bas.manquantes && !r.bas.enTrop, phraseCompte(r.bas, 'Villes de déploiement en bas (Rouge)'))
       ];
+      if (r.neutres.voulues || r.neutres.posees) villes.push(ligneReste('neutres', !r.neutres.manquantes && !r.neutres.enTrop, phraseCompte(r.neutres, 'Villes neutres (une par flanc)')));
+      var erreurs = [ligneReste('erreurs', !r.erreurs.length, r.erreurs.length ? 'Erreurs en cours : ' + r.erreurs.length : 'Aucune erreur aux contrôles',
+        r.erreurs.length ? r.erreurs.slice(0, 4).join(' ') + (r.erreurs.length > 4 ? ' …' : '') : null)];
+      var titreEtape = function (numero, nom, etat) {
+        return el('h3', { classe: 'at-reste-etape', 'data-etape': nom, 'data-etat': etat, texte: numero + '. ' + (nom === 'construction' ? 'Construction du terrain' : 'Villes')
+          + (etat === 'faite' ? ' : faite' : (etat === 'en-cours' ? ' : en cours' : ' : ensuite')) });
+      };
+      var ancien = estAncien(acces.plateau());
+      var contenu = ancien ? [
+        // Ancien plateau : ses pièces ne sont pas celles du catalogue 2, les deux étapes ne s'y appliquent pas.
+        el('h2', { texte: 'Ce qu’il reste à faire' }),
+        el('p', { classe: 'at-aide', id: 'cr-reste-ancien', texte: 'Plateau de l’ancien catalogue : ses tuiles d’une case et ses villes ont été posées pendant la construction. Les étapes du catalogue 2 ne s’y appliquent pas ; seules ses villes et ses erreurs sont suivies ici.' }),
+        el('ul', { classe: 'at-reste-liste' }, villes)
+      ] : [
+        el('h2', { texte: 'Ce qu’il reste à faire' }),
+        titreEtape(1, 'construction', r.etape === 'construction' ? 'en-cours' : 'faite'),
+        el('ul', { classe: 'at-reste-liste' }, construction),
+        titreEtape(2, 'villes', r.etape === 'construction' ? 'ensuite' : (r.etape === 'villes' ? 'en-cours' : 'faite')),
+        el('ul', { classe: 'at-reste-liste' }, villes)
+      ];
+      // L'étape « Villes » se propose d'elle-même quand la construction est terminée.
+      if (!ancien && r.etape === 'villes' && acces.allerAuxVilles && acces.etat().mode !== 'villes') {
+        contenu.push(el('p', { classe: 'at-reste-proposition', id: 'cr-proposition' }, [
+          'Le terrain est construit : ',
+          bouton('Passer à l’étape « Villes »', acces.allerAuxVilles, 'cr-vers-villes', 'Poser les villes de déploiement et les villes neutres')
+        ]));
+      }
+      contenu.push(el('ul', { classe: 'at-reste-liste' }, erreurs));
       if (r.inconnues) {
         contenu.push(el('p', { classe: 'at-avis', id: 'cr-inconnues' }, [
           pluriel(r.inconnues, 'pièce', 'pièces') + ' d’un modèle inconnu : elles n’occupent aucune case. ',
@@ -450,10 +514,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         var cible = b.confirmer;
         acces.confirmer('Retirer le monobloc « ' + cible.nom + ' » en entier (' + cible.cases.length + ' cases) ?',
           'Retirer', function () {
-            var r = P.retirer(acces.plateau(), cible.piece);
+            var avantRetrait = acces.plateau(), r = P.retirer(avantRetrait, cible.piece);
             if (!r.ok) { dire(r.raison, 'erreur'); return; }
             acces.changer(r.plateau);
-            dire('Monobloc « ' + cible.nom + ' » retiré : il retourne au stock.'
+            dire('Monobloc « ' + cible.nom + ' » retiré : il retourne au stock.' + mentionVilles(avantRetrait, r.plateau)
               + (r.evenementsRetires.length ? ' ' + pluriel(r.evenementsRetires.length, 'tuile d’événement retourne', 'tuiles d’événement retournent') + ' en réserve.' : ''), 'info');
           });
       }
@@ -479,7 +543,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         el('p', { classe: 'at-aide', texte: 'Choisissez un terrain ou la gomme, puis cliquez ou glissez sur les cases, y compris les cases vides de la grille. Un trait s’annule en une fois (Ctrl+Z).' }),
         zoneOutils,
         zoneMessage,
-        el('p', { classe: 'at-aide', texte: 'Le pinceau pose des tuiles d’une case : celles du stock d’abord, puis « hors stock » (annoncé, à prévoir en plus du catalogue). Il ne touche ni aux monoblocs ni au noyau. La gomme retire un monobloc après confirmation ; elle ne retire jamais le noyau, qui est fixe. Maj + glisser déplace la vue.' })
+        el('p', { classe: 'at-aide', texte: 'Le pinceau pose des tuiles d’une case. Le catalogue 2 est fait de monoblocs : ces tuiles sont « hors stock » (annoncé, à prévoir en plus du catalogue), sauf une plaine prise d’abord parmi les tuiles de remplissage. Les villes se posent à l’étape « Villes ». Il ne touche ni aux monoblocs ni au noyau. La gomme retire un monobloc après confirmation ; elle ne retire jamais le noyau, qui est fixe. Maj + glisser déplace la vue.' })
       ])
     ]);
     rafraichir();

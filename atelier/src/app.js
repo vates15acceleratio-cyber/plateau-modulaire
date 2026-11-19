@@ -6,7 +6,7 @@
  * La page comprend des paramètres d'adresse, utiles pour les captures d'écran et la recette :
  *   index.html#onglet=plateau|inventaire|partie&graine=12&partie=5&mode=creer
  *   (graine : génère ce plateau au démarrage ; partie : ouvre une partie fictive avec cette graine ;
- *    mode : generer | creer | pinceau | monoblocs | bibliotheque, mode de l'onglet Plateau).
+ *    mode : generer | creer | pinceau | villes | monoblocs | bibliotheque, mode de l'onglet Plateau).
  *
  * Au démarrage, sans paramètre « graine », le travail en cours sauvegardé dans le navigateur est repris
  * (vue-bibliotheque.js) ; sinon, ou avec « graine », un plateau est généré.
@@ -44,7 +44,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     return (typeof graine === 'number' && graine < 999999999) ? graine + 1 : 1;
   }
 
-  var MODES_PLATEAU = ['generer', 'creer', 'pinceau', 'monoblocs', 'bibliotheque'];
+  var MODES_PLATEAU = ['generer', 'creer', 'pinceau', 'villes', 'monoblocs', 'bibliotheque'];
 
   /** Paramètres de l'adresse (« #onglet=partie&graine=12 ») : {onglet, graine, partie, mode}, null si absent ou invalide. */
   function lireParametres(hash) {
