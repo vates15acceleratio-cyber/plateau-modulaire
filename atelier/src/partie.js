@@ -335,7 +335,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     var champs = ['version', 'graine', 'pieces', 'recouvrements', 'camps'];
     exiger(estObjet(pl), 'Plateau : objet attendu.');
     var avecModeles = possede(pl, 'modeles');                       // champ facultatif
-    clesExactes(pl, avecModeles ? champs.concat(['modeles']) : champs, 'Plateau');
+    var avecDeploiements = possede(pl, 'deploiements');             // champ facultatif (villes de déploiement, catalogue 2)
+    clesExactes(pl, champs.concat(avecModeles ? ['modeles'] : [], avecDeploiements ? ['deploiements'] : []), 'Plateau');
     exiger(estEntier(pl.version, 0, 1000), 'Plateau : version invalide.');
     // La graine du plateau est moins contrainte que celle de la partie (chaîne vide ou null admis),
     // pour ne pas refuser un plateau que le lot A accepte.
@@ -372,6 +373,18 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       exiger(typeof rc.cle === 'string' && MOTIF_CLE.test(rc.cle), ou + ' : clé de case invalide.');
       propre.recouvrements.push({ evenement: rc.evenement, cle: rc.cle });
     });
+    if (avecDeploiements) {
+      exiger(Array.isArray(pl.deploiements) && pl.deploiements.length <= 8, 'Plateau : villes de déploiement invalides.');
+      var villesPosees = [];
+      pl.deploiements.forEach(function (d, i) {
+        var ou = 'Plateau, ville de déploiement ' + (i + 1);
+        clesExactes(d, ['cle', 'camp'], ou);
+        exiger(JOUEURS.indexOf(d.camp) >= 0, ou + ' : camp invalide.');
+        exiger(typeof d.cle === 'string' && MOTIF_CLE.test(d.cle), ou + ' : clé de case invalide.');
+        villesPosees.push({ cle: d.cle, camp: d.camp });
+      });
+      if (villesPosees.length) propre.deploiements = villesPosees;   // forme canonique : champ absent s'il n'y en a pas
+    }
     clesExactes(pl.camps, JOUEURS, 'Plateau, camps');
     JOUEURS.forEach(function (j) {
       exiger(Array.isArray(pl.camps[j]) && pl.camps[j].length <= 6, 'Plateau, camps : liste invalide.');

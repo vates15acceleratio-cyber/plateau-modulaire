@@ -19,7 +19,8 @@ const AT = globalThis.AT;
 const H = AT.hex, C = AT.catalogue;
 
 const CRETE = () => ({ nom: 'Crête', quantite: 2, cases: [{ q: 0, r: 0, terrain: 'montagne' }, { q: 1, r: 0, terrain: 'foret' }, { q: 1, r: 1, terrain: 'plaine' }] });
-const pose = (pl, modele, q, r, rot, options) => { const x = P.poser(pl, modele, q, r, rot || 0, options); assert.ok(x.ok, x.raison); return x.plateau; };
+// Les tuiles d'une case du premier catalogue (P, F, S, V) sont hors catalogue : elles se posent hors stock.
+const pose = (pl, modele, q, r, rot, options) => { const x = P.poser(pl, modele, q, r, rot || 0, options || { horsStock: ['P', 'F', 'S', 'V'].includes(modele) }); assert.ok(x.ok, x.raison); return x.plateau; };
 const genere = () => P.avecCamps(G.generer(1).plateau);
 
 // ------------------------------------------------------------------ création guidée
@@ -78,22 +79,32 @@ test('palette : catalogue imprimé puis pièces personnelles, jamais la montagne
   const p0 = VC.palette(pl);
   assert.deepStrictEqual(p0.map((x) => x.id), C.ORDRE_MODELES.concat(['X1']));
   assert.ok(!p0.some((x) => x.id === 'M1'));
-  assert.deepStrictEqual(p0.filter((x) => x.id === 'N1')[0], { id: 'N1', nom: 'Noyau', cases: 7, total: 1, poses: 1, restant: 0, perso: false });
-  assert.deepStrictEqual(p0.filter((x) => x.id === 'X1')[0], { id: 'X1', nom: 'Crête', cases: 3, total: 2, poses: 0, restant: 2, perso: true });
-  for (let i = 0; i < 7; i++) pl = P.peindre(pl, (i - 3) + ',-3', 'foret').plateau;
-  assert.strictEqual(VC.palette(pl).filter((x) => x.id === 'F')[0].restant, 0, '7 forêts posées pour 5 : restant 0, pas -2');
-  assert.strictEqual(VC.palette(pl).filter((x) => x.id === 'F')[0].poses, 7);
+  assert.deepStrictEqual(p0.filter((x) => x.id === 'N1')[0], { id: 'N1', nom: 'Noyau', cases: 7, total: 1, poses: 1, restant: 0, perso: false, role: 'noyau', facultatif: false });
+  assert.deepStrictEqual(p0.filter((x) => x.id === 'X1')[0], { id: 'X1', nom: 'Crête', cases: 3, total: 2, poses: 0, restant: 2, perso: true, role: 'perso', facultatif: false });
+  assert.deepStrictEqual(p0.filter((x) => x.id === 'R')[0], { id: 'R', nom: 'Remplissage', cases: 1, total: 2, poses: 0, restant: 2, perso: false, role: 'remplissage', facultatif: true });
+  assert.strictEqual(p0.filter((x) => x.id === 'VN')[0].role, 'ville');
+  assert.ok(!p0.some((x) => ['P', 'F', 'S', 'V'].includes(x.id)), 'les tuiles d’une case du premier catalogue ne sont plus dans la palette');
+  // Plaines peintes : les 2 remplissages du stock, puis des Plaines hors catalogue ; le stock restant ne passe pas sous 0.
+  for (let i = 0; i < 4; i++) pl = P.peindre(pl, (i - 3) + ',-3', 'plaine').plateau;
+  assert.strictEqual(VC.palette(pl).filter((x) => x.id === 'R')[0].restant, 0);
+  assert.strictEqual(VC.palette(pl).filter((x) => x.id === 'R')[0].poses, 2);
 });
 
 test('resteAFaire : plateau vierge, plateau en cours, plateau généré terminé', () => {
   const vierge = P.vierge(1), r0 = VC.resteAFaire(vierge, K.tout(vierge));
-  assert.strictEqual(r0.nbPieces, 63);
-  assert.deepStrictEqual(r0.pieces.filter((x) => x.id === 'P')[0], { id: 'P', nom: 'Plaine', restant: 39 });
+  assert.strictEqual(r0.nbPieces, 23, '2 montagnes et 21 monoblocs de terrain');
+  assert.deepStrictEqual(r0.pieces.filter((x) => x.id === 'P4A')[0], { id: 'P4A', nom: 'Pré en losange', restant: 1 });
+  assert.ok(!r0.pieces.some((x) => x.id === 'R' || x.id === 'VN'), 'ni les remplissages (facultatifs) ni les villes neutres');
+  assert.deepStrictEqual(r0.facultatives, [{ id: 'R', nom: 'Remplissage', restant: 2 }]);
+  assert.deepStrictEqual(r0.neutres, { posees: 0, voulues: 2, manquantes: 2, enTrop: 0 });
+  assert.strictEqual(r0.etape, 'construction');
   assert.ok(!r0.pieces.some((x) => x.id === 'N1'));
   assert.deepStrictEqual(r0.villes, { posees: 1, voulues: 7, manquantes: 6, enTrop: 0 });
   assert.deepStrictEqual(r0.haut, { posees: 0, voulues: 2, manquantes: 2, enTrop: 0 });
   assert.deepStrictEqual(r0.bas, { posees: 0, voulues: 2, manquantes: 2, enTrop: 0 });
-  assert.ok(r0.erreurs.length > 0 && r0.erreurs.every((m) => typeof m === 'string'));
+  // Le noyau seul ne touche encore aucune pièce (contact) ; les villes à poser, elles, ne sont pas une erreur.
+  assert.strictEqual(r0.erreurs.length, 1);
+  assert.match(r0.erreurs[0], /^Contact/);
   assert.strictEqual(r0.termine, false);
 
   let pl = P.ajouterModele(vierge, CRETE()).plateau;
@@ -108,6 +119,15 @@ test('resteAFaire : plateau vierge, plateau en cours, plateau généré terminé
   assert.deepStrictEqual(r1.erreurs, [], 'sans bilan, pas de liste d’erreurs');
 
   const fini = genere(), r2 = VC.resteAFaire(fini, K.tout(fini));
+  assert.strictEqual(r2.etape, 'complet');
+  assert.deepStrictEqual(r2.neutres, { posees: 2, voulues: 2, manquantes: 0, enTrop: 0 });
+  assert.deepStrictEqual(r2.haut, { posees: 2, voulues: 2, manquantes: 0, enTrop: 0 });
+  // Terrain construit, villes retirées : étape « villes ».
+  let sansVilles = fini;
+  P.deploiements(fini).forEach((d) => { sansVilles = P.retirerVilleDeploiement(sansVilles, d.cle).plateau; });
+  const r3 = VC.resteAFaire(sansVilles, K.tout(sansVilles));
+  assert.strictEqual(r3.etape, 'villes');
+  assert.deepStrictEqual([r3.haut.manquantes, r3.bas.manquantes, r3.neutres.manquantes, r3.termine], [2, 2, 0, false]);
   assert.strictEqual(r2.nbPieces, 0);
   assert.strictEqual(r2.villes.manquantes + r2.haut.manquantes + r2.bas.manquantes, 0);
   assert.strictEqual(r2.termine, true);
@@ -148,21 +168,30 @@ test('trait de pinceau : plusieurs cases, plateau de départ intact, une case vi
   assert.strictEqual(trait.depart, depart);
   const b = VC.bilanTrait(trait);
   assert.strictEqual(b.change, true);
-  assert.strictEqual(b.niveau, 'info');
-  assert.match(b.message, /^3 cases peintes en forêt\.$/);
+  // Une tuile peinte est hors catalogue : le trait l'annonce.
+  assert.strictEqual(b.niveau, 'alerte');
+  assert.match(b.message, /^3 cases peintes en forêt\. 3 tuiles posées hors stock : à prévoir en plus du catalogue\.$/);
+  // Deux Plaines : elles viennent des tuiles de remplissage du catalogue, rien à prévoir en plus.
+  const plaines = VC.bilanTrait(VC.tracer(depart, { type: 'terrain', terrain: 'plaine' }, ['2,-2', '3,-2']));
+  assert.strictEqual(plaines.niveau, 'info');
+  assert.match(plaines.message, /^2 cases peintes en plaine\.$/);
+  assert.deepStrictEqual(plaines.plateau.pieces.slice(1).map((x) => x.modele), ['R', 'R']);
   assert.strictEqual(b.confirmer, null);
   assert.deepStrictEqual(b.plateau.camps, P.campsAuto(b.plateau), 'les camps sont recalculés une fois, à la fin');
 });
 
-test('trait de pinceau : hors stock annoncé, villes de déploiement recalculées en fin de trait', () => {
+test('trait de pinceau : hors stock annoncé ; le pinceau ne pose plus de ville', () => {
   const sept = ['-3,-3', '-2,-3', '-1,-3', '0,-3', '1,-3', '2,-3', '3,-3'];
   const b = VC.bilanTrait(VC.tracer(P.vierge(1), { type: 'terrain', terrain: 'foret' }, sept));
-  assert.match(b.message, /7 cases peintes en forêt\. 2 tuiles posées hors stock : à prévoir en plus du catalogue\./);
+  assert.match(b.message, /7 cases peintes en forêt\. 7 tuiles posées hors stock : à prévoir en plus du catalogue\./);
   assert.strictEqual(b.niveau, 'alerte');
   const m = VC.bilanTrait(VC.tracer(P.vierge(1), { type: 'terrain', terrain: 'montagne' }, ['3,0']));
   assert.match(m.message, /1 case peinte en montagne\. 1 tuile posée hors stock/);
-  const v = VC.bilanTrait(VC.tracer(P.vierge(1), { type: 'terrain', terrain: 'ville' }, ['-1,-3', '2,-3']));
-  assert.deepStrictEqual(v.plateau.camps.vert, ['-1,-3', '2,-3']);
+  // Les villes se posent à l'étape « Villes » : l'outil « ville » n'existe plus.
+  assert.deepStrictEqual(VC.TERRAINS_PINCEAU, ['plaine', 'foret', 'marais', 'montagne']);
+  const depart = P.vierge(1), v = VC.bilanTrait(VC.tracer(depart, { type: 'terrain', terrain: 'ville' }, ['-1,-3', '2,-3']));
+  assert.strictEqual(v.change, false);
+  assert.strictEqual(v.plateau, depart);
 });
 
 test('trait de pinceau : noyau et monobloc laissés, avec explication ; rien à changer ; outil invalide', () => {
@@ -337,8 +366,8 @@ test('plateau.modifierModele : pièce posée, le nom et la quantité se changent
 
 test('inventaire : totaux du catalogue imprimé inchangés, restantes jamais négatives, hors catalogue et pièces personnelles à part', () => {
   const plein = genere(), b0 = VI.bilan(plein);
-  assert.strictEqual(b0.lignes.length, 13);
-  assert.deepStrictEqual([b0.poses, b0.casesPosees, b0.restantes], [64, 91, 0]);
+  assert.strictEqual(b0.lignes.length, 26);
+  assert.deepStrictEqual([b0.poses, b0.casesPosees, b0.restantes], [26, 93, 2], '24 pièces de terrain et 2 villes neutres posées ; 2 remplissages restent');
   assert.deepStrictEqual(b0.horsCatalogue, { pieces: 0, cases: 0, detail: [] });
   assert.deepStrictEqual(b0.persos, []);
 
@@ -347,28 +376,29 @@ test('inventaire : totaux du catalogue imprimé inchangés, restantes jamais né
   pl = P.peindre(pl, '0,3', 'montagne').plateau;
   for (let i = 0; i < 7; i++) pl = P.peindre(pl, (i - 3) + ',-3', 'foret').plateau;
   const b = VI.bilan(pl);
-  assert.deepStrictEqual(b.lignes.filter((x) => x.id === 'F')[0], { id: 'F', nom: 'Forêt', cases: 1, total: 5, poses: 5, restantes: 0, enPlus: 2 });
-  assert.deepStrictEqual([b.poses, b.casesPosees, b.restantes], [6, 12, 58], 'noyau + 5 forêts ; 64 − 6 = 58 restantes');
+  assert.ok(!b.lignes.some((x) => x.id === 'F'), 'la forêt d’une case n’est plus au catalogue imprimé');
+  assert.deepStrictEqual([b.poses, b.casesPosees, b.restantes], [1, 7, 27], 'le noyau seul ; 28 − 1 = 27 restantes');
   assert.strictEqual(b.poses + b.restantes, C.totaux().pieces);
-  assert.deepStrictEqual(b.horsCatalogue, { pieces: 3, cases: 3, detail: [{ id: 'F', nom: 'Forêt', nombre: 2 }, { id: 'M1', nom: 'Montagne d’une case', nombre: 1 }] });
+  assert.deepStrictEqual(b.horsCatalogue, { pieces: 8, cases: 8, detail: [{ id: 'M1', nom: 'Montagne d’une case', nombre: 1 }, { id: 'F', nom: 'Forêt', nombre: 7 }] });
   assert.deepStrictEqual(b.persos, [{ id: 'X1', nom: 'Crête', cases: 3, total: 2, poses: 1, restantes: 1, enPlus: 0 }]);
   assert.ok(b.lignes.every((x) => x.restantes >= 0 && x.poses <= x.total));
   assert.ok(!b.lignes.some((x) => x.id === 'M1' || x.id === 'X1'));
-  assert.deepStrictEqual(C.totaux().pieces, 64);
-  assert.deepStrictEqual(C.totaux().cases, 91);
+  assert.deepStrictEqual(C.totaux().pieces, 28);
+  assert.deepStrictEqual(C.totaux().cases, 95);
 });
 
 // ------------------------------------------------------------------ bibliothèque (vue)
 
 test('bibliothèque : résumé d’une fiche, date lisible, nom proposé, plateaux identiques', () => {
   const plein = genere();
-  assert.deepStrictEqual(VB.resume(plein), { cases: 91, pieces: 64, villes: 7, erreurs: K.tout(plein).erreurs, alertes: K.tout(plein).alertes });
+  assert.deepStrictEqual(VB.resume(plein), { cases: 93, pieces: 26, villes: 7, erreurs: K.tout(plein).erreurs, alertes: K.tout(plein).alertes });
   assert.strictEqual(VB.texteResume({ cases: 91, pieces: 64, villes: 7, erreurs: 0, alertes: 0 }), '91 cases, 64 pièces, 7 villes ; aucune erreur, aucune alerte');
   assert.strictEqual(VB.texteResume({ cases: 1, pieces: 1, villes: 1, erreurs: 1, alertes: 2 }), '1 case, 1 pièce, 1 ville ; 1 erreur, 2 alertes');
   assert.strictEqual(VB.texteResume({ cases: 0, pieces: 0, villes: 0, erreurs: 3, alertes: 0 }), 'aucune case, aucune pièce, aucune ville ; 3 erreurs, aucune alerte');
   const vierge = VB.resume(P.vierge(1));
   assert.deepStrictEqual([vierge.cases, vierge.pieces, vierge.villes], [7, 1, 1]);
-  assert.ok(vierge.erreurs > 0);
+  assert.strictEqual(vierge.erreurs, 1, 'le noyau seul ne touche aucune pièce ; les villes à poser ne sont pas une erreur');
+  assert.ok(vierge.alertes > 0);
   assert.match(VB.dateLisible('2026-11-19T12:05:09.000Z'), /^\d\d\/11\/2026 à \d\d:05$/);
   assert.strictEqual(VB.dateLisible('pas une date'), '');
   assert.strictEqual(VB.dateLisible(undefined), '');

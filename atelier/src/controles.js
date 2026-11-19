@@ -1,19 +1,24 @@
 /*
- * controles.js : les 7 contrôles du plateau (docs/02-atelier-cahier-des-charges.md, §3).
+ * controles.js : les contrôles du plateau (docs/02-atelier-cahier-des-charges.md, §3 et §9.4).
  * Aucun accès au DOM. Dépend de AT.hex, AT.catalogue, AT.plateau.
  *
- * Chaque contrôle renvoie une LISTE de constats {regle, niveau, message, cases} (au moins un) :
- *   regle   : 'inventaire' | 'continuite' | 'monoblocs' | 'villes' | 'contact' | 'equilibre' | 'evenements'
+ * Chaque contrôle renvoie une LISTE de constats {regle, groupe, niveau, message, cases} (au moins un) :
+ *   regle   : 'inventaire' | 'continuite' | 'monoblocs' | 'contact' | 'villes' | 'equilibre' | 'evenements'
+ *   groupe  : 'construction' (inventaire, continuité et trous, monoblocs et noyau, contact) | 'villes' (villes,
+ *             équilibre) | 'evenements'
  *   niveau  : 'erreur' | 'alerte' | 'info'
  *   message : texte en français pour l'utilisateur
  *   cases   : clés des cases concernées (pour la surbrillance), éventuellement vide
  * Certains constats portent en plus un champ `donnees` (chiffres pour l'affichage).
  *
- * Les contrôles 1 à 6 jugent la CONSTRUCTION du plateau : ils ignorent les tuiles d'événement.
- * Le contrôle 7 juge les tuiles d'événement posées.
+ * Deux phases (§9.1, B3) : la CONSTRUCTION du terrain, puis les VILLES. Un plateau construit sans villes n'est pas
+ * en erreur : etape() dit « construction terminée, villes à poser » et le contrôle des villes le signale en alerte.
+ * Les contrôles de construction jugent le terrain seul (sans villes neutres ni villes de déploiement) ; aucun
+ * contrôle de construction ou de villes ne regarde les tuiles d'événement, jugées à part.
  *
  * options (toutes facultatives, valeurs par défaut dans AT.catalogue.REGLAGES) :
- *   seuilContact (2 ou 3), mesureContact ('cotes' | 'pieces'), ecartVilles, nombreVilles, couts,
+ *   seuilContact (2 ou 3), mesureContact ('cotes' | 'pieces'), seuilContactRemplissage, ecartVilles, nombreVilles, couts,
+ *   profondeurExtremite, contactVilleNeutre, neutresTiersCentral,
  *   trous ('alerte' | 'erreur' | 'ignore' : niveau du constat quand le plateau a un trou).
  */
 var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof globalThis !== 'undefined' ? globalThis : window).AT || {});
@@ -26,10 +31,14 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   }
   var H = AT.hex, C = AT.catalogue, P = AT.plateau;
   var possede = Object.prototype.hasOwnProperty;
-  var BASE = { sansRecouvrements: true };
+  var BASE = { sansRecouvrements: true };                          // terrain et villes, sans les tuiles d'événement
+  var TERRAIN = { sansRecouvrements: true, sansVilles: true };     // le terrain construit seul
+  var GROUPES = { inventaire: 'construction', continuite: 'construction', monoblocs: 'construction', contact: 'construction',
+    villes: 'villes', equilibre: 'villes', evenements: 'evenements' };
+  var NOMS_CAMPS = { vert: 'Vert', rouge: 'Rouge' };
 
   function constat(regle, niveau, message, cases, donnees) {
-    var c = { regle: regle, niveau: niveau, message: message, cases: cases ? H.trier(cases) : [] };
+    var c = { regle: regle, groupe: GROUPES[regle], niveau: niveau, message: message, cases: cases ? H.trier(cases) : [] };
     if (donnees !== undefined) c.donnees = donnees;
     return c;
   }
@@ -63,15 +72,17 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   /**
    * Inventaire. Erreurs : pièce de modèle inconnu ; monobloc (ou noyau) posé plus de fois que prévu.
-   * Alertes : pièces restantes (catalogue imprimé, puis pièces personnelles) ; tuiles d'UNE case posées hors stock
-   * par le pinceau (« à prévoir en plus du catalogue », détail par modèle) ; toute montagne d'une case.
+   * Alertes : pièces de terrain restantes (noyau, montagnes, monoblocs), puis pièces personnelles restantes ; tuiles
+   * d'UNE case posées hors catalogue (pinceau, ancien catalogue : « à prévoir en plus du catalogue », détail par
+   * modèle) ; toute montagne d'une case. Les tuiles de remplissage non posées sont une simple information ; les
+   * villes neutres restantes sont l'affaire du contrôle des villes.
    */
   function inventaire(plateau) {
     var res = [], inconnues = 0, pieces = plateau.pieces || [];
     pieces.forEach(function (p) { if (!P.modele(plateau, p.modele)) inconnues += 1; });
     if (inconnues) res.push(constat('inventaire', 'erreur', pluriel(inconnues, 'pièce') + ' hors catalogue sur le plateau.', []));
     var stock = P.stock(plateau), restantes = [], nbRestantes = 0, restantesPerso = [], nbRestantesPerso = 0;
-    var enPlus = [], nbEnPlus = 0, casesEnPlus = [], parModele = {};
+    var enPlus = [], nbEnPlus = 0, casesEnPlus = [], parModele = {}, facultatives = [];
     var casesDe = function (liste) {
       var cases = [];
       liste.forEach(function (p) { P.casesPiece(p, plateau).forEach(function (c) { cases.push(c.cle); }); });
@@ -93,14 +104,16 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         }
       } else if (s.restant > 0) {
         if (m.perso) { restantesPerso.push(s.restant + ' × ' + m.nom); nbRestantesPerso += s.restant; }
-        else { restantes.push(s.restant + ' × ' + m.nom); nbRestantes += s.restant; }
+        else if (m.facultatif) { facultatives.push(s.restant + ' × ' + m.nom); }
+        else if (C.estConstruction(m)) { restantes.push(s.restant + ' × ' + m.nom); nbRestantes += s.restant; }
       }
     });
     if (nbRestantes) {
-      res.push(constat('inventaire', 'alerte', 'Pièces restantes (' + nbRestantes + ') : ' + restantes.join(', ') + '.', [], { restantes: nbRestantes }));
+      res.push(constat('inventaire', 'alerte', 'Pièces de terrain restantes (' + nbRestantes + ') : ' + restantes.join(', ') + '.', [], { restantes: nbRestantes }));
     } else if (!res.length) {
-      res.push(constat('inventaire', 'info', 'Toutes les pièces du catalogue sont posées (' + C.totaux().pieces + ' pièces).', [], { restantes: 0 }));
+      res.push(constat('inventaire', 'info', 'Toutes les pièces de terrain du catalogue sont posées (' + C.totaux().construction.pieces + ' pièces).', [], { restantes: 0 }));
     }
+    if (facultatives.length) res.push(constat('inventaire', 'info', 'Tuiles facultatives non posées : ' + facultatives.join(', ') + '.', []));
     if (nbRestantesPerso) {
       res.push(constat('inventaire', 'alerte', 'Pièces personnelles restantes (' + nbRestantesPerso + ') : ' + restantesPerso.join(', ') + '.', [], { restantesPerso: nbRestantesPerso }));
     }
@@ -134,6 +147,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   function continuite(plateau, options) {
     var res = [], toutes = P.cases(plateau, BASE), cles = Object.keys(toutes);
+    // Les trous se jugent sur le terrain construit : une ville neutre, ajoutée après coup, n'en ferme pas.
+    var clesTerrain = Object.keys(P.cases(plateau, TERRAIN));
     if (!cles.length) return [constat('continuite', 'alerte', 'Le plateau est vide.', [])];
     var doubles = P.chevauchements(plateau);
     if (doubles.length) res.push(constat('continuite', 'erreur', 'Chevauchement : ' + pluriel(doubles.length, 'case') + ' sous plusieurs pièces.', doubles));
@@ -150,7 +165,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     // Trous : cases vides entièrement entourées. Niveau réglable (REGLAGES.trous), « alerte » par défaut.
     var niveauTrous = reglage(options, 'trous'), sansTrou = '';
     if (niveauTrous === 'alerte' || niveauTrous === 'erreur') {
-      var groupesVides = P.trous(cles);
+      var groupesVides = P.trous(clesTerrain);
       if (groupesVides.length) {
         var videes = [];
         groupesVides.forEach(function (g) { videes = videes.concat(g); });
@@ -206,7 +221,106 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   function memesCles(a, b) { return H.trier(a).join(' ') === H.trier(b).join(' '); }
 
+  /** Pièces de construction (noyau, montagnes, monoblocs de terrain) encore à poser : {nombre, detail: ['2 × Nom']}. */
+  function resteConstruction(plateau) {
+    var stock = P.stock(plateau), detail = [], nombre = 0;
+    C.ORDRE_MODELES.forEach(function (id) {
+      var m = C.MODELES[id];
+      if (C.estConstruction(m) && stock[id].restant > 0) { detail.push(stock[id].restant + ' × ' + m.nom); nombre += stock[id].restant; }
+    });
+    return { nombre: nombre, detail: detail };
+  }
+
+  /** « 2 villes de déploiement pour Vert, 1 ville neutre » : ce qu'il reste à poser, ou '' si rien. */
+  function texteVillesManquantes(manquantes) {
+    var morceaux = [];
+    ['vert', 'rouge'].forEach(function (camp) {
+      if (manquantes[camp]) morceaux.push(pluriel(manquantes[camp], 'ville de déploiement', 'villes de déploiement') + ' pour ' + NOMS_CAMPS[camp]);
+    });
+    if (manquantes.neutres) morceaux.push(pluriel(manquantes.neutres, 'ville neutre', 'villes neutres'));
+    return morceaux.join(', ');
+  }
+
+  /**
+   * Villes (phase « villes », §9.1). Erreurs : ville de déploiement mal placée (B4), ville neutre mal placée (B5),
+   * villes trop proches (B6), villes en trop, camps enregistrés qui ne sont pas ceux des tuiles posées.
+   * Les villes qui restent à poser ne sont PAS une erreur : alerte si le terrain est construit, information sinon.
+   * Un plateau de l'ancien catalogue (villes d'une case, aucune ville du catalogue 2) garde l'ancien contrôle.
+   */
   function villes(plateau, options) {
+    var etat = P.etatVilles(plateau), pieces = plateau.pieces || [];
+    var anciennes = pieces.filter(function (p) { return p.modele === 'V'; });
+    if (anciennes.length && !etat.vert.length && !etat.rouge.length && !etat.neutres.length) return villesAnciennes(plateau, options);
+
+    var res = [], toutes = P.cases(plateau, BASE), terrain = P.cases(plateau, TERRAIN);
+    var ecart = reglage(options, 'ecartVilles'), parCamp = C.REGLAGES.villesParCamp, couts = options && options.couts;
+    var regles = { sansEcart: true, couts: couts };
+    ['profondeurExtremite', 'contactVilleNeutre', 'neutresTiersCentral'].forEach(function (nom) { if (options && options[nom] !== undefined) regles[nom] = options[nom]; });
+    var cles = H.trier(Object.keys(toutes).filter(function (k) { return toutes[k].terrain === 'ville'; }));
+
+    // Villes de déploiement : une Plaine du bord haut (Vert) ou du bord bas (Rouge), hors noyau.
+    ['vert', 'rouge'].forEach(function (camp) {
+      if (etat[camp].length > parCamp) {
+        res.push(constat('villes', 'erreur', pluriel(etat[camp].length, 'ville de déploiement', 'villes de déploiement') + ' pour ' + NOMS_CAMPS[camp] + ' ; il en faut ' + parCamp + '.', etat[camp]));
+      }
+      etat[camp].forEach(function (k) {
+        var raison = P.refusDeploiementSurCases(terrain, camp, k, regles);
+        if (raison) res.push(constat('villes', 'erreur', 'Ville de déploiement de ' + NOMS_CAMPS[camp] + ' en (' + k + ') mal placée : ' + raison, [k]));
+      });
+    });
+
+    // Villes neutres : une tuile ajoutée contre chaque flanc.
+    var total = C.modele('VN') ? C.modele('VN').nombre : 0, flancs = {};
+    if (etat.neutres.length > total) res.push(constat('villes', 'erreur', pluriel(etat.neutres.length, 'ville neutre', 'villes neutres') + ' ; il en faut ' + total + '.', etat.neutres.map(function (n) { return n.cle; })));
+    etat.neutres.forEach(function (n) {
+      if (possede.call(terrain, n.cle)) return;                       // chevauchement : c'est le contrôle 2 qui le dit
+      var raison = P.refusNeutreSurCases(terrain, n.cle, regles);
+      if (raison) { res.push(constat('villes', 'erreur', 'Ville neutre en (' + n.cle + ') mal placée : ' + raison, [n.cle])); return; }
+      if (flancs[n.flanc]) res.push(constat('villes', 'erreur', 'Deux villes neutres sur le flanc ' + n.flanc + ' : il en faut une par flanc.', [n.cle, flancs[n.flanc]]));
+      flancs[n.flanc] = n.cle;
+    });
+    if (anciennes.length) {
+      res.push(constat('villes', 'alerte', pluriel(anciennes.length, 'ville') + ' de l’ancien catalogue (tuile d’une case) sur le plateau : dans le catalogue 2, les villes sont des tuiles de déploiement ou des villes neutres.',
+        anciennes.map(function (p) { return H.cle(p.q, p.r); })));
+    }
+
+    // Écart entre toutes les paires, en pas, par les cases franchissables.
+    var minimum = Infinity;
+    cles.forEach(function (a, i) {
+      var d = P.pasSurCases(toutes, [a], { couts: couts });
+      cles.slice(i + 1).forEach(function (b) {
+        if (!possede.call(d, b)) return;                 // villes non reliées : c'est le contrôle 2 qui le dit
+        minimum = Math.min(minimum, d[b]);
+        if (d[b] < ecart) {
+          res.push(constat('villes', 'erreur', 'Villes trop proches : ' + liste([a, b]) + ' à ' + pluriel(d[b], 'pas') + ' ; il en faut ' + ecart + ' (soit ' + pluriel(ecart - 1, 'case') + ' entre elles).', [a, b]));
+        }
+      });
+    });
+
+    // `camps` doit être celui que donnent les tuiles posées.
+    var auto = P.campsAuto(plateau);
+    ['vert', 'rouge'].forEach(function (camp) {
+      var notes = (plateau.camps && plateau.camps[camp]) || [];
+      if (!memesCles(notes, auto[camp])) {
+        res.push(constat('villes', 'erreur', 'Les villes de déploiement enregistrées pour ' + NOMS_CAMPS[camp] + ' ne sont pas celles des tuiles posées.', notes.concat(auto[camp])));
+      }
+    });
+
+    // Ce qu'il reste à poser : jamais une erreur.
+    var manque = texteVillesManquantes(etat.manquantes), reste = resteConstruction(plateau);
+    if (manque) {
+      res.push(constat('villes', reste.nombre ? 'info' : 'alerte', reste.nombre
+        ? 'Villes : elles se posent une fois le terrain construit (' + manque + ' à poser).'
+        : 'Construction terminée, villes à poser : ' + manque + '.', [], { manquantes: etat.manquantes }));
+    } else if (!res.length) {
+      res.push(constat('villes', 'info', pluriel(cles.length, 'ville') + ' ; écart minimal ' + pluriel(minimum, 'pas') + ' ; déploiement de Vert en ' + liste(auto.vert) + ', de Rouge en ' + liste(auto.rouge)
+        + ' ; villes neutres en ' + liste(etat.neutres.map(function (n) { return n.cle; })) + '.', cles, { ecartMinimal: minimum }));
+    }
+    return res;
+  }
+
+  /** Villes d'un plateau de l'ANCIEN catalogue (tuiles de ville d'une case, déploiement sur les rangées extrêmes). */
+  function villesAnciennes(plateau, options) {
     var res = [], toutes = P.cases(plateau, BASE);
     var nombre = reglage(options, 'nombreVilles'), ecart = reglage(options, 'ecartVilles'), parCamp = C.REGLAGES.villesParCamp;
     var couts = options && options.couts;
@@ -254,12 +368,13 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   // ------------------------------------------------------------------ 5. contact (A6)
 
   /**
-   * Contact de chaque pièce : [{piece, modele, cases: [clés], cotes, pieces}].
+   * Contact de chaque pièce du terrain construit (les villes neutres, jugées par le contrôle des villes, ne comptent
+   * ni comme pièces ni comme voisines) : [{piece, modele, cases: [clés], cotes, pieces}].
    *   cotes  : nombre de cases voisines de la pièce occupées par une autre pièce ;
    *   pieces : nombre de pièces voisines distinctes.
    */
   function contacts(plateau) {
-    var toutes = P.cases(plateau, BASE), parPiece = new Map();
+    var toutes = P.cases(plateau, TERRAIN), parPiece = new Map();
     H.trier(Object.keys(toutes)).forEach(function (k) {
       var id = toutes[k].piece;
       if (!parPiece.has(id)) parPiece.set(id, { piece: id, modele: toutes[k].modele, cases: [] });
@@ -284,8 +399,11 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     var seuil = reglage(options, 'seuilContact'), retenue = reglage(options, 'mesureContact');
     var tous = contacts(plateau), res = [];
     if (!tous.length) return [constat('contact', 'info', 'Contact : plateau vide.', [])];
+    // Une tuile de remplissage a son propre seuil (jamais plus exigeant que celui des monoblocs).
+    var seuilRemplissage = Math.min(seuil, reglage(options, 'seuilContactRemplissage'));
+    var seuilDe = function (x) { var m = P.modele(plateau, x.modele); return (m && m.role === 'remplissage') ? seuilRemplissage : seuil; };
     C.REGLAGES.mesuresContact.forEach(function (mesure) {
-      var faibles = tous.filter(function (x) { return x[mesure] < seuil; });
+      var faibles = tous.filter(function (x) { return x[mesure] < seuilDe(x); });
       var minimum = Math.min.apply(null, tous.map(function (x) { return x[mesure]; }));
       var cases = [];
       faibles.forEach(function (x) { cases = cases.concat(x.cases); });
@@ -303,54 +421,56 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   // ------------------------------------------------------------------ 6. équilibre et répartition
 
   /**
-   * Équilibre entre les deux camps. Pour chaque ville : coût minimal en rations depuis les villes de
-   * déploiement de Vert, et depuis celles de Rouge. Score = somme, sur les villes, de l'écart entre le
-   * coût de Vert vers la ville et le coût de Rouge vers la ville symétrique (demi-tour autour de (0,0)).
-   * 0 = parfaitement équilibré.
-   *
-   * Le score n'a de sens que sur un plateau SYMÉTRIQUE par demi-tour, pour la forme (cases occupées) et pour
-   * les villes. Sinon : comparable = false, score = null, `raison` dit pourquoi ; le tableau `villes` (coûts
-   * depuis chaque camp) reste rempli, et l'écart d'une ville sans ville symétrique vaut null.
-   *
-   * Renvoie {calculable, comparable, score, raison, villes: [{cle, vert, rouge, symetrique, ecart}],
-   *          sansSymetrique: [villes sans ville symétrique], casesSansSymetrique: [cases sans case symétrique],
-   *          horsAtteinte: [clés]}.
-   *   calculable : les villes de déploiement des deux camps sont désignées (sinon rien n'est calculé) ;
-   *   symetrique : la ville symétrique, ou la ville elle-même si elle n'en a pas.
+   * Équilibre du plateau (sans symétrie) : ecartsCamps sur le terrain et les villes, avec les villes de déploiement
+   * de campsAuto. Renvoie le résultat de ecartsCamps, complété pour l'affichage : `comparable` (= calculable).
    */
   function equilibre(plateau, options) {
-    var toutes = P.cases(plateau, BASE), camps = P.campsAuto(plateau), couts = options && options.couts;
-    var res = { calculable: false, comparable: false, score: null, raison: null, villes: [], sansSymetrique: [], casesSansSymetrique: [], horsAtteinte: [] };
-    if (!camps.vert.length || !camps.rouge.length) {
-      res.raison = 'Les villes de déploiement ne sont pas désignées.';
+    var e = ecartsCamps(P.cases(plateau, BASE), P.campsAuto(plateau), options);
+    e.comparable = e.calculable;
+    return e;
+  }
+
+  /**
+   * Équilibre SANS symétrie (cahier des charges §9.3 d), sur un résultat de AT.plateau.cases().
+   * `camps` : {vert: [clés], rouge: [clés]} (villes de déploiement). Le coût d'un camp vers une case est le plus
+   * petit coût en rations depuis l'une de ses villes de déploiement (entrer dans une case coûte son terrain).
+   *   - pour chaque autre ville (centre, villes neutres) : écart entre le coût de Vert et celui de Rouge ;
+   *   - villes de déploiement adverses : coûts de Vert vers chaque ville de Rouge et de Rouge vers chaque ville de
+   *     Vert, rangés du plus petit au plus grand et comparés rang par rang.
+   * Score = somme de ces écarts (0 = les deux camps sont à égale distance de tout).
+   * Renvoie {calculable, score, raison, villes: [{cle, type: 'centre' | 'neutre' | 'vert' | 'rouge', vert, rouge, ecart}],
+   *          adverses: {vert: [coûts], rouge: [coûts], ecart}, horsAtteinte: [clés]}.
+   *   Une ville de déploiement a ecart = null (elle compte dans `adverses`) ; une ville hors d'atteinte d'un camp
+   *   a ecart = null, figure dans horsAtteinte et ne compte pas dans le score.
+   */
+  function ecartsCamps(toutes, camps, options) {
+    var couts = options && options.couts;
+    var res = { calculable: false, score: null, raison: null, villes: [], adverses: { vert: [], rouge: [], ecart: null }, horsAtteinte: [] };
+    var vert = ((camps && camps.vert) || []).filter(function (k) { return possede.call(toutes, k); });
+    var rouge = ((camps && camps.rouge) || []).filter(function (k) { return possede.call(toutes, k); });
+    if (!vert.length || !rouge.length) {
+      res.raison = 'Les villes de déploiement ne sont pas toutes posées.';
       return res;
     }
-    var dv = P.rationsSurCases(toutes, camps.vert, { couts: couts });
-    var dr = P.rationsSurCases(toutes, camps.rouge, { couts: couts });
-    res.casesSansSymetrique = H.trier(Object.keys(toutes).filter(function (k) { return !possede.call(toutes, H.symetrique(k)); }));
-    var cles = H.trier(Object.keys(toutes).filter(function (k) { return toutes[k].terrain === 'ville'; }));
+    var dv = P.rationsSurCases(toutes, vert, { couts: couts }), dr = P.rationsSurCases(toutes, rouge, { couts: couts });
     var score = 0;
-    cles.forEach(function (k) {
-      var s = H.symetrique(k), seule = !(possede.call(toutes, s) && toutes[s].terrain === 'ville');
-      if (seule) { res.sansSymetrique.push(k); s = k; }
-      var ligne = { cle: k, vert: possede.call(dv, k) ? dv[k] : null, rouge: possede.call(dr, k) ? dr[k] : null, symetrique: s, ecart: null };
-      if (possede.call(dv, k) && possede.call(dr, s)) {
-        if (!seule) { ligne.ecart = Math.abs(dv[k] - dr[s]); score += ligne.ecart; }
-      } else {
-        res.horsAtteinte.push(k);
-      }
+    H.trier(Object.keys(toutes).filter(function (k) { return toutes[k].terrain === 'ville'; })).forEach(function (k) {
+      var type = vert.indexOf(k) !== -1 ? 'vert' : rouge.indexOf(k) !== -1 ? 'rouge' : (k === '0,0' ? 'centre' : 'neutre');
+      var ligne = { cle: k, type: type, vert: possede.call(dv, k) ? dv[k] : null, rouge: possede.call(dr, k) ? dr[k] : null, ecart: null };
+      if (ligne.vert === null || ligne.rouge === null) res.horsAtteinte.push(k);
+      else if (type === 'centre' || type === 'neutre') { ligne.ecart = Math.abs(ligne.vert - ligne.rouge); score += ligne.ecart; }
       res.villes.push(ligne);
     });
-    res.calculable = true;
-    res.comparable = !res.casesSansSymetrique.length && !res.sansSymetrique.length;
-    if (res.comparable) {
-      res.score = score;
-    } else {
-      var causes = [];
-      if (res.casesSansSymetrique.length) causes.push('forme : ' + pluriel(res.casesSansSymetrique.length, 'case') + ' sans case symétrique');
-      if (res.sansSymetrique.length) causes.push(pluriel(res.sansSymetrique.length, 'ville') + ' sans ville symétrique : ' + liste(res.sansSymetrique));
-      res.raison = 'Plateau non symétrique par demi-tour (' + causes.join(' ; ') + ').';
+    var croissant = function (a, b) { return a - b; };
+    res.adverses.vert = rouge.filter(function (k) { return possede.call(dv, k); }).map(function (k) { return dv[k]; }).sort(croissant);
+    res.adverses.rouge = vert.filter(function (k) { return possede.call(dr, k); }).map(function (k) { return dr[k]; }).sort(croissant);
+    if (res.adverses.vert.length === res.adverses.rouge.length && res.adverses.vert.length) {
+      res.adverses.ecart = 0;
+      res.adverses.vert.forEach(function (c, i) { res.adverses.ecart += Math.abs(c - res.adverses.rouge[i]); });
+      score += res.adverses.ecart;
     }
+    res.calculable = true;
+    res.score = score;
     return res;
   }
 
@@ -367,14 +487,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   function controleEquilibre(plateau, options) {
     var res = [], e = equilibre(plateau, options);
     if (!e.calculable) {
-      res.push(constat('equilibre', 'alerte', 'Équilibre non calculable : les villes de déploiement ne sont pas désignées (il en manque, ou il y en a trop, sur la rangée du haut ou du bas).', [], e));
+      res.push(constat('equilibre', 'info', 'Équilibre : il se calcule une fois les villes de déploiement des deux camps posées.', [], e));
     } else {
-      if (e.comparable) {
-        res.push(constat('equilibre', 'info', 'Équilibre : score ' + e.score + ' (0 = les deux camps atteignent les villes au même coût en rations).', [], e));
-      } else {
-        res.push(constat('equilibre', 'alerte', 'Équilibre non comparable : ' + e.raison + ' Le score n’est pas calculé ; les coûts par ville restent affichés.',
-          e.casesSansSymetrique.concat(e.sansSymetrique.filter(function (k) { return e.casesSansSymetrique.indexOf(k) === -1; })), e));
-      }
+      var centre = 0, neutres = 0;
+      e.villes.forEach(function (v) { if (v.ecart !== null) { if (v.type === 'centre') centre += v.ecart; else neutres += v.ecart; } });
+      res.push(constat('equilibre', 'info', 'Équilibre : score ' + e.score + ' (0 = les deux camps sont à égale distance de tout, en rations). Écart vers le centre ' + centre
+        + ', vers les villes neutres ' + neutres + ', vers les villes de déploiement adverses ' + (e.adverses.ecart === null ? '–' : e.adverses.ecart) + '.', [], e));
       if (e.horsAtteinte.length) {
         res.push(constat('equilibre', 'alerte', 'Villes hors d’atteinte d’un camp : ' + liste(e.horsAtteinte) + ' ; elles ne comptent pas dans le score.', e.horsAtteinte));
       }
@@ -417,23 +535,55 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   // ------------------------------------------------------------------ tout
 
+  // ------------------------------------------------------------------ étape et bilan
+
   /**
-   * Lance les 7 contrôles. Renvoie {ok, erreurs, alertes, resultats, equilibre} :
-   *   ok : aucun constat de niveau 'erreur' ; erreurs / alertes : nombres de constats ; resultats : tous les constats,
-   *   dans l'ordre des contrôles ; equilibre : résultat de equilibre() (score…).
+   * Étape du plateau (§9.1, B3). Renvoie {etape, message, restantes, detail, villes, ancien} :
+   *   etape : 'construction' (il reste des pièces de terrain à poser), 'villes' (terrain construit, villes à poser)
+   *           ou 'complet' (terrain construit, toutes les villes posées) ; l'étape ne dit rien des erreurs ;
+   *   restantes / detail : pièces de construction à poser (nombre, ['2 × Nom']) ;
+   *   villes : {vert, rouge, neutres} villes à poser ; ancien : le plateau porte des tuiles du premier catalogue.
+   */
+  function etape(plateau) {
+    var reste = resteConstruction(plateau), etat = P.etatVilles(plateau);
+    var ancien = (plateau.pieces || []).some(function (p) { var m = C.modele(p.modele); return !!m && m.ancien === true; });
+    var nom = reste.nombre ? 'construction' : (etat.completes ? 'complet' : 'villes'), message;
+    if (nom === 'construction') message = 'Construction en cours : ' + pluriel(reste.nombre, 'pièce') + ' de terrain à poser.';
+    else if (nom === 'villes') message = 'Construction terminée, villes à poser : ' + texteVillesManquantes(etat.manquantes) + '.';
+    else message = 'Plateau complet : terrain construit, villes posées.';
+    if (ancien) message += ' Ce plateau porte des tuiles de l’ancien catalogue.';
+    return { etape: nom, message: message, restantes: reste.nombre, detail: reste.detail, villes: etat.manquantes, ancien: ancien };
+  }
+
+  /**
+   * Lance tous les contrôles. Renvoie {ok, erreurs, alertes, resultats, equilibre, etape, etapeMessage, construction, villes} :
+   *   ok : aucun constat de niveau 'erreur' (un plateau sans villes peut être ok : voir `etape`) ;
+   *   erreurs / alertes : nombres de constats ; resultats : tous les constats, groupe « construction » d'abord
+   *   (inventaire, continuité, monoblocs, contact), puis « villes » (villes, équilibre), puis les événements ;
+   *   equilibre : résultat de equilibre() ; etape : 'construction' | 'villes' | 'complet' (voir etape()) ;
+   *   construction / villes : {erreurs, alertes} du groupe, et pour la construction `terminee`, pour les villes `completes`.
+   * Un plateau est jouable tel que le générateur le rend quand ok est vrai ET etape vaut 'complet'.
    */
   function tout(plateau, options) {
     var resultats = [].concat(
-      inventaire(plateau), continuite(plateau, options), monoblocs(plateau), villes(plateau, options),
-      contact(plateau, options), controleEquilibre(plateau, options), evenements(plateau, options));
-    var compte = function (niveau) { return resultats.filter(function (x) { return x.niveau === niveau; }).length; };
-    return { ok: compte('erreur') === 0, erreurs: compte('erreur'), alertes: compte('alerte'), resultats: resultats, equilibre: equilibre(plateau, options) };
+      inventaire(plateau), continuite(plateau, options), monoblocs(plateau), contact(plateau, options),
+      villes(plateau, options), controleEquilibre(plateau, options), evenements(plateau, options));
+    var compte = function (niveau, groupe) {
+      return resultats.filter(function (x) { return x.niveau === niveau && (!groupe || x.groupe === groupe); }).length;
+    };
+    var e = etape(plateau);
+    return {
+      ok: compte('erreur') === 0, erreurs: compte('erreur'), alertes: compte('alerte'), resultats: resultats, equilibre: equilibre(plateau, options),
+      etape: e.etape, etapeMessage: e.message,
+      construction: { erreurs: compte('erreur', 'construction'), alertes: compte('alerte', 'construction'), terminee: e.etape !== 'construction', restantes: e.restantes },
+      villes: { erreurs: compte('erreur', 'villes'), alertes: compte('alerte', 'villes'), completes: e.etape === 'complet', manquantes: e.villes }
+    };
   }
 
   AT.controles = {
     inventaire: inventaire, continuite: continuite, monoblocs: monoblocs, villes: villes, contact: contact,
-    controleEquilibre: controleEquilibre, evenements: evenements, tout: tout,
-    contacts: contacts, equilibre: equilibre, repartition: repartition,
+    controleEquilibre: controleEquilibre, evenements: evenements, tout: tout, etape: etape, villesAnciennes: villesAnciennes,
+    contacts: contacts, equilibre: equilibre, ecartsCamps: ecartsCamps, repartition: repartition,
     montagneHorsBloc: montagneHorsBloc
   };
 

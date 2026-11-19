@@ -115,13 +115,15 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       R.remplacer(zone, [
         el('p', { classe: 'at-bandeau-provisoire', id: 'inv-provisoire', texte: 'Proposition provisoire, à valider : les pièces, leurs quantités, les tuiles d’événement et leurs effets ne sont pas arrêtés.' }),
         el('h2', { texte: 'Pièces du catalogue' }),
-        el('p', { id: 'inv-totaux', texte: 'Catalogue : ' + totaux.pieces + ' pièces, ' + totaux.cases + ' cases. Sur le plateau courant : ' + poses + ' pièces posées (' + casesPosees + ' cases), ' + b.restantes + ' restantes.' }),
+        el('p', { id: 'inv-totaux', texte: 'Catalogue : ' + totaux.pieces + ' pièces, ' + totaux.cases + ' cases (dont ' + totaux.construction.pieces + ' pièces de terrain pour ' + totaux.construction.cases + ' cases, et ' + totaux.facultatives + ' tuiles de remplissage facultatives). Sur le plateau courant : ' + poses + ' pièces posées (' + casesPosees + ' cases), ' + b.restantes + ' restantes.' }),
         el('p', { id: 'inv-repartition', texte: 'Répartition : ' + (t.ville || 0) + ' villes, ' + (t.montagne || 0) + ' cases de montagne, ' + (t.plaine || 0) + ' plaines (' + part(t.plaine || 0) + '), '
           + (t.foret || 0) + ' forêts (' + part(t.foret || 0) + '), ' + (t.marais || 0) + ' marais (' + part(t.marais || 0) + ') ; les pourcentages sont calculés hors villes et montagnes.' }),
         el('table', { classe: 'at-table at-table-large', id: 'inv-pieces' }, [
           entetes(['Dessin', 'Pièce', 'Contenu', 'Total', 'Posées', 'Restantes']),
           el('tbody', null, lignes)
         ]),
+        el('p', { id: 'inv-villes', texte: 'Villes : la ville du noyau, ' + (C.MODELES.VN ? C.MODELES.VN.nombre : 0) + ' villes neutres (tuiles ajoutées contre les flancs) et ' + C.VILLE_DEPLOIEMENT.nombre
+          + ' tuiles de ville de déploiement, posées par-dessus une Plaine après la construction (' + C.VILLE_DEPLOIEMENT.parCamp + ' par joueur) ; ' + P.deploiements(plateau).length + ' posée(s) sur le plateau courant.' }),
         el('p', { id: 'inv-hors-catalogue', classe: hors.pieces ? 'at-niveau-alerte' : 'at-aide', texte: texteHors }),
         el('h2', { texte: 'Mes monoblocs' }),
         el('p', { classe: 'at-aide', texte: 'Pièces personnelles de ce plateau, à part du catalogue imprimé : elles ne comptent pas dans ses totaux.' }),

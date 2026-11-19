@@ -14,9 +14,15 @@ const H = AT.hex, C = AT.catalogue, T = AT.partie;
 
 const env = (graine) => ({ alea: AT.alea.creer(graine), hex: H, plateau: P });
 const genere = (graine) => { const r = G.generer(graine); assert.ok(r.ok, r.raison); return P.avecCamps(r.plateau); };
+/** Un plateau du premier catalogue (tuiles d'une case, villes sur les rangées extrêmes), relu d'un fichier de version 1. */
+const ancienPlateau = () => {
+  const lu = P.lire(require('node:fs').readFileSync(require('node:path').join(__dirname, 'fixtures-v1', 'plateau-genere.json'), 'utf8'));
+  assert.ok(lu.ok, lu.erreurs.join(' '));
+  return lu.plateau;
+};
 
-test('3 villes sur la rangée du haut après retouche : contrôle 4 en erreur, plateau enregistrable, relisible, jouable', () => {
-  let p = genere(1);
+test('ancien plateau, 3 villes sur la rangée du haut après retouche : contrôle des villes en erreur, plateau enregistrable, relisible, jouable', () => {
+  let p = ancienPlateau();
   const cases = P.cases(p);
   const haut = Math.min(...Object.keys(cases).map((k) => H.decle(k).r));
   const plaine = Object.keys(cases).find((k) => H.decle(k).r === haut && cases[k].modele === 'P');
@@ -91,7 +97,7 @@ test('graine du plateau : même longueur maximale dans plateau.valider et partie
 function plateauPerso() {
   let p = P.ajouterModele(P.vierge('main'), { nom: 'Crête', quantite: 2, cases: [{ q: 0, r: 0, terrain: 'montagne' }, { q: 1, r: 0, terrain: 'foret' }, { q: 1, r: 1, terrain: 'plaine' }] }).plateau;
   const poses = [['X1', 2, 0], ['V', 0, -2], ['P', 0, 2], ['V', 0, 3], ['P', 1, -2]];
-  for (const [modele, q, r] of poses) { const res = P.poser(p, modele, q, r, 0); assert.ok(res.ok, res.raison); p = res.plateau; }
+  for (const [modele, q, r] of poses) { const res = P.poser(p, modele, q, r, 0, { horsStock: ['P', 'F', 'S', 'V'].includes(modele) }); assert.ok(res.ok, res.raison); p = res.plateau; }
   const m = P.peindre(p, '-2,0', 'montagne');
   assert.ok(m.ok && m.horsStock);
   return P.avecCamps(m.plateau);
@@ -141,9 +147,9 @@ test('pièce personnelle : enregistrer, rouvrir, créer une partie, enregistrer 
   assert.deepStrictEqual(recharge.etat.plateau.camps, p.camps);
   // Les contrôles du plateau rechargé répondent (alertes de la création à la main comprises).
   const bilan = K.tout(recharge.etat.plateau);
-  assert.ok(bilan.resultats.some((x) => /Tuiles à prévoir en plus du catalogue \(1\) : 1 × Montagne d’une case/.test(x.message)));
+  assert.ok(bilan.resultats.some((x) => /Tuiles à prévoir en plus du catalogue \(5\) : 1 × Montagne d’une case, 2 × Plaine, 2 × Ville \(ancien catalogue\)/.test(x.message)));
   assert.ok(bilan.resultats.some((x) => /Pièces personnelles restantes \(1\) : 1 × Crête/.test(x.message)));
-  assert.strictEqual(bilan.equilibre.comparable, false);
+  assert.strictEqual(bilan.equilibre.calculable, true);
 });
 
 test('partie.creer et partie.charger : pièces personnelles validées strictement, avec ou sans le contrôle du lot A', () => {

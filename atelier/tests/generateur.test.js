@@ -14,40 +14,67 @@ const COMBINAISONS = [
 ];
 const GRAINES = [1, 2, 3, 4, 5, 6];
 
-/** Vérifie tout ce que le cahier des charges promet d'un plateau généré. */
+/** Vérifie tout ce que le cahier des charges (§9) promet d'un plateau généré. */
 function verifierPlateau(res, options) {
   const p = res.plateau;
   assert.strictEqual(res.raison, null);
-  // Toutes les pièces du catalogue, 91 cases, pas de chevauchement.
-  assert.strictEqual(p.pieces.length, 64);
+  // Toutes les pièces de construction, une fois chacune ; aucune tuile de terrain d'une case hors remplissage.
   const stock = P.stock(p);
-  C.ORDRE_MODELES.forEach((id) => assert.strictEqual(stock[id].restant, 0, id));
-  const cases = P.cases(p), cles = Object.keys(cases);
-  assert.strictEqual(cles.length, 91);
+  C.ORDRE_MODELES.forEach((id) => { if (C.estConstruction(C.MODELES[id])) assert.strictEqual(stock[id].restant, 0, id); });
+  const remplissages = p.pieces.filter((x) => x.modele === 'R').length;
+  assert.strictEqual(remplissages, res.remplissages);
+  assert.ok(remplissages <= (options.remplissages || 0), 'pas plus de remplissages que permis');
+  assert.strictEqual(p.pieces.length, 24 + remplissages + 2);
+  p.pieces.forEach((x) => { if (P.modele(p, x.modele).cases.length === 1) assert.ok(['R', 'VN'].includes(x.modele), 'tuile d’une case inattendue : ' + x.modele); });
+  const terrain = P.cases(p, { sansVilles: true }), cases = P.cases(p);
+  assert.strictEqual(Object.keys(terrain).length, 91 + remplissages);
+  assert.strictEqual(Object.keys(cases).length, 93 + remplissages);
   assert.deepStrictEqual(P.chevauchements(p), []);
+  assert.deepStrictEqual(P.trous(Object.keys(terrain)), []);
   assert.deepStrictEqual(p.recouvrements, []);
-  // Tous les contrôles de niveau erreur, relancés ici avec les mêmes options.
+  // Tous les contrôles, relancés ici avec les mêmes options : aucune erreur, étape « complet ».
   const bilan = K.tout(p, options);
   assert.strictEqual(bilan.erreurs, 0, bilan.resultats.filter((x) => x.niveau === 'erreur').map((x) => x.message).join(' | '));
+  assert.strictEqual(bilan.etape, 'complet');
   assert.strictEqual(bilan.equilibre.score, res.score);
-  // Forme symétrique par demi-tour, noyau au centre.
-  cles.forEach((k) => assert.ok(cases[H.symetrique(k)], 'pas de symétrique pour ' + k));
+  assert.ok(Number.isInteger(res.score) && res.score >= 0);
+  // Noyau au centre.
   assert.strictEqual(cases['0,0'].modele, 'N1');
   assert.deepStrictEqual(p.pieces[0], { id: 'p1', modele: 'N1', q: 0, r: 0, rotation: 0 });
-  // Villes de déploiement : Vert sur la rangée r minimale, Rouge sur la rangée r maximale.
-  const rs = cles.map((k) => H.decle(k).r), haut = Math.min(...rs), bas = Math.max(...rs);
+  // Villes de déploiement : 2 par camp, posées sur une Plaine du bord, Vert en haut, Rouge en bas.
+  const etendue = P.etendueSurCases(terrain);
+  assert.deepStrictEqual(P.deploiements(p).map((x) => x.camp), ['vert', 'vert', 'rouge', 'rouge']);
   assert.strictEqual(p.camps.vert.length, 2);
   assert.strictEqual(p.camps.rouge.length, 2);
-  p.camps.vert.forEach((k) => { assert.strictEqual(H.decle(k).r, haut); assert.strictEqual(cases[k].terrain, 'ville'); });
-  p.camps.rouge.forEach((k) => { assert.strictEqual(H.decle(k).r, bas); assert.strictEqual(cases[k].terrain, 'ville'); });
   assert.deepStrictEqual(P.campsAuto(p), p.camps);
-  assert.strictEqual(P.villes(p).length, 7);
+  [['vert', (r) => r <= etendue.haut + 1], ['rouge', (r) => r >= etendue.bas - 1]].forEach(([camp, extremite]) => {
+    p.camps[camp].forEach((k) => {
+      assert.strictEqual(cases[k].terrain, 'ville');
+      assert.strictEqual(cases[k].origine, 'plaine');
+      assert.strictEqual(cases[k].ville, 'VD');
+      assert.strictEqual(cases[k].camp, camp);
+      assert.strictEqual(terrain[k].terrain, 'plaine');
+      assert.ok(!C.modele(cases[k].modele).noyau);
+      assert.ok(extremite(H.decle(k).r), camp + ' : ville hors des 2 rangées extrêmes');
+      assert.ok(H.voisines(k).some((v) => !terrain[v]), 'ville de déploiement hors du bord');
+    });
+  });
+  // Villes neutres : une tuile ajoutée contre chaque flanc.
+  const etat = P.etatVilles(p);
+  assert.deepStrictEqual(etat.neutres.map((n) => n.flanc).sort(), ['droite', 'gauche']);
+  assert.strictEqual(etat.completes, true);
+  etat.neutres.forEach((n) => assert.ok(!terrain[n.cle] && H.voisines(n.cle).filter((v) => terrain[v]).length >= 2));
+  // 7 villes, toutes à 4 pas au moins les unes des autres.
+  const villes = P.villes(p);
+  assert.strictEqual(villes.length, 7);
+  villes.forEach((a) => { const d = P.distancesPas(p, a); villes.forEach((b) => { if (a !== b) assert.ok(d[b] >= 4, a + ' et ' + b + ' à ' + d[b] + ' pas'); }); });
   // Règle de contact demandée.
-  K.contacts(p).forEach((x) => assert.ok(x[options.mesureContact] >= options.seuilContact, x.piece + ' sous le seuil'));
+  K.contacts(p).forEach((x) => { if (x.cases.length > 1) assert.ok(x[options.mesureContact] >= options.seuilContact, x.piece + ' sous le seuil'); });
   // Le plateau est un fichier valide.
   const lu = P.lire(P.serialiser(p));
   assert.ok(lu.ok, lu.erreurs.join(' '));
   assert.deepStrictEqual(lu.plateau, p);
+  assert.strictEqual(p.version, 2);
 }
 
 test('même graine et mêmes options = même plateau ; graines différentes = plateaux différents', () => {
@@ -89,146 +116,168 @@ for (const options of COMBINAISONS) {
         assert.ok(typeof res.raison === 'string' && res.raison.length > 0);
       }
     }
-    // Mesuré sur 200 graines (docs/03-mesures-faisabilite.md) : les quatre combinaisons réussissent presque toujours.
-    assert.ok(reussites >= 1, 'aucune réussite sur ' + GRAINES.length + ' graines');
+    // Mesuré sur 300 graines (docs/07-mesures-catalogue-2.md) : le générateur réussit presque toujours.
+    assert.ok(reussites >= GRAINES.length - 1, reussites + ' réussite(s) sur ' + GRAINES.length + ' graines');
   });
 }
 
-test('réglage par défaut : seuil 3, mesure « pièces »', () => {
+test('réglage par défaut : seuil 3, mesure « pièces », aucun remplissage', () => {
   const res = G.generer(3);
   assert.ok(res.ok, res.raison);
   verifierPlateau(res, { seuilContact: 3, mesureContact: 'pieces' });
+  assert.strictEqual(res.remplissages, 0);
   assert.deepStrictEqual(G.generer(3, { seuilContact: 3, mesureContact: 'pieces' }).plateau, res.plateau);
+  assert.strictEqual(C.REGLAGES.mesureContact, 'pieces');
+  assert.strictEqual(C.REGLAGES.generateur.remplissages, 0);
 });
 
-test('les plateaux générés ne sont pas tous l’hexagone régulier : la forme du bord varie', () => {
-  const formes = new Set(), hexagone = H.trier(H.disque(5)).join(' ');
+test('tuiles de remplissage : posées seulement si le réglage le permet, jamais plus que le stock', () => {
+  let posees = 0;
   for (const graine of GRAINES) {
-    const res = G.generer(graine, { seuilContact: 2 });
+    const res = G.generer(graine, { remplissages: 2 });
     assert.ok(res.ok, res.raison);
-    assert.strictEqual(res.forme, H.trier(Object.keys(P.cases(res.plateau))).join(' '));
-    assert.notStrictEqual(res.forme, hexagone);
-    formes.add(res.forme);
+    verifierPlateau(res, { seuilContact: 3, mesureContact: 'pieces', remplissages: 2 });
+    posees += res.remplissages;
   }
-  assert.ok(formes.size >= GRAINES.length - 1);
+  assert.ok(posees <= 2 * GRAINES.length);
+  const trop = G.generer(1, { remplissages: 3 });
+  assert.strictEqual(trop.ok, false);
+  assert.strictEqual(trop.incompatible, true);
+  assert.match(trop.raison, /3 tuiles de remplissage : le catalogue en compte 2/);
+  assert.match(G.generer(1, { remplissages: -1 }).raison, /remplissage invalide/);
 });
 
-test('tirerForme : 91 cases, symétrique, noyau intact, chaque case a assez de voisines', () => {
-  for (const seuil of [2, 3]) {
-    const R = G.reglages({ seuilContact: seuil });
-    const forme = G.tirerForme(A.creer(8), R);
-    assert.ok(forme.ok);
-    assert.strictEqual(forme.cases.length, 91);
-    const dans = new Set(forme.cases);
-    H.disque(1).forEach((k) => assert.ok(dans.has(k)));
-    forme.cases.forEach((k) => {
-      assert.ok(dans.has(H.symetrique(k)));
-      assert.ok(H.voisines(k).filter((v) => dans.has(v)).length >= seuil);
-    });
-    assert.strictEqual(G.formeValide(dans, R), true);
+test('le plateau est construit librement : les formes varient d’une graine à l’autre', () => {
+  const formes = new Set(), hauteurs = new Set();
+  for (const graine of GRAINES) {
+    const res = G.generer(graine);
+    assert.ok(res.ok, res.raison);
+    const terrain = P.cases(res.plateau, { sansVilles: true }), e = P.etendueSurCases(terrain);
+    formes.add(H.trier(Object.keys(terrain)).join(' '));
+    hauteurs.add(e.bas - e.haut + 1);
+    assert.ok(e.haut >= -5 && e.bas <= 5, 'réglage demiHauteur : le plateau tient dans 11 rangées');
   }
-  const R3 = G.reglages({ seuilContact: 3 });
-  const pointe = new Set(H.disque(5));
-  pointe.delete('2,3'); pointe.delete('-2,-3'); pointe.add('6,-3'); pointe.add('-6,3');   // une case isolée qui dépasse : 2 voisines
-  assert.strictEqual(pointe.size, 91);
-  assert.strictEqual(G.formeValide(pointe, R3), false);
-  assert.strictEqual(G.formeValide(pointe, G.reglages({ seuilContact: 2 })), true);
+  assert.strictEqual(formes.size, GRAINES.length);
+  const libre = G.generer(2, { demiHauteur: null });
+  assert.ok(libre.ok, libre.raison);
+});
+
+test('batir : un terrain réussi porte toutes les pièces, sans trou ; un échec nomme son étape', () => {
+  const cat = G.piecesDuCatalogue();
+  assert.strictEqual(cat.noyau.id, 'N1');
+  assert.strictEqual(cat.pieces.length, 23);
+  assert.strictEqual(cat.remplissage.id, 'R');
+  let reussis = 0;
+  for (const graine of GRAINES) {
+    const res = G.batir(A.creer(graine), cat.noyau, cat.pieces, cat.remplissage, G.reglages({ remplissages: 2 }));
+    if (!res.ok) { assert.ok(['pose', 'trou', 'franchissable', 'contact', 'contactRemplissage'].includes(res.echec)); continue; }
+    reussis += 1;
+    assert.strictEqual(Object.keys(res.cases).length, 91 + res.remplissages);
+    assert.strictEqual(res.pieces.length, 24 + res.remplissages);
+    assert.deepStrictEqual(res.pieces[0], { modele: 'N1', q: 0, r: 0, rotation: 0 });
+    assert.deepStrictEqual(P.trous(Object.keys(res.cases)), []);
+    // Les cases annoncées sont bien celles des pièces posées.
+    res.pieces.forEach((x, i) => P.casesModele(x.modele, x.q, x.r, x.rotation).forEach((c) => {
+      assert.strictEqual(res.cases[c.cle].piece, 'p' + (i + 1));
+      assert.strictEqual(res.cases[c.cle].terrain, c.terrain);
+    }));
+  }
+  assert.ok(reussis >= GRAINES.length - 1);
+});
+
+test('chercherVilles : 2 villes par camp et une ville neutre par flanc, ou un refus qui dit ce qui manque', () => {
+  const cat = G.piecesDuCatalogue(), R = G.reglages({ remplissages: 2 });
+  let trouvees = 0;
+  for (const graine of GRAINES) {
+    const terrain = G.batir(A.creer(graine), cat.noyau, cat.pieces, cat.remplissage, R);
+    if (!terrain.ok) continue;
+    const v = G.chercherVilles(terrain.cases, A.creer(graine), R);
+    assert.strictEqual(typeof v.places.vert, 'number');
+    if (!v.ok) { assert.ok(['vert', 'rouge', 'gauche', 'droite', 'ecart'].includes(v.manque)); assert.ok(v.raison.length > 0); continue; }
+    trouvees += 1;
+    assert.strictEqual(v.vert.length, 2);
+    assert.strictEqual(v.rouge.length, 2);
+    assert.ok(v.neutres.gauche && v.neutres.droite);
+    v.vert.concat(v.rouge).forEach((k) => assert.strictEqual(terrain.cases[k].terrain, 'plaine'));
+    assert.ok(!terrain.cases[v.neutres.gauche] && !terrain.cases[v.neutres.droite]);
+  }
+  assert.ok(trouvees >= 1);
+  // Profondeur 1 : presque jamais de place (mesuré) ; le refus est expliqué.
+  const etroit = G.batir(A.creer(3), cat.noyau, cat.pieces, cat.remplissage, R);
+  const refus = G.chercherVilles(etroit.cases, A.creer(3), G.reglages({ ecartVilles: 30 }));
+  assert.strictEqual(refus.ok, false);
+  assert.ok(refus.raison.length > 0);
 });
 
 test('échec expliqué : pas de plateau, pas de repli silencieux', () => {
-  const impossible = G.generer(1, { seuilContact: 6, essaisForme: 20 });
+  const impossible = G.generer(1, { ecartVilles: 30, tentatives: 3 });
   assert.strictEqual(impossible.ok, false);
   assert.strictEqual(impossible.plateau, null);
-  assert.match(impossible.raison, /Aucune forme de bord valide/);
-  assert.strictEqual(impossible.echecs.forme, 1);
+  assert.match(impossible.raison, /Aucun plateau valide en 3 essais/);
+  assert.strictEqual(impossible.essais, 3);
+  assert.strictEqual(Object.keys(impossible.echecs).reduce((n, k) => n + impossible.echecs[k], 0), 3);
   assert.match(G.generer(1, { mesureContact: 'autre' }).raison, /Mesure de contact inconnue/);
   assert.match(G.generer(1, { tentatives: 0 }).raison, /tentatives/);
-  // Des villes exigées à 9 pas : aucune rangée du haut ne peut en porter deux.
-  const villes = G.generer(1, { ecartVilles: 9, essaisForme: 20 });
-  assert.strictEqual(villes.ok, false);
-  assert.ok(villes.raison.length > 0);
+  assert.match(G.generer(1, { seuilContact: 9 }).raison, /Seuil de contact invalide/);
 });
 
 test('le nombre de tentatives est un réglage ; un plateau se génère en moins de 2 secondes', () => {
-  const une = G.generer(4, { tentatives: 1, formes: 1, seuilContact: 2 });
-  assert.ok(une.essais <= 1);
+  const une = G.generer(4, { tentatives: 1 });
+  assert.strictEqual(une.essais, 1);
   const debut = Date.now();
   const res = G.generer(21);
   const duree = Date.now() - debut;
   assert.ok(res.ok, res.raison);
   assert.ok(duree < 2000, 'génération en ' + duree + ' ms');
-  assert.ok(res.essais >= 1 && res.formesEssayees >= 1 && res.tiragesForme >= 1);
+  assert.ok(res.essais >= 1);
 });
 
 test('le générateur ne modifie pas les réglages du catalogue', () => {
   const avant = JSON.stringify(C.REGLAGES);
-  G.generer(2, { seuilContact: 2, mesureContact: 'pieces', tentatives: 3 });
+  G.generer(2, { seuilContact: 2, mesureContact: 'pieces', tentatives: 3, remplissages: 1 });
   assert.strictEqual(JSON.stringify(C.REGLAGES), avant);
 });
 
-test('catalogue ou rayon hors de ce que le générateur sait poser : échec immédiat qui nomme la cause', () => {
-  const Cat = globalThis.AT.catalogue;
-  const copie = JSON.stringify(Cat.MODELES), ordre = Cat.ORDRE_MODELES.slice(), parCamp = Cat.REGLAGES.villesParCamp;
-  const restaurer = () => {
-    const m = JSON.parse(copie);
-    Object.keys(Cat.MODELES).forEach((k) => { delete Cat.MODELES[k]; });
-    Object.keys(m).forEach((k) => { Cat.MODELES[k] = m[k]; });
-    Cat.ORDRE_MODELES.length = 0;
-    ordre.forEach((k) => Cat.ORDRE_MODELES.push(k));
-    Cat.REGLAGES.villesParCamp = parCamp;
-  };
-  const echec = (motif) => {
-    const r = G.generer(1);
-    assert.strictEqual(r.ok, false);
-    assert.strictEqual(r.incompatible, true);
-    assert.strictEqual(r.essais, 0, 'aucun essai de remplissage lancé');
-    assert.match(r.raison, motif);
-    assert.match(r.raison, /générateur doit être adapté/);
-  };
+test('pièces personnelles du document : reportées dans le plateau généré, non posées', () => {
+  const persos = [{ id: 'X1', nom: 'Bois long', cases: [{ q: 0, r: 0, terrain: 'foret' }, { q: 1, r: 0, terrain: 'foret' }], quantite: 2 }];
+  const res = G.generer(8, { modeles: persos });
+  assert.ok(res.ok, res.raison);
+  assert.deepStrictEqual(res.plateau.modeles, persos);
+  assert.match(res.note, /conservée dans le plateau, non posée/);
+  assert.strictEqual(res.plateau.pieces.some((x) => x.modele === 'X1'), false);
+  assert.deepStrictEqual(G.generer(8).plateau.pieces, res.plateau.pieces);
+  assert.match(G.generer(8, { modeles: [{ id: 'P', nom: 'x', cases: [], quantite: 1 }] }).raison, /Pièces personnelles du document invalides/);
+});
+
+test('catalogue hors de ce que le générateur sait faire : échec immédiat qui nomme la cause', () => {
   assert.strictEqual(G.incompatibilite(G.reglages()), null);
+  const nombre = C.MODELES.VN.nombre, parCamp = C.REGLAGES.villesParCamp;
   try {
-    // 8 villes au lieu de 6 (total inchangé de 91 cases).
-    Cat.MODELES.V.nombre = 8; Cat.MODELES.P.nombre = 37;
-    echec(/8 villes d’une case, or le générateur en pose 6/);
-    restaurer();
-    // Un monobloc de plus.
-    Cat.MODELES.X3 = { id: 'X3', nom: 'Essai', nombre: 1, cases: Cat.MODELES.F3.cases };
-    Cat.ORDRE_MODELES.push('X3');
-    Cat.MODELES.P.nombre = 36;
-    echec(/ne sait pas poser : X3 \(monobloc\)/);
-    restaurer();
-    // Deux exemplaires d'un monobloc connu.
-    Cat.MODELES.M4.nombre = 2; Cat.MODELES.P.nombre = 35;
-    echec(/un seul exemplaire de chaque monobloc.*M4 × 2/);
-    restaurer();
-    // Un modèle d'une case inconnu.
-    Cat.MODELES.D = { id: 'D', nom: 'Désert', nombre: 1, cases: [{ q: 0, r: 0, terrain: 'plaine' }] };
-    Cat.ORDRE_MODELES.push('D');
-    Cat.MODELES.P.nombre = 38;
-    echec(/ne sait pas poser : D \(une case\)/);
-    restaurer();
-    // Nombre de cases différent de celui de l'hexagone de départ.
-    Cat.MODELES.P.nombre = 40;
-    echec(/Le catalogue compte 92 cases, or l’hexagone de départ de rayon 5 en compte 91/);
-    restaurer();
-    Cat.REGLAGES.villesParCamp = 3;
-    echec(/villesParCamp = 3/);
-    restaurer();
+    C.MODELES.VN.nombre = 3;
+    const res = G.generer(1);
+    assert.strictEqual(res.ok, false);
+    assert.strictEqual(res.incompatible, true);
+    assert.match(res.raison, /2 villes neutres/);
+    assert.strictEqual(res.essais, 0);
+    C.MODELES.VN.nombre = nombre;
+    C.REGLAGES.villesParCamp = 3;
+    assert.match(G.generer(1).raison, /villesParCamp = 3/);
   } finally {
-    restaurer();
+    C.MODELES.VN.nombre = nombre;
+    C.REGLAGES.villesParCamp = parCamp;
   }
-  // Rayon donné en option.
-  for (const rayon of [4, 6]) {
-    const r = G.generer(1, { rayon: rayon });
-    assert.strictEqual(r.ok, false);
-    assert.match(r.raison, new RegExp('91 cases, or l’hexagone de départ de rayon ' + rayon + ' en compte ' + (3 * rayon * (rayon + 1) + 1)));
-  }
-  // Ce qui se change librement continue de marcher : 7 forêts et 37 plaines.
+  assert.ok(G.generer(1).ok);
+});
+
+test('le générateur pose ce que le catalogue contient : un monobloc de plus est posé lui aussi', () => {
+  const nombre = C.MODELES.P3A.nombre;
   try {
-    Cat.MODELES.F.nombre = 7; Cat.MODELES.P.nombre = 37;
-    assert.strictEqual(G.generer(1, { seuilContact: 2 }).ok, true);
+    C.MODELES.P3A.nombre = 2;
+    const res = G.generer(4);
+    assert.ok(res.ok, res.raison);
+    assert.strictEqual(res.plateau.pieces.filter((x) => x.modele === 'P3A').length, 2);
+    assert.strictEqual(Object.keys(P.cases(res.plateau, { sansVilles: true })).length, 94);
   } finally {
-    restaurer();
+    C.MODELES.P3A.nombre = nombre;
   }
-  assert.strictEqual(G.generer(1).ok, true, 'catalogue restauré');
 });

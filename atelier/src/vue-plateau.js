@@ -84,9 +84,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   var NOMS_REGLES = {
     inventaire: '1. Inventaire', continuite: '2. Chevauchement et continuité', monoblocs: '3. Monoblocs et noyau',
-    villes: '4. Villes', contact: '5. Contact entre tuiles', equilibre: '6. Équilibre et terrains', evenements: '7. Tuiles d’événement'
+    contact: '4. Contact entre tuiles', villes: '5. Villes', equilibre: '6. Équilibre et terrains', evenements: '7. Tuiles d’événement'
   };
-  var ORDRE_REGLES = ['inventaire', 'continuite', 'monoblocs', 'villes', 'contact', 'equilibre', 'evenements'];
+  // Construction (1 à 4), puis villes (5 et 6), puis événements.
+  var ORDRE_REGLES = ['inventaire', 'continuite', 'monoblocs', 'contact', 'villes', 'equilibre', 'evenements'];
   var NOMS_NIVEAUX = { erreur: 'Erreur', alerte: 'Alerte', info: 'Conforme' };
 
   // ------------------------------------------------------------------ la vue
@@ -517,6 +518,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       bilan = K.tout(pl, reglages);
       blocs.push(el('p', { classe: 'at-bilan ' + (bilan.erreurs ? 'at-niveau-erreur' : (bilan.alertes ? 'at-niveau-alerte' : 'at-niveau-info')), id: 'pl-bilan',
         texte: bilan.erreurs ? bilan.erreurs + ' erreur(s), ' + bilan.alertes + ' alerte(s)' : (bilan.alertes ? 'Aucune erreur, ' + bilan.alertes + ' alerte(s)' : 'Plateau conforme : aucune erreur, aucune alerte') }));
+      // Étape du plateau (§9.1) : construction en cours, villes à poser, ou complet.
+      if (bilan.etapeMessage) blocs.push(el('p', { classe: 'at-aide', id: 'pl-etape', 'data-etape': bilan.etape, texte: bilan.etapeMessage }));
       var liste = el('ul', { classe: 'at-constats' });
       ORDRE_REGLES.forEach(function (regle) {
         var constats = bilan.resultats.filter(function (x) { return x.regle === regle; });
@@ -540,7 +543,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var e = bilan.equilibre, numeros = R.numerosVilles(pl);
       blocs.push(el('h3', { texte: 'Équilibre : coût en rations vers chaque ville' }));
       if (!e.calculable) {
-        blocs.push(el('p', { classe: 'at-aide', texte: 'Non calculable : il faut 1 ou 2 villes sur la rangée du haut et sur celle du bas (avec 3 villes ou plus sur une rangée, aucune n’est retenue).' }));
+        blocs.push(el('p', { classe: 'at-aide', texte: 'Non calculable : il faut les villes de déploiement des deux camps (elles se posent à l’étape « Villes », une fois le terrain construit).' }));
       } else {
         var corpsTable = el('tbody');
         e.villes.forEach(function (v) {
@@ -552,15 +555,14 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
             el('td', { texte: v.rouge === null ? '—' : v.rouge }),
             el('td', { texte: v.ecart === null ? '—' : v.ecart })
           ]);
-          corpsTable.appendChild(avecSurbrillance(ligne, [v.cle, v.symetrique], 'ville/' + v.cle));
+          corpsTable.appendChild(avecSurbrillance(ligne, [v.cle], 'ville/' + v.cle));
         });
         blocs.push(el('table', { classe: 'at-table', id: 'pl-equilibre' }, [
           el('thead', null, el('tr', null, ['Ville', 'Case', 'Depuis Vert', 'Depuis Rouge', 'Écart'].map(function (t) { return el('th', { scope: 'col', texte: t }); }))),
           corpsTable
         ]));
-        blocs.push(el('p', { id: 'pl-score', texte: e.comparable
-          ? 'Score d’équilibre : ' + e.score + ' (0 = équilibré ; écart = différence avec la ville symétrique vue de l’autre camp).'
-          : 'Score d’équilibre : non comparable. ' + e.raison + ' Les coûts par ville ci-dessus restent valables.' }));
+        blocs.push(el('p', { id: 'pl-score', texte: 'Score d’équilibre : ' + e.score + ' (0 = équilibré). Il additionne l’écart entre Vert et Rouge vers le centre et vers chaque ville neutre'
+          + (e.adverses && e.adverses.ecart !== null ? ', et l’écart vers les villes de déploiement adverses (' + e.adverses.ecart + ').' : '.') }));
       }
 
       // Répartition des terrains.

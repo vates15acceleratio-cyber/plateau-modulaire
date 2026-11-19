@@ -10,7 +10,7 @@ const C = globalThis.AT.catalogue;
 function monter(liste, depart) {
   let p = depart || P.vide(1);
   for (const [modele, q, r, rotation] of liste) {
-    const res = P.poser(p, modele, q, r, rotation || 0);
+    const res = P.poser(p, modele, q, r, rotation || 0, { horsStock: ['P', 'F', 'S', 'V'].includes(modele) });
     assert.ok(res.ok, 'pose refusée : ' + res.raison);
     p = res.plateau;
   }
@@ -26,7 +26,7 @@ function petitPlateau() {
 }
 
 test('vide : plateau au format du contrat', () => {
-  assert.deepStrictEqual(P.vide('abc'), { version: 1, graine: 'abc', pieces: [], recouvrements: [], camps: { vert: [], rouge: [] } });
+  assert.deepStrictEqual(P.vide('abc'), { version: 2, graine: 'abc', pieces: [], recouvrements: [], camps: { vert: [], rouge: [] } });
   assert.strictEqual(P.vide().graine, 0);
 });
 
@@ -58,7 +58,7 @@ test('poser : nouveau plateau, plateau reçu intact, identifiants uniques', () =
   assert.strictEqual(vide.pieces.length, 0);
   assert.notStrictEqual(a.plateau, vide);
   assert.deepStrictEqual(a.plateau.pieces, [{ id: a.id, modele: 'N1', q: 0, r: 0, rotation: 0 }]);
-  const b = P.poser(a.plateau, 'P', 2, 0);
+  const b = P.poser(a.plateau, 'P', 2, 0, 0, { horsStock: true });
   assert.ok(b.ok);
   assert.notStrictEqual(b.id, a.id);
   assert.strictEqual(b.plateau.pieces[1].rotation, 0);
@@ -68,7 +68,7 @@ test('poser : nouveau plateau, plateau reçu intact, identifiants uniques', () =
 
 test('poser : refus expliqué (chevauchement, stock épuisé, pièce inconnue, hors bornes, rotation)', () => {
   const p = monter([['N1', 0, 0], ['M4', 2, 0]]);
-  const chevauche = P.poser(p, 'P', 1, 0, 0);
+  const chevauche = P.poser(p, 'P', 1, 0, 0, { horsStock: true });
   assert.strictEqual(chevauche.ok, false);
   assert.match(chevauche.raison, /Chevauchement/);
   assert.match(chevauche.raison, /\(1,0\)/);
@@ -81,17 +81,18 @@ test('poser : refus expliqué (chevauchement, stock épuisé, pièce inconnue, h
   assert.match(stock.raison, /Stock épuisé/);
   assert.strictEqual(P.poser(p, 'N1', 10, 10, 0).ok, false);
   assert.match(P.poser(p, '__proto__', 5, 5, 0).raison, /inconnue/);
-  assert.strictEqual(P.poser(p, 'P', 1.5, 0, 0).ok, false);
-  assert.strictEqual(P.poser(p, 'P', 31, 0, 0).ok, false);
+  assert.strictEqual(P.poser(p, 'P', 1.5, 0, 0, { horsStock: true }).ok, false);
+  assert.strictEqual(P.poser(p, 'P', 31, 0, 0, { horsStock: true }).ok, false);
   assert.strictEqual(P.poser(p, 'M5', 29, 0, 0).ok, false, 'une case du monobloc sortirait des bornes');
   assert.ok(P.poser(p, 'M5', 28, 0, 0).ok);
-  assert.strictEqual(P.poser(p, 'P', 5, 5, 6).ok, false);
-  assert.strictEqual(P.poser(p, 'P', 5, 5, '1').ok, false);
+  assert.strictEqual(P.poser(p, 'P', 5, 5, 6, { horsStock: true }).ok, false);
+  assert.strictEqual(P.poser(p, 'P', 5, 5, '1', { horsStock: true }).ok, false);
 });
 
 test('stock : total, posées, restant', () => {
   const s = P.stock(petitPlateau());
-  assert.deepStrictEqual(s.P, { total: 39, poses: 3, restant: 36 });
+  // Les tuiles d'une case du premier catalogue sont hors catalogue : total 0, posées hors stock.
+  assert.deepStrictEqual(s.P, { total: 0, poses: 3, restant: -3 });
   assert.deepStrictEqual(s.N1, { total: 1, poses: 1, restant: 0 });
   assert.deepStrictEqual(s.M5, { total: 1, poses: 0, restant: 1 });
   // Catalogue imprimé, puis les modèles hors catalogue (M1, total 0) ; les pièces personnelles viendraient ensuite.
@@ -141,7 +142,7 @@ test('retirer : la pièce part, ses événements et ses camps aussi', () => {
   const c = P.retirer(p, 'absente');
   assert.strictEqual(c.ok, false);
   assert.strictEqual(c.plateau, p);
-  assert.strictEqual(P.stock(a.plateau).F.restant, 5);
+  assert.strictEqual(P.stock(a.plateau).F.restant, 0);
 });
 
 test('tourner : rotation autour de l’ancre, refus en cas de chevauchement', () => {
@@ -337,7 +338,8 @@ test('valider : refuse tout ce qui sort du format (types, bornes, identifiants)'
   refuse(() => 'texte', /pas un plateau/);
   refuse((o) => { o.extra = 1; }, /champ inconnu/);
   refuse((o) => { delete o.camps; }, /manquant/);
-  refuse((o) => { o.version = 2; }, /Version/);
+  refuse((o) => { o.version = 3; }, /Version/);
+  refuse((o) => { o.version = 0; }, /Version/);
   refuse((o) => { o.version = '1'; }, /Version/);
   refuse((o) => { o.graine = 1.5; }, /Graine/);
   refuse((o) => { o.graine = 'x'.repeat(65); }, /Graine/);
@@ -393,7 +395,7 @@ test('poser : un identifiant de fichier démesuré ne fait pas déborder le num�
   const p = P.vide(1);
   p.pieces.push({ id: 'p999999999999999', modele: 'N1', q: 0, r: 0, rotation: 0 }, { id: 'p41', modele: 'P', q: 3, r: 0, rotation: 0 }, { id: 'constructor', modele: 'P', q: 4, r: 0, rotation: 0 });
   assert.ok(P.valider(JSON.parse(P.serialiser(p))).ok);
-  const r = P.poser(p, 'P', 5, 0, 0);
+  const r = P.poser(p, 'P', 5, 0, 0, { horsStock: true });
   assert.ok(r.ok, r.raison);
   assert.strictEqual(r.id, 'p42');
   const relu = P.lire(P.serialiser(r.plateau));
@@ -427,7 +429,7 @@ test('retouches au hasard (poser, tourner, retirer) : le plateau reste toujours 
         // Les villes sont tirées plus souvent, sur les rangées extrêmes, pour provoquer les égalités.
         const modele = a.entier(3) === 0 ? 'V' : a.choisir(C.ORDRE_MODELES);
         const rr = a.entier(3) === 0 ? a.choisir([-3, 3]) : a.entier(7) - 3;
-        r = P.poser(p, modele, a.entier(9) - 4, rr, a.entier(6));
+        r = P.poser(p, modele, a.entier(9) - 4, rr, a.entier(6), { horsStock: modele === 'V' });
       } else if (tirage < 8) {
         r = P.tourner(p, a.choisir(p.pieces).id, 1 + a.entier(5));
       } else {
@@ -454,7 +456,7 @@ test('poser : jamais d’identifiant en double, même quand le numéro suivant e
   assert.ok(P.valider(JSON.parse(P.serialiser(p))).ok);
   let q = p;
   for (let i = 0; i < 5; i++) {
-    const r = P.poser(q, 'P', -3 - i, 0, 0);
+    const r = P.poser(q, 'P', -3 - i, 0, 0, { horsStock: true });
     assert.ok(r.ok, r.raison);
     q = r.plateau;
   }

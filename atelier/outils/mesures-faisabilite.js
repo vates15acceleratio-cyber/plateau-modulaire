@@ -12,6 +12,12 @@ const path = require('node:path');
 const { performance } = require('node:perf_hooks');
 const G = require(path.join(__dirname, '..', 'src', 'generateur.js'));
 const AT = globalThis.AT;
+// Ce script mesurait le générateur du PREMIER catalogue (forme tirée d'avance, rapport docs/03-mesures-faisabilite.md).
+// Ce générateur a été remplacé par celui du catalogue 2 : le script s'arrête ici au lieu d'échouer plus loin.
+if (typeof G.tirerForme !== 'function') {
+  console.error('mesures-faisabilite.js mesure le générateur du premier catalogue, remplacé depuis. Voir outils/mesures-catalogue-2.js (rapport docs/07-mesures-catalogue-2.md).');
+  process.exit(1);
+}
 const H = AT.hex, C = AT.catalogue, K = AT.controles;
 
 const NB_GRAINES = parseInt(process.argv[2], 10) || 500;

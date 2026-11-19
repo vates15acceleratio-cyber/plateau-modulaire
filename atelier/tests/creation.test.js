@@ -21,7 +21,8 @@ function ajouter(plateau, definition) {
   return r.plateau;
 }
 function poser(plateau, modele, q, r, rotation, options) {
-  const res = P.poser(plateau, modele, q, r, rotation || 0, options);
+  // Les tuiles d'une case du premier catalogue (P, F, S, V) sont hors catalogue : elles se posent hors stock.
+  const res = P.poser(plateau, modele, q, r, rotation || 0, options || { horsStock: ['P', 'F', 'S', 'V'].includes(modele) });
   assert.ok(res.ok, 'pose refusée : ' + res.raison);
   return res.plateau;
 }
@@ -34,9 +35,10 @@ test('catalogue : M1 est connu, hors catalogue imprimé ; les totaux ne changent
   assert.strictEqual(m.horsCatalogue, true);
   assert.deepStrictEqual(m.cases, [{ q: 0, r: 0, terrain: 'montagne' }]);
   assert.ok(!C.ORDRE_MODELES.includes('M1') && !Object.keys(C.MODELES).includes('M1'));
-  assert.deepStrictEqual(C.ORDRE_HORS_CATALOGUE, ['M1']);
-  assert.strictEqual(C.totaux().pieces, 64);
-  assert.strictEqual(C.totaux().cases, 91);
+  assert.deepStrictEqual(C.ORDRE_HORS_CATALOGUE, ['M1', 'P', 'F', 'S', 'V']);
+  assert.strictEqual(C.totaux().pieces, 28);
+  assert.strictEqual(C.totaux().cases, 95);
+  assert.deepStrictEqual(C.totaux().construction, { pieces: 24, cases: 91 });
   assert.strictEqual(G.incompatibilite(G.reglages()), null);
   assert.deepStrictEqual(C.REGLAGES.perso.terrains, ['plaine', 'foret', 'marais', 'montagne']);
 });
@@ -72,9 +74,9 @@ test('ajouterModele : identifiant attribué, plateau reçu intact, modèle trouv
   assert.strictEqual(P.modele(P.vide(1), 'X1'), null);
   assert.strictEqual(P.modele(undefined, 'P').nom, 'Plaine');
   for (const id of ['__proto__', 'constructor', 'toString', 'X9', '', null, 3]) assert.strictEqual(P.modele(deux.plateau, id), null, String(id));
-  assert.deepStrictEqual(P.idsModeles(deux.plateau), C.ORDRE_MODELES.concat(['M1', 'X1', 'X2']));
+  assert.deepStrictEqual(P.idsModeles(deux.plateau), C.ORDRE_MODELES.concat(C.ORDRE_HORS_CATALOGUE, ['X1', 'X2']));
   const s = P.stock(deux.plateau);
-  assert.deepStrictEqual(Object.keys(s), C.ORDRE_MODELES.concat(['M1', 'X1', 'X2']));
+  assert.deepStrictEqual(Object.keys(s), C.ORDRE_MODELES.concat(C.ORDRE_HORS_CATALOGUE, ['X1', 'X2']));
   assert.deepStrictEqual(s.X1, { total: 2, poses: 0, restant: 2 });
   assert.deepStrictEqual(s.X2, { total: 1, poses: 0, restant: 1 });
   // La liste rendue par modeles() est une copie.
@@ -313,7 +315,7 @@ test('toutes les fonctions de modification gardent les pièces personnelles, san
   const attendu = JSON.stringify(p.modeles);
   const idCrete = p.pieces.filter((x) => x.modele === 'X1')[0].id;
   const resultats = {
-    poser: P.poser(p, 'P', -3, 0, 0),
+    poser: P.poser(p, 'P', -3, 0, 0, { horsStock: true }),
     retirer: P.retirer(p, idCrete),
     tourner: P.tourner(p, idCrete, 2),
     peindre: P.peindre(p, '-3,0', 'marais'),
@@ -347,7 +349,7 @@ test('pose hors stock : stricte par défaut, permise sur option, annoncée', () 
   assert.strictEqual(libre.horsStock, true);
   assert.deepStrictEqual(P.stock(libre.plateau).M1, { total: 0, poses: 1, restant: -1 });
   assert.strictEqual(P.cases(libre.plateau)['3,0'].terrain, 'montagne');
-  const enStock = P.poser(p, 'P', 3, 0, 0, { horsStock: true });
+  const enStock = P.poser(p, 'R', 3, 0, 0, { horsStock: true });
   assert.strictEqual(enStock.horsStock, false, 'tant qu’il reste du stock, la pose n’est pas hors stock');
   assert.strictEqual(P.poser(p, 'N1', 5, 5, 0).ok, false);
   assert.strictEqual(P.poser(p, 'N1', 5, 5, 0, { horsStock: 1 }).ok, false, 'l’option doit valoir true');
@@ -360,22 +362,22 @@ test('pose hors stock : stricte par défaut, permise sur option, annoncée', () 
 
 test('contrôle 1 : tuiles à prévoir en plus du catalogue, montagne d’une case, monobloc en trop', () => {
   let p = P.vierge(1);
-  // 5 forêts du stock, puis 2 hors stock ; 2 montagnes d'une case.
+  // 7 forêts d'une case (hors catalogue depuis le catalogue 2) ; 2 montagnes d'une case.
   for (let i = 0; i < 7; i++) p = poser(p, 'F', 3 + i, 0, 0, { horsStock: true });
   p = poser(poser(p, 'M1', 3, 2, 0, { horsStock: true }), 'M1', 4, 2, 0, { horsStock: true });
   const constats = K.inventaire(p);
   assert.strictEqual(niveaux(constats, 'erreur').length, 0, 'une pose hors stock d’une tuile d’une case n’est pas une erreur');
   const enPlus = constats.filter((x) => /à prévoir en plus du catalogue/.test(x.message))[0];
   assert.strictEqual(enPlus.niveau, 'alerte');
-  assert.strictEqual(enPlus.message, 'Tuiles à prévoir en plus du catalogue (4) : 2 × Forêt, 2 × Montagne d’une case.');
-  assert.deepStrictEqual(enPlus.donnees, { enPlus: 4, parModele: { F: 2, M1: 2 } });
-  assert.deepStrictEqual(enPlus.cases, H.trier(['8,0', '9,0', '3,2', '4,2']), 'les tuiles posées après épuisement du stock');
+  assert.strictEqual(enPlus.message, 'Tuiles à prévoir en plus du catalogue (9) : 2 × Montagne d’une case, 7 × Forêt.');
+  assert.deepStrictEqual(enPlus.donnees, { enPlus: 9, parModele: { M1: 2, F: 7 } });
+  assert.deepStrictEqual(enPlus.cases, H.trier(['3,0', '4,0', '5,0', '6,0', '7,0', '8,0', '9,0', '3,2', '4,2']), 'toutes les tuiles hors catalogue');
   const montagnes = constats.filter((x) => /d’une case sur le plateau/.test(x.message))[0];
   assert.strictEqual(montagnes.niveau, 'alerte');
   assert.match(montagnes.message, /^2 montagnes d’une case sur le plateau : la décision en vigueur est « montagnes en blocs de 4 ou 5 cases »\.$/);
   assert.deepStrictEqual(montagnes.cases, ['3,2', '4,2']);
-  assert.ok(constats.some((x) => x.niveau === 'alerte' && /^Pièces restantes \(58\)/.test(x.message)));
-  assert.ok(!/Montagne d’une case/.test(constats.filter((x) => /^Pièces restantes/.test(x.message))[0].message), 'M1 n’est jamais une pièce restante');
+  assert.ok(constats.some((x) => x.niveau === 'alerte' && /^Pièces de terrain restantes \(23\)/.test(x.message)));
+  assert.ok(!/Montagne d’une case/.test(constats.filter((x) => /^Pièces de terrain restantes/.test(x.message))[0].message), 'M1 n’est jamais une pièce restante');
   // Sans rien hors stock : aucune de ces deux alertes.
   assert.ok(!K.inventaire(P.vierge(1)).some((x) => /à prévoir|d’une case/.test(x.message)));
   // Un monobloc posé plus de fois que prévu reste une erreur (catalogue comme pièce personnelle).
@@ -405,22 +407,28 @@ test('contrôle 3 : une pièce personnelle avec une ville (document monté à la
   assert.ok(erreurs.some((x) => x.cases.includes('4,0')));
 });
 
-test('peindre : tuile d’une case du bon modèle, stock d’abord puis hors stock, remplacement, refus', () => {
+test('peindre : tuile d’une case hors catalogue (une Plaine vient d’abord des remplissages), remplacement, refus', () => {
   const depart = P.vierge(1), fige = JSON.stringify(depart);
   const a = P.peindre(depart, '3,0', 'foret');
   assert.ok(a.ok, a.raison);
   assert.strictEqual(JSON.stringify(depart), fige);
-  assert.deepStrictEqual({ modele: a.modele, terrain: a.terrain, horsStock: a.horsStock, remplace: a.remplace, inchange: a.inchange, note: a.note },
-    { modele: 'F', terrain: 'foret', horsStock: false, remplace: null, inchange: false, note: null });
+  assert.deepStrictEqual({ modele: a.modele, terrain: a.terrain, horsStock: a.horsStock, remplace: a.remplace, inchange: a.inchange },
+    { modele: 'F', terrain: 'foret', horsStock: true, remplace: null, inchange: false });
+  assert.match(a.note, /« Forêt » posée hors stock : elle est à prévoir en plus du catalogue/);
   assert.strictEqual(P.cases(a.plateau)['3,0'].piece, a.id);
-  const modeles = { plaine: 'P', foret: 'F', marais: 'S', montagne: 'M1', ville: 'V' };
+  // Catalogue 2 : toute tuile peinte est hors catalogue, sauf une Plaine tant qu'il reste un remplissage en stock.
+  const modeles = { plaine: 'R', foret: 'F', marais: 'S', montagne: 'M1' };
   for (const terrain of Object.keys(modeles)) {
     const r = P.peindre(depart, '4,-2', terrain);
     assert.ok(r.ok, terrain + ' : ' + r.raison);
     assert.strictEqual(r.modele, modeles[terrain]);
     assert.strictEqual(P.cases(r.plateau)['4,-2'].terrain, terrain);
-    assert.strictEqual(r.horsStock, terrain === 'montagne');
+    assert.strictEqual(r.horsStock, terrain !== 'plaine');
   }
+  // Les villes ne se peignent plus : elles se posent à l'étape « Villes ».
+  const ville = P.peindre(depart, '4,-2', 'ville');
+  assert.strictEqual(ville.ok, false);
+  assert.match(ville.raison, /Le pinceau ne pose pas de ville : les villes se posent à l’étape « Villes »/);
   // Montagne : toujours hors stock, et le résultat le dit.
   const m = P.peindre(a.plateau, '4,0', 'montagne');
   assert.strictEqual(m.horsStock, true);
@@ -441,13 +449,21 @@ test('peindre : tuile d’une case du bon modèle, stock d’abord puis hors sto
   assert.strictEqual(c.inchange, true);
   assert.strictEqual(c.plateau, b.plateau);
   assert.strictEqual(c.id, b.id);
-  // Le stock d'abord, puis hors stock : la 6e forêt.
+  // Plaines : les 2 remplissages du stock d'abord, puis une Plaine hors catalogue.
   let p = depart, dernier = null;
-  for (let i = 0; i < 6; i++) { dernier = P.peindre(p, (3 + i) + ',0', 'foret'); assert.ok(dernier.ok); assert.strictEqual(dernier.horsStock, i === 5, 'forêt n° ' + (i + 1)); p = dernier.plateau; }
-  assert.match(dernier.note, /« Forêt » posée hors stock/);
-  // Remplacer une tuile par une autre du même modèle épuisé : la tuile rendue au stock sert d'abord.
-  const echange = P.peindre(P.peindre(p, '3,0', 'plaine').plateau, '3,0', 'foret');
-  assert.strictEqual(echange.horsStock, true, 'il y avait déjà 6 forêts pour 5 au stock');
+  for (let i = 0; i < 3; i++) {
+    dernier = P.peindre(p, (3 + i) + ',0', 'plaine');
+    assert.ok(dernier.ok);
+    assert.strictEqual(dernier.modele, i < 2 ? 'R' : 'P', 'plaine n° ' + (i + 1));
+    assert.strictEqual(dernier.horsStock, i === 2, 'plaine n° ' + (i + 1));
+    p = dernier.plateau;
+  }
+  assert.match(dernier.note, /« Plaine » posée hors stock/);
+  assert.strictEqual(P.stock(p).R.restant, 0);
+  assert.strictEqual(P.peindre(p, '3,0', 'plaine').inchange, true, 'un remplissage est déjà une Plaine');
+  // Remplacer une tuile par une autre : toujours hors catalogue.
+  const echange = P.peindre(P.peindre(p, '3,0', 'marais').plateau, '3,0', 'foret');
+  assert.strictEqual(echange.horsStock, true);
   // Refus : noyau, monobloc du catalogue, pièce personnelle, terrain ou case invalides.
   const noyau = P.peindre(depart, '1,0', 'foret');
   assert.strictEqual(noyau.ok, false);
@@ -501,49 +517,39 @@ test('gommer : retire une tuile d’une case, signale un monobloc sans le retire
   assert.strictEqual(P.gommer(crete, '4,1').monobloc, true);
 });
 
-test('équilibre : « non comparable » sur un plateau sans symétrie par demi-tour, coûts par ville conservés', () => {
+test('équilibre : plus de « non comparable » ; le score se calcule sans symétrie dès que les deux camps ont leurs villes', () => {
   const monter = (liste) => liste.reduce((p, x) => poser(p, x[0], x[1], x[2], 0), P.vide(1));
-  // Symétrique (forme et villes) : comparable, même si les terrains penchent.
-  const penche = monter([['V', 0, -2], ['S', 0, -1], ['V', 0, 0], ['P', 0, 1], ['V', 0, 2]]);
+  // Ancien plateau en colonne : villes d'une case, déploiement sur les rangées extrêmes.
+  const penche = P.avecCamps(monter([['V', 0, -2], ['S', 0, -1], ['V', 0, 0], ['P', 0, 1], ['V', 0, 2]]));
   const e1 = K.equilibre(penche);
   assert.deepStrictEqual([e1.calculable, e1.comparable, e1.score, e1.raison], [true, true, 1, null]);
-  assert.deepStrictEqual(e1.casesSansSymetrique, []);
   assert.ok(/^Équilibre : score 1/.test(K.controleEquilibre(penche)[0].message));
-  // Forme non symétrique : une plaine de plus d'un côté.
+  // Forme non symétrique (une plaine de plus d'un côté) : le score est toujours calculé.
   const forme = poser(penche, 'P', 1, 0, 0);
   const e2 = K.equilibre(forme);
-  assert.deepStrictEqual([e2.calculable, e2.comparable, e2.score], [true, false, null]);
-  assert.deepStrictEqual(e2.casesSansSymetrique, ['1,0']);
-  assert.deepStrictEqual(e2.sansSymetrique, []);
-  assert.strictEqual(e2.raison, 'Plateau non symétrique par demi-tour (forme : 1 case sans case symétrique).');
-  assert.deepStrictEqual(e2.villes.map((v) => [v.cle, v.vert, v.rouge, v.ecart]), [['0,-2', 0, 5, 0], ['0,0', 3, 2, 1], ['0,2', 5, 0, 0]], 'les coûts par ville restent calculés');
+  assert.deepStrictEqual([e2.calculable, e2.comparable, e2.score], [true, true, 1]);
+  assert.deepStrictEqual(e2.villes.map((v) => [v.cle, v.type, v.vert, v.rouge, v.ecart]),
+    [['0,-2', 'vert', 0, 5, null], ['0,0', 'centre', 3, 2, 1], ['0,2', 'rouge', 5, 0, null]]);
+  assert.deepStrictEqual(e2.adverses, { vert: [5], rouge: [5], ecart: 0 });
   const c2 = K.controleEquilibre(forme);
-  assert.strictEqual(c2[0].niveau, 'alerte');
-  assert.match(c2[0].message, /^Équilibre non comparable : Plateau non symétrique par demi-tour \(forme : 1 case sans case symétrique\)\. Le score n’est pas calculé ; les coûts par ville restent affichés\.$/);
-  assert.deepStrictEqual(c2[0].cases, ['1,0']);
+  assert.strictEqual(c2[0].niveau, 'info');
   assert.strictEqual(c2[0].donnees.villes.length, 3);
-  // Villes non symétriques sur une forme symétrique.
-  const villes = monter([['V', 0, -2], ['P', 0, -1], ['V', 0, 0], ['P', 0, 1], ['V', 0, 2], ['V', 2, 0], ['P', -2, 0], ['P', 1, 0], ['P', -1, 0]]);
+  assert.ok(!c2.some((x) => /non comparable/.test(x.message)));
+  // Une ville d'un seul côté : elle compte comme les autres (coût de Vert contre coût de Rouge).
+  const villes = P.avecCamps(monter([['V', 0, -2], ['P', 0, -1], ['V', 0, 0], ['P', 0, 1], ['V', 0, 2], ['V', 2, 0], ['P', -2, 0], ['P', 1, 0], ['P', -1, 0]]));
   const e3 = K.equilibre(villes);
-  assert.deepStrictEqual([e3.comparable, e3.score, e3.casesSansSymetrique.length], [false, null, 0]);
-  assert.deepStrictEqual(e3.sansSymetrique, ['2,0']);
-  assert.match(e3.raison, /1 ville sans ville symétrique : \(2,0\)/);
-  const seule = e3.villes.filter((v) => v.cle === '2,0')[0];
-  assert.deepStrictEqual([seule.symetrique, seule.ecart], ['2,0', null]);
-  assert.ok(typeof seule.vert === 'number' && typeof seule.rouge === 'number');
-  // Le bilan complet reste utilisable, et le nombre d'alertes en tient compte.
-  const bilan = K.tout(forme);
-  assert.strictEqual(bilan.equilibre.score, null);
-  assert.strictEqual(bilan.equilibre.comparable, false);
-  assert.ok(bilan.resultats.some((x) => x.regle === 'equilibre' && x.niveau === 'alerte' && /non comparable/.test(x.message)));
-  // Non calculable : ni comparable, ni score.
+  assert.deepStrictEqual([e3.calculable, e3.score], [true, 1]);
+  assert.deepStrictEqual(e3.villes.filter((v) => v.cle === '2,0')[0], { cle: '2,0', type: 'neutre', vert: 4, rouge: 3, ecart: 1 });
+  // Le bilan complet porte le même score.
+  assert.strictEqual(K.tout(forme).equilibre.score, 1);
+  // Non calculable tant que les deux camps n'ont pas de ville de déploiement : pas de score, simple information.
   const e4 = K.equilibre(P.vierge(1));
   assert.deepStrictEqual([e4.calculable, e4.comparable, e4.score], [false, false, null]);
-  // Un plateau généré reste comparable ; une retouche d'un seul côté ne l'est plus.
+  assert.strictEqual(K.controleEquilibre(P.vierge(1))[0].niveau, 'info');
+  // Un plateau généré (jamais symétrique) a un score.
   const genere = G.generer(1);
-  assert.strictEqual(K.equilibre(genere.plateau).comparable, true);
-  const bord = genere.plateau.pieces.filter((x) => x.modele === 'P' && Math.abs(x.r) >= 4)[0];
-  assert.strictEqual(K.equilibre(P.avecCamps(P.retirer(genere.plateau, bord.id).plateau)).comparable, false);
+  assert.ok(genere.ok, genere.raison);
+  assert.strictEqual(K.equilibre(genere.plateau).score, genere.score);
 });
 
 test('générateur : les pièces personnelles du document sont reportées, non posées, et une note le dit', () => {

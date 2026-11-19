@@ -139,9 +139,12 @@ test('plateau : étiquettes des cases (contacts, rations, coordonnées)', () => 
   const pl = G.generer(1).plateau, n = Object.keys(P.cases(pl)).length;
   assert.deepStrictEqual(VP.etiquettes(pl, 'rien'), {});
   const cotes = VP.etiquettes(pl, 'cotes');
-  assert.strictEqual(Object.keys(cotes).length, n);
+  // Le contact se juge sur le terrain construit : les 2 villes neutres n'ont pas d'étiquette de contact.
+  const terrain = Object.keys(P.cases(pl, { sansVilles: true })).length;
+  assert.strictEqual(terrain, n - 2);
+  assert.strictEqual(Object.keys(cotes).length, terrain);
   assert.ok(Object.values(cotes).every((v) => Number.isInteger(v) && v >= 3));
-  assert.strictEqual(Object.keys(VP.etiquettes(pl, 'pieces')).length, n);
+  assert.strictEqual(Object.keys(VP.etiquettes(pl, 'pieces')).length, terrain);
   const vert = VP.etiquettes(pl, 'rations-vert'), rouge = VP.etiquettes(pl, 'rations-rouge');
   assert.strictEqual(vert[pl.camps.vert[0]], 0);
   assert.strictEqual(rouge[pl.camps.rouge[1]], 0);

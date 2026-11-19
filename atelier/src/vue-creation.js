@@ -22,8 +22,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   /** Rayon de la grille vide affichée pendant la création (cahier des charges §8.2). */
   var RAYON_GRILLE = 7;
-  var TERRAINS_PINCEAU = ['plaine', 'foret', 'marais', 'montagne', 'ville'];
-  var NOMS_TERRAINS = { plaine: 'plaine', foret: 'forêt', marais: 'marais', montagne: 'montagne', ville: 'ville' };
+  // Les villes ne se peignent plus (§9.4) : elles se posent à l'étape « Villes ».
+  var TERRAINS_PINCEAU = ['plaine', 'foret', 'marais', 'montagne'];
+  var NOMS_TERRAINS = { plaine: 'plaine', foret: 'forêt', marais: 'marais', montagne: 'montagne' };
 
   function pluriel(n, un, plusieurs) { return n + ' ' + (n > 1 ? plusieurs : un); }
 
@@ -53,7 +54,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   /**
    * Palette de la création guidée : toutes les pièces du catalogue imprimé puis les pièces personnelles du
    * document (jamais les modèles hors catalogue, réservés au pinceau).
-   * Renvoie [{id, nom, cases (nombre), total, poses, restant (jamais négatif), perso}].
+   * Renvoie [{id, nom, cases (nombre), total, poses, restant (jamais négatif), perso, role, facultatif}] ;
+   * role : 'noyau' | 'montagne' | 'terrain' | 'remplissage' | 'ville' (ville neutre) | 'perso'.
    */
   function palette(plateau) {
     var stock = P.stock(plateau);
@@ -62,7 +64,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       return !!m && !m.horsCatalogue;
     }).map(function (id) {
       var m = P.modele(plateau, id), s = stock[id];
-      return { id: id, nom: m.nom, cases: m.cases.length, total: s.total, poses: s.poses, restant: Math.max(0, s.restant), perso: !!m.perso };
+      return { id: id, nom: m.nom, cases: m.cases.length, total: s.total, poses: s.poses, restant: Math.max(0, s.restant), perso: !!m.perso,
+        role: m.perso ? 'perso' : (m.role || 'terrain'), facultatif: !!m.facultatif };
     });
   }
 
@@ -85,35 +88,44 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   /**
    * « Ce qu'il reste à faire » sur un plateau en cours de création.
    * `bilan` (facultatif) : résultat de AT.controles.tout, pour la liste des erreurs en cours.
-   * Renvoie {pieces: [{id, nom, restant}], nbPieces, persos: [...], nbPersos,
-   *          villes, haut, bas : {posees, voulues, manquantes, enTrop} (haut = Vert, bas = Rouge),
+   * Renvoie {pieces: [{id, nom, restant}], nbPieces (pièces de TERRAIN à poser : noyau, montagnes, monoblocs),
+   *          facultatives: [{id, nom, restant}] (tuiles de remplissage en stock), persos: [...], nbPersos,
+   *          villes, haut, bas, neutres : {posees, voulues, manquantes, enTrop} (haut = villes de déploiement de Vert,
+   *          bas = celles de Rouge, neutres = villes neutres), etape ('construction' | 'villes' | 'complet'),
    *          erreurs: [messages], inconnues: nombre de pièces de modèle inconnu, termine}.
+   * Sur un plateau de l'ancien catalogue (villes d'une case), haut et bas comptent les villes des rangées extrêmes.
    */
   function resteAFaire(plateau, bilan) {
-    var R = C.REGLAGES, res = { pieces: [], nbPieces: 0, persos: [], nbPersos: 0 };
+    var R = C.REGLAGES, res = { pieces: [], nbPieces: 0, facultatives: [], persos: [], nbPersos: 0 };
     palette(plateau).forEach(function (x) {
-      if (x.restant <= 0) return;
+      if (x.restant <= 0 || x.role === 'ville') return;              // les villes neutres sont comptées plus bas
+      if (x.facultatif) { res.facultatives.push({ id: x.id, nom: x.nom, restant: x.restant }); return; }
       (x.perso ? res.persos : res.pieces).push({ id: x.id, nom: x.nom, restant: x.restant });
       if (x.perso) res.nbPersos += x.restant; else res.nbPieces += x.restant;
     });
     var toutes = P.cases(plateau, { sansRecouvrements: true });
     var nbVilles = Object.keys(toutes).filter(function (k) { return toutes[k].terrain === 'ville'; }).length;
-    var rangees = P.villesRangeesExtremes(plateau);
+    var etat = P.etatVilles(plateau), rangees = P.villesRangeesExtremes(plateau);
+    var ancien = !etat.vert.length && !etat.rouge.length && !etat.neutres.length && (rangees.vert.length + rangees.rouge.length > 0
+      || (plateau.pieces || []).some(function (p) { return p.modele === 'V'; }));
+    var neutre = C.modele('VN');
     res.villes = compte(nbVilles, R.nombreVilles);
-    res.haut = compte(rangees.vert.length, R.villesParCamp);
-    res.bas = compte(rangees.rouge.length, R.villesParCamp);
+    res.haut = compte(ancien ? rangees.vert.length : etat.vert.length, R.villesParCamp);
+    res.bas = compte(ancien ? rangees.rouge.length : etat.rouge.length, R.villesParCamp);
+    res.neutres = compte(etat.neutres.length, ancien || !neutre ? 0 : neutre.nombre);
+    res.etape = res.nbPieces ? 'construction' : (res.haut.manquantes || res.bas.manquantes || res.neutres.manquantes ? 'villes' : 'complet');
     res.erreurs = bilan && Array.isArray(bilan.resultats)
       ? bilan.resultats.filter(function (x) { return x.niveau === 'erreur'; }).map(function (x) { return x.message; })
       : [];
     res.inconnues = piecesInconnues(plateau).length;
     res.termine = !res.nbPieces && !res.nbPersos && !res.villes.manquantes && !res.villes.enTrop && !res.haut.manquantes && !res.haut.enTrop
-      && !res.bas.manquantes && !res.bas.enTrop && !res.erreurs.length && !res.inconnues;
+      && !res.bas.manquantes && !res.bas.enTrop && !res.neutres.manquantes && !res.neutres.enTrop && !res.erreurs.length && !res.inconnues;
     return res;
   }
 
   // ------------------------------------------------------------------ trait de pinceau
 
-  /** Outil valide : {type: 'terrain', terrain} (plaine, forêt, marais, montagne, ville) ou {type: 'gomme'}. */
+  /** Outil valide : {type: 'terrain', terrain} (plaine, forêt, marais, montagne) ou {type: 'gomme'}. */
   function outilValide(outil) {
     return !!outil && (outil.type === 'gomme' || (outil.type === 'terrain' && TERRAINS_PINCEAU.indexOf(outil.terrain) !== -1));
   }
@@ -350,12 +362,14 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var r = resteAFaire(acces.plateau(), acces.bilan());
       var detailler = function (liste) { return liste.map(function (x) { return x.restant + ' × ' + x.nom; }).join(', '); };
       var lignes = [
-        ligneReste('pieces', !r.nbPieces, r.nbPieces ? 'Pièces du catalogue à poser : ' + r.nbPieces : 'Toutes les pièces du catalogue sont posées', r.nbPieces ? detailler(r.pieces) : null)
+        ligneReste('pieces', !r.nbPieces, r.nbPieces ? 'Pièces de terrain à poser : ' + r.nbPieces : 'Terrain construit : toutes les pièces de terrain sont posées', r.nbPieces ? detailler(r.pieces) : null)
       ];
+      if (r.facultatives.length) lignes.push(ligneReste('facultatives', true, 'Tuiles de remplissage en réserve (facultatives) : ' + detailler(r.facultatives)));
       if (r.nbPersos) lignes.push(ligneReste('persos', false, 'Monoblocs personnels à poser : ' + r.nbPersos, detailler(r.persos)));
       lignes.push(ligneReste('villes', !r.villes.manquantes && !r.villes.enTrop, phraseCompte(r.villes, 'Villes')));
       lignes.push(ligneReste('haut', !r.haut.manquantes && !r.haut.enTrop, phraseCompte(r.haut, 'Villes de déploiement en haut (Vert)')));
       lignes.push(ligneReste('bas', !r.bas.manquantes && !r.bas.enTrop, phraseCompte(r.bas, 'Villes de déploiement en bas (Rouge)')));
+      if (r.neutres.voulues || r.neutres.posees) lignes.push(ligneReste('neutres', !r.neutres.manquantes && !r.neutres.enTrop, phraseCompte(r.neutres, 'Villes neutres (une par flanc)')));
       lignes.push(ligneReste('erreurs', !r.erreurs.length, r.erreurs.length ? 'Erreurs en cours : ' + r.erreurs.length : 'Aucune erreur aux contrôles',
         r.erreurs.length ? r.erreurs.slice(0, 4).join(' ') + (r.erreurs.length > 4 ? ' …' : '') : null));
       var contenu = [

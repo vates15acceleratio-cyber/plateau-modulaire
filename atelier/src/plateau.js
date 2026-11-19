@@ -6,8 +6,14 @@
  *   { version, graine,
  *     pieces: [{id, modele, q, r, rotation}],       // ancre (q, r), rotation en sixièmes de tour (0 à 5)
  *     recouvrements: [{evenement, cle}],            // tuiles d'événement posées par-dessus une case
- *     camps: {vert: [cle, cle], rouge: [cle, cle]},  // villes de déploiement de chaque joueur
+ *     deploiements: [{cle, camp}],                  // FACULTATIF : villes de déploiement posées par-dessus une Plaine (§9)
+ *     camps: {vert: [cle, cle], rouge: [cle, cle]},  // villes de déploiement de chaque joueur, DÉDUITES de `deploiements`
  *     modeles: [{id, nom, cases: [{q, r, terrain}], quantite}] }   // FACULTATIF : pièces personnelles du document (§8.1)
+ *
+ * Version 2 du format (catalogue 2). Un fichier de version 1 s'ouvre toujours : ses tuiles d'une case P / F / S / V
+ * sont des pièces « hors catalogue », et ses villes de déploiement restent celles des rangées extrêmes (voir campsAuto).
+ * Les villes neutres sont des pièces (modèle VN) ; les villes de déploiement sont le champ `deploiements`, absent
+ * quand il n'y en a pas. Les fonctions qui posent ou retirent une ville tiennent `camps` à jour.
  *
  * Pièces personnelles : elles voyagent dans le document (aucun registre global). Le champ `modeles` est absent
  * quand il n'y en a pas. Toute recherche de modèle passe par modele(plateau, id) : catalogue de base, puis document.
@@ -26,7 +32,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   }
   var H = AT.hex, C = AT.catalogue;
 
-  var VERSION = 1;
+  var VERSION = 2;
+  var VERSIONS_LUES = [1, 2];
+  var CAMPS = ['vert', 'rouge'];
+  var NOMS_CAMPS = { vert: 'Vert', rouge: 'Rouge' };
   var NOYAU = 'N1';
   var FORME_ID = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
   var possede = Object.prototype.hasOwnProperty;
@@ -52,11 +61,23 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         rouge: ((plateau.camps && plateau.camps.rouge) || []).slice()
       }
     };
+    if (listeDeploiements(plateau).length) p.deploiements = listeDeploiements(plateau).map(function (x) { return { cle: x.cle, camp: x.camp }; });
     if (listeModeles(plateau).length) p.modeles = listeModeles(plateau).map(copieModele);
     if (remplacements) Object.keys(remplacements).forEach(function (k) { p[k] = remplacements[k]; });
     if (possede.call(p, 'modeles') && !(Array.isArray(p.modeles) && p.modeles.length)) delete p.modeles;   // forme canonique : champ absent
+    if (possede.call(p, 'deploiements') && !(Array.isArray(p.deploiements) && p.deploiements.length)) delete p.deploiements;
     return p;
   }
+
+  /** Liste interne (non copiée) des villes de déploiement du document ; [] si le champ est absent ou mal formé. */
+  function listeDeploiements(plateau) {
+    return (plateau && typeof plateau === 'object' && Array.isArray(plateau.deploiements)) ? plateau.deploiements.filter(function (x) {
+      return x !== null && typeof x === 'object' && typeof x.cle === 'string' && CAMPS.indexOf(x.camp) !== -1;
+    }) : [];
+  }
+
+  /** Villes de déploiement posées : copie de la liste [{cle, camp}] ([] s'il n'y en a pas). */
+  function deploiements(plateau) { return listeDeploiements(plateau).map(function (x) { return { cle: x.cle, camp: x.camp }; }); }
 
   // ------------------------------------------------------------------ modèles (catalogue de base + pièces du document)
 
@@ -122,21 +143,33 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    *   origine   : terrain d'origine (celui de la tuile du dessous) ;
    *   modele    : identifiant du modèle de la pièce ;
    *   evenement : identifiant de l'événement posé dessus, ou null.
+   * Une case qui porte une ville de déploiement a en plus `ville: 'VD'` et `camp` ('vert' | 'rouge') ; son terrain
+   * effectif est 'ville', son origine reste 'plaine'.
    * options.sansRecouvrements = true : ignore les tuiles d'événement.
+   * options.sansVilles = true : le terrain CONSTRUIT seul, sans les villes de déploiement ni les villes neutres.
    * En cas de chevauchement (plateau fautif), la première pièce de la liste garde la case.
    */
   function cases(plateau, options) {
-    var res = {};
+    var res = {}, sansVilles = !!(options && options.sansVilles);
     (plateau.pieces || []).forEach(function (piece) {
+      if (sansVilles && piece.modele === VILLE_NEUTRE) return;
       casesPiece(piece, plateau).forEach(function (c) {
         if (possede.call(res, c.cle)) return;
         res[c.cle] = { terrain: c.terrain, piece: piece.id, origine: c.terrain, modele: piece.modele, evenement: null };
       });
     });
+    if (!sansVilles) {
+      listeDeploiements(plateau).forEach(function (d) {
+        if (!possede.call(res, d.cle) || res[d.cle].ville) return;
+        res[d.cle].terrain = 'ville';
+        res[d.cle].ville = C.VILLE_DEPLOIEMENT.id;
+        res[d.cle].camp = d.camp;
+      });
+    }
     if (!(options && options.sansRecouvrements)) {
       (plateau.recouvrements || []).forEach(function (rec) {
         var ev = C.evenement(rec.evenement);
-        if (!ev || !possede.call(res, rec.cle) || res[rec.cle].evenement) return;
+        if (!ev || !possede.call(res, rec.cle) || res[rec.cle].evenement || res[rec.cle].ville) return;
         res[rec.cle].terrain = ev.terrain;
         res[rec.cle].evenement = ev.id;
       });
@@ -249,8 +282,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   }
 
   /**
-   * Retire la pièce `idPiece`. Les tuiles d'événement posées sur ses cases repartent en réserve,
-   * et ses cases sortent de la liste des camps. Renvoie {ok, plateau, evenementsRetires}.
+   * Retire la pièce `idPiece`. Les tuiles d'événement et les villes de déploiement posées sur ses cases repartent
+   * en réserve, et ses cases sortent de la liste des camps. Renvoie {ok, plateau, evenementsRetires, villesRetirees}.
    */
   function retirer(plateau, idPiece) {
     var piece = (plateau.pieces || []).filter(function (p) { return p.id === idPiece; })[0];
@@ -260,14 +293,17 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     var base = copier(plateau);
     var retires = base.recouvrements.filter(function (x) { return possede.call(perdues, x.cle); }).map(function (x) { return x.evenement; });
     var garde = function (k) { return !possede.call(perdues, k); };
+    var villesLa = deploiements(plateau);
     return {
       ok: true,
-      plateau: copier(plateau, {
+      plateau: campsDeduits(copier(plateau, {
         pieces: base.pieces.filter(function (p) { return p.id !== idPiece; }),
         recouvrements: base.recouvrements.filter(function (x) { return garde(x.cle); }),
+        deploiements: villesLa.filter(function (x) { return garde(x.cle); }),
         camps: { vert: base.camps.vert.filter(garde), rouge: base.camps.rouge.filter(garde) }
-      }),
-      evenementsRetires: retires
+      }), plateau),
+      evenementsRetires: retires,
+      villesRetirees: villesLa.filter(function (x) { return !garde(x.cle); }).map(function (x) { return x.cle; })
     };
   }
 
@@ -293,25 +329,29 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     casesPiece(piece, plateau).forEach(function (c) { avant[c.cle] = c.terrain; });
     nouvelles.forEach(function (c) { apres[c.cle] = c.terrain; });
     var garde = function (k) { return !possede.call(avant, k) || apres[k] === avant[k]; };
-    var base = copier(plateau);
+    var base = copier(plateau), villesLa = deploiements(plateau);
     return {
       ok: true,
-      plateau: copier(plateau, {
+      plateau: campsDeduits(copier(plateau, {
         pieces: base.pieces.map(function (p) { if (p.id === idPiece) p.rotation = rotation; return p; }),
         recouvrements: base.recouvrements.filter(function (x) { return garde(x.cle); }),
+        deploiements: villesLa.filter(function (x) { return garde(x.cle); }),
         camps: { vert: base.camps.vert.filter(garde), rouge: base.camps.rouge.filter(garde) }
-      }),
-      evenementsRetires: base.recouvrements.filter(function (x) { return !garde(x.cle); }).map(function (x) { return x.evenement; })
+      }), plateau),
+      evenementsRetires: base.recouvrements.filter(function (x) { return !garde(x.cle); }).map(function (x) { return x.evenement; }),
+      villesRetirees: villesLa.filter(function (x) { return !garde(x.cle); }).map(function (x) { return x.cle; })
     };
   }
 
   // ------------------------------------------------------------------ pinceau et gomme (§8.2, logique seule)
 
   /**
-   * Pinceau : met une tuile d'UNE case du terrain voulu ('plaine', 'foret', 'marais', 'montagne', 'ville' :
-   * modèles de REGLAGES.pinceau) sur la case `cle`. La tuile vient du stock s'il en reste, sinon elle est posée
-   * hors stock (résultat : horsStock = true et `note` le dit). Une tuile d'une case déjà là est remplacée
-   * (ses tuiles d'événement repartent en réserve) ; si elle a déjà ce terrain, rien ne change (inchange = true).
+   * Pinceau : met une tuile d'UNE case du terrain voulu ('plaine', 'foret', 'marais', 'montagne' : modèles de
+   * REGLAGES.pinceau) sur la case `cle`. Ces tuiles sont hors catalogue : elles sont posées hors stock (résultat :
+   * horsStock = true et `note` le dit), sauf une Plaine tant qu'il reste une tuile de remplissage en stock.
+   * Les villes ne se peignent pas : voir poserVilleDeploiement et poserVilleNeutre.
+   * Une tuile d'une case déjà là est remplacée (ses tuiles d'événement et sa ville de déploiement repartent en
+   * réserve) ; si elle a déjà ce terrain, rien ne change (inchange = true).
    * Refus avec raison sur une case de monobloc (monobloc = true) ou du noyau (noyau = true) : `piece` la désigne.
    * Les camps ne sont pas recalculés (voir avecCamps).
    * Renvoie {ok, plateau, id, modele, terrain, horsStock, remplace (identifiant de la tuile remplacée ou null),
@@ -320,8 +360,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   function peindre(plateau, cle, terrain) {
     var table = C.REGLAGES.pinceau;
     if (!cleValide(cle)) return refus(plateau, 'Case hors des limites du plateau.');
+    if (terrain === 'ville') return refus(plateau, 'Le pinceau ne pose pas de ville : les villes se posent à l’étape « Villes », une fois le terrain construit.');
     if (typeof terrain !== 'string' || !possede.call(table, terrain) || !C.modele(table[terrain])) return refus(plateau, 'Terrain inconnu du pinceau.');
     var m = C.modele(table[terrain]), p = H.decle(cle), base = plateau, remplace = null, retires = [];
+    // Une Plaine vient d'abord des tuiles de remplissage du catalogue, tant qu'il en reste.
+    var remplissage = C.modele(C.REGLAGES.pinceauRemplissage);
+    if (remplissage && remplissage.cases.length === 1 && remplissage.cases[0].terrain === terrain && stock(plateau)[remplissage.id].restant > 0) m = remplissage;
     var occupees = cases(plateau, { sansRecouvrements: true });
     if (possede.call(occupees, cle)) {
       var ici = occupees[cle], modeleIci = modele(plateau, ici.modele);
@@ -332,8 +376,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         r.monobloc = true; r.noyau = !!modeleIci.noyau; r.piece = ici.piece;
         return r;
       }
-      if (ici.modele === m.id) {
-        return { ok: true, plateau: plateau, id: ici.piece, modele: m.id, terrain: terrain, horsStock: false, remplace: null, inchange: true, evenementsRetires: [], note: null };
+      if (modeleIci && modeleIci.cases[0].terrain === terrain) {
+        return { ok: true, plateau: plateau, id: ici.piece, modele: ici.modele, terrain: terrain, horsStock: false, remplace: null, inchange: true, evenementsRetires: [], note: null };
       }
       var retrait = retirer(plateau, ici.piece);
       if (!retrait.ok) return refus(plateau, retrait.raison);
@@ -354,10 +398,16 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * `piece`, `modele`, `cases` du monobloc). Pour un monobloc, l'interface demande confirmation puis appelle
    * retirer(plateau, piece). Le NOYAU est fixe (règle de l'utilisateur) : la gomme ne le retire jamais ; seuls
    * « Vider le plateau » et un nouveau plateau le font.
+   * Sur une case qui porte une ville de déploiement, la gomme retire D'ABORD cette ville (résultat : ville = 'VD',
+   * camp) et laisse la tuile du dessous.
    * Renvoie {ok, plateau, id, modele, evenementsRetires} ou {ok: false, plateau, raison, vide | monobloc, ...}.
    */
   function gommer(plateau, cle) {
     var occupees = cases(plateau, { sansRecouvrements: true }), r;
+    if (typeof cle === 'string' && possede.call(occupees, cle) && occupees[cle].ville) {
+      var sansVille = retirerVilleDeploiement(plateau, cle);
+      return { ok: true, plateau: sansVille.plateau, id: occupees[cle].piece, modele: occupees[cle].modele, evenementsRetires: [], ville: occupees[cle].ville, camp: occupees[cle].camp };
+    }
     if (typeof cle !== 'string' || !possede.call(occupees, cle)) {
       r = refus(plateau, 'Case vide : rien à gommer.');
       r.vide = true;
@@ -381,30 +431,38 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   // ------------------------------------------------------------------ camps
 
   /**
-   * Villes des rangées extrêmes, sans limite de nombre : celles de la rangée du haut (r minimal) pour Vert,
-   * celles de la rangée du bas (r maximal) pour Rouge. Renvoie {vert: [clés], rouge: [clés]}.
-   * Sert au contrôle 4 (compte et égalités) ; les villes de déploiement sont données par campsAuto.
+   * ANCIEN CATALOGUE : villes d'une case (modèle V) des rangées extrêmes, sans limite de nombre : celles de la rangée
+   * du haut (r minimal) pour Vert, celles de la rangée du bas (r maximal) pour Rouge. Renvoie {vert: [clés], rouge: [clés]}.
+   * Sert au contrôle des villes d'un ancien plateau ; les villes de déploiement sont données par campsAuto.
    */
   function villesRangeesExtremes(plateau) {
-    var toutes = cases(plateau, { sansRecouvrements: true });
+    var toutes = cases(plateau, { sansRecouvrements: true, sansVilles: true });
     var cles = Object.keys(toutes);
     if (!cles.length) return { vert: [], rouge: [] };
     var rs = cles.map(function (k) { return H.decle(k).r; });
     var haut = Math.min.apply(null, rs), bas = Math.max.apply(null, rs);
     var liste = function (rangee) {
-      return H.trier(cles.filter(function (k) { return toutes[k].terrain === 'ville' && H.decle(k).r === rangee; }));
+      return H.trier(cles.filter(function (k) { return toutes[k].terrain === 'ville' && toutes[k].modele === VILLE_ANCIENNE && H.decle(k).r === rangee; }));
     };
     return { vert: liste(haut), rouge: haut === bas ? [] : liste(bas) };
   }
 
   /**
-   * Villes de déploiement déduites du plateau : les villes de la rangée du haut pour Vert, celles de la rangée
-   * du bas pour Rouge. Jamais plus de REGLAGES.villesParCamp cases par camp : si une rangée extrême porte
+   * Villes de déploiement déduites du plateau. Catalogue 2 : les tuiles de ville de déploiement posées (champ
+   * `deploiements`), par propriétaire. Ancien plateau sans aucune de ces tuiles : les villes d'une case (modèle V)
+   * de la rangée du haut pour Vert, de la rangée du bas pour Rouge.
+   * Jamais plus de REGLAGES.villesParCamp cases par camp : si un camp en a davantage, ou si une rangée extrême porte
    * davantage de villes, le cas est ambigu et AUCUNE n'est désignée pour ce camp (liste vide) ; le contrôle 4
    * signale l'égalité. Le résultat est donc toujours accepté par valider(). Renvoie {vert: [clés], rouge: [clés]}.
    */
   function campsAuto(plateau) {
-    var rangees = villesRangeesExtremes(plateau), max = C.REGLAGES.villesParCamp;
+    var max = C.REGLAGES.villesParCamp, posees = listeDeploiements(plateau);
+    if (posees.length) {
+      var toutes = cases(plateau, { sansRecouvrements: true }), res = { vert: [], rouge: [] };
+      posees.forEach(function (x) { if (possede.call(toutes, x.cle) && toutes[x.cle].camp === x.camp && res[x.camp].indexOf(x.cle) === -1) res[x.camp].push(x.cle); });
+      return { vert: res.vert.length > max ? [] : H.trier(res.vert), rouge: res.rouge.length > max ? [] : H.trier(res.rouge) };
+    }
+    var rangees = villesRangeesExtremes(plateau);
     return {
       vert: rangees.vert.length > max ? [] : rangees.vert,
       rouge: rangees.rouge.length > max ? [] : rangees.rouge
@@ -413,6 +471,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   /** Nouveau plateau dont les camps sont ceux de campsAuto. */
   function avecCamps(plateau) { return copier(plateau, { camps: campsAuto(plateau) }); }
+
+  /** Après une modification : si le plateau d'avant portait des villes de déploiement, `camps` est redéduit. */
+  function campsDeduits(nouveau, avant) { return listeDeploiements(avant).length ? avecCamps(nouveau) : nouveau; }
 
   // ------------------------------------------------------------------ chemins
 
@@ -573,6 +634,288 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     return composantes(vides);
   }
 
+  // ------------------------------------------------------------------ places des villes (§9, phase « villes »)
+
+  var VILLE_NEUTRE = 'VN', VILLE_ANCIENNE = 'V';
+
+  /** Réglage de la phase « villes » : options[nom], sinon REGLAGES.villes[nom], sinon la valeur de repli. */
+  function reglageVilles(options, nom, repli) {
+    if (options && options[nom] !== undefined) return options[nom];
+    var R = C.REGLAGES.villes;
+    return (R && R[nom] !== undefined) ? R[nom] : repli;
+  }
+
+  /**
+   * Étendue du terrain construit (les villes neutres, ajoutées après coup, ne comptent pas) :
+   * {haut, bas, rangees: {r: {gauche: q minimal, droite: q maximal}}}, ou null si le plateau est vide.
+   */
+  function etendueSurCases(toutes) {
+    var haut = Infinity, bas = -Infinity, rangees = {};
+    Object.keys(toutes).forEach(function (k) {
+      if (toutes[k].modele === VILLE_NEUTRE) return;
+      var p = H.decle(k);
+      haut = Math.min(haut, p.r); bas = Math.max(bas, p.r);
+      if (!rangees[p.r]) rangees[p.r] = { gauche: p.q, droite: p.q };
+      else { rangees[p.r].gauche = Math.min(rangees[p.r].gauche, p.q); rangees[p.r].droite = Math.max(rangees[p.r].droite, p.q); }
+    });
+    return haut === Infinity ? null : { haut: haut, bas: bas, rangees: rangees };
+  }
+
+  /** Pas minimaux depuis chaque ville de `villesLa` vers `cle` (ou vers une case vide `cle`, par ses voisines) : le plus petit. */
+  function pasVersVilles(toutes, cle, villesLa, couts) {
+    if (!villesLa.length) return Infinity;
+    var d = pasSurCases(toutes, villesLa, { couts: couts });
+    if (possede.call(toutes, cle)) return possede.call(d, cle) ? d[cle] : Infinity;
+    var mieux = Infinity;
+    H.voisines(cle).forEach(function (v) { if (possede.call(d, v)) mieux = Math.min(mieux, d[v] + 1); });
+    return mieux;
+  }
+
+  /**
+   * Raison pour laquelle la case `cle` ne peut pas recevoir une ville de déploiement du camp ('vert' : bord haut,
+   * 'rouge' : bord bas), ou null si elle convient. `toutes` : résultat de cases(). Règle B4 : une Plaine, hors noyau,
+   * au bord du plateau, dans les `profondeurExtremite` rangées extrêmes de son côté, à `ecartVilles` pas au moins
+   * de toute autre ville. options : profondeurExtremite, ecartVilles, couts, villes (clés des villes dont il faut
+   * s'écarter ; par défaut toutes celles du plateau), sansEcart (true : ne pas vérifier l'écart).
+   */
+  function refusDeploiementSurCases(toutes, camp, cle, options) {
+    if (camp !== 'vert' && camp !== 'rouge') return 'Camp inconnu (vert ou rouge).';
+    if (typeof cle !== 'string' || !possede.call(toutes, cle)) return 'Cette case n’est pas sur le plateau.';
+    var c = toutes[cle], m = C.modele(c.modele), cote = camp === 'vert' ? 'haut' : 'bas';
+    if (c.terrain === 'ville') return 'Cette case porte déjà une ville.';
+    if (m && m.noyau) return 'Une ville de déploiement ne se pose pas sur le noyau.';
+    if (c.evenement) return 'Cette case porte une tuile d’événement.';
+    if (c.terrain !== 'plaine') return 'Une ville de déploiement se pose sur une case de Plaine (ici : ' + c.terrain + ').';
+    if (options && options.libre) return null;
+    var e = etendueSurCases(toutes), prof = reglageVilles(options, 'profondeurExtremite', 2), r = H.decle(cle).r;
+    var dedans = camp === 'vert' ? r <= e.haut + prof - 1 : r >= e.bas - prof + 1;
+    if (!dedans) {
+      return 'Cette case n’est pas à l’extrémité du ' + cote + ' : la ville de déploiement de ' + (camp === 'vert' ? 'Vert' : 'Rouge') + ' se pose dans '
+        + (prof > 1 ? 'les ' + prof + ' rangées' : 'la rangée') + ' du ' + cote + '.';
+    }
+    if (!H.voisines(cle).some(function (v) { return !possede.call(toutes, v); })) return 'Cette case n’est pas au bord du plateau (elle est entourée de tuiles).';
+    if (!(options && options.sansEcart)) {
+      var ecart = reglageVilles(options, 'ecartVilles', C.REGLAGES.ecartVilles);
+      var autres = (options && options.villes) || Object.keys(toutes).filter(function (k) { return toutes[k].terrain === 'ville'; });
+      var pas = pasVersVilles(toutes, cle, autres, options && options.couts);
+      if (pas < ecart) return 'Trop près d’une autre ville : ' + pas + ' pas, il en faut ' + ecart + ' (soit ' + (ecart - 1) + ' cases entre elles).';
+    }
+    return null;
+  }
+
+  /** Cases qui peuvent recevoir une ville de déploiement du camp : clés triées. Voir refusDeploiementSurCases. */
+  function placesDeploiementSurCases(toutes, camp, options) {
+    var autres = (options && options.villes) || Object.keys(toutes).filter(function (k) { return toutes[k].terrain === 'ville'; });
+    var o = {};
+    Object.keys(options || {}).forEach(function (k) { o[k] = options[k]; });
+    o.sansEcart = true;                                   // l'écart est vérifié ici en un seul parcours
+    var ecart = reglageVilles(options, 'ecartVilles', C.REGLAGES.ecartVilles);
+    var d = (options && options.sansEcart) ? null : pasSurCases(toutes, autres, { couts: options && options.couts });
+    return H.trier(Object.keys(toutes).filter(function (k) {
+      if (refusDeploiementSurCases(toutes, camp, k, o) !== null) return false;
+      return !d || !possede.call(d, k) || d[k] >= ecart;
+    }));
+  }
+
+  /** Flanc d'une case VIDE par rapport au terrain construit : 'gauche', 'droite', ou null (dessus, dessous, dans un creux). */
+  function flancSurCases(etendue, cle) {
+    var p = H.decle(cle), rangee = etendue && etendue.rangees[p.r];
+    if (!rangee) return null;
+    if (p.q < rangee.gauche) return 'gauche';
+    return p.q > rangee.droite ? 'droite' : null;
+  }
+
+  /**
+   * Raison pour laquelle la case VIDE `cle` ne peut pas recevoir une ville neutre, ou null si elle convient.
+   * Règle B5 : une tuile ajoutée contre le bord, sur le flanc gauche ou droit, dans le tiers central des rangées
+   * (réglage neutresTiersCentral), touchant au moins `contactVilleNeutre` cases du plateau dont une franchissable,
+   * à `ecartVilles` pas au moins de toute autre ville. options : comme refusDeploiementSurCases, plus
+   * contactVilleNeutre, neutresTiersCentral, flanc ('gauche' | 'droite' : flanc imposé).
+   */
+  function refusNeutreSurCases(toutes, cle, options) {
+    if (!cleValide(cle)) return 'Case hors des limites du plateau.';
+    if (possede.call(toutes, cle)) return 'Une ville neutre est une tuile ajoutée contre le bord : cette case est déjà occupée.';
+    var couts = options && options.couts;
+    var voisinesLa = H.voisines(cle).filter(function (v) { return possede.call(toutes, v) && toutes[v].modele !== VILLE_NEUTRE; });
+    if (!voisinesLa.length) return 'Une ville neutre se pose contre le bord du plateau : cette case ne touche aucune tuile.';
+    if (options && options.libre) return null;
+    var e = etendueSurCases(toutes), flanc = flancSurCases(e, cle);
+    if (!flanc) return 'Une ville neutre se pose sur un côté du plateau (flanc gauche ou droit), pas en haut, en bas ni dans un creux.';
+    if (options && options.flanc && options.flanc !== flanc) return 'Cette case est sur le flanc ' + flanc + ' ; la ville neutre attendue va sur le flanc ' + options.flanc + '.';
+    if (reglageVilles(options, 'neutresTiersCentral', true)) {
+      var tiers = Math.floor((e.bas - e.haut + 1) / 3), r = H.decle(cle).r;
+      if (r < e.haut + tiers || r > e.bas - tiers) {
+        return 'Une ville neutre se pose à mi-hauteur du plateau (rangées ' + (e.haut + tiers) + ' à ' + (e.bas - tiers) + ') ; cette case est en rangée ' + r + '.';
+      }
+    }
+    if (!voisinesLa.some(function (v) { return franchissable(toutes, v, couts); })) return 'Cette case ne touche que des cases infranchissables : la ville serait hors d’atteinte.';
+    var contact = reglageVilles(options, 'contactVilleNeutre', 2);
+    if (voisinesLa.length < contact) return 'Cette case ne touche que ' + voisinesLa.length + ' case(s) du plateau ; une ville neutre doit en toucher au moins ' + contact + '.';
+    if (!(options && options.sansEcart)) {
+      var ecart = reglageVilles(options, 'ecartVilles', C.REGLAGES.ecartVilles);
+      var autres = (options && options.villes) || Object.keys(toutes).filter(function (k) { return toutes[k].terrain === 'ville'; });
+      var pas = pasVersVilles(toutes, cle, autres, couts);
+      if (pas < ecart) return 'Trop près d’une autre ville : ' + pas + ' pas, il en faut ' + ecart + ' (soit ' + (ecart - 1) + ' cases entre elles).';
+    }
+    return null;
+  }
+
+  /**
+   * Cases vides qui peuvent recevoir une ville neutre : [{cle, flanc, cotes, pieces}] triées (cotes : cases du
+   * plateau touchées ; pieces : pièces distinctes touchées). Voir refusNeutreSurCases.
+   */
+  function placesNeutresSurCases(toutes, options) {
+    var vues = Object.create(null), res = [], e = etendueSurCases(toutes);
+    if (!e) return res;
+    var autres = (options && options.villes) || Object.keys(toutes).filter(function (k) { return toutes[k].terrain === 'ville'; });
+    var o = {};
+    Object.keys(options || {}).forEach(function (k) { o[k] = options[k]; });
+    o.sansEcart = true;
+    var ecart = reglageVilles(options, 'ecartVilles', C.REGLAGES.ecartVilles);
+    var d = (options && options.sansEcart) ? null : pasSurCases(toutes, autres, { couts: options && options.couts });
+    Object.keys(toutes).forEach(function (k) {
+      H.voisines(k).forEach(function (v) {
+        if (vues[v] === true || possede.call(toutes, v)) return;
+        vues[v] = true;
+        if (refusNeutreSurCases(toutes, v, o) !== null) return;
+        var touchees = H.voisines(v).filter(function (x) { return possede.call(toutes, x) && toutes[x].modele !== VILLE_NEUTRE; });
+        if (d) {
+          var pas = Infinity;
+          touchees.forEach(function (x) { if (possede.call(d, x)) pas = Math.min(pas, d[x] + 1); });
+          if (pas < ecart) return;
+        }
+        var pieces = Object.create(null);
+        touchees.forEach(function (x) { pieces[toutes[x].piece] = true; });
+        res.push({ cle: v, flanc: flancSurCases(e, v), cotes: touchees.length, pieces: Object.keys(pieces).length });
+      });
+    });
+    var ordre = H.trier(res.map(function (x) { return x.cle; }));
+    return res.sort(function (a, b) { return ordre.indexOf(a.cle) - ordre.indexOf(b.cle); });
+  }
+
+  // ------------------------------------------------------------------ poser et retirer les villes (§9, phase « villes »)
+
+  /**
+   * Où en sont les villes : {vert: [clés], rouge: [clés], neutres: [{cle, piece, flanc}],
+   *                          manquantes: {vert, rouge, neutres} (nombres), completes: booléen}.
+   * `flanc` d'une ville neutre : 'gauche', 'droite', ou null si elle n'est pas sur un côté du plateau.
+   */
+  function etatVilles(plateau) {
+    var parCamp = C.REGLAGES.villesParCamp, res = { vert: [], rouge: [], neutres: [] };
+    var terrain = cases(plateau, { sansRecouvrements: true, sansVilles: true }), etendue = etendueSurCases(terrain);
+    listeDeploiements(plateau).forEach(function (x) { if (possede.call(terrain, x.cle) && res[x.camp].indexOf(x.cle) === -1) res[x.camp].push(x.cle); });
+    res.vert = H.trier(res.vert); res.rouge = H.trier(res.rouge);
+    (plateau.pieces || []).forEach(function (p) {
+      if (p.modele !== VILLE_NEUTRE) return;
+      var k = H.cle(p.q, p.r);
+      res.neutres.push({ cle: k, piece: p.id, flanc: possede.call(terrain, k) ? null : flancSurCases(etendue, k) });
+    });
+    var total = C.modele(VILLE_NEUTRE) ? C.modele(VILLE_NEUTRE).nombre : 0;
+    res.manquantes = {
+      vert: Math.max(0, parCamp - res.vert.length), rouge: Math.max(0, parCamp - res.rouge.length), neutres: Math.max(0, total - res.neutres.length)
+    };
+    res.completes = !res.manquantes.vert && !res.manquantes.rouge && !res.manquantes.neutres;
+    return res;
+  }
+
+  /**
+   * Peut-on poser une ville de déploiement du camp ('vert' : bord haut ; 'rouge' : bord bas) sur la case ?
+   * Renvoie {ok: true} ou {ok: false, raison}. Règle B4, voir refusDeploiementSurCases.
+   * options.libre = true : seules les conditions matérielles sont vérifiées (une Plaine du plateau, hors noyau, sans
+   * ville ni événement, et il reste une tuile au camp) ; la place à l'extrémité et l'écart sont laissés aux contrôles.
+   * Autres options : profondeurExtremite, ecartVilles, couts.
+   */
+  function peutPoserVilleDeploiement(plateau, camp, cle, options) {
+    if (CAMPS.indexOf(camp) === -1) return { ok: false, raison: 'Camp inconnu (vert ou rouge).' };
+    var etat = etatVilles(plateau), parCamp = C.REGLAGES.villesParCamp;
+    if (etat[camp].length >= parCamp) {
+      return { ok: false, raison: NOMS_CAMPS[camp] + ' a déjà ses ' + parCamp + ' villes de déploiement : retirez-en une avant d’en poser une autre.' };
+    }
+    if (listeDeploiements(plateau).length >= C.REGLAGES.bornes.deploiements) return { ok: false, raison: 'Trop de villes de déploiement sur le plateau.' };
+    var raison = refusDeploiementSurCases(cases(plateau), camp, cle, options);
+    return raison ? { ok: false, raison: raison } : { ok: true };
+  }
+
+  /** Cases où le camp peut poser une ville de déploiement : clés triées ([] s'il a déjà toutes les siennes). */
+  function placesDeploiement(plateau, camp, options) {
+    if (CAMPS.indexOf(camp) === -1 || etatVilles(plateau)[camp].length >= C.REGLAGES.villesParCamp) return [];
+    return placesDeploiementSurCases(cases(plateau), camp, options);
+  }
+
+  /**
+   * Pose une ville de déploiement du camp par-dessus la case de Plaine `cle` (la tuile du dessous reste en place).
+   * `camps` est mis à jour. Renvoie {ok, plateau, camp, cle} ou {ok: false, plateau, raison}. Options : voir peutPoserVilleDeploiement.
+   */
+  function poserVilleDeploiement(plateau, camp, cle, options) {
+    var avis = peutPoserVilleDeploiement(plateau, camp, cle, options);
+    if (!avis.ok) return refus(plateau, avis.raison);
+    var liste = deploiements(plateau);
+    liste.push({ cle: cle, camp: camp });
+    return { ok: true, plateau: avecCamps(copier(plateau, { deploiements: liste })), camp: camp, cle: cle };
+  }
+
+  /** Retire la ville de déploiement posée sur la case. `camps` est mis à jour. Renvoie {ok, plateau, camp, cle} ou un refus. */
+  function retirerVilleDeploiement(plateau, cle) {
+    var liste = deploiements(plateau), trouvee = liste.filter(function (x) { return x.cle === cle; })[0];
+    if (!trouvee) return refus(plateau, 'Aucune ville de déploiement sur cette case.');
+    var nouveau = avecCamps(copier(plateau, { deploiements: liste.filter(function (x) { return x.cle !== cle; }) }));
+    return { ok: true, plateau: nouveau, camp: trouvee.camp, cle: cle };
+  }
+
+  /**
+   * Peut-on poser une ville neutre sur la case VIDE `cle` ? Renvoie {ok: true, flanc} ou {ok: false, raison}.
+   * Règle B5, voir refusNeutreSurCases ; une seule ville neutre par flanc.
+   * options.libre = true : seules les conditions matérielles sont vérifiées (case vide contre le plateau, tuile en stock).
+   * Autres options : contactVilleNeutre, neutresTiersCentral, ecartVilles, couts.
+   */
+  function peutPoserVilleNeutre(plateau, cle, options) {
+    var m = C.modele(VILLE_NEUTRE), etat = etatVilles(plateau);
+    if (!m) return { ok: false, raison: 'Le catalogue n’a pas de ville neutre.' };
+    if (etat.neutres.length >= m.nombre) return { ok: false, raison: 'Les ' + m.nombre + ' villes neutres sont déjà posées : retirez-en une avant d’en poser une autre.' };
+    // La place d'abord (flanc, hauteur, contact), puis « une par flanc », puis l'écart aux autres villes.
+    var toutes = cases(plateau), sansEcart = {};
+    Object.keys(options || {}).forEach(function (k) { sansEcart[k] = options[k]; });
+    sansEcart.sansEcart = true;
+    var raison = refusNeutreSurCases(toutes, cle, sansEcart);
+    if (raison) return { ok: false, raison: raison };
+    var flanc = flancSurCases(etendueSurCases(toutes), cle);
+    if (!(options && options.libre) && etat.neutres.some(function (x) { return x.flanc === flanc; })) {
+      return { ok: false, raison: 'Le flanc ' + flanc + ' a déjà sa ville neutre : l’autre se pose sur le flanc ' + (flanc === 'gauche' ? 'droit' : 'gauche') + '.' };
+    }
+    raison = refusNeutreSurCases(toutes, cle, options);
+    if (raison) return { ok: false, raison: raison };
+    return { ok: true, flanc: flanc };
+  }
+
+  /** Cases vides où une ville neutre peut se poser : [{cle, flanc, cotes, pieces}] ([] si toutes sont posées). */
+  function placesNeutres(plateau, options) {
+    var m = C.modele(VILLE_NEUTRE), etat = etatVilles(plateau);
+    if (!m || etat.neutres.length >= m.nombre) return [];
+    return placesNeutresSurCases(cases(plateau), options).filter(function (x) {
+      return !etat.neutres.some(function (n) { return n.flanc === x.flanc; });
+    });
+  }
+
+  /**
+   * Pose une ville neutre (pièce VN) sur la case vide `cle`, contre le bord du plateau.
+   * Renvoie {ok, plateau, id, cle, flanc} ou {ok: false, plateau, raison}. Options : voir peutPoserVilleNeutre.
+   */
+  function poserVilleNeutre(plateau, cle, options) {
+    var avis = peutPoserVilleNeutre(plateau, cle, options);
+    if (!avis.ok) return refus(plateau, avis.raison);
+    var p = H.decle(cle), pose = poser(plateau, VILLE_NEUTRE, p.q, p.r, 0);
+    if (!pose.ok) return refus(plateau, pose.raison);
+    return { ok: true, plateau: pose.plateau, id: pose.id, cle: cle, flanc: avis.flanc };
+  }
+
+  /** Retire une ville neutre, désignée par la clé de sa case ou par l'identifiant de sa pièce. Renvoie {ok, plateau, id, cle} ou un refus. */
+  function retirerVilleNeutre(plateau, cleOuId) {
+    var piece = (plateau.pieces || []).filter(function (p) { return p.modele === VILLE_NEUTRE && (p.id === cleOuId || H.cle(p.q, p.r) === cleOuId); })[0];
+    if (!piece) return refus(plateau, 'Aucune ville neutre à cet endroit.');
+    var retrait = retirer(plateau, piece.id);
+    return retrait.ok ? { ok: true, plateau: retrait.plateau, id: piece.id, cle: H.cle(piece.q, piece.r) } : refus(plateau, retrait.raison);
+  }
+
   // ------------------------------------------------------------------ événements
 
   /**
@@ -584,6 +927,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     if (!ev) return 'Événement inconnu de la réserve.';
     if (typeof cle !== 'string' || !possede.call(base, cle)) return 'Case hors du plateau.';
     var c = base[cle], m = C.modele(c.modele);            // une pièce personnelle n'est jamais le noyau
+    if (c.ville) return 'Un événement ne se pose jamais sur une ville de déploiement.';
     if (R.evenementsInterditsSur.indexOf(c.origine) !== -1) return 'Un événement ne se pose jamais sur une case de ce type (' + c.origine + ').';
     if (R.evenementsInterditsSurNoyau && m && m.noyau) return 'Un événement ne se pose jamais sur le noyau.';
     if (ev.sur.terrains && ev.sur.terrains.indexOf(c.origine) === -1) {
@@ -901,7 +1245,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   /**
    * Valide strictement un objet lu dans un fichier (types, bornes, identifiants connus, doublons).
-   * Ne vérifie pas les règles du jeu (chevauchements, stock… : voir AT.controles).
+   * Versions lues : 1 (premier catalogue) et 2 ; le plateau rendu est toujours en version 2.
+   * Ne vérifie pas les règles du jeu (chevauchements, stock, place des villes… : voir AT.controles).
    * Renvoie {ok, plateau, erreurs} : `plateau` est un objet reconstruit champ par champ (null si invalide).
    */
   function valider(objet) {
@@ -910,8 +1255,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     if (!estObjetSimple(objet)) { erreurs.push('Le fichier ne contient pas un plateau.'); return echec(); }
     var attendus = ['version', 'graine', 'pieces', 'recouvrements', 'camps'];
     if (possede.call(objet, 'modeles')) attendus.push('modeles');          // champ facultatif (pièces personnelles)
+    if (possede.call(objet, 'deploiements')) attendus.push('deploiements'); // champ facultatif (villes de déploiement)
     if (!champsExacts(objet, attendus, 'Plateau', erreurs)) return echec();
-    if (objet.version !== VERSION) erreurs.push('Version de plateau non reconnue.');
+    if (VERSIONS_LUES.indexOf(objet.version) === -1) erreurs.push('Version de plateau non reconnue.');
     var graineOk = (typeof objet.graine === 'number' && Number.isSafeInteger(objet.graine))
       || (typeof objet.graine === 'string' && objet.graine.length <= B.longueurGraine);
     if (!graineOk) erreurs.push('Graine invalide (entier ou texte de ' + B.longueurGraine + ' caractères au plus).');
@@ -975,6 +1321,28 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       });
     }
 
+    // Villes de déploiement posées par-dessus une case (catalogue 2).
+    var poseesLa = [], clesVilles = Object.create(null), parCamp = { vert: 0, rouge: 0 };
+    if (possede.call(objet, 'deploiements')) {
+      if (!Array.isArray(objet.deploiements) || objet.deploiements.length > B.deploiements) {
+        erreurs.push('Liste des villes de déploiement invalide (' + B.deploiements + ' au plus).');
+      } else {
+        objet.deploiements.forEach(function (x, i) {
+          var ou = 'Ville de déploiement n° ' + (i + 1);
+          if (!estObjetSimple(x)) { erreurs.push(ou + ' : ce n’est pas un objet.'); return; }
+          if (!champsExacts(x, ['cle', 'camp'], ou, erreurs)) return;
+          if (CAMPS.indexOf(x.camp) === -1) { erreurs.push(ou + ' : camp invalide (vert ou rouge).'); return; }
+          if (!cleValide(x.cle)) { erreurs.push(ou + ' : case invalide.'); return; }
+          if (clesVilles[x.cle] === true) { erreurs.push(ou + ' : deux villes sur la même case.'); return; }
+          if (clesVues[x.cle] === true) { erreurs.push(ou + ' : cette case porte déjà une tuile d’événement.'); return; }
+          clesVilles[x.cle] = true;
+          parCamp[x.camp] += 1;
+          if (parCamp[x.camp] > C.REGLAGES.villesParCamp) { erreurs.push(ou + ' : plus de ' + C.REGLAGES.villesParCamp + ' villes de déploiement pour ' + NOMS_CAMPS[x.camp] + '.'); return; }
+          poseesLa.push({ cle: x.cle, camp: x.camp });
+        });
+      }
+    }
+
     // Camps.
     var camps = { vert: [], rouge: [] };
     if (!estObjetSimple(objet.camps) || !champsExacts(objet.camps, ['vert', 'rouge'], 'Camps', erreurs)) {
@@ -998,6 +1366,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
     if (erreurs.length) return echec();
     var propre = { version: VERSION, graine: objet.graine, pieces: pieces, recouvrements: recouvrements, camps: camps };
+    if (poseesLa.length) propre.deploiements = poseesLa;
     if (persos.length) propre.modeles = persos;
     return { ok: true, plateau: propre, erreurs: [] };
   }
@@ -1015,7 +1384,11 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   }
 
   AT.plateau = {
-    VERSION: VERSION,
+    VERSION: VERSION, VERSIONS_LUES: VERSIONS_LUES.slice(),
+    deploiements: deploiements, etatVilles: etatVilles,
+    placesDeploiement: placesDeploiement, placesNeutres: placesNeutres,
+    peutPoserVilleDeploiement: peutPoserVilleDeploiement, poserVilleDeploiement: poserVilleDeploiement, retirerVilleDeploiement: retirerVilleDeploiement,
+    peutPoserVilleNeutre: peutPoserVilleNeutre, poserVilleNeutre: poserVilleNeutre, retirerVilleNeutre: retirerVilleNeutre,
     vide: vide, vierge: vierge, casesModele: casesModele, casesPiece: casesPiece, cases: cases, chevauchements: chevauchements,
     cout: cout, villes: villes, stock: stock,
     modele: modele, modeles: modeles, idsModeles: idsModeles,
@@ -1025,6 +1398,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     villesRangeesExtremes: villesRangeesExtremes, campsAuto: campsAuto, avecCamps: avecCamps,
     pasSurCases: pasSurCases, rationsSurCases: rationsSurCases, distancesPas: distancesPas, distancesRations: distancesRations,
     chemin: chemin, composantes: composantes, coupures: coupures, trous: trous,
+    etendueSurCases: etendueSurCases, flancSurCases: flancSurCases,
+    refusDeploiementSurCases: refusDeploiementSurCases, placesDeploiementSurCases: placesDeploiementSurCases,
+    refusNeutreSurCases: refusNeutreSurCases, placesNeutresSurCases: placesNeutresSurCases,
     refusTerrainEvenement: refusTerrainEvenement, peutPoserEvenement: peutPoserEvenement,
     poserEvenement: poserEvenement, retirerEvenement: retirerEvenement,
     valider: valider, serialiser: serialiser, lire: lire

@@ -1,0 +1,519 @@
+{
+ "version": 1,
+ "graine": 5,
+ "pieces": [
+  {
+   "id": "p1",
+   "modele": "N1",
+   "q": 0,
+   "r": 0,
+   "rotation": 0
+  },
+  {
+   "id": "p2",
+   "modele": "M5",
+   "q": 2,
+   "r": 2,
+   "rotation": 3
+  },
+  {
+   "id": "p3",
+   "modele": "M4",
+   "q": -1,
+   "r": -1,
+   "rotation": 4
+  },
+  {
+   "id": "p4",
+   "modele": "S31",
+   "q": -4,
+   "r": 2,
+   "rotation": 0
+  },
+  {
+   "id": "p5",
+   "modele": "F31",
+   "q": 4,
+   "r": -2,
+   "rotation": 3
+  },
+  {
+   "id": "p6",
+   "modele": "S21",
+   "q": -2,
+   "r": 5,
+   "rotation": 4
+  },
+  {
+   "id": "p7",
+   "modele": "F21",
+   "q": 2,
+   "r": -5,
+   "rotation": 1
+  },
+  {
+   "id": "p8",
+   "modele": "S3",
+   "q": -4,
+   "r": 0,
+   "rotation": 1
+  },
+  {
+   "id": "p9",
+   "modele": "F3",
+   "q": 4,
+   "r": 0,
+   "rotation": 4
+  },
+  {
+   "id": "p10",
+   "modele": "V",
+   "q": -1,
+   "r": -5,
+   "rotation": 0
+  },
+  {
+   "id": "p11",
+   "modele": "V",
+   "q": 5,
+   "r": -5,
+   "rotation": 0
+  },
+  {
+   "id": "p12",
+   "modele": "V",
+   "q": -3,
+   "r": -1,
+   "rotation": 0
+  },
+  {
+   "id": "p13",
+   "modele": "V",
+   "q": 3,
+   "r": 1,
+   "rotation": 0
+  },
+  {
+   "id": "p14",
+   "modele": "V",
+   "q": -5,
+   "r": 5,
+   "rotation": 0
+  },
+  {
+   "id": "p15",
+   "modele": "V",
+   "q": 1,
+   "r": 5,
+   "rotation": 0
+  },
+  {
+   "id": "p16",
+   "modele": "P",
+   "q": 0,
+   "r": -5,
+   "rotation": 0
+  },
+  {
+   "id": "p17",
+   "modele": "P",
+   "q": 1,
+   "r": -5,
+   "rotation": 0
+  },
+  {
+   "id": "p18",
+   "modele": "S",
+   "q": -2,
+   "r": -4,
+   "rotation": 0
+  },
+  {
+   "id": "p19",
+   "modele": "P",
+   "q": -1,
+   "r": -4,
+   "rotation": 0
+  },
+  {
+   "id": "p20",
+   "modele": "P",
+   "q": 1,
+   "r": -4,
+   "rotation": 0
+  },
+  {
+   "id": "p21",
+   "modele": "F",
+   "q": 3,
+   "r": -4,
+   "rotation": 0
+  },
+  {
+   "id": "p22",
+   "modele": "P",
+   "q": 4,
+   "r": -4,
+   "rotation": 0
+  },
+  {
+   "id": "p23",
+   "modele": "F",
+   "q": 5,
+   "r": -4,
+   "rotation": 0
+  },
+  {
+   "id": "p24",
+   "modele": "P",
+   "q": -2,
+   "r": -3,
+   "rotation": 0
+  },
+  {
+   "id": "p25",
+   "modele": "P",
+   "q": -1,
+   "r": -3,
+   "rotation": 0
+  },
+  {
+   "id": "p26",
+   "modele": "P",
+   "q": 2,
+   "r": -3,
+   "rotation": 0
+  },
+  {
+   "id": "p27",
+   "modele": "S",
+   "q": 5,
+   "r": -3,
+   "rotation": 0
+  },
+  {
+   "id": "p28",
+   "modele": "P",
+   "q": -3,
+   "r": -2,
+   "rotation": 0
+  },
+  {
+   "id": "p29",
+   "modele": "P",
+   "q": -2,
+   "r": -2,
+   "rotation": 0
+  },
+  {
+   "id": "p30",
+   "modele": "P",
+   "q": 0,
+   "r": -2,
+   "rotation": 0
+  },
+  {
+   "id": "p31",
+   "modele": "P",
+   "q": 1,
+   "r": -2,
+   "rotation": 0
+  },
+  {
+   "id": "p32",
+   "modele": "P",
+   "q": 2,
+   "r": -2,
+   "rotation": 0
+  },
+  {
+   "id": "p33",
+   "modele": "P",
+   "q": -4,
+   "r": -1,
+   "rotation": 0
+  },
+  {
+   "id": "p34",
+   "modele": "P",
+   "q": -2,
+   "r": -1,
+   "rotation": 0
+  },
+  {
+   "id": "p35",
+   "modele": "P",
+   "q": 2,
+   "r": -1,
+   "rotation": 0
+  },
+  {
+   "id": "p36",
+   "modele": "P",
+   "q": 3,
+   "r": -1,
+   "rotation": 0
+  },
+  {
+   "id": "p37",
+   "modele": "P",
+   "q": 6,
+   "r": -1,
+   "rotation": 0
+  },
+  {
+   "id": "p38",
+   "modele": "P",
+   "q": -5,
+   "r": 0,
+   "rotation": 0
+  },
+  {
+   "id": "p39",
+   "modele": "P",
+   "q": -3,
+   "r": 0,
+   "rotation": 0
+  },
+  {
+   "id": "p40",
+   "modele": "F",
+   "q": -2,
+   "r": 0,
+   "rotation": 0
+  },
+  {
+   "id": "p41",
+   "modele": "S",
+   "q": 2,
+   "r": 0,
+   "rotation": 0
+  },
+  {
+   "id": "p42",
+   "modele": "P",
+   "q": 3,
+   "r": 0,
+   "rotation": 0
+  },
+  {
+   "id": "p43",
+   "modele": "P",
+   "q": 5,
+   "r": 0,
+   "rotation": 0
+  },
+  {
+   "id": "p44",
+   "modele": "P",
+   "q": -6,
+   "r": 1,
+   "rotation": 0
+  },
+  {
+   "id": "p45",
+   "modele": "P",
+   "q": -3,
+   "r": 1,
+   "rotation": 0
+  },
+  {
+   "id": "p46",
+   "modele": "P",
+   "q": -2,
+   "r": 1,
+   "rotation": 0
+  },
+  {
+   "id": "p47",
+   "modele": "P",
+   "q": 4,
+   "r": 1,
+   "rotation": 0
+  },
+  {
+   "id": "p48",
+   "modele": "P",
+   "q": -2,
+   "r": 2,
+   "rotation": 0
+  },
+  {
+   "id": "p49",
+   "modele": "P",
+   "q": -1,
+   "r": 2,
+   "rotation": 0
+  },
+  {
+   "id": "p50",
+   "modele": "P",
+   "q": 3,
+   "r": 2,
+   "rotation": 0
+  },
+  {
+   "id": "p51",
+   "modele": "F",
+   "q": -5,
+   "r": 3,
+   "rotation": 0
+  },
+  {
+   "id": "p52",
+   "modele": "P",
+   "q": -2,
+   "r": 3,
+   "rotation": 0
+  },
+  {
+   "id": "p53",
+   "modele": "P",
+   "q": 0,
+   "r": 3,
+   "rotation": 0
+  },
+  {
+   "id": "p54",
+   "modele": "P",
+   "q": 1,
+   "r": 3,
+   "rotation": 0
+  },
+  {
+   "id": "p55",
+   "modele": "P",
+   "q": 2,
+   "r": 3,
+   "rotation": 0
+  },
+  {
+   "id": "p56",
+   "modele": "S",
+   "q": -5,
+   "r": 4,
+   "rotation": 0
+  },
+  {
+   "id": "p57",
+   "modele": "P",
+   "q": -4,
+   "r": 4,
+   "rotation": 0
+  },
+  {
+   "id": "p58",
+   "modele": "S",
+   "q": -3,
+   "r": 4,
+   "rotation": 0
+  },
+  {
+   "id": "p59",
+   "modele": "P",
+   "q": -1,
+   "r": 4,
+   "rotation": 0
+  },
+  {
+   "id": "p60",
+   "modele": "P",
+   "q": 0,
+   "r": 4,
+   "rotation": 0
+  },
+  {
+   "id": "p61",
+   "modele": "P",
+   "q": 1,
+   "r": 4,
+   "rotation": 0
+  },
+  {
+   "id": "p62",
+   "modele": "F",
+   "q": 2,
+   "r": 4,
+   "rotation": 0
+  },
+  {
+   "id": "p63",
+   "modele": "P",
+   "q": -1,
+   "r": 5,
+   "rotation": 0
+  },
+  {
+   "id": "p64",
+   "modele": "P",
+   "q": 0,
+   "r": 5,
+   "rotation": 0
+  },
+  {
+   "id": "p65",
+   "modele": "X1",
+   "q": -7,
+   "r": 2,
+   "rotation": 0
+  },
+  {
+   "id": "p66",
+   "modele": "M1",
+   "q": 5,
+   "r": -2,
+   "rotation": 0
+  },
+  {
+   "id": "p67",
+   "modele": "P",
+   "q": -3,
+   "r": 5,
+   "rotation": 0
+  }
+ ],
+ "recouvrements": [
+  {
+   "evenement": "E4",
+   "cle": "3,-4"
+  },
+  {
+   "evenement": "E8",
+   "cle": "0,-5"
+  }
+ ],
+ "camps": {
+  "vert": [
+   "-1,-5",
+   "5,-5"
+  ],
+  "rouge": [
+   "-5,5",
+   "1,5"
+  ]
+ },
+ "modeles": [
+  {
+   "id": "X1",
+   "nom": "Bois long",
+   "cases": [
+    {
+     "q": 0,
+     "r": 0,
+     "terrain": "foret"
+    },
+    {
+     "q": 1,
+     "r": 0,
+     "terrain": "foret"
+    },
+    {
+     "q": 2,
+     "r": 0,
+     "terrain": "plaine"
+    }
+   ],
+   "quantite": 2
+  }
+ ]
+}

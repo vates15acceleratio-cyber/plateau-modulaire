@@ -97,6 +97,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var source = ctx.plateau(), essais = source.recouvrements.length;
       var plateau = { version: source.version, graine: source.graine, pieces: source.pieces, recouvrements: [], camps: source.camps };
       if (source.modeles) plateau.modeles = source.modeles;          // pièces personnelles du document : la partie les emporte
+      if (source.deploiements) plateau.deploiements = source.deploiements;   // villes de déploiement posées par-dessus une Plaine (catalogue 2)
       var premier = JOUEURS.indexOf(choixPremier.value) !== -1 ? choixPremier.value : AT.cartes.REGLAGES.premierJoueur;
       var r = PA.creer({ graine: g, plateau: plateau, reglages: { premierJoueur: premier } }, { alea: AT.alea.creer(g), hex: H, plateau: P });
       if (!r.ok) { ctx.message('Partie impossible : ' + r.raison, 'erreur'); return false; }

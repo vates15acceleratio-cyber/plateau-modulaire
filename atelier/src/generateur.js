@@ -1,19 +1,17 @@
 /*
- * generateur.js : génération d'un plateau complet (docs/02-atelier-cahier-des-charges.md, §4).
+ * generateur.js : génération d'un plateau complet (docs/02-atelier-cahier-des-charges.md, §9.4).
  * Aucun accès au DOM. Dépend de AT.alea, AT.hex, AT.catalogue, AT.plateau, AT.controles.
  *
- * AT.generateur.generer(graine, options) :
- *   1. forme libre : hexagone de rayon 5 dont on retire puis ajoute des paires de cases de bord,
- *      symétrique par demi-tour autour de (0,0) ;
- *   2. noyau au centre, montagnes, villes (centre, 2 en haut pour Vert, 2 en bas pour Rouge, 2 neutres),
- *      monoblocs (chaque bois / lisière / bosquet face à son jumeau marécage / mare / roselière), tuiles simples ;
- *   3. échanges de tuiles simples pour réduire le score d'équilibre ;
- *   4. le meilleur essai est gardé ; il doit passer AT.controles.tout sans erreur et épuiser le stock.
+ * AT.generateur.generer(graine, options) construit « comme des joueurs » :
+ *   1. le noyau au centre, puis les montagnes et les monoblocs de terrain du catalogue, posés un à un contre le
+ *      plateau (batir) ; les tuiles de remplissage ne servent qu'en dernier recours, si le réglage en autorise ;
+ *   2. les villes (chercherVilles) : 2 villes de déploiement par camp sur des Plaines des bords haut et bas, une
+ *      ville neutre contre chaque flanc, en retenant la combinaison la mieux équilibrée ;
+ *   3. le plateau doit passer AT.controles.tout sans erreur et être « complet » ; sinon on reconstruit.
  * Même graine et mêmes options = même plateau (aucune horloge, aucun Math.random).
  *
- * Deux simplifications, plus strictes que les contrôles (voir docs/03-mesures-faisabilite.md) :
- *   - la forme exige que CHAQUE case ait au moins `seuilContact` cases voisines, même une case de monobloc ;
- *   - le plateau produit est toujours symétrique par demi-tour pour la forme et pour les villes.
+ * Le générateur pose tout ce que le catalogue contient (rôles 'montagne' et 'terrain') : changer les formes ou le
+ * nombre des monoblocs dans catalogue.js ne demande rien ici. Mesures : docs/07-mesures-catalogue-2.md.
  */
 var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof globalThis !== 'undefined' ? globalThis : window).AT || {});
 
@@ -26,446 +24,423 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   }
   var H = AT.hex, C = AT.catalogue, P = AT.plateau, K = AT.controles;
 
-  var INFINI = 1e9;
-  /** Paires de monoblocs jumeaux (même forme, forêt d'un côté, marais de l'autre : même coût en rations). */
-  var JUMEAUX = [['F3', 'S3'], ['F31', 'S31'], ['F21', 'S21']];
-  var MONTAGNES = ['M4', 'M5'];
+  // ------------------------------------------------------------------ construction libre (§9.4 : « comme des joueurs »)
 
-  /** Réglages effectifs : REGLAGES.generateur et réglages généraux, remplacés par les options fournies. */
+  var LARGEUR = 96, DECALAGE = 48;                 // grille de travail : cases (q, r) entre -48 et 47
+  var PAS_VOISINS = [LARGEUR, LARGEUR - 1, -1, -LARGEUR, -LARGEUR + 1, 1];   // même ordre que H.DIRS
+  var POCHE_MAX = 14;                              // au-delà, une zone vide est tenue pour ouverte sur l'extérieur
+
+  function numero(q, r) { return (q + DECALAGE) * LARGEUR + (r + DECALAGE); }
+  function cleDe(n) { return H.cle(Math.floor(n / LARGEUR) - DECALAGE, (n % LARGEUR) - DECALAGE); }
+
+  /**
+   * Réglages effectifs du générateur : REGLAGES.generateur, REGLAGES.villes et les réglages généraux (seuils de
+   * contact, écart entre villes, coûts), remplacés par les options fournies.
+   */
   function reglages(options) {
     var R = C.REGLAGES, r = {}, o = options || {};
     Object.keys(R.generateur).forEach(function (k) { r[k] = R.generateur[k]; });
+    Object.keys(R.villes).forEach(function (k) { r[k] = R.villes[k]; });
     r.seuilContact = R.seuilContact;
     r.mesureContact = R.mesureContact;
+    r.seuilContactRemplissage = R.seuilContactRemplissage;
     r.ecartVilles = R.ecartVilles;
     r.couts = R.couts;
     Object.keys(r).forEach(function (k) { if (o[k] !== undefined) r[k] = o[k]; });
     return r;
   }
 
-  /** Moitié « canonique » du plateau : une case et une seule de chaque paire {case, symétrique}. */
-  function moitie(p) { return p.r > 0 || (p.r === 0 && p.q > 0); }
-
-  // ------------------------------------------------------------------ forme libre
-
-  /**
-   * Manque de voisines d'une forme : somme, sur les cases qui ont moins de `seuil` cases voisines,
-   * du nombre de voisines qui leur manquent. 0 = chaque case a assez de voisines.
-   * `seulement` (facultatif) : ne compter que ces cases-là (celles qui sont dans la forme).
-   */
-  function manque(S, seuil, seulement) {
-    var total = 0;
-    (seulement || S).forEach(function (c) {
-      if (!S.has(c)) return;
-      var p = H.decle(c), n = 0;
-      for (var i = 0; i < 6; i++) if (S.has(H.cle(p.q + H.DIRS[i].q, p.r + H.DIRS[i].r))) n += 1;
-      if (n < seuil) total += seuil - n;
-    });
-    return total;
-  }
-
-  /**
-   * Une retouche aléatoire de l'hexagone de départ : `retouches` paires retirées du bord, puis autant ajoutées.
-   * Le tirage est guidé : à chaque pas, on écarte les cases qui laisseraient un manque de voisines que les
-   * ajouts restants ne peuvent plus combler (une paire ajoutée comble au plus 4 manques, estimation large) ;
-   * après le dernier ajout, le manque doit être nul.
-   * Renvoie l'ensemble (Set) des clés, à valider par formeValide, ou null si le tirage est dans une impasse.
-   */
-  function retoucher(alea, R) {
-    var S = new Set(H.disque(R.rayon)), retirees = new Set(), k, candidates;
-    // Garde les cases dont la bascule (retrait ou ajout de la paire) laisse un manque rattrapable.
-    function filtrer(liste, ajout, ajoutsRestants) {
-      var actuel = manque(S, R.seuilContact);
-      return liste.filter(function (c) {
-        // Seules la case, sa symétrique et leurs voisines changent : on ne recompte que celles-là.
-        var s = H.symetrique(c), autour = new Set([c, s].concat(H.voisines(c), H.voisines(s)));
-        var avant = manque(S, R.seuilContact, autour);
-        if (ajout) { S.add(c); S.add(s); } else { S.delete(c); S.delete(s); }
-        var apres = manque(S, R.seuilContact, autour);
-        if (ajout) { S.delete(c); S.delete(s); } else { S.add(c); S.add(s); }
-        return actuel - avant + apres <= 4 * ajoutsRestants;
-      });
-    }
-    for (k = 0; k < R.retouches; k++) {
-      candidates = [];
-      S.forEach(function (c) {
-        var p = H.decle(c);
-        if (!moitie(p) || H.anneau(p) < 2) return;                      // jamais le noyau
-        if (H.voisines(c).some(function (v) { return !S.has(v); })) candidates.push(c);
-      });
-      candidates = filtrer(H.trier(candidates), false, R.retouches);
-      if (!candidates.length) return null;
-      var retiree = alea.choisir(candidates);
-      S.delete(retiree); S.delete(H.symetrique(retiree));
-      retirees.add(retiree); retirees.add(H.symetrique(retiree));
-    }
-    for (k = 0; k < R.retouches; k++) {
-      var vues = new Set();
-      candidates = [];
-      S.forEach(function (c) {
-        H.voisines(c).forEach(function (v) {
-          if (S.has(v) || vues.has(v) || retirees.has(v)) return;      // on ne rebouche pas une case retirée
-          vues.add(v);
-          if (moitie(H.decle(v))) candidates.push(v);
-        });
-      });
-      candidates = filtrer(H.trier(candidates), true, R.retouches - 1 - k);
-      if (!candidates.length) return null;
-      var ajoutee = alea.choisir(candidates);
-      S.add(ajoutee); S.add(H.symetrique(ajoutee));
-    }
-    return S;
-  }
-
-  /**
-   * La forme convient-elle ? Chaque case a au moins `seuil` voisines ; la rangée du haut peut recevoir
-   * deux villes à `ecart` pas ; forme d'un seul tenant et sans trou. Renvoie true / false.
-   */
-  function formeValide(S, R) {
-    if (manque(S, R.seuilContact) !== 0) return false;
-    var haut = Infinity, qmin = Infinity, qmax = -Infinity;
-    S.forEach(function (c) {
-      var p = H.decle(c);
-      if (p.r < haut) { haut = p.r; qmin = p.q; qmax = p.q; }
-      else if (p.r === haut) { qmin = Math.min(qmin, p.q); qmax = Math.max(qmax, p.q); }
-    });
-    if (qmax - qmin < R.ecartVilles) return false;
-    if (P.composantes(Array.from(S)).length !== 1) return false;
-    // Pas de trou : tout ce qui n'est pas le plateau, dans un disque plus large, est d'un seul tenant.
-    var dehors = H.disque(R.rayon + R.retouches + 2).filter(function (c) { return !S.has(c); });
-    return P.composantes(dehors).length === 1;
-  }
-
-  /**
-   * Tire une forme valide. Renvoie {ok, cases: [clés triées], tirages} ; ok = false si aucun des
-   * `essaisForme` tirages ne convient (aucun repli sur l'hexagone non retouché).
-   */
-  function tirerForme(alea, R) {
-    for (var t = 1; t <= R.essaisForme; t++) {
-      var S = retoucher(alea, R);
-      if (S && formeValide(S, R)) return { ok: true, cases: H.trier(Array.from(S)), tirages: t };
-    }
-    return { ok: false, cases: null, tirages: R.essaisForme };
-  }
-
-  /** Graphe indexé d'une forme : cases numérotées dans l'ordre de lecture. */
-  function indexer(cles) {
-    var G = { n: cles.length, cles: cles, index: new Map(), q: [], r: [], voisins: [], sym: [], anneau: [] };
-    cles.forEach(function (c, i) { G.index.set(c, i); });
-    cles.forEach(function (c, i) {
-      var p = H.decle(c);
-      G.q.push(p.q); G.r.push(p.r); G.anneau.push(H.anneau(p));
-      G.sym.push(G.index.get(H.symetrique(c)));
-      G.voisins.push(H.voisines(c).filter(function (v) { return G.index.has(v); }).map(function (v) { return G.index.get(v); }));
-    });
-    G.haut = Math.min.apply(null, G.r);
-    G.bas = Math.max.apply(null, G.r);
-    return G;
-  }
-
-  // ------------------------------------------------------------------ outils sur le graphe indexé
-
-  /** Pas minimaux depuis la case `depart` par les cases non bloquées. Renvoie un tableau (INFINI = hors d'atteinte). */
-  function pasDepuis(G, bloque, depart) {
-    var d = new Array(G.n).fill(INFINI), file = [depart];
-    d[depart] = 0;
-    for (var i = 0; i < file.length; i++) {
-      var vs = G.voisins[file[i]];
-      for (var j = 0; j < vs.length; j++) {
-        if (d[vs[j]] === INFINI && !bloque[vs[j]]) { d[vs[j]] = d[file[i]] + 1; file.push(vs[j]); }
-      }
-    }
-    return d;
-  }
-
-  /** Rations minimales depuis `sources` ; cout[i] < 0 = infranchissable. Remplit et renvoie le tableau d. */
-  function rationsDepuis(G, cout, sources, d, fait) {
-    var n = G.n, i;
-    for (i = 0; i < n; i++) { d[i] = INFINI; fait[i] = 0; }
-    for (i = 0; i < sources.length; i++) d[sources[i]] = 0;
-    for (;;) {
-      var m = -1, dm = INFINI;
-      for (i = 0; i < n; i++) if (!fait[i] && d[i] < dm) { dm = d[i]; m = i; }
-      if (m < 0) break;
-      fait[m] = 1;
-      var vs = G.voisins[m];
-      for (var j = 0; j < vs.length; j++) {
-        var v = vs[j];
-        if (cout[v] >= 0 && !fait[v] && dm + cout[v] < d[v]) d[v] = dm + cout[v];
-      }
-    }
-    return d;
-  }
-
-  /**
-   * Règle de contact sur un remplissage partiel : proprietaire[i] = numéro du monobloc qui porte la case,
-   * ou -1 (tuile d'une case, posée ou à venir : chacune compte pour une pièce). Vrai si toutes les pièces
-   * atteignent le seuil pour la mesure retenue.
-   */
-  function contactRespecte(G, proprietaire, R) {
-    var groupes = new Map();
-    for (var i = 0; i < G.n; i++) {
-      var moi = proprietaire[i] >= 0 ? proprietaire[i] : -1 - i;
-      var g = groupes.get(moi);
-      if (!g) { g = { cotes: new Set(), pieces: new Set() }; groupes.set(moi, g); }
-      var vs = G.voisins[i];
-      for (var j = 0; j < vs.length; j++) {
-        var autre = proprietaire[vs[j]] >= 0 ? proprietaire[vs[j]] : -1 - vs[j];
-        if (autre !== moi) { g.cotes.add(vs[j]); g.pieces.add(autre); }
-      }
-    }
-    var ok = true;
-    groupes.forEach(function (g) { if (g[R.mesureContact].size < R.seuilContact) ok = false; });
-    return ok;
-  }
-
-  /** Indices des cases d'un modèle posé, ou null si une case sort de la forme. */
-  function indicesPose(G, idModele, q, r, rotation) {
-    var res = [], cs = P.casesModele(idModele, q, r, rotation);
-    for (var i = 0; i < cs.length; i++) {
-      var k = G.index.get(cs[i].cle);
-      if (k === undefined) return null;
-      res.push(k);
+  /** Les 6 orientations d'une forme : [{rotation, pas: [décalages sur la grille], cases: [{q, r}]}]. */
+  function orientations(cases) {
+    var res = [];
+    for (var rot = 0; rot < 6; rot++) {
+      var tournees = cases.map(function (c) { return H.tourner(c.q, c.r, rot); });
+      res.push({ rotation: rot, cases: tournees, pas: tournees.map(function (t) { return t.q * LARGEUR + t.r; }) });
     }
     return res;
   }
 
-  // ------------------------------------------------------------------ un essai de remplissage
+  /**
+   * Taille de la poche fermée de cases vides qui contient la case `depart`, ou 0 si la zone est ouverte
+   * (plus de POCHE_MAX cases). `occupe` : Int16Array (-1 = vide). `marque` reçoit les cases de la poche.
+   */
+  function poche(occupe, depart, marque) {
+    var file = [depart], vues = new Set([depart]);
+    for (var i = 0; i < file.length; i++) {
+      for (var j = 0; j < 6; j++) {
+        var v = file[i] + PAS_VOISINS[j];
+        if (occupe[v] !== -1 || vues.has(v)) continue;
+        vues.add(v);
+        file.push(v);
+        if (file.length > POCHE_MAX) return 0;
+      }
+    }
+    if (marque) file.forEach(function (n) { marque.push(n); });
+    return file.length;
+  }
 
   /**
-   * Remplit la forme. Renvoie {echec: 'montagnes' | 'villes' | 'monoblocs' | 'contact' | 'inventaire'}
-   * ou {score, pieces: [{modele, q, r, rotation}], camps}.
+   * Construit le terrain « comme des joueurs » : à partir du noyau, les pièces sont posées une à une contre le
+   * plateau. Chaque pose doit toucher au moins `seuilContact` pièces distinctes (moins tant que le plateau n'en a
+   * pas autant) et ne pas enfermer de case vide. Parmi les poses permises, on préfère celles qui touchent beaucoup
+   * et restent près du centre, avec une part de hasard.
+   * Tuiles de remplissage (s'il y en a en stock), employées le moins possible :
+   *   1. quand AUCUNE pose ne convient sans enfermer une case vide isolée, la case enfermée reçoit un remplissage ;
+   *   2. à la fin, contre un monobloc qui ne touche pas assez de pièces.
+   *
+   * `noyau` : {id, cases} ; `pieces` : [{id, cases: [{q, r, terrain}]}], un élément par exemplaire à poser ;
+   * `remplissage` : {id, cases} (une case) ou null ; R : reglages().
+   * Déroulement : 1. pose des pièces dans un ordre tiré au sort ; 2. reprise des monoblocs qui ne touchent pas assez
+   * de pièces (repris et reposés ailleurs) ; 3. rattrapage par une tuile de remplissage, s'il en reste.
+   * Renvoie {ok, echec ('pose' | 'trou' | 'franchissable' | 'contact' | 'contactRemplissage'), pieces: [{modele, q, r, rotation}],
+   *          cases: {cle: {terrain, piece, origine, modele, evenement}}, remplissages: nombre posé, sousContact: nombre de
+   *          poses faites sous le seuil faute de mieux, deplacees: nombre de monoblocs repris}.
    */
-  function essai(G, alea, R) {
-    var n = G.n, i;
-    var terrain = new Array(n).fill(null);         // terrain de chaque case, null = pas encore remplie
-    var proprietaire = new Array(n).fill(-1);      // numéro du monobloc, -1 = tuile d'une case
-    var pieces = [], numero = 0;
+  function batir(alea, noyau, pieces, remplissage, R) {
+    var occupe = new Int16Array(LARGEUR * LARGEUR).fill(-1);
+    var terrain = [], posees = [], cellules = [];
+    var res = { ok: false, echec: null, pieces: [], cases: {}, remplissages: 0, sousContact: 0, deplacees: 0 };
+    var stockR = remplissage ? R.remplissages : 0;
+    var ESSAI = 32000;                             // marque d'une pose à l'essai dans la grille
+    // Étirement tiré au sort : le plateau sera un peu plus large ou un peu plus haut.
+    var e = 1 + R.etirement * (2 * alea.suivant() - 1), ex = e, ey = 1 / e;
+    var plafond = Number.isInteger(R.demiHauteur) ? R.demiHauteur : null;
 
-    function placer(idModele, q, r, rotation, indices) {
-      var m = C.modele(idModele);
-      indices.forEach(function (k, j) { terrain[k] = m.cases[j].terrain; proprietaire[k] = numero; });
-      pieces.push({ modele: idModele, q: q, r: r, rotation: rotation });
-      numero += 1;
+    /** Pose (ou repose) la pièce de rang n. */
+    function mettre(n, modele, q, r, rotation) {
+      var liste = [];
+      modele.cases.forEach(function (c) {
+        var t = H.tourner(c.q, c.r, rotation), k = numero(q + t.q, r + t.r);
+        occupe[k] = n; terrain[k] = c.terrain; liste.push(k);
+      });
+      posees[n] = { modele: modele, q: q, r: r, rotation: rotation, montagne: modele.cases[0].terrain === 'montagne', taille: modele.cases.length };
+      cellules[n] = liste;
     }
-    function libres(indices) { return indices.every(function (k) { return terrain[k] === null; }); }
-
-    // Noyau.
-    placer('N1', 0, 0, 0, indicesPose(G, 'N1', 0, 0, 0));
-
-    // Montagnes : dans l'hexagone de rayon `montagnesRayonMax`, hors rangées extrêmes, à distance l'une de l'autre.
-    var ordre = alea.melanger(MONTAGNES), roche = [];
-    for (var mi = 0; mi < ordre.length; mi++) {
-      var poses = [];
-      for (i = 0; i < n; i++) {
-        for (var rot = 0; rot < 6; rot++) {
-          var ind = indicesPose(G, ordre[mi], G.q[i], G.r[i], rot);
-          if (!ind || !libres(ind)) continue;
-          var bon = ind.every(function (k) {
-            if (G.anneau[k] > R.montagnesRayonMax || G.r[k] === G.haut || G.r[k] === G.bas) return false;
-            return roche.every(function (x) { return H.distance({ q: G.q[k], r: G.r[k] }, { q: G.q[x], r: G.r[x] }) >= R.montagnesEcart; });
-          });
-          if (bon) poses.push({ q: G.q[i], r: G.r[i], rotation: rot, indices: ind });
+    function enlever(n) { cellules[n].forEach(function (k) { occupe[k] = -1; }); cellules[n] = []; }
+    /** Cases vides qui touchent le plateau, en ordre fixe. */
+    function bords() {
+      var vues = new Set();
+      cellules.forEach(function (liste) {
+        liste.forEach(function (k) { for (var j = 0; j < 6; j++) if (occupe[k + PAS_VOISINS[j]] === -1) vues.add(k + PAS_VOISINS[j]); });
+      });
+      return Array.from(vues).sort(function (a, b) { return a - b; });
+    }
+    function eloignement(k) {
+      var q = Math.floor(k / LARGEUR) - DECALAGE, r = (k % LARGEUR) - DECALAGE;
+      var x = (q + r / 2) * ex, y = r * 0.8660254 * ey;
+      return Math.sqrt(x * x + y * y);
+    }
+    /** Pièces distinctes touchées par un ensemble de cases (hors `moi`). */
+    function touchees(liste, moi) {
+      var vues = new Set();
+      for (var i = 0; i < liste.length; i++) for (var j = 0; j < 6; j++) {
+        var o = occupe[liste[i] + PAS_VOISINS[j]];
+        if (o !== -1 && o !== moi) vues.add(o);
+      }
+      return vues;
+    }
+    /**
+     * Meilleure pose du modèle contre le plateau, par rang : 0 = touche `besoin` pièces sans rien enfermer ;
+     * 1 = idem en enfermant des cases isolées qu'un remplissage comblera ; 2 = contact insuffisant, rien d'enfermé.
+     * Renvoie [pose de rang 0, de rang 1, de rang 2] (null si aucune), une pose = {q, r, rotation, enfermees}.
+     */
+    function chercherPose(modele, besoin) {
+      var orients = orientations(modele.cases), estMontagne = modele.cases[0].terrain === 'montagne';
+      var vus = new Set(), meilleurs = [null, null, null], notes = [-Infinity, -Infinity, -Infinity], front = bords();
+      for (var fi = 0; fi < front.length; fi++) {
+        for (var oi = 0; oi < 6; oi++) {
+          var pas = orients[oi].pas;
+          for (var ci = 0; ci < pas.length; ci++) {
+            var ancre = front[fi] - pas[ci], signature = ancre * 8 + oi;
+            if (vus.has(signature)) continue;
+            vus.add(signature);
+            var liste = [], libre = true, i, j;
+            for (i = 0; i < pas.length; i++) {
+              var k = ancre + pas[i];
+              if (occupe[k] !== -1 || (plafond !== null && Math.abs((k % LARGEUR) - DECALAGE) > plafond)) { libre = false; break; }
+              liste.push(k);
+            }
+            if (!libre) continue;
+            // Contact : côtés communs et pièces distinctes ; montagnes à distance l'une de l'autre.
+            var cotes = 0, voisinesP = new Set(), tropPres = false, loin = 0;
+            for (i = 0; i < liste.length; i++) {
+              loin += eloignement(liste[i]);
+              for (j = 0; j < 6; j++) {
+                var o = occupe[liste[i] + PAS_VOISINS[j]];
+                if (o === -1) continue;
+                cotes += 1; voisinesP.add(o);
+                if (estMontagne && posees[o].montagne && R.montagnesEcart > 1) tropPres = true;
+              }
+            }
+            if (tropPres) continue;
+            var assez = voisinesP.size >= besoin;
+            // Cases vides enfermées par cette pose.
+            for (i = 0; i < liste.length; i++) occupe[liste[i]] = ESSAI;
+            var enfermees = [], refusee = false, dejaVues = new Set();
+            for (i = 0; i < liste.length && !refusee; i++) for (j = 0; j < 6; j++) {
+              var v = liste[i] + PAS_VOISINS[j];
+              if (occupe[v] !== -1 || dejaVues.has(v)) continue;
+              var marque = [], taille = poche(occupe, v, marque);
+              marque.forEach(function (x) { dejaVues.add(x); });
+              if (taille === 0) { dejaVues.add(v); continue; }
+              if (taille > 1) { refusee = true; break; }
+              enfermees.push(v);
+            }
+            for (i = 0; i < liste.length; i++) occupe[liste[i]] = -1;
+            if (refusee || enfermees.length > stockR || (enfermees.length && !assez)) continue;
+            var rang = assez ? (enfermees.length ? 1 : 0) : 2;
+            var note = cotes + 1.5 * Math.min(voisinesP.size, 4) - R.compacite * loin / liste.length + R.fantaisie * alea.suivant() - 4 * enfermees.length;
+            if (note > notes[rang]) {
+              notes[rang] = note;
+              meilleurs[rang] = { q: Math.floor(ancre / LARGEUR) - DECALAGE, r: (ancre % LARGEUR) - DECALAGE, rotation: oi, enfermees: enfermees };
+            }
+          }
         }
       }
-      if (!poses.length) return { echec: 'montagnes' };
-      var pose = alea.choisir(poses);
-      placer(ordre[mi], pose.q, pose.r, pose.rotation, pose.indices);
-      roche = roche.concat(pose.indices);
+      return meilleurs;
     }
-    var bloque = terrain.map(function (t) { return t === 'montagne'; });
-    var depuisCentre = pasDepuis(G, bloque, G.index.get('0,0'));
-    for (i = 0; i < n; i++) if (!bloque[i] && depuisCentre[i] === INFINI) return { echec: 'montagnes' };   // case enfermée
+    function combler(liste) {
+      liste.forEach(function (k) {
+        mettre(posees.length, remplissage, Math.floor(k / LARGEUR) - DECALAGE, (k % LARGEUR) - DECALAGE, 0);
+        stockR -= 1; res.remplissages += 1;
+      });
+    }
+    function manques() {
+      var liste = [];
+      for (var n = 0; n < posees.length; n++) if (posees[n].taille > 1 && touchees(cellules[n], n).size < R.seuilContact) liste.push(n);
+      return liste;
+    }
 
-    // Villes de déploiement : deux cases de la rangée du haut à `ecartVilles` pas au moins ; Rouge en face.
-    var rangee = [];
-    for (i = 0; i < n; i++) if (G.r[i] === G.haut && terrain[i] === null && terrain[G.sym[i]] === null) rangee.push(i);
-    var paires = [];
-    rangee.forEach(function (a) {
-      rangee.forEach(function (b) { if (G.q[b] - G.q[a] >= R.ecartVilles) paires.push([a, b]); });
+    mettre(0, noyau, 0, 0, 0);
+
+    // 1. Pose des pièces une à une, dans un ordre tiré au sort.
+    var ordre = alea.melanger(pieces);
+    for (var pi = 0; pi < ordre.length; pi++) {
+      var poses = chercherPose(ordre[pi], Math.min(R.seuilContact, posees.length));
+      // Sans pose de rang 0 : on préfère une pose sous le seuil (les pièces suivantes la compléteront souvent) à un remplissage.
+      var choix = poses[0] || (R.remplissageTot ? poses[1] || poses[2] : poses[2] || poses[1]);
+      if (!choix) { res.echec = 'pose'; return res; }
+      if (!poses[0] && choix === poses[2]) res.sousContact += 1;
+      mettre(posees.length, ordre[pi], choix.q, choix.r, choix.rotation);
+      combler(choix.enfermees);
+    }
+
+    // 2. Reprise : un monobloc qui ne touche pas assez de pièces est repris et reposé ailleurs, là où il en touche assez.
+    var faibles = manques(), tours = 0;
+    while (faibles.length && tours++ < R.reprises) {
+      var n = faibles[alea.entier(faibles.length)], ancien = posees[n];
+      if (ancien.modele === noyau) break;
+      enlever(n);
+      var ailleurs = chercherPose(ancien.modele, R.seuilContact);
+      var mieux = ailleurs[0] || ailleurs[1];
+      // Reprendre la pièce ne doit ni couper le plateau ni laisser un trou à sa place.
+      if (mieux) {
+        mettre(n, ancien.modele, mieux.q, mieux.r, mieux.rotation);
+        var tenu = P.composantes(Object.keys(casesCourantes())).length === 1 && !P.trous(Object.keys(casesCourantes())).length;
+        if (tenu) { combler(mieux.enfermees); res.deplacees += 1; }
+        else { enlever(n); mieux = null; }
+      }
+      if (!mieux) mettre(n, ancien.modele, ancien.q, ancien.r, ancien.rotation);
+      faibles = manques();
+    }
+
+    // 3. Rattrapage : un remplissage contre chaque monobloc qui ne touche toujours pas assez de pièces.
+    var garde = 0;
+    while (faibles.length && stockR > 0 && garde++ < 20) {
+      var cible = faibles[0], place = null, notePlace = -Infinity;
+      cellules[cible].forEach(function (k) {
+        for (var j = 0; j < 6; j++) {
+          var v = k + PAS_VOISINS[j];
+          if (occupe[v] !== -1 || (plafond !== null && Math.abs((v % LARGEUR) - DECALAGE) > plafond)) continue;
+          var autour = touchees([v], -2);
+          if (autour.size < R.seuilContactRemplissage) continue;
+          occupe[v] = ESSAI;
+          var ferme = false;
+          for (var x = 0; x < 6; x++) if (occupe[v + PAS_VOISINS[x]] === -1 && poche(occupe, v + PAS_VOISINS[x], null) > 0) ferme = true;
+          occupe[v] = -1;
+          if (ferme) continue;
+          var note = autour.size * 2 - eloignement(v) * 0.1;
+          if (note > notePlace) { notePlace = note; place = v; }
+        }
+      });
+      if (place === null) break;
+      combler([place]);
+      faibles = manques();
+    }
+
+    function casesCourantes() {
+      var toutes = {};
+      cellules.forEach(function (liste, i) {
+        liste.forEach(function (k) { toutes[cleDe(k)] = { terrain: terrain[k], piece: 'p' + (i + 1), origine: terrain[k], modele: posees[i].modele.id, evenement: null }; });
+      });
+      return toutes;
+    }
+
+    // Résultat, puis critères de réussite (les mêmes quel que soit le stock de remplissages).
+    res.pieces = posees.map(function (p) { return { modele: p.modele.id, q: p.q, r: p.r, rotation: p.rotation }; });
+    res.cases = casesCourantes();
+    var cles = Object.keys(res.cases);
+    if (P.trous(cles).length) { res.echec = 'trou'; return res; }
+    if (P.composantes(cles).length !== 1) { res.echec = 'trou'; return res; }
+    if (P.composantes(cles.filter(function (k) { return C.coutTerrain(res.cases[k].terrain, R.couts) !== Infinity; })).length !== 1) { res.echec = 'franchissable'; return res; }
+    if (faibles.length) { res.echec = 'contact'; return res; }
+    for (var x = 0; x < posees.length; x++) {
+      if (posees[x].taille === 1 && touchees(cellules[x], x).size < R.seuilContactRemplissage) { res.echec = 'contactRemplissage'; return res; }
+    }
+    res.ok = true;
+    return res;
+  }
+
+  /**
+   * Cherche les villes d'un terrain construit (résultat de AT.plateau.cases, sans ville autre que le centre) :
+   * 2 villes de déploiement par camp et une ville neutre par flanc, toutes à `ecartVilles` pas les unes des autres,
+   * en retenant la combinaison au meilleur score d'équilibre (AT.controles.ecartsCamps) ; à score égal, le hasard choisit.
+   * Renvoie {ok, raison, manque ('vert' | 'rouge' | 'gauche' | 'droite' | 'ecart' | null), vert: [clés], rouge: [clés],
+   *          neutres: {gauche, droite}, score, places: {vert, rouge, gauche, droite} (nombres de places admissibles)}.
+   */
+  function chercherVilles(toutes, alea, R) {
+    var res = { ok: false, raison: null, manque: null, vert: [], rouge: [], neutres: { gauche: null, droite: null }, score: null, places: { vert: 0, rouge: 0, gauche: 0, droite: 0 } };
+    var o = { profondeurExtremite: R.profondeurExtremite, ecartVilles: R.ecartVilles, contactVilleNeutre: R.contactVilleNeutre, neutresTiersCentral: R.neutresTiersCentral, couts: R.couts };
+    var candidats = { vert: P.placesDeploiementSurCases(toutes, 'vert', o), rouge: P.placesDeploiementSurCases(toutes, 'rouge', o) };
+    var neutres = P.placesNeutresSurCases(toutes, o);
+    var parFlanc = { gauche: neutres.filter(function (x) { return x.flanc === 'gauche'; }), droite: neutres.filter(function (x) { return x.flanc === 'droite'; }) };
+    res.places = { vert: candidats.vert.length, rouge: candidats.rouge.length, gauche: parFlanc.gauche.length, droite: parFlanc.droite.length };
+    var noms = { vert: 'le déploiement de Vert (bord haut)', rouge: 'le déploiement de Rouge (bord bas)', gauche: 'la ville neutre du flanc gauche', droite: 'la ville neutre du flanc droit' };
+    var manquant = candidats.vert.length < 2 ? 'vert' : candidats.rouge.length < 2 ? 'rouge' : !parFlanc.gauche.length ? 'gauche' : !parFlanc.droite.length ? 'droite' : null;
+    if (manquant) { res.manque = manquant; res.raison = 'Pas assez de places pour ' + noms[manquant] + '.'; return res; }
+
+    // Pas et rations depuis chaque candidat ; une ville neutre (case ajoutée) se mesure par ses voisines.
+    var pas = {}, rations = {}, coutVille = C.coutTerrain('ville', R.couts);
+    candidats.vert.concat(candidats.rouge).forEach(function (k) {
+      pas[k] = P.pasSurCases(toutes, [k], { couts: R.couts });
+      rations[k] = P.rationsSurCases(toutes, [k], { couts: R.couts });
     });
-    if (!paires.length) return { echec: 'villes' };
-    var vert = alea.choisir(paires), rouge = [G.sym[vert[1]], G.sym[vert[0]]];
-    var centre = G.index.get('0,0');
-    var fixes = [centre, vert[0], vert[1], rouge[0], rouge[1]];
-    var cartes = fixes.map(function (v) { return pasDepuis(G, bloque, v); });
-    for (i = 0; i < fixes.length; i++) {
-      for (var j2 = i + 1; j2 < fixes.length; j2++) if (cartes[i][fixes[j2]] < R.ecartVilles) return { echec: 'villes' };
-    }
-    // Villes neutres : une paire symétrique, hors rangées extrêmes, à `ecartVilles` pas de toutes les autres.
-    var neutres = [];
-    for (i = 0; i < n; i++) {
-      var s = G.sym[i];
-      if (!moitie({ q: G.q[i], r: G.r[i] }) || terrain[i] !== null || terrain[s] !== null) continue;
-      if (G.r[i] === G.haut || G.r[i] === G.bas || fixes.indexOf(i) !== -1 || fixes.indexOf(s) !== -1) continue;
-      var loin = cartes.every(function (d) { return d[i] >= R.ecartVilles && d[s] >= R.ecartVilles; });
-      if (loin && pasDepuis(G, bloque, i)[s] >= R.ecartVilles) neutres.push(i);
-    }
-    if (!neutres.length) return { echec: 'villes' };
-    var neutre = alea.choisir(neutres);
-    var villes = fixes.slice(1).concat([neutre, G.sym[neutre]]).sort(function (a, b) { return a - b; });
-    villes.forEach(function (k) { terrain[k] = 'ville'; });
-    if (!contactRespecte(G, proprietaire, R)) return { echec: 'contact' };
-
-    // Monoblocs : chaque pièce de forêt en face de sa jumelle de marais (même coût : symétrie des rations).
-    var jumeaux = alea.melanger(JUMEAUX);
-    for (var ji = 0; ji < jumeaux.length; ji++) {
-      var candidats = [];
-      for (i = 0; i < n; i++) {
-        for (var rot2 = 0; rot2 < 6; rot2++) {
-          var ici = indicesPose(G, jumeaux[ji][0], G.q[i], G.r[i], rot2);
-          if (!ici || !libres(ici)) continue;
-          var enFace = ici.map(function (k) { return G.sym[k]; });
-          if (!libres(enFace) || enFace.some(function (k) { return ici.indexOf(k) !== -1; })) continue;
-          candidats.push({ q: G.q[i], r: G.r[i], rotation: rot2, ici: ici, enFace: enFace });
-        }
-      }
-      candidats = alea.melanger(candidats);
-      var pris = false;
-      for (var ci = 0; ci < candidats.length && !pris; ci++) {
-        var c = candidats[ci];
-        // Essai de pose, annulé si la règle de contact n'est plus respectée.
-        c.ici.forEach(function (k) { proprietaire[k] = numero; });
-        c.enFace.forEach(function (k) { proprietaire[k] = numero + 1; });
-        if (contactRespecte(G, proprietaire, R)) {
-          var cote = alea.entier(2);                  // quel jumeau de quel côté
-          placer(jumeaux[ji][cote], c.q, c.r, c.rotation, c.ici);
-          placer(jumeaux[ji][1 - cote], 0 - c.q, 0 - c.r, (c.rotation + 3) % 6, c.enFace);
-          pris = true;
-        } else {
-          c.ici.concat(c.enFace).forEach(function (k) { proprietaire[k] = -1; });
-        }
-      }
-      if (!pris) return { echec: 'monoblocs' };
-    }
-
-    // Tuiles simples : forêts et marais par paires symétriques, plaines ailleurs.
-    var reste = [];
-    for (i = 0; i < n; i++) if (terrain[i] === null) reste.push(i);
-    var nP = C.MODELES.P.nombre, nF = C.MODELES.F.nombre, nS = C.MODELES.S.nombre;
-    if (reste.length !== nP + nF + nS) return { echec: 'inventaire' };
-    var doubles = alea.melanger(reste.filter(function (k) { return terrain[G.sym[k]] === null && moitie({ q: G.q[k], r: G.r[k] }); }));
-    var aPoser = { foret: nF, marais: nS };
-    for (i = 0; i < doubles.length && aPoser.foret > 0 && aPoser.marais > 0; i++) {
-      var sens = alea.entier(2);
-      terrain[doubles[i]] = sens ? 'foret' : 'marais';
-      terrain[G.sym[doubles[i]]] = sens ? 'marais' : 'foret';
-      aPoser.foret -= 1; aPoser.marais -= 1;
-    }
-    alea.melanger(reste.filter(function (k) { return terrain[k] === null; })).forEach(function (k) {
-      if (aPoser.foret > 0) { terrain[k] = 'foret'; aPoser.foret -= 1; }
-      else if (aPoser.marais > 0) { terrain[k] = 'marais'; aPoser.marais -= 1; }
-      else terrain[k] = 'plaine';
-    });
-
-    // Équilibre : échanges de deux tuiles simples tant que le score ne se dégrade pas.
-    var cout = new Array(n), d1 = new Array(n), d2 = new Array(n), fait = new Array(n);
-    var majCout = function (k) { var v = C.coutTerrain(terrain[k], R.couts); cout[k] = v === Infinity ? -1 : v; };
-    for (i = 0; i < n; i++) majCout(i);
-    var toutesVilles = [centre].concat(villes);
-    var mesurer = function () {
-      rationsDepuis(G, cout, vert, d1, fait);
-      rationsDepuis(G, cout, rouge, d2, fait);
-      var total = 0;
-      for (var v = 0; v < toutesVilles.length; v++) total += Math.abs(d1[toutesVilles[v]] - d2[G.sym[toutesVilles[v]]]);
-      return total;
+    var vers = function (table, cle) {                      // valeur vers une case du plateau ou vers une case vide
+      if (Object.prototype.hasOwnProperty.call(table, cle)) return table[cle];
+      var mieux = Infinity;
+      H.voisines(cle).forEach(function (v) { if (Object.prototype.hasOwnProperty.call(table, v)) mieux = Math.min(mieux, table[v]); });
+      return mieux;
     };
-    var score = mesurer();
-    for (var e = 0; e < R.echanges && score > 0; e++) {
-      var a = reste[alea.entier(reste.length)], b = reste[alea.entier(reste.length)];
-      if (terrain[a] === terrain[b]) continue;
-      var tmp = terrain[a]; terrain[a] = terrain[b]; terrain[b] = tmp;
-      majCout(a); majCout(b);
-      var nouveau = mesurer();
-      if (nouveau <= score) { score = nouveau; }
-      else { tmp = terrain[a]; terrain[a] = terrain[b]; terrain[b] = tmp; majCout(a); majCout(b); }
+    var paires = function (liste) {
+      var r = [];
+      for (var i = 0; i < liste.length; i++) for (var j = i + 1; j < liste.length; j++) if (vers(pas[liste[i]], liste[j]) >= R.ecartVilles) r.push([liste[i], liste[j]]);
+      return r;
+    };
+    var pv = paires(candidats.vert), pr = paires(candidats.rouge);
+    if (!pv.length || !pr.length) {
+      res.manque = !pv.length ? 'vert' : 'rouge';
+      res.raison = 'Aucune paire de places à ' + R.ecartVilles + ' pas l’une de l’autre pour ' + noms[res.manque] + '.';
+      return res;
     }
-
-    // Liste des pièces : monoblocs déjà notés, puis villes, puis tuiles simples (ordre de lecture).
-    var modeleSimple = { plaine: 'P', foret: 'F', marais: 'S' };
-    villes.forEach(function (k) { pieces.push({ modele: 'V', q: G.q[k], r: G.r[k], rotation: 0 }); });
-    reste.forEach(function (k) { pieces.push({ modele: modeleSimple[terrain[k]], q: G.q[k], r: G.r[k], rotation: 0 }); });
-    var cleDe = function (k) { return G.cles[k]; };
-    return { score: score, pieces: pieces, camps: { vert: H.trier(vert.map(cleDe)), rouge: H.trier(rouge.map(cleDe)) } };
+    // Pour une ville neutre : pas et rations depuis un candidat (une case de plus que sa meilleure voisine).
+    var pasNeutre = function (k, n) { return vers(pas[k], n.cle) + 1; };
+    var rationsNeutre = function (k, n) { return vers(rations[k], n.cle) + coutVille; };
+    var croissant = function (a, b) { return a - b; };
+    var meilleur = null, egaux = 0;
+    for (var a = 0; a < pv.length; a++) {
+      for (var b = 0; b < pr.length; b++) {
+        var V = pv[a], Rg = pr[b], quatre = V.concat(Rg);
+        if (vers(pas[V[0]], Rg[0]) < R.ecartVilles || vers(pas[V[0]], Rg[1]) < R.ecartVilles || vers(pas[V[1]], Rg[0]) < R.ecartVilles || vers(pas[V[1]], Rg[1]) < R.ecartVilles) continue;
+        var cv = Math.min(rations[V[0]]['0,0'], rations[V[1]]['0,0']), cr = Math.min(rations[Rg[0]]['0,0'], rations[Rg[1]]['0,0']);
+        var note = Math.abs(cv - cr);
+        var lv = Rg.map(function (k) { return Math.min(rations[V[0]][k], rations[V[1]][k]); }).sort(croissant);
+        var lr = V.map(function (k) { return Math.min(rations[Rg[0]][k], rations[Rg[1]][k]); }).sort(croissant);
+        note += Math.abs(lv[0] - lr[0]) + Math.abs(lv[1] - lr[1]);
+        var choisis = {}, possible = true;
+        ['gauche', 'droite'].forEach(function (flanc) {
+          var mieux = null, noteMieux = Infinity;
+          parFlanc[flanc].forEach(function (n) {
+            if (quatre.some(function (k) { return pasNeutre(k, n) < R.ecartVilles; })) return;
+            var ecart = Math.abs(Math.min(rationsNeutre(V[0], n), rationsNeutre(V[1], n)) - Math.min(rationsNeutre(Rg[0], n), rationsNeutre(Rg[1], n)));
+            // À écart égal, la case qui touche le plus de tuiles.
+            var valeur = ecart - n.cotes / 100;
+            if (valeur < noteMieux) { noteMieux = valeur; mieux = { cle: n.cle, ecart: ecart }; }
+          });
+          if (!mieux) possible = false; else { choisis[flanc] = mieux.cle; note += mieux.ecart; }
+        });
+        if (!possible) continue;
+        if (meilleur === null || note < meilleur.score) { meilleur = { score: note, vert: V, rouge: Rg, neutres: choisis }; egaux = 1; }
+        else if (note === meilleur.score) { egaux += 1; if (alea.entier(egaux) === 0) meilleur = { score: note, vert: V, rouge: Rg, neutres: choisis }; }
+      }
+    }
+    if (!meilleur) { res.manque = 'ecart'; res.raison = 'Aucune combinaison de villes ne respecte l’écart de ' + R.ecartVilles + ' pas.'; return res; }
+    res.ok = true;
+    res.vert = H.trier(meilleur.vert); res.rouge = H.trier(meilleur.rouge);
+    res.neutres = meilleur.neutres; res.score = meilleur.score;
+    return res;
   }
 
-  /** Construit le plateau (objet JSON du contrat) à partir du résultat d'un essai. */
-  function construire(graine, resultat) {
-    var plateau = P.vide(graine);
-    plateau.pieces = resultat.pieces.map(function (p, i) { return { id: 'p' + (i + 1), modele: p.modele, q: p.q, r: p.r, rotation: p.rotation }; });
-    plateau.camps = { vert: resultat.camps.vert.slice(), rouge: resultat.camps.rouge.slice() };
-    return plateau;
-  }
+  // ------------------------------------------------------------------ ce que le générateur pose
 
-  // ------------------------------------------------------------------ ce que le générateur sait poser
-
-  var SIMPLES = { V: 'ville', P: 'plaine', F: 'foret', S: 'marais' };   // modèles d'une case connus, et leur terrain
-  var VILLES_POSEES = 6;                                                // 2 en haut, 2 en bas, 2 neutres (plus celle du noyau)
-
-  /**
-   * Le catalogue et les réglages correspondent-ils à ce que ce générateur sait poser ?
-   * Renvoie null si oui, sinon une phrase qui nomme la cause (le générateur n'est pas général : voir l'en-tête de catalogue.js).
-   */
-  function incompatibilite(R) {
-    var suite = ' Le générateur doit être adapté (src/generateur.js) ; la retouche à la main reste possible.';
-    if (!Number.isInteger(R.rayon) || R.rayon < 2 || R.rayon > 12) return 'Rayon de l’hexagone de départ invalide (' + R.rayon + ').';
-    var connus = ['N1'].concat(MONTAGNES);
-    JUMEAUX.forEach(function (paire) { connus = connus.concat(paire); });
-    var manquants = connus.concat(Object.keys(SIMPLES)).filter(function (id) { return !C.modele(id); });
-    if (manquants.length) return 'Catalogue : modèle(s) attendu(s) par le générateur et absent(s) : ' + manquants.join(', ') + '.' + suite;
-    var inconnus = [], nombres = [];
+  /** Pièces du catalogue à poser : {noyau, pieces (un élément par exemplaire : montagnes et monoblocs), remplissage, villeNeutre}. */
+  function piecesDuCatalogue() {
+    var res = { noyau: null, pieces: [], remplissage: null, villeNeutre: null };
     C.ORDRE_MODELES.forEach(function (id) {
       var m = C.MODELES[id];
-      if (m.cases.length > 1) {
-        if (connus.indexOf(id) === -1) inconnus.push(id + ' (monobloc)');
-        else if (m.nombre !== 1) nombres.push(id + ' × ' + m.nombre);
-      } else if (!Object.prototype.hasOwnProperty.call(SIMPLES, id) || m.cases[0].terrain !== SIMPLES[id]) {
-        inconnus.push(id + ' (une case)');
-      }
+      if (m.noyau) { if (!res.noyau) res.noyau = m; return; }
+      if (m.role === 'remplissage') { if (!res.remplissage && m.cases.length === 1) res.remplissage = m; return; }
+      if (m.role === 'ville') { if (!res.villeNeutre && m.cases.length === 1) res.villeNeutre = m; return; }
+      if (m.role === 'montagne' || m.role === 'terrain') for (var i = 0; i < m.nombre; i++) res.pieces.push(m);
     });
-    if (inconnus.length) return 'Catalogue : pièce(s) que le générateur ne sait pas poser : ' + inconnus.join(', ') + '.' + suite;
-    if (nombres.length) return 'Catalogue : le générateur pose un seul exemplaire de chaque monobloc, or le catalogue en compte : ' + nombres.join(', ') + '.' + suite;
-    if (!C.MODELES.N1.noyau) return 'Catalogue : le modèle N1 n’est plus le noyau.' + suite;
-    for (var j = 0; j < JUMEAUX.length; j++) {
-      if (C.MODELES[JUMEAUX[j][0]].cases.length !== C.MODELES[JUMEAUX[j][1]].cases.length) {
-        return 'Catalogue : les monoblocs jumeaux ' + JUMEAUX[j].join(' et ') + ' n’ont plus le même nombre de cases.' + suite;
-      }
-    }
-    if (C.MODELES.V.nombre !== VILLES_POSEES) {
-      return 'Catalogue : ' + C.MODELES.V.nombre + ' villes d’une case, or le générateur en pose ' + VILLES_POSEES + ' (2 en haut, 2 en bas, 2 neutres).' + suite;
-    }
+    return res;
+  }
+
+  /**
+   * Le catalogue et les réglages correspondent-ils à ce que ce générateur sait faire ?
+   * Renvoie null si oui, sinon une phrase qui nomme la cause.
+   */
+  function incompatibilite(R) {
+    var suite = ' Le générateur doit être adapté (src/generateur.js) ; la création à la main reste possible.';
+    var cat = piecesDuCatalogue();
+    if (!cat.noyau || cat.noyau.id !== 'N1') return 'Catalogue : le noyau N1 est absent.' + suite;
+    if (!cat.pieces.length) return 'Catalogue : aucune pièce de terrain à poser (rôles « terrain » et « montagne »).' + suite;
+    if (!cat.villeNeutre || cat.villeNeutre.nombre !== 2) return 'Catalogue : le générateur pose 2 villes neutres d’une case (une par flanc).' + suite;
     if (C.REGLAGES.villesParCamp !== 2) return 'Réglage villesParCamp = ' + C.REGLAGES.villesParCamp + ', or le générateur pose 2 villes de déploiement par camp.' + suite;
-    var casesForme = 3 * R.rayon * (R.rayon + 1) + 1, casesCatalogue = C.totaux().cases;
-    if (casesForme !== casesCatalogue) {
-      return 'Le catalogue compte ' + casesCatalogue + ' cases, or l’hexagone de départ de rayon ' + R.rayon + ' en compte ' + casesForme
-        + ' : le plateau ne peut pas utiliser toutes les pièces.' + suite;
-    }
+    var stock = cat.remplissage ? cat.remplissage.nombre : 0;
+    if (!Number.isInteger(R.remplissages) || R.remplissages < 0) return 'Nombre de tuiles de remplissage invalide.';
+    if (R.remplissages > stock) return 'Le générateur ne peut pas poser ' + R.remplissages + ' tuiles de remplissage : le catalogue en compte ' + stock + '.';
     return null;
+  }
+
+  /** Construit le plateau (objet JSON) : terrain, villes neutres, villes de déploiement, camps. */
+  function construire(graine, construction, villes) {
+    var plateau = P.vide(graine);
+    plateau.pieces = construction.pieces.map(function (p, i) { return { id: 'p' + (i + 1), modele: p.modele, q: p.q, r: p.r, rotation: p.rotation }; });
+    ['gauche', 'droite'].forEach(function (flanc) {
+      var p = H.decle(villes.neutres[flanc]);
+      plateau.pieces.push({ id: 'p' + (plateau.pieces.length + 1), modele: 'VN', q: p.q, r: p.r, rotation: 0 });
+    });
+    plateau.deploiements = villes.vert.map(function (k) { return { cle: k, camp: 'vert' }; }).concat(villes.rouge.map(function (k) { return { cle: k, camp: 'rouge' }; }));
+    plateau.camps = { vert: villes.vert.slice(), rouge: villes.rouge.slice() };
+    return plateau;
   }
 
   // ------------------------------------------------------------------ generer
 
   /**
-   * Génère un plateau. `graine` : entier ou chaîne. options (facultatives) :
-   *   seuilContact (2 ou 3), mesureContact ('cotes' | 'pieces'), tentatives (essais de remplissage par forme),
-   *   et tout réglage de AT.catalogue.REGLAGES.generateur (retouches, formes, echanges, essaisForme…), ecartVilles, couts ;
+   * Génère un plateau complet. `graine` : entier ou chaîne. options (facultatives) :
+   *   seuilContact (2 ou 3), mesureContact ('cotes' | 'pieces'), tentatives (constructions essayées au plus),
+   *   remplissages (tuiles de remplissage autorisées), demiHauteur, profondeurExtremite, contactVilleNeutre, ecartVilles,
+   *   couts, et tout réglage de AT.catalogue.REGLAGES.generateur ;
    *   modeles : pièces personnelles du document courant (AT.plateau.modeles(plateau)). Le générateur ne connaît que
    *   le catalogue de base : elles sont REPORTÉES dans le plateau généré (champ `modeles`), non posées, et `note` le dit.
-   * Renvoie {ok, plateau, score, raison, note, forme, essais, formesEssayees, tiragesForme, echecs, controles} :
-   *   ok = true : `plateau` utilise toutes les pièces et passe tous les contrôles de niveau erreur ;
+   * Renvoie {ok, plateau, score, raison, note, essais, remplissages, echecs, controles} :
+   *   ok = true : `plateau` porte toutes les pièces de construction et toutes les villes, et passe tous les contrôles
+   *   de niveau erreur (étape « complet ») ; `score` est son score d'équilibre ; `remplissages` le nombre de tuiles
+   *   de remplissage posées ;
    *   ok = false : plateau = null et `raison` explique l'échec ; `echecs` compte les essais ratés par étape
-   *   (forme, montagnes, villes, monoblocs, contact, inventaire, controles).
+   *   (pose, trou, franchissable, contact, contactRemplissage, villes, controles).
    */
   function generer(graine, options) {
     var R = reglages(options);
     var res = {
-      ok: false, plateau: null, score: null, raison: null, note: null, forme: null, essais: 0, formesEssayees: 0, tiragesForme: 0,
-      echecs: { forme: 0, montagnes: 0, villes: 0, monoblocs: 0, contact: 0, inventaire: 0, controles: 0 }, controles: null
+      ok: false, plateau: null, score: null, raison: null, note: null, essais: 0, remplissages: 0,
+      echecs: { pose: 0, trou: 0, franchissable: 0, contact: 0, contactRemplissage: 0, villes: 0, controles: 0 }, controles: null
     };
     if (C.REGLAGES.mesuresContact.indexOf(R.mesureContact) === -1) { res.raison = 'Mesure de contact inconnue.'; return res; }
     if (!Number.isInteger(R.seuilContact) || R.seuilContact < 0 || R.seuilContact > 6) { res.raison = 'Seuil de contact invalide.'; return res; }
     if (!Number.isInteger(R.tentatives) || R.tentatives < 1) { res.raison = 'Nombre de tentatives invalide.'; return res; }
-    // Échec immédiat et nommé si le catalogue ou le rayon sort de ce que le générateur sait poser.
+    // Échec immédiat et nommé si le catalogue ou les réglages sortent de ce que le générateur sait faire.
     var cause = incompatibilite(R);
     if (cause) { res.raison = cause; res.incompatible = true; return res; }
     // Pièces personnelles du document : validées ici, reportées telles quelles dans le plateau généré.
@@ -476,45 +451,37 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       persos = avis.modeles;
     }
     var graineUtile = (typeof graine === 'number' || typeof graine === 'string') ? graine : 0;
-    var alea = AT.alea.creer(graineUtile);
-    var optionsControles = { seuilContact: R.seuilContact, mesureContact: R.mesureContact, ecartVilles: R.ecartVilles, couts: R.couts };
-    var meilleur = null;
+    var alea = AT.alea.creer(graineUtile), cat = piecesDuCatalogue();
+    var optionsControles = {
+      seuilContact: R.seuilContact, mesureContact: R.mesureContact, seuilContactRemplissage: R.seuilContactRemplissage,
+      ecartVilles: R.ecartVilles, couts: R.couts, profondeurExtremite: R.profondeurExtremite,
+      contactVilleNeutre: R.contactVilleNeutre, neutresTiersCentral: R.neutresTiersCentral
+    };
+    var raisonVilles = null;
 
-    for (var f = 0; f < R.formes && !meilleur; f++) {
-      var forme = tirerForme(alea, R);
-      res.tiragesForme += forme.tirages;
-      if (!forme.ok) { res.echecs.forme += 1; break; }
-      res.formesEssayees += 1;
-      var G = indexer(forme.cases);
-      for (var t = 0; t < R.tentatives; t++) {
-        res.essais += 1;
-        var r = essai(G, alea, R);
-        if (r.echec) { res.echecs[r.echec] += 1; continue; }
-        if (meilleur && r.score >= meilleur.score) continue;
-        // Un candidat ne devient le meilleur que s'il passe les contrôles et épuise le stock.
-        var plateau = construire(graineUtile, r);
-        var bilan = K.tout(plateau, optionsControles);
-        var stock = P.stock(plateau);
-        var complet = C.ORDRE_MODELES.every(function (id) { return stock[id].restant === 0; });
-        if (!bilan.ok || !complet || bilan.equilibre.score !== r.score) { res.echecs.controles += 1; continue; }
-        meilleur = { score: r.score, plateau: plateau, controles: bilan, forme: forme.cases.join(' ') };
-        if (meilleur.score === 0) break;
-      }
+    for (var t = 0; t < R.tentatives && !res.ok; t++) {
+      res.essais += 1;
+      var construction = batir(alea, cat.noyau, cat.pieces, cat.remplissage, R);
+      if (!construction.ok) { res.echecs[construction.echec] += 1; continue; }
+      var villes = chercherVilles(construction.cases, alea, R);
+      if (!villes.ok) { res.echecs.villes += 1; raisonVilles = villes.raison; continue; }
+      // Un plateau n'est rendu que s'il passe les contrôles et se trouve à l'étape « complet ».
+      var plateau = construire(graineUtile, construction, villes);
+      var bilan = K.tout(plateau, optionsControles);
+      if (!bilan.ok || bilan.etape !== 'complet') { res.echecs.controles += 1; continue; }
+      res.ok = true;
+      res.plateau = plateau;
+      res.controles = bilan;
+      res.score = bilan.equilibre.score;
+      res.remplissages = construction.remplissages;
     }
 
-    if (!meilleur) {
+    if (!res.ok) {
       var e = res.echecs;
-      res.raison = e.forme && !res.essais
-        ? 'Aucune forme de bord valide en ' + res.tiragesForme + ' tirages (seuil de contact ' + R.seuilContact + ').'
-        : 'Aucun plateau valide en ' + res.essais + ' essais (échecs : montagnes ' + e.montagnes + ', villes ' + e.villes + ', monoblocs ' + e.monoblocs
-          + ', contact ' + e.contact + ', inventaire ' + e.inventaire + ', contrôles ' + e.controles + (e.forme ? ', forme ' + e.forme : '') + ').';
+      res.raison = 'Aucun plateau valide en ' + res.essais + ' essais (échecs : pose ' + e.pose + ', trou ' + (e.trou + e.franchissable) + ', contact ' + (e.contact + e.contactRemplissage)
+        + ', villes ' + e.villes + ', contrôles ' + e.controles + ').' + (raisonVilles ? ' Dernier refus des villes : ' + raisonVilles : '');
       return res;
     }
-    res.ok = true;
-    res.plateau = meilleur.plateau;
-    res.score = meilleur.score;
-    res.forme = meilleur.forme;
-    res.controles = meilleur.controles;
     if (persos.length) {
       res.plateau.modeles = persos;
       res.controles = K.tout(res.plateau, optionsControles);      // le bilan rendu décrit le plateau rendu
@@ -524,7 +491,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     return res;
   }
 
-  AT.generateur = { generer: generer, tirerForme: tirerForme, formeValide: formeValide, reglages: reglages, incompatibilite: incompatibilite };
+  AT.generateur = {
+    generer: generer, batir: batir, chercherVilles: chercherVilles, reglages: reglages,
+    incompatibilite: incompatibilite, piecesDuCatalogue: piecesDuCatalogue
+  };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = AT.generateur;
 })();
