@@ -142,6 +142,14 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     S21: { id: 'S21', nom: 'Roselière à deux marais (ancien)', nombre: 0, horsCatalogue: true, ancien: true, cases: forme(COUDE, [MA, MA, PL]) },
     F12: { id: 'F12', nom: 'Clairière (ancien)', nombre: 0, horsCatalogue: true, ancien: true, cases: forme(LIGNE, [PL, FO, PL]) }
   };
+  /*
+   * Monoblocs de terrain du catalogue PRÉCÉDENT (catalogue 2 du 2026-11-19, première version, 21 monoblocs) : les 14
+   * retirés depuis (ci-dessus, `ancien: true`) et les 7 gardés tels quels. Sert à reconnaître un plateau fait avec ce
+   * catalogue-là (AT.plateau.catalogueDuPlateau) : il porte des monoblocs retirés et aucun monobloc apparu depuis.
+   */
+  var CATALOGUE_PRECEDENT = ['P4A', 'P4B', 'P4C', 'P4D', 'P4E', 'F31', 'F31B', 'S31', 'S31B', 'F22', 'S22', 'FS4',
+    'P3A', 'P3B', 'P3C', 'F3', 'S3', 'F21', 'S21', 'F12', 'S12'];
+
   var ORDRE_HORS_CATALOGUE = ['M1', 'P', 'F', 'S', 'V', 'P4A', 'P4B', 'P4C', 'P4D', 'P4E', 'P3A', 'P3B', 'P3C', 'F22', 'S22', 'FS4', 'F21', 'S21', 'F12'];
 
   /*
@@ -185,8 +193,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     villes: {
       profondeurExtremite: 2,               // rangées du haut (Vert) ou du bas (Rouge) où se pose une ville de déploiement
       profondeursExtremite: [1, 2, 3],      // valeurs permises (réglage de l'étape « Villes », champ `profondeurExtremite` d'un fichier)
-      neutresTiersCentral: true,            // une ville neutre se pose dans le tiers central des rangées
-      contactVilleNeutre: 2                 // cases du plateau qu'une ville neutre doit toucher au moins
+      // Décision du 2026-11-20 : une ville neutre se pose n'importe où sur un flanc (gauche ou droit), une par flanc.
+      // Le tiers central des rangées n'est plus une règle (false) ; le générateur le préfère seulement (generateur.prefererTiersCentral).
+      neutresTiersCentral: false,
+      // Décision du 2026-11-20 : une ville neutre est « tenue par 2 tuiles », c'est-à-dire qu'elle touche au moins
+      // 2 PIÈCES distinctes du plateau (et non 2 cases, qui peuvent être du même monobloc).
+      contactVilleNeutre: 2
     },
     // Répartition visée des terrains hors villes et montagnes, en pourcentage (affichage seulement).
     repartitionVisee: { plaine: 65, foret: 17.5, marais: 17.5 },
@@ -209,6 +221,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       montagnesEcart: 2,                    // distance minimale entre deux blocs de montagne (2 = une case entre eux)
       reprises: 30,                         // monoblocs repris et reposés au plus, quand ils ne touchent pas assez de pièces
       remplissageTot: false,                // true : combler tout de suite une case enfermée plutôt que poser sous le seuil
+      prefererTiersCentral: true,           // villes neutres : préférer une place du tiers central des rangées quand il y en a une (ce n'est pas une règle)
       accolerSpeciales: 0                   // > 0 : préférer les poses qui accolent forêt à forêt et marais à marais (bois et marécages plus gros) ; 0 : indifférent
     },
     // Bornes de validation d'un plateau lu dans un fichier.
@@ -305,7 +318,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   AT.catalogue = {
     MODELES: MODELES, ORDRE_MODELES: ORDRE_MODELES,
-    MODELES_HORS_CATALOGUE: MODELES_HORS_CATALOGUE, ORDRE_HORS_CATALOGUE: ORDRE_HORS_CATALOGUE,
+    MODELES_HORS_CATALOGUE: MODELES_HORS_CATALOGUE, ORDRE_HORS_CATALOGUE: ORDRE_HORS_CATALOGUE, CATALOGUE_PRECEDENT: CATALOGUE_PRECEDENT,
     VILLE_DEPLOIEMENT: VILLE_DEPLOIEMENT, VERSION: 2,
     EVENEMENTS: EVENEMENTS, ORDRE_EVENEMENTS: ORDRE_EVENEMENTS,
     REGLAGES: REGLAGES,

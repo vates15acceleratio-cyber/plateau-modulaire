@@ -46,12 +46,13 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * le plateau reçu est rendu inchangé. Renvoie {ok, plateau, id, raison}.
    * La repose ne compte pas contre le stock (un déplacement ne change pas le nombre de pièces) : une tuile
    * posée hors stock, comme la montagne d'une case du pinceau, se déplace donc aussi.
-   * Une ville neutre ne se déplace pas ainsi (refus) : elle se retire et se repose à l'étape « Villes ».
+   * Une ville neutre ne se déplace pas ainsi (refus) : elle se retire et se repose à l'étape « Villes ». Le noyau,
+   * fixe, ne se déplace pas non plus.
    */
   function deplacerPiece(plateau, idPiece, q, r, rotation) {
     var piece = (plateau.pieces || []).filter(function (p) { return p.id === idPiece; })[0];
     if (!piece) return { ok: false, plateau: plateau, raison: 'Pièce introuvable sur le plateau.' };
-    if (refusRetoucheVille(plateau, idPiece)) return { ok: false, plateau: plateau, raison: P.RAISON_VILLE_NEUTRE };
+    if (refusRetouche(plateau, idPiece)) return { ok: false, plateau: plateau, raison: refusRetouche(plateau, idPiece) };
     var retrait = P.retirer(plateau, idPiece);
     var pose = P.poser(retrait.plateau, piece.modele, q, r, rotation === undefined ? piece.rotation : rotation, { horsStock: true });
     if (!pose.ok) return { ok: false, plateau: plateau, raison: pose.raison };
@@ -87,6 +88,18 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     return piece && piece.modele === 'VN' ? P.RAISON_VILLE_NEUTRE : null;
   }
 
+  /**
+   * Pièce qui ne se retouche pas par « Tourner », « Déplacer », « Retirer » ni par le glisser : renvoie le message de
+   * refus, ou null si la retouche est permise. Le NOYAU est fixe (même règle que pour la gomme) ; une ville neutre
+   * ne se retouche qu'à l'étape « Villes ».
+   */
+  function refusRetouche(plateau, idPiece) {
+    var piece = (plateau.pieces || []).filter(function (p) { return p.id === idPiece; })[0];
+    var m = piece ? P.modele(plateau, piece.modele) : null;
+    if (m && m.noyau) return P.RAISON_NOYAU_FIXE;
+    return refusRetoucheVille(plateau, idPiece);
+  }
+
   /** Cases où la tuile d'événement peut être posée (liste de clés). */
   function casesAdmissibles(plateau, idEvenement, occupees) {
     return Object.keys(P.cases(plateau)).filter(function (k) {
@@ -104,8 +117,6 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     { id: 'villes', nom: 'Villes', regles: ['villes', 'equilibre'] },
     { id: 'evenements', nom: 'Tuiles d’événement (essai)', regles: ['evenements'] }
   ];
-  var TITRES_ETAPES = { construction: 'Construction en cours', villes: 'Construction terminée : posez les villes', complet: 'Plateau complet'
-  };
   var NOMS_NIVEAUX = { erreur: 'Erreur', alerte: 'Alerte', info: 'Conforme' };
 
   // ------------------------------------------------------------------ la vue
@@ -278,7 +289,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         return;
       }
       if (!selection) { ctx.message('Sélectionnez d’abord une pièce du plateau ou du stock.', 'info'); return; }
-      if (refusRetoucheVille(plateau(), selection)) { ctx.message(P.RAISON_VILLE_NEUTRE, 'erreur'); return; }
+      if (refusRetouche(plateau(), selection)) { ctx.message(refusRetouche(plateau(), selection), 'erreur'); return; }
       var r = P.tourner(plateau(), selection, 1);
       if (!r.ok) { ctx.message('Rotation impossible : ' + r.raison, 'erreur'); return; }
       var mention = mentionEvenements(plateau(), r.plateau) + mentionVilles(plateau(), r.plateau);
@@ -288,13 +299,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
     function retirerSelection() {
       if (!selection) return;
-      // Le noyau est fixe (règle de l'utilisateur) : ni la gomme ni « Retirer » ne l'enlèvent.
-      var visee = pieceDe(selection), modeleVise = visee ? P.modele(plateau(), visee.modele) : null;
-      if (modeleVise && modeleVise.noyau) {
-        ctx.message('Le noyau est fixe : il ne se retire pas. Seuls « Vider le plateau » et « Nouveau plateau vierge » le font.', 'erreur');
-        return;
-      }
-      if (refusRetoucheVille(plateau(), selection)) { ctx.message(P.RAISON_VILLE_NEUTRE, 'erreur'); return; }
+      // Le noyau est fixe (règle de l'utilisateur) : ni la gomme, ni « Retirer », ni « Tourner », ni « Déplacer » n'y touchent.
+      if (refusRetouche(plateau(), selection)) { ctx.message(refusRetouche(plateau(), selection), 'erreur'); return; }
       var r = P.retirer(plateau(), selection);
       if (!r.ok) { ctx.message(r.raison, 'erreur'); return; }
       selection = null; caseSelection = null; aPoser = null;
@@ -306,7 +312,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     function commencerDeplacement() {
       var piece = pieceDe(selection);
       if (!piece) return;
-      if (refusRetoucheVille(plateau(), selection)) { ctx.message(P.RAISON_VILLE_NEUTRE, 'erreur'); return; }
+      if (refusRetouche(plateau(), selection)) { ctx.message(refusRetouche(plateau(), selection), 'erreur'); return; }
       aPoser = { type: 'deplacement', rotation: piece.rotation };
       rafraichirOutils();
     }
@@ -375,11 +381,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       if (!possede.call(toutes, cle)) return null;
       var piece = pieceDe(toutes[cle].piece), depart = H.decle(cle);
       if (!piece) return null;
-      // Une ville neutre ne se déplace pas en la glissant : un simple clic la sélectionne, un glisser est refusé.
-      if (refusRetoucheVille(plateau(), piece.id)) {
+      // Le noyau et une ville neutre ne se déplacent pas en les glissant : un simple clic sélectionne, un glisser est refusé.
+      var raisonFixe = refusRetouche(plateau(), piece.id);
+      if (raisonFixe) {
         return {
           bouger: function () {},
-          finir: function (k, aBouge) { if (aBouge) ctx.message(P.RAISON_VILLE_NEUTRE, 'erreur'); else surClic(cle); },
+          finir: function (k, aBouge) { if (aBouge) ctx.message(raisonFixe, 'erreur'); else surClic(cle); },
           annuler: function () {}
         };
       }
@@ -558,7 +565,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       guide.rafraichir();
       villes.rafraichir();
       // L'étape « Villes » se propose d'elle-même quand la construction est terminée (bouton de mode mis en avant).
-      var proposer = !!bilan && bilan.etape === 'villes' && mode !== 'villes' && !estAncien(plateau());
+      var proposer = !!bilan && bilan.etape === 'villes' && mode !== 'villes' && bilan.catalogue !== 'premier';
       boutonsModes.villes.setAttribute('data-propose', proposer ? 'oui' : 'non');
       boutonsModes.villes.title = proposer ? 'Construction terminée : c’est le moment de poser les villes' : 'Poser les villes de déploiement et les villes neutres';
       if (mode === 'monoblocs') monoblocs.rafraichir();
@@ -575,19 +582,17 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         texte: bilan.erreurs ? bilan.erreurs + ' erreur(s), ' + bilan.alertes + ' alerte(s)' : (bilan.alertes ? 'Aucune erreur, ' + bilan.alertes + ' alerte(s)' : 'Plateau conforme : aucune erreur, aucune alerte') }));
       // Étape du plateau (§9.1), en tête : construction en cours, villes à poser, ou complet. Un plateau construit
       // sans villes n'est pas en erreur : il est « à l'étape des villes ».
-      var ancien = estAncien(pl);
-      // Ancien plateau : les étapes du catalogue 2 ne s'y appliquent pas (ses pièces ne sont pas celles du catalogue 2).
-      // À l'inverse, une tuile d'une case peinte au pinceau ne fait pas d'un plateau du catalogue 2 un « ancien plateau » :
-      // la mention du modèle est alors retirée de l'affichage.
-      var mentionAncien = ' Ce plateau porte des tuiles de l’ancien catalogue.';
-      blocs.unshift(el('p', { classe: 'at-etape at-etape-' + (ancien ? 'ancien' : bilan.etape), id: 'pl-etape', 'data-etape': ancien ? 'ancien' : bilan.etape }, ancien ? [
-        el('strong', { id: 'pl-etape-titre', texte: 'Plateau de l’ancien catalogue' }),
-        el('span', { classe: 'at-etape-detail', texte: ' Il se juge avec les contrôles de l’ancien catalogue ; les étapes du catalogue 2 (construction, puis villes) ne s’y appliquent pas.' })
-      ] : [
-        el('strong', { id: 'pl-etape-titre', texte: TITRES_ETAPES[bilan.etape] || '' }),
-        el('span', { classe: 'at-etape-detail', texte: ' ' + String(bilan.etapeMessage || '').split(mentionAncien).join('') })
+      // Le catalogue du plateau, le titre et la phrase de l'étape viennent du modèle (AT.plateau.catalogueDuPlateau,
+      // AT.controles.etape) : la vue les affiche tels quels.
+      var ancien = bilan.catalogue === 'premier', precedent = bilan.catalogue === 'precedent';
+      blocs.unshift(el('p', { classe: 'at-etape at-etape-' + (ancien || precedent ? 'ancien' : bilan.etape), id: 'pl-etape', 'data-etape': ancien ? 'ancien' : bilan.etape, 'data-catalogue': bilan.catalogue }, [
+        el('strong', { id: 'pl-etape-titre', texte: bilan.etapeTitre || '' }),
+        el('span', { classe: 'at-etape-detail', texte: ' ' + String(bilan.etapeMessage || '') })
       ]));
-      bandeauAncien.hidden = !ancien;
+      bandeauAncien.hidden = !(ancien || precedent);
+      bandeauAncien.textContent = precedent
+        ? 'Plateau du catalogue précédent (des monoblocs retirés depuis du catalogue imprimé) : il reste lisible, jouable et modifiable ; aucune pièce n’est à poser.'
+        : 'Plateau de l’ancien catalogue (tuiles d’une case, villes posées pendant la construction) : il reste lisible et modifiable, et les contrôles s’y adaptent.';
       var liste = el('ul', { classe: 'at-constats' });
       GROUPES.forEach(function (groupe) {
         var dansGroupe = bilan.resultats.filter(function (x) { return groupe.regles.indexOf(x.regle) !== -1; });
@@ -632,25 +637,26 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
             el('td', { texte: '(' + v.cle + ')' }),
             el('td', { texte: v.vert === null ? '—' : v.vert }),
             el('td', { texte: v.rouge === null ? '—' : v.rouge }),
-            el('td', { texte: v.ecart === null ? '—' : v.ecart })
+            el('td', { 'data-avantage': v.avantage || 'aucun', texte: v.ecart === null ? '—' : K.texteAvantageLigne(v.avantage, v.ecart) })
           ]);
           corpsTable.appendChild(avecSurbrillance(ligne, [v.cle], 'ville/' + v.cle));
         });
-        // Villes de déploiement adverses : coûts de chaque camp vers les villes de l'autre, comparés rang par rang.
+        // Ville de déploiement adverse la plus LOINTAINE : la plus proche est toujours à égale distance des deux camps
+        // (entrer dans une ville coûte la même chose des deux côtés), elle ne mesure donc rien et n'est pas affichée.
         var adv = e.adverses || { vert: [], rouge: [], ecart: null };
         var pied = el('tfoot', null, el('tr', { id: 'pl-adverses' }, [
-          el('th', { scope: 'row', colspan: 2, texte: 'Villes de déploiement adverses' }),
-          el('td', { texte: adv.vert.length ? adv.vert.join(' et ') : '—' }),
-          el('td', { texte: adv.rouge.length ? adv.rouge.join(' et ') : '—' }),
-          el('td', { texte: adv.ecart === null ? '—' : adv.ecart })
+          el('th', { scope: 'row', colspan: 2, texte: 'Ville de déploiement adverse la plus lointaine' }),
+          el('td', { texte: adv.vertLoin === null || adv.vertLoin === undefined ? '—' : adv.vertLoin }),
+          el('td', { texte: adv.rougeLoin === null || adv.rougeLoin === undefined ? '—' : adv.rougeLoin }),
+          el('td', { 'data-avantage': adv.avantage || 'aucun', texte: adv.ecart === null ? '—' : K.texteAvantageLigne(adv.avantage, adv.ecart) })
         ]));
         blocs.push(el('table', { classe: 'at-table', id: 'pl-equilibre' }, [
-          el('thead', null, el('tr', null, ['Ville', 'Case', 'Depuis Vert', 'Depuis Rouge', 'Écart'].map(function (t) { return el('th', { scope: 'col', texte: t }); }))),
+          el('thead', null, el('tr', null, ['Ville', 'Case', 'Depuis Vert', 'Depuis Rouge', 'Écart (moins de rations = avantage)'].map(function (t) { return el('th', { scope: 'col', texte: t }); }))),
           corpsTable,
           pied
         ]));
-        blocs.push(el('p', { id: 'pl-score', texte: 'Score d’équilibre : ' + e.score + ' (0 = équilibré). Il additionne l’écart entre Vert et Rouge vers le centre et vers chaque ville neutre'
-          + (e.adverses && e.adverses.ecart !== null ? ', et l’écart vers les villes de déploiement adverses (' + e.adverses.ecart + ').' : '.') }));
+        blocs.push(el('p', { id: 'pl-score', 'data-avantage': e.avantage || 'aucun', texte: 'Score d’équilibre : ' + e.score + ' (0 = équilibré) ; ' + e.avantageTexte + '. Le score additionne l’écart entre Vert et Rouge vers le centre et vers chaque ville neutre'
+          + (e.adverses && e.adverses.ecart !== null ? ', et l’écart vers la ville de déploiement adverse la plus lointaine (' + e.adverses.ecart + ').' : '.') }));
       }
 
       // Répartition des terrains.
@@ -695,8 +701,6 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       return s;
     }
 
-    /** Un vrai plateau de l'ancien catalogue porte des tuiles de ville d'une case (une forêt peinte au pinceau ne suffit pas). */
-    function estAncien(pl) { return AT.vueCreation.estAncien(pl); }
 
     /** Ce qui élargit le cadre selon le mode : il faut recadrer quand cela change. */
     function cadreDuMode(m) { return (m === 'creer' || m === 'pinceau') ? 'grille' : (m === 'villes' ? 'anneau' : 'plateau'); }
@@ -889,7 +893,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     };
   }
 
-  AT.vuePlateau = { MODES: MODES, creer: creer, deplacerPiece: deplacerPiece, refusRetoucheVille: refusRetoucheVille, etiquettes: etiquettes, casesAdmissibles: casesAdmissibles };
+  AT.vuePlateau = { MODES: MODES, creer: creer, deplacerPiece: deplacerPiece, refusRetoucheVille: refusRetoucheVille, refusRetouche: refusRetouche, etiquettes: etiquettes, casesAdmissibles: casesAdmissibles };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = AT.vuePlateau;
 })();

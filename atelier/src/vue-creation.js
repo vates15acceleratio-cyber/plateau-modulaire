@@ -89,9 +89,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * Une plaine, une forêt ou un marais d'une case ne suffisent pas : le pinceau en pose aussi sur un plateau du
    * catalogue 2. Sur un ancien plateau, les étapes du catalogue 2 (construction, puis villes) ne s'appliquent pas.
    */
-  function estAncien(plateau) {
-    return !!plateau && (plateau.pieces || []).some(function (p) { return p.modele === 'V'; });
-  }
+  function estAncien(plateau) { return !!plateau && P.catalogueDuPlateau(plateau).premier; }
 
   /** Identifiants des pièces posées dont le modèle est inconnu du catalogue et du document. */
   function piecesInconnues(plateau) {
@@ -129,9 +127,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     });
     var toutes = P.cases(plateau, { sansRecouvrements: true });
     var nbVilles = Object.keys(toutes).filter(function (k) { return toutes[k].terrain === 'ville'; }).length;
-    var etat = P.etatVilles(plateau), rangees = P.villesRangeesExtremes(plateau);
-    var ancien = !etat.vert.length && !etat.rouge.length && !etat.neutres.length && (rangees.vert.length + rangees.rouge.length > 0
-      || (plateau.pieces || []).some(function (p) { return p.modele === 'V'; }));
+    var etat = P.etatVilles(plateau), rangees = P.villesRangeesExtremes(plateau), cat = P.catalogueDuPlateau(plateau);
+    // Plateau du premier catalogue sans ville du catalogue 2 : ses villes de déploiement sont celles des rangées extrêmes.
+    var ancien = cat.premier && !etat.vert.length && !etat.rouge.length && !etat.neutres.length;
+    res.catalogue = cat.nom;
+    // Plateau d'un catalogue antérieur : aucune pièce du catalogue courant n'est « à poser » sur lui.
+    if (!cat.courant) { res.pieces = []; res.nbPieces = 0; res.facultatives = []; }
     var neutre = C.modele('VN');
     res.villes = compte(nbVilles, R.nombreVilles);
     res.haut = compte(ancien ? rangees.vert.length : etat.vert.length, R.villesParCamp);
@@ -221,7 +222,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         : pluriel(trait.changees, 'case peinte', 'cases peintes') + ' en ' + NOMS_TERRAINS[trait.outil.terrain] + '.');
     }
     if (trait.horsStock) {
-      morceaux.push(pluriel(trait.horsStock, 'tuile posée', 'tuiles posées') + ' hors stock : à prévoir en plus du catalogue.');
+      morceaux.push(pluriel(trait.horsStock, 'tuile posée', 'tuiles posées') + ' hors stock : à prévoir en plus du catalogue. Hors règles (le terrain se construit en monoblocs de 3 ou 4 cases) : signalé par les contrôles.');
       niveau = 'alerte';
     }
     if (trait.evenements) {
@@ -419,8 +420,14 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         return el('h3', { classe: 'at-reste-etape', 'data-etape': nom, 'data-etat': etat, texte: numero + '. ' + (nom === 'construction' ? 'Construction du terrain' : 'Villes')
           + (etat === 'faite' ? ' : faite' : (etat === 'en-cours' ? ' : en cours' : ' : ensuite')) });
       };
-      var ancien = estAncien(acces.plateau());
-      var contenu = ancien ? [
+      var ancien = r.catalogue === 'premier';
+      var contenu = r.catalogue === 'precedent' ? [
+        // Plateau du catalogue précédent : rien à poser pour le terrain, seules les villes et les erreurs sont suivies.
+        el('h2', { texte: 'Ce qu’il reste à faire' }),
+        el('p', { classe: 'at-aide', id: 'cr-reste-precedent', texte: 'Plateau du catalogue précédent : son terrain est fait de monoblocs qui ne sont plus tous au catalogue imprimé. Aucune pièce n’est à poser ; seules ses villes et ses erreurs sont suivies ici.' }),
+        titreEtape(2, 'villes', r.etape === 'villes' ? 'en-cours' : 'faite'),
+        el('ul', { classe: 'at-reste-liste' }, villes)
+      ] : ancien ? [
         // Ancien plateau : ses pièces ne sont pas celles du catalogue 2, les deux étapes ne s'y appliquent pas.
         el('h2', { texte: 'Ce qu’il reste à faire' }),
         el('p', { classe: 'at-aide', id: 'cr-reste-ancien', texte: 'Plateau de l’ancien catalogue : ses tuiles d’une case et ses villes ont été posées pendant la construction. Les étapes du catalogue 2 ne s’y appliquent pas ; seules ses villes et ses erreurs sont suivies ici.' }),
@@ -543,7 +550,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         el('p', { classe: 'at-aide', texte: 'Choisissez un terrain ou la gomme, puis cliquez ou glissez sur les cases, y compris les cases vides de la grille. Un trait s’annule en une fois (Ctrl+Z).' }),
         zoneOutils,
         zoneMessage,
-        el('p', { classe: 'at-aide', texte: 'Le pinceau pose des tuiles d’une case. Le catalogue 2 est fait de monoblocs : ces tuiles sont « hors stock » (annoncé, à prévoir en plus du catalogue), sauf une plaine prise d’abord parmi les tuiles de remplissage. Les villes se posent à l’étape « Villes ». Il ne touche ni aux monoblocs ni au noyau. La gomme retire un monobloc après confirmation ; elle ne retire jamais le noyau, qui est fixe. Maj + glisser déplace la vue.' })
+        el('p', { classe: 'at-aide', texte: 'Le pinceau sert à essayer des idées : il pose des tuiles d’une case, alors que le terrain se construit en monoblocs de 3 ou 4 cases. Ces tuiles sont donc HORS RÈGLES, signalées en erreur par les contrôles (le plateau reste enregistrable), sauf une plaine prise d’abord parmi les tuiles de remplissage du catalogue. Les villes se posent à l’étape « Villes ». Il ne touche ni aux monoblocs ni au noyau. La gomme retire un monobloc après confirmation ; elle ne retire jamais le noyau, qui est fixe. Maj + glisser déplace la vue.' })
       ])
     ]);
     rafraichir();

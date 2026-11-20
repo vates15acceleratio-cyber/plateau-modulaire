@@ -461,11 +461,11 @@ test('correction 6 : sur un plateau de l’ancien catalogue, le contrôle 1 ne p
   const vide = V.anneau(genereV1)[0];
   const peint = P.peindre(genereV1, vide, 'montagne').plateau;
   assert.ok(K.inventaire(peint).some((x) => x.niveau === 'alerte' && /^Tuiles à prévoir en plus du catalogue \(1\) : 1 × Montagne d’une case\.$/.test(x.message)));
-  // Plateau du catalogue 2 : rien ne change, même avec une forêt peinte au pinceau (ce n'est pas un ancien plateau).
+  // Plateau du catalogue 2 : une forêt peinte au pinceau n'en fait pas un ancien plateau ; elle y est hors règles (I2).
   const p2 = genere(1);
   assert.match(K.inventaire(p2)[0].message, /^Toutes les pièces de terrain du catalogue sont posées/);
   const foret = P.peindre(p2, V.anneau(p2)[0], 'foret').plateau;
-  assert.ok(K.inventaire(foret).some((x) => x.niveau === 'alerte' && /^Tuiles à prévoir en plus du catalogue \(1\) : 1 × Forêt\.$/.test(x.message)));
+  assert.ok(K.inventaire(foret).some((x) => x.niveau === 'erreur' && /^Hors règles : 1 tuile de terrain d’une case \(1 × Forêt\)\./.test(x.message)));
   assert.ok(!K.inventaire(foret).some((x) => /ancien catalogue/.test(x.message)));
   assert.match(K.inventaire(P.vierge(1)).filter((x) => x.niveau === 'alerte')[0].message, /^Pièces de terrain restantes \(23\)/);
 });

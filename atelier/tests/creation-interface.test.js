@@ -170,7 +170,7 @@ test('trait de pinceau : plusieurs cases, plateau de départ intact, une case vi
   assert.strictEqual(b.change, true);
   // Une tuile peinte est hors catalogue : le trait l'annonce.
   assert.strictEqual(b.niveau, 'alerte');
-  assert.match(b.message, /^3 cases peintes en forêt\. 3 tuiles posées hors stock : à prévoir en plus du catalogue\.$/);
+  assert.match(b.message, /^3 cases peintes en forêt\. 3 tuiles posées hors stock : à prévoir en plus du catalogue\. Hors règles \(le terrain se construit en monoblocs de 3 ou 4 cases\) : signalé par les contrôles\.$/);
   // Deux Plaines : elles viennent des tuiles de remplissage du catalogue, rien à prévoir en plus.
   const plaines = VC.bilanTrait(VC.tracer(depart, { type: 'terrain', terrain: 'plaine' }, ['2,-2', '3,-2']));
   assert.strictEqual(plaines.niveau, 'info');

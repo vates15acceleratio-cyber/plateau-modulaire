@@ -298,12 +298,12 @@ test('question 1 : un monobloc personnel avec de la montagne hors bloc de 4 ou 5
   pl = P.poser(pl, 'X2', -5, 0, 0).plateau;
   pl = P.poser(pl, 'X3', -3, 3, 0).plateau;
   const constats = K.inventaire(pl), alerte = constats.filter((x) => /hors bloc/.test(x.message))[0];
-  assert.ok(alerte, 'alerte attendue');
-  assert.strictEqual(alerte.niveau, 'alerte');
-  assert.strictEqual(alerte.message, '3 monoblocs personnels avec de la montagne hors bloc de 4 ou 5 cases (Trois pics, Col) : la décision en vigueur est « montagnes en blocs de 4 ou 5 cases ».');
+  assert.ok(alerte, 'constat attendu');
+  // Depuis la revue du catalogue 2 (I2) : sur un plateau du catalogue courant, c'est hors règles, donc une erreur.
+  assert.strictEqual(alerte.niveau, 'erreur');
+  assert.strictEqual(alerte.message, 'Hors règles : 3 monoblocs personnels avec de la montagne hors bloc de 4 ou 5 cases (Trois pics, Col). Les montagnes sont des blocs de 4 ou 5 cases, tout en montagne.');
   assert.strictEqual(alerte.cases.length, 3 + 3 + 2);
-  assert.deepStrictEqual(alerte.donnees, { montagnesHorsBloc: 3 });
-  assert.ok(!constats.some((x) => x.niveau === 'erreur'), 'c’est une alerte, pas une erreur');
+  assert.deepStrictEqual(alerte.donnees, { montagnesHorsBloc: 3, horsRegles: true });
   // Les montagnes du catalogue (4 et 5 cases) et le bloc personnel de 4 ne déclenchent rien.
   const catalogue = P.poser(P.poser(P.vierge(1), 'M4', 3, 0, 0).plateau, 'M5', -5, 0, 0).plateau;
   assert.ok(!K.inventaire(catalogue).some((x) => /hors bloc|d’une case/.test(x.message)));

@@ -162,12 +162,17 @@ test('placesNeutres et poserVilleNeutre : une tuile ajoutée contre chaque flanc
   const places = P.placesNeutres(p);
   assert.ok(places.some((x) => x.flanc === 'gauche') && places.some((x) => x.flanc === 'droite'));
   const tiers = Math.floor((e.bas - e.haut + 1) / 3);
+  // I4 : n'importe où sur un flanc ; le tiers central n'est une règle que si le réglage est remis à vrai.
+  assert.ok(places.some((x) => { const r = H.decle(x.cle).r; return r < e.haut + tiers || r > e.bas - tiers; }), 'des places hors du tiers central');
+  const centrales = P.placesNeutres(p, { neutresTiersCentral: true });
+  assert.ok(centrales.length > 0 && centrales.length < places.length);
+  centrales.forEach((x) => { const r = H.decle(x.cle).r; assert.ok(r >= e.haut + tiers && r <= e.bas - tiers, 'dans le tiers central des rangées'); });
   places.forEach((x) => {
     assert.ok(!terrain[x.cle], 'une case vide');
-    assert.ok(x.cotes >= 2 && x.pieces >= 1);
+    assert.ok(x.cotes >= 2 && x.pieces >= 2, 'I3 : tenue par 2 pièces distinctes au moins');
+    assert.strictEqual(x.pieces, new Set(H.voisines(x.cle).filter((v) => terrain[v]).map((v) => terrain[v].piece)).size);
     assert.strictEqual(x.cotes, H.voisines(x.cle).filter((v) => terrain[v]).length);
     const c = H.decle(x.cle);
-    assert.ok(c.r >= e.haut + tiers && c.r <= e.bas - tiers, 'dans le tiers central des rangées');
     assert.ok(x.flanc === 'gauche' ? c.q < e.rangees[c.r].gauche : c.q > e.rangees[c.r].droite);
     assert.deepStrictEqual(P.peutPoserVilleNeutre(p, x.cle), { ok: true, flanc: x.flanc });
   });
@@ -211,9 +216,15 @@ test('poserVilleNeutre : refus expliqués', () => {
   // Au-dessus du plateau : ni à gauche ni à droite.
   const haut = H.decle(Object.keys(terrain).filter((k) => H.decle(k).r === e.haut)[0]);
   refus(H.cle(haut.q, haut.r - 1), /sur un côté du plateau \(flanc gauche ou droit\), pas en haut, en bas ni dans un creux/);
-  // Sur un flanc, mais trop haut : hors du tiers central.
-  const rangeeHaute = e.haut + 1, gaucheHaut = H.cle(e.rangees[rangeeHaute].gauche - 1, rangeeHaute);
-  if (H.voisines(gaucheHaut).some((v) => terrain[v])) refus(gaucheHaut, /à mi-hauteur du plateau \(rangées -?\d+ à -?\d+\)/);
+  // I4 : sur un flanc mais hors du tiers central, ce n'est plus un refus ; seulement si le réglage est remis à vrai.
+  const horsTiers = P.placesNeutres(p).filter((x) => { const r = H.decle(x.cle).r, tiers = Math.floor((e.bas - e.haut + 1) / 3); return r < e.haut + tiers || r > e.bas - tiers; })[0];
+  assert.ok(horsTiers, 'une place hors du tiers central');
+  assert.strictEqual(P.poserVilleNeutre(p, horsTiers.cle).ok, true);
+  assert.match(P.poserVilleNeutre(p, horsTiers.cle, { neutresTiersCentral: true }).raison, /à mi-hauteur du plateau \(rangées -?\d+ à -?\d+\)/);
+  // I3 : sur un flanc, touchant 2 cases du MÊME monobloc : refusée (tenue par une seule tuile).
+  const unePiece = P.placesNeutresSurCases(terrain, { contactEnCases: true }).filter((x) => x.pieces === 1)[0];
+  assert.ok(unePiece, 'une case de flanc qui touche 2 cases d’une seule pièce');
+  refus(unePiece.cle, /ne touche que 1 pièce du plateau \(\d cases\) ; une ville neutre doit être tenue par au moins 2 tuiles différentes/);
   // Un flanc n'a qu'une ville neutre.
   const places = P.placesNeutres(p), gauches = places.filter((x) => x.flanc === 'gauche');
   const un = P.poserVilleNeutre(p, gauches[0].cle).plateau;

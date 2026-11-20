@@ -892,6 +892,38 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * Attendu (cahier des charges A3) : une ville de déploiement LIBRE de son camp (plateau.camps[joueur]) ;
    * sinon avertissement bloquant (« hors-deploiement », « occupee »), que `forcer` permet de passer.
    */
+  /**
+   * Villes de déploiement d'un joueur. Quand le plateau porte des tuiles de ville de déploiement (`deploiements`,
+   * catalogue 2), ce sont ELLES qui font foi, et non la liste `camps` (qui doit en être la copie) : une case citée
+   * dans `camps` sans tuile posée n'est pas une ville de déploiement. Ancien plateau sans tuile : `camps`.
+   */
+  function villesDeDeploiement(plateau, joueur) {
+    var tuiles = Array.isArray(plateau.deploiements) ? plateau.deploiements : [];
+    if (tuiles.length) return tuiles.filter(function (d) { return d.camp === joueur; }).map(function (d) { return d.cle; });
+    return ((plateau.camps && plateau.camps[joueur]) || []).slice();
+  }
+
+  /**
+   * Ce que la table de jeu doit dire d'un plateau avant de jouer dessus, sans rien bloquer : liste de phrases
+   * (vide = rien à dire). Deux cas : `camps` ne correspond pas aux tuiles de ville de déploiement posées (fichier
+   * retouché à la main) ; le plateau n'a aucune ville de déploiement pour un joueur.
+   */
+  function avisPlateau(plateau) {
+    var avis = [], tuiles = Array.isArray(plateau && plateau.deploiements) ? plateau.deploiements : [];
+    var memes = function (a, b) { return a.slice().sort().join(' ') === b.slice().sort().join(' '); };
+    if (tuiles.length) {
+      var faux = JOUEURS.filter(function (j) { return !memes((plateau.camps && plateau.camps[j]) || [], villesDeDeploiement(plateau, j)); });
+      if (faux.length) {
+        avis.push('Les villes de déploiement enregistrées pour ' + faux.map(function (j) { return NOMS[j]; }).join(' et ')
+          + ' (champ « camps ») ne sont pas celles des tuiles posées : la table de jeu s’en tient aux tuiles posées.');
+      }
+    }
+    var sans = JOUEURS.filter(function (j) { return !villesDeDeploiement(plateau || {}, j).length; });
+    if (sans.length === JOUEURS.length) avis.push('Ce plateau n’a aucune ville de déploiement : former un bataillon demandera « Faire quand même ». Posez d’abord les villes (onglet Plateau, étape « Villes »).');
+    else if (sans.length) avis.push(NOMS[sans[0]] + ' n’a aucune ville de déploiement sur ce plateau : former un bataillon lui demandera « Faire quand même ».');
+    return avis;
+  }
+
   function former(etat, params, env) {
     params = params || {};
     if (!plateauPresent(env)) return refus(etat, 'Fonctions du plateau manquantes.');
@@ -902,7 +934,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     var cases = casesDuPlateau(etat, env);
     if (typeof params.cle !== 'string' || !possede(cases, params.cle)) return refus(etat, 'Cette case n’existe pas sur le plateau.');
     var av = [];
-    if ((etat.plateau.camps[j] || []).indexOf(params.cle) < 0) {
+    if (villesDeDeploiement(etat.plateau, j).indexOf(params.cle) < 0) {
       av.push(avert('hors-deploiement', 'Cette case n’est pas une ville de déploiement de ' + NOMS[j] + '.'));
     }
     if (occupants(etat, params.cle).length) av.push(avert('occupee', 'Cette case est déjà occupée par un bataillon.'));
@@ -932,7 +964,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     if (b.troupes.length >= etat.reglages.troupesParBataillon) return refus(etat, 'Ce bataillon a déjà ' + etat.reglages.troupesParBataillon + ' Troupes.');
     if (etat.paquets[j].main.indexOf(params.carte) < 0) return refus(etat, 'Cette carte n’est pas dans la main de ' + NOMS[j] + '.');
     var av = [];
-    var surDeploiement = (etat.plateau.camps[j] || []).indexOf(b.case) >= 0;
+    var surDeploiement = villesDeDeploiement(etat.plateau, j).indexOf(b.case) >= 0;
     var surVilleControlee = possede(etat.villes, b.case) && etat.villes[b.case] === j;
     if (!surDeploiement && !surVilleControlee) {
       av.push(avert('hors-renfort', 'Ce bataillon n’est ni sur une ville de déploiement ni sur une ville contrôlée par ' + NOMS[j] + '.'));
@@ -1255,7 +1287,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     finDeTour: finDeTour,
     noter: noter,
     paquet: paquet,
-    former: former,
+    former: former, avisPlateau: avisPlateau, villesDeDeploiement: villesDeDeploiement,
     renforcer: renforcer,
     deplacer: deplacer,
     marquerDegats: marquerDegats,

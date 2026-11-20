@@ -202,9 +202,11 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var lignes = messages.map(function (m) { return el('li', { classe: 'at-niveau-erreur', texte: m }); });
       if (verrou) lignes.unshift(el('li', { classe: 'at-niveau-alerte', texte: 'Cette pièce est posée sur le plateau : seuls son nom et sa quantité se changent. Pour changer sa forme, retirez d’abord ses exemplaires.' }));
       if (!messages.length) lignes.push(el('li', { classe: 'at-niveau-info', texte: 'Pièce valide : ' + contenu(d.cases) + '.' }));
-      // Rappel sans blocage : la décision en vigueur est « montagnes en blocs de 4 ou 5 cases » (le contrôle 1 le signalera, en alerte).
-      if (AT.controles && AT.controles.montagneHorsBloc(d.cases)) {
-        lignes.push(el('li', { classe: 'at-niveau-alerte', id: 'mo-rappel-montagne', texte: 'Rappel : cette pièce porte de la montagne sans être un bloc de 4 ou 5 cases tout en montagne. Elle reste permise ; une fois posée, le contrôle 1 le signalera en alerte.' }));
+      // Sans blocage : on peut essayer des idées. Mais ce qui enfreint les règles de l'utilisateur est dit ici, et
+      // une fois la pièce posée, signalé en erreur par les contrôles.
+      var ecarts = AT.controles && d.cases.length ? AT.controles.horsReglesForme(d.cases) : [];
+      if (ecarts.length) {
+        lignes.push(el('li', { classe: 'at-niveau-alerte', id: 'mo-hors-regles', texte: 'Hors règles : ' + ecarts.join(' ; ') + '. La pièce reste permise pour essayer une idée ; une fois posée, elle est signalée en erreur par les contrôles.' }));
       }
       R.remplacer(zoneAvis, lignes);
       btnValider.disabled = messages.length > 0;

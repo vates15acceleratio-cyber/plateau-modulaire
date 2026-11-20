@@ -296,3 +296,71 @@ Résultat sur 100 graines : **785 plateaux, 0 non conforme**. Les 500 plateaux �
 ### Fichiers touchés dans cette recette
 
 `atelier/src/plateau.js`, `atelier/src/catalogue.js`, `atelier/src/controles.js`, `atelier/src/generateur.js`, `atelier/src/partie.js`, `atelier/src/vue-partie.js`, `atelier/src/vue-plateau.js`, `atelier/src/vue-villes.js`, `atelier/src/vue-bibliotheque.js`, `atelier/src/app.js`, `atelier/outils/recette.js`, `atelier/outils/recette-ancien.js`, `atelier/outils/verifier-regles.js`, `atelier/tests/corrections-villes.test.js` (nouveau), `atelier/tests/verifier-regles.test.js` (nouveau), `atelier/tests/controles.test.js`, `atelier/tests/integration.test.js`, `atelier/tests/villes-interface.test.js`, `atelier/README.md`, `docs/04-recette-atelier.md`.
+
+## Corrections après la revue du catalogue 2 (2026-11-20, `docs/08-revue-catalogue-2.md`)
+
+Rien n'a été committé ni installé. Edge seulement sans fenêtre, sur des profils temporaires ; `Atelier.bat` n'a pas été lancé.
+
+### Chiffres
+
+| Vérification | Annoncé | Constaté au départ | Après |
+|---|---|---|---|
+| `node --test` (depuis `atelier/`) | 310 OK | 310 OK | **326 OK, 0 échec** |
+| Recette Edge sans fenêtre (budget 20000) | 676 OK | 676 OK, 0 ÉCHEC | **712 OK, 0 ÉCHEC** (63 s) |
+| `node outils/verifier-regles.js 50` | | 389 plateaux, 0 non conforme, 11 échecs de génération | **390 plateaux, 0 non conforme**, 10 échecs de génération (tous à 1 rangée) |
+| `node outils/verifier-regles.js 100` | | | **773 plateaux, 0 non conforme**, 27 échecs de génération (tous à 1 rangée) |
+| Persistance réelle (4 lancements, 2 profils neufs) | | | 6 puis 7 OK ; « villes » : 7 puis 8 OK |
+
+### Mesure du point 3 (I3 et I4), 300 graines, réglages par défaut
+
+| État | Réussite du générateur | Essais par graine | Villes neutres générées tenues par une seule pièce | Villes neutres hors du tiers central | Places par terrain, flanc gauche / droit | Score d'équilibre moyen / maximal |
+|---|---|---|---|---|---|---|
+| Avant (2 cases, tiers central obligatoire) | 300 / 300 | 2,88 | 249 sur 600 (41,5 %) | 0 | 3,05 / 3,07 (dont la moitié tenues par une pièce : 923 sur 1 836) | 2,18 / 10 |
+| I3 seul (2 pièces, tiers central obligatoire) | 300 / 300 | 3,03 | 0 | 0 | 1,50 / 1,60 | 3,22 / 13 |
+| I3 + I4 (2 pièces, tout le flanc, tiers central préféré) | **300 / 300** | 2,86 | **0** | 33 sur 600 (5,5 %) | 4,28 / 4,26 | 3,27 / 14 |
+
+La réussite reste à 100 % : la règle « 2 pièces » est appliquée partout, générateur compris, sans repli. Aucun terrain n'a un flanc sans place dans aucun des trois états. Le prix est l'équilibre : score moyen de 2,18 à 3,27, pire cas de 10 à 14. À 1 rangée d'extrémité, les échecs de génération passent de 22 % (mesure de la revue) à 27 %.
+
+### Ce qui est fait (tests : `atelier/tests/revue-catalogue-2.test.js`, un test au moins par constat, nommé par son numéro)
+
+| N° | Ce qui est fait | Fichiers |
+|---|---|---|
+| I1, M1 | Une seule définition, dans le modèle : `plateau.catalogueDuPlateau` rend « premier » (une tuile de ville d'une case), « précédent » (des monoblocs retirés et aucun monobloc apparu depuis) ou « courant ». Contrôles, étape, « reste à faire », panneau des villes et inventaire la reprennent ; plus aucun test de `V` ni remplacement de texte dans les vues. Plateau du catalogue précédent : titre « Plateau du catalogue précédent », aucune pièce « à poser », étape jugée sur les villes (« complet » s'il les a), une seule alerte de construction (« 14 monoblocs d'un ancien catalogue »). `etape()` rend le titre et la phrase que l'écran affiche tels quels. | `src/catalogue.js`, `src/plateau.js`, `src/controles.js`, `src/vue-plateau.js`, `src/vue-creation.js`, `src/vue-villes.js`, `src/vue-inventaire.js` |
+| I2 | Sur un plateau du catalogue courant, erreur de construction « Hors règles : … », cases en surbrillance : tuile de terrain d'une case hors des 2 remplissages (forêt, marais, plaine hors stock, montagne d'une case), monobloc tout en plaine (retiré ou personnel), monobloc personnel qui n'a pas 3 ou 4 cases (sauf bloc tout en montagne de 4 ou 5). Les poses restent possibles et le plateau enregistrable. Le pinceau (aide et message) et l'éditeur de monoblocs disent « hors règles, signalé par les contrôles ». Le vérificateur accepte maintenant les pièces personnelles et juge toute pièce avec B1 ; test croisé sur 11 plateaux fautifs et 7 plateaux voisins conformes : même verdict partout. | `src/controles.js`, `src/plateau.js`, `src/vue-creation.js`, `src/vue-monoblocs.js`, `outils/verifier-regles.js` |
+| I3 | Ville neutre tenue par 2 pièces distinctes : modèle, contrôles, générateur, vérificateur, messages. | `src/plateau.js`, `src/catalogue.js`, `outils/verifier-regles.js`, `src/vue-villes.js` |
+| I4, M9 | Ville neutre permise partout sur un flanc, une par flanc. `villes.neutresTiersCentral` est faux par défaut (ni contrôles ni vérificateur) ; le générateur préfère le tiers central (`generateur.prefererTiersCentral`) et prend une autre place du flanc à défaut. Rappel des règles mis en accord. | `src/catalogue.js`, `src/plateau.js`, `src/generateur.js`, `src/vue-villes.js`, `outils/verifier-regles.js` |
+| M2 | La pose automatique et « Autre proposition » écartent une Plaine couverte par une tuile d'événement ; les distances restent mesurées sans les événements, comme les contrôles. | `src/vue-villes.js` |
+| M3 | Le bouton, son message et le commentaire disent ce qui est parcouru : « placement n° 3 sur 69 des villes de déploiement », les villes neutres allant à la meilleure place de chaque flanc. | `src/vue-villes.js`, `src/generateur.js` |
+| M4 | Chaque écart dit son sens (« avantage Vert de 3 », « égal »), le score donne le total par camp. La ligne du bas ne montre plus que la ville adverse la plus lointaine ; la plus proche, toujours égale, n'est plus comptée (le score est numériquement le même). | `src/controles.js`, `src/vue-plateau.js` |
+| M5 | La table de jeu s'en tient aux tuiles posées (places proposées, boutons « Former en … », formation, renfort). Elle avertit sans bloquer si `camps` ne leur correspond pas, et annonce un plateau sans villes de déploiement. | `src/partie.js`, `src/vue-partie.js` |
+| M6 | Le noyau ne se tourne pas (modèle) et ne se déplace pas (bouton, touche R, glisser) : un seul message, le même que pour « Retirer ». | `src/plateau.js`, `src/vue-plateau.js` |
+| M7 | « Au bord » = bord extérieur : une Plaine qui ne touche qu'un trou intérieur est refusée (modèle et vérificateur). | `src/plateau.js`, `outils/verifier-regles.js` |
+| M8 | Le contrôle des villes met en erreur plus de 7 villes (1 centre, 2 neutres, 4 de déploiement). Une troisième ville neutre n'est plus comptée comme « tuile de terrain ». | `src/controles.js` |
+| M10 | Le vérificateur compte le contact d'un remplissage avec la mesure retenue, comme les contrôles. | `outils/verifier-regles.js` |
+
+M11 n'a pas été traité, comme demandé.
+
+### Choix faits en chemin, à valider
+
+1. **Plateaux du catalogue précédent et règle « 2 tuiles » (I1 contre I3).** Les deux plateaux de `fixtures-v2` ont des villes neutres tenues par une seule pièce. Pour qu'un plateau complet d'hier ne s'ouvre pas en erreur, ce cas y est une **alerte** (« 2 villes neutres tenues par une seule tuile… »). Un tel plateau a donc 2 alertes (monoblocs, villes neutres) et non une seule. L'autre choix est l'erreur : il respecte la règle à la lettre, mais tout plateau fait hier s'ouvre en erreur.
+2. **Plateaux du catalogue courant générés avant aujourd'hui.** Eux n'ont pas cette tolérance : 41,5 % des villes neutres générées avant ne touchaient qu'une pièce, donc beaucoup de ces plateaux se rouvriront avec une erreur « ville neutre mal placée ». Remède à l'écran : étape « Villes », retirer la ville et la reposer, ou « Poser les villes automatiquement ».
+3. **Limite entre « précédent » et « courant ».** Le noyau et un seul monobloc retiré, sans monobloc du catalogue actuel, comptent comme « précédent ». Dès qu'un monobloc apparu depuis est posé, le plateau est « courant » et ses monoblocs tout en plaine sont hors règles.
+4. **Deux cas hors de la liste d'I2.** Un monobloc personnel qui mêle montagne et terrain, ou un bloc de montagne qui n'a pas 4 ou 5 cases, est mis en erreur (même principe, « montagnes en blocs de 4 ou 5 »). Un monobloc retiré qui respecte les règles (par exemple `F22`) reste une alerte, et le vérificateur l'accepte aussi.
+5. **Divergence voulue.** Un plateau du catalogue précédent est conforme pour les contrôles et non conforme pour le vérificateur, qui juge avec les règles d'aujourd'hui. Un test le consigne.
+
+### Recette et captures
+
+- Un scénario ajouté, « Revue C2 » (36 contrôles) : plateau du catalogue précédent ouvert (titre, étape, alertes, « reste à faire », villes, inventaire, partie), poses hors règles (pinceau, montagne, monobloc personnel tout en plaine, enregistrement), ville neutre hors du tiers central acceptée et case tenue par une pièce refusée, noyau (R, « Tourner », « Déplacer », Suppr, glisser), tableau d'équilibre, table de jeu sans villes et avec un `camps` falsifié. Le plateau du catalogue précédent est embarqué dans `outils/recette-ancien.js`. 12 contrôles existants ont changé d'attente avec les décisions.
+- Les 8 images de `docs/captures/` sont refaites en 1366 × 768 et toutes ouvertes. `villes.png` et `capture-plateau.png` : villes neutres tenues par deux pièces, rien de coupé. **`pinceau.png` et `bibliotheque.png` montrent maintenant un plateau en erreur** (« 2 erreur(s) » : tuiles d'une case hors règles), ce qui est le comportement voulu pour un plateau peint.
+- Tableau d'équilibre vu sur une capture haute (bureau) et à 375 px : les libellés « avantage Vert de 3 » passent à la ligne sans déborder.
+
+### Non vérifié
+
+- L'écran « Plateau du catalogue précédent » n'a pas été vu (aucune adresse n'y mène) : vérifié par la recette seulement.
+- M2 dans le navigateur (tests Node seulement).
+- `outils/mesures-catalogue-2.js` tourne toujours, mais ses comptes de places et `docs/07` datent d'avant I3 et I4.
+- `docs/02` et `docs/00` (hors de mon périmètre) ne disent pas encore « 2 pièces », « tout le flanc », « hors règles en erreur ».
+
+### Fichiers touchés
+
+`atelier/src/` : `catalogue.js`, `plateau.js`, `controles.js`, `generateur.js`, `partie.js`, `vue-plateau.js`, `vue-creation.js`, `vue-villes.js`, `vue-inventaire.js`, `vue-monoblocs.js`, `vue-partie.js` ; `atelier/outils/` : `verifier-regles.js`, `recette.js`, `recette-ancien.js` ; `atelier/tests/` : `revue-catalogue-2.test.js` (nouveau) et 8 fichiers dont des attentes changent ; `atelier/README.md` ; `docs/captures/` (8 images) ; `docs/04-recette-atelier.md`.

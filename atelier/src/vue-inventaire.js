@@ -68,7 +68,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    *   terrain: {cases, plaine, foret, marais}   (monoblocs de terrain seuls : la répartition visée 65 / 17,5 / 17,5),
    *   remplissage: {pieces, plaine}, montagne: cases, villes: nombre total de villes d'un plateau complet,
    *   ancien: {present, lignes: [{id, nom, cases, poses}], pieces}   (tuiles du premier catalogue sur CE plateau ;
-   *            present = le plateau porte une tuile de ville d'une case, marque d'un vrai plateau de l'ancien catalogue) }.
+   *            present = le plateau est du premier catalogue, selon AT.plateau.catalogueDuPlateau) }.
    */
   function parRole(plateau) {
     var C = AT.catalogue, P = AT.plateau, b = bilan(plateau), parId = {};
@@ -92,13 +92,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       if (m.role === 'montagne') montagne += m.nombre * m.cases.length;
     });
     var etat = P.etatVilles(plateau), VD = C.VILLE_DEPLOIEMENT, posees = etat.vert.length + etat.rouge.length;
-    var stock = P.stock(plateau), anciennes = [], nbAnciennes = 0, aUneVille = false;
+    var stock = P.stock(plateau), anciennes = [], nbAnciennes = 0, aUneVille = P.catalogueDuPlateau(plateau).premier;
     C.ORDRE_HORS_CATALOGUE.forEach(function (id) {
       var m = C.MODELES_HORS_CATALOGUE[id];
       if (!m.ancien || !stock[id] || !stock[id].poses) return;
       anciennes.push({ id: id, nom: m.nom, cases: m.cases.length, poses: stock[id].poses });
       nbAnciennes += stock[id].poses;
-      if (id === 'V') aUneVille = true;
     });
     return {
       roles: roles,

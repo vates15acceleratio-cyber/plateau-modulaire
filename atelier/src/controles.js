@@ -72,24 +72,47 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   }
 
   /**
-   * Inventaire. Erreurs : pièce de modèle inconnu ; monobloc (ou noyau) posé plus de fois que prévu.
-   * Alertes : pièces de terrain restantes (noyau, montagnes, monoblocs), puis pièces personnelles restantes ; tuiles
-   * d'UNE case posées hors catalogue (pinceau, ancien catalogue : « à prévoir en plus du catalogue », détail par
-   * modèle) ; toute montagne d'une case. Les tuiles de remplissage non posées sont une simple information ; les
-   * villes neutres restantes sont l'affaire du contrôle des villes.
-   * Plateau de l'ancien catalogue (il porte une tuile de ville d'une case) : une seule information le dit ; ni
-   * « pièces de terrain restantes », ni « tuiles à prévoir en plus » pour ses tuiles P / F / S / V.
+   * Ce qu'une forme de monobloc [{q, r, terrain}] a de contraire aux règles de l'utilisateur (liste de phrases courtes,
+   * vide si elle les respecte) : « terrain en monoblocs de 3 ou 4 cases », « aucun monobloc tout en plaine »,
+   * « montagnes en blocs de 4 ou 5 cases ». Sert au contrôle 1 et à l'éditeur « Mes monoblocs ».
+   */
+  function horsReglesForme(cases) {
+    var liste = Array.isArray(cases) ? cases : [], n = liste.length, res = [];
+    var montagnes = liste.filter(function (c) { return c && c.terrain === 'montagne'; }).length;
+    if (montagnes === n && n > 0) {
+      if (n !== 4 && n !== 5) res.push('montagne de ' + pluriel(n, 'case') + ' (les montagnes sont des blocs de 4 ou 5 cases)');
+      return res;
+    }
+    if (montagnes) res.push('montagne mêlée à un autre terrain (les montagnes sont des blocs de 4 ou 5 cases, tout en montagne)');
+    if (n !== 3 && n !== 4) res.push(pluriel(n, 'case') + ' (un monobloc de terrain compte 3 ou 4 cases)');
+    if (C.toutEnPlaine(liste)) res.push('tout en plaine (chaque monobloc de terrain porte au moins une forêt ou un marais)');
+    return res;
+  }
+
+  /**
+   * Inventaire, selon le catalogue du plateau (AT.plateau.catalogueDuPlateau).
+   * Toujours : erreur pour une pièce de modèle inconnu et pour un monobloc (ou le noyau) posé plus de fois que prévu ;
+   * alerte pour les pièces personnelles restantes.
+   * Plateau du catalogue COURANT : alerte « pièces de terrain restantes » ; et, en ERREUR (« Hors règles : … », cases en
+   * surbrillance), tout ce qui enfreint les règles de l'utilisateur : tuile de terrain d'une case qui n'est pas un
+   * remplissage en stock (forêt, marais, plaine hors stock, montagne d'une case), monobloc tout en plaine (retiré du
+   * catalogue ou personnel), monobloc personnel qui n'est pas de 3 ou 4 cases (sauf bloc tout en montagne de 4 ou 5),
+   * montagne mêlée à un autre terrain. Ces poses restent possibles (pinceau, mes monoblocs) ; le plateau n'est
+   * simplement plus « sans erreur ». Un monobloc retiré qui respecte les règles reste une alerte.
+   * Plateau du catalogue PRÉCÉDENT : aucune pièce « à poser » ; une seule alerte « n monoblocs d'un ancien catalogue ».
+   * Plateau du PREMIER catalogue : une information le dit ; ses tuiles d'une case ne sont ni fautes ni « à prévoir ».
+   * Sur ces deux sortes d'anciens plateaux, les tuiles peintes depuis restent de simples alertes.
    */
   function inventaire(plateau) {
     var res = [], inconnues = 0, pieces = plateau.pieces || [];
-    // Plateau de l'ANCIEN catalogue (il porte des tuiles de ville d'une case) : ses tuiles d'une case ne sont pas du
-    // carton « à prévoir en plus », et les pièces de terrain du catalogue 2 ne sont pas « à poser » sur lui.
-    var ancien = pieces.some(function (p) { return p.modele === 'V'; }), nbAnciennes = 0, detailAnciennes = [];
+    var cat = P.catalogueDuPlateau(plateau), premier = cat.premier, courant = cat.courant;
+    var nbAnciennes = 0, detailAnciennes = [];
     pieces.forEach(function (p) { if (!P.modele(plateau, p.modele)) inconnues += 1; });
     if (inconnues) res.push(constat('inventaire', 'erreur', pluriel(inconnues, 'pièce') + ' hors catalogue sur le plateau.', []));
     var stock = P.stock(plateau), restantes = [], nbRestantes = 0, restantesPerso = [], nbRestantesPerso = 0;
     var enPlus = [], nbEnPlus = 0, casesEnPlus = [], parModele = {}, facultatives = [];
     var monoblocsAnciens = [], nbMonoblocsAnciens = 0, casesMonoblocsAnciens = [];
+    var plats = [], nbPlats = 0, casesPlats = [];                    // monoblocs tout en plaine (retirés ou personnels)
     var casesDe = function (liste) {
       var cases = [];
       liste.forEach(function (p) { P.casesPiece(p, plateau).forEach(function (c) { cases.push(c.cle); }); });
@@ -100,14 +123,18 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       if (s.restant < 0) {
         var posees = pieces.filter(function (p) { return p.modele === id; });
         if (m.ancien === true && m.cases.length > 1) {
-          // Monobloc retiré du catalogue (relu d'un fichier) : ni faute ni « stock dépassé ». Sur un plateau du premier
-          // catalogue il fait partie de ce catalogue-là ; ailleurs, il est signalé plus bas, en alerte.
-          if (!ancien) { monoblocsAnciens.push(s.poses + ' × ' + m.nom); nbMonoblocsAnciens += s.poses; casesMonoblocsAnciens = casesMonoblocsAnciens.concat(casesDe(posees)); }
-        } else if (ancien && m.ancien === true) {
+          // Monobloc retiré du catalogue (relu d'un fichier) : jamais « stock dépassé ». Sur un plateau du premier
+          // catalogue il fait partie de ce catalogue-là. Sur un plateau du catalogue courant, un monobloc tout en
+          // plaine est hors règles ; les autres sont signalés en alerte.
+          if (courant && C.toutEnPlaine(m.cases)) { plats.push(s.poses + ' × ' + m.nom); nbPlats += s.poses; casesPlats = casesPlats.concat(casesDe(posees)); }
+          else if (!premier) { monoblocsAnciens.push(s.poses + ' × ' + m.nom); nbMonoblocsAnciens += s.poses; casesMonoblocsAnciens = casesMonoblocsAnciens.concat(casesDe(posees)); }
+        } else if (premier && m.ancien === true) {
           detailAnciennes.push(s.poses + ' × ' + m.nom);
           nbAnciennes += s.poses;
+        } else if (m.role === 'ville') {
+          // Ville neutre en trop (fichier) : ce n'est pas une tuile de terrain ; le contrôle des villes dit le surnombre.
         } else if (m.cases.length === 1) {
-          // Tuile d'une case posée hors stock (pinceau) : ce n'est pas une faute, c'est du carton à prévoir.
+          // Tuile d'une case posée hors stock (pinceau).
           enPlus.push((0 - s.restant) + ' × ' + m.nom);
           nbEnPlus -= s.restant;
           parModele[id] = 0 - s.restant;
@@ -122,21 +149,25 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         else if (C.estConstruction(m)) { restantes.push(s.restant + ' × ' + m.nom); nbRestantes += s.restant; }
       }
     });
-    if (ancien) {
+    if (premier) {
       res.push(constat('inventaire', 'info', 'Plateau de l’ancien catalogue : ' + pluriel(nbAnciennes, 'tuile') + ' d’une case de ce catalogue (' + detailAnciennes.join(', ')
         + '). Il ne se compare pas à l’inventaire du catalogue 2.', [], { ancien: true, tuilesAnciennes: nbAnciennes }));
+    } else if (cat.precedent) {
+      res.push(constat('inventaire', 'info', 'Plateau du catalogue précédent : il ne se compare pas à l’inventaire du catalogue actuel, aucune pièce de terrain n’est à poser.', [], { precedent: true }));
     } else if (nbRestantes) {
       res.push(constat('inventaire', 'alerte', 'Pièces de terrain restantes (' + nbRestantes + ') : ' + restantes.join(', ') + '.', [], { restantes: nbRestantes }));
     } else if (!res.length) {
       res.push(constat('inventaire', 'info', 'Toutes les pièces de terrain du catalogue sont posées (' + C.totaux().construction.pieces + ' pièces).', [], { restantes: 0 }));
     }
-    if (facultatives.length && !ancien) res.push(constat('inventaire', 'info', 'Tuiles facultatives non posées : ' + facultatives.join(', ') + '.', []));
+    if (facultatives.length && courant) res.push(constat('inventaire', 'info', 'Tuiles facultatives non posées : ' + facultatives.join(', ') + '.', []));
     if (nbRestantesPerso) {
       res.push(constat('inventaire', 'alerte', 'Pièces personnelles restantes (' + nbRestantesPerso + ') : ' + restantesPerso.join(', ') + '.', [], { restantesPerso: nbRestantesPerso }));
     }
     if (nbEnPlus) {
-      res.push(constat('inventaire', 'alerte', 'Tuiles à prévoir en plus du catalogue (' + nbEnPlus + ') : ' + enPlus.join(', ') + '.', casesEnPlus,
-        { enPlus: nbEnPlus, parModele: parModele }));
+      res.push(courant
+        ? constat('inventaire', 'erreur', 'Hors règles : ' + pluriel(nbEnPlus, 'tuile') + ' de terrain d’une case (' + enPlus.join(', ') + '). Le terrain se construit en monoblocs de 3 ou 4 cases ; seules les '
+          + (C.MODELES.R ? C.MODELES.R.nombre : 0) + ' tuiles de remplissage du catalogue sont admises. Ces tuiles seraient à prévoir en plus du catalogue.', casesEnPlus, { enPlus: nbEnPlus, parModele: parModele, horsRegles: true })
+        : constat('inventaire', 'alerte', 'Tuiles à prévoir en plus du catalogue (' + nbEnPlus + ') : ' + enPlus.join(', ') + '.', casesEnPlus, { enPlus: nbEnPlus, parModele: parModele }));
     }
     if (nbMonoblocsAnciens) {
       res.push(constat('inventaire', 'alerte', pluriel(nbMonoblocsAnciens, 'monobloc') + ' d’un ancien catalogue sur le plateau (' + monoblocsAnciens.join(', ')
@@ -147,30 +178,48 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       return !!m && m.cases.length === 1 && m.cases[0].terrain === 'montagne';
     });
     if (montagnes.length) {
-      res.push(constat('inventaire', 'alerte', pluriel(montagnes.length, 'montagne') + ' d’une case sur le plateau : la décision en vigueur est « montagnes en blocs de 4 ou 5 cases ».',
-        casesDe(montagnes), { montagnesUneCase: montagnes.length }));
+      res.push(courant
+        ? constat('inventaire', 'erreur', 'Hors règles : ' + pluriel(montagnes.length, 'montagne') + ' d’une case. Les montagnes sont des blocs de 4 ou 5 cases.', casesDe(montagnes), { montagnesUneCase: montagnes.length, horsRegles: true })
+        : constat('inventaire', 'alerte', pluriel(montagnes.length, 'montagne') + ' d’une case sur le plateau : la décision en vigueur est « montagnes en blocs de 4 ou 5 cases ».',
+          casesDe(montagnes), { montagnesUneCase: montagnes.length }));
     }
-    // Même rappel pour un monobloc personnel qui porte de la montagne sans être un bloc de 4 ou 5 cases tout en montagne.
-    var horsBloc = pieces.filter(function (p) {
-      var m = P.modele(plateau, p.modele);
-      return !!m && m.perso === true && montagneHorsBloc(m.cases);
-    });
-    // Décision du 2026-11-19 : aucun monobloc tout en plaine. Pour une pièce personnelle, c'est un rappel, pas une faute.
-    var toutPlaine = pieces.filter(function (p) {
-      var m = P.modele(plateau, p.modele);
-      return !!m && m.perso === true && C.toutEnPlaine(m.cases);
-    });
-    if (toutPlaine.length) {
-      var nomsPlaine = [];
-      toutPlaine.forEach(function (p) { var nom = P.modele(plateau, p.modele).nom; if (nomsPlaine.indexOf(nom) === -1) nomsPlaine.push(nom); });
-      res.push(constat('inventaire', 'alerte', pluriel(toutPlaine.length, 'monobloc personnel', 'monoblocs personnels') + ' tout en plaine (' + nomsPlaine.join(', ')
-        + ') : la décision en vigueur est « chaque monobloc de terrain porte au moins une forêt ou un marais ».', casesDe(toutPlaine), { monoblocsToutPlaine: toutPlaine.length }));
-    }
-    if (horsBloc.length) {
+    // Monoblocs personnels posés : tout en plaine, taille autre que 3 ou 4 cases, montagne hors bloc de 4 ou 5.
+    var persosPoses = pieces.filter(function (p) { var m = P.modele(plateau, p.modele); return !!m && m.perso === true; });
+    var nomsDe = function (liste) {
       var noms = [];
-      horsBloc.forEach(function (p) { var nom = P.modele(plateau, p.modele).nom; if (noms.indexOf(nom) === -1) noms.push(nom); });
-      res.push(constat('inventaire', 'alerte', pluriel(horsBloc.length, 'monobloc personnel', 'monoblocs personnels') + ' avec de la montagne hors bloc de 4 ou 5 cases (' + noms.join(', ')
-        + ') : la décision en vigueur est « montagnes en blocs de 4 ou 5 cases ».', casesDe(horsBloc), { montagnesHorsBloc: horsBloc.length }));
+      liste.forEach(function (p) { var nom = P.modele(plateau, p.modele).nom; if (noms.indexOf(nom) === -1) noms.push(nom); });
+      return noms.join(', ');
+    };
+    var toutPlaine = persosPoses.filter(function (p) { return C.toutEnPlaine(P.modele(plateau, p.modele).cases); });
+    var horsBloc = persosPoses.filter(function (p) { return montagneHorsBloc(P.modele(plateau, p.modele).cases); });
+    var horsTaille = persosPoses.filter(function (p) {
+      var cases = P.modele(plateau, p.modele).cases, n = cases.length;
+      return n !== 3 && n !== 4 && !cases.every(function (c) { return c.terrain === 'montagne'; });
+    });
+    if (courant) {
+      if (nbPlats || toutPlaine.length) {
+        var detailPlats = plats.concat(toutPlaine.length ? [pluriel(toutPlaine.length, 'monobloc personnel', 'monoblocs personnels') + ' (' + nomsDe(toutPlaine) + ')'] : []);
+        res.push(constat('inventaire', 'erreur', 'Hors règles : ' + pluriel(nbPlats + toutPlaine.length, 'monobloc') + ' tout en plaine (' + detailPlats.join(', ')
+          + '). Chaque monobloc de terrain porte au moins une forêt ou un marais.', casesPlats.concat(casesDe(toutPlaine)), { monoblocsToutPlaine: nbPlats + toutPlaine.length, horsRegles: true }));
+      }
+      if (horsTaille.length) {
+        res.push(constat('inventaire', 'erreur', 'Hors règles : ' + pluriel(horsTaille.length, 'monobloc personnel', 'monoblocs personnels') + ' qui ne ' + (horsTaille.length > 1 ? 'sont' : 'est') + ' pas de 3 ou 4 cases ('
+          + nomsDe(horsTaille) + '). Le terrain se construit en monoblocs de 3 ou 4 cases.', casesDe(horsTaille), { monoblocsHorsTaille: horsTaille.length, horsRegles: true }));
+      }
+      if (horsBloc.length) {
+        res.push(constat('inventaire', 'erreur', 'Hors règles : ' + pluriel(horsBloc.length, 'monobloc personnel', 'monoblocs personnels') + ' avec de la montagne hors bloc de 4 ou 5 cases (' + nomsDe(horsBloc)
+          + '). Les montagnes sont des blocs de 4 ou 5 cases, tout en montagne.', casesDe(horsBloc), { montagnesHorsBloc: horsBloc.length, horsRegles: true }));
+      }
+    } else {
+      // Ancien plateau : ce sont des rappels, pas des fautes (il ne se juge pas avec les règles du catalogue courant).
+      if (toutPlaine.length) {
+        res.push(constat('inventaire', 'alerte', pluriel(toutPlaine.length, 'monobloc personnel', 'monoblocs personnels') + ' tout en plaine (' + nomsDe(toutPlaine)
+          + ') : la décision en vigueur est « chaque monobloc de terrain porte au moins une forêt ou un marais ».', casesDe(toutPlaine), { monoblocsToutPlaine: toutPlaine.length }));
+      }
+      if (horsBloc.length) {
+        res.push(constat('inventaire', 'alerte', pluriel(horsBloc.length, 'monobloc personnel', 'monoblocs personnels') + ' avec de la montagne hors bloc de 4 ou 5 cases (' + nomsDe(horsBloc)
+          + ') : la décision en vigueur est « montagnes en blocs de 4 ou 5 cases ».', casesDe(horsBloc), { montagnesHorsBloc: horsBloc.length }));
+      }
     }
     return res;
   }
@@ -255,9 +304,11 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   function memesCles(a, b) { return H.trier(a).join(' ') === H.trier(b).join(' '); }
 
-  /** Pièces de construction (noyau, montagnes, monoblocs de terrain) encore à poser : {nombre, detail: ['2 × Nom']}. */
+  /** Pièces de construction (noyau, montagnes, monoblocs de terrain) encore à poser sur un plateau du catalogue courant : {nombre, detail: ['2 × Nom']}. */
   function resteConstruction(plateau) {
     var stock = P.stock(plateau), detail = [], nombre = 0;
+    // Un plateau fait avec un catalogue antérieur n'a rien « à poser » : ses pièces ne sont pas celles du catalogue courant.
+    if (!P.catalogueDuPlateau(plateau).courant) return { nombre: 0, detail: [] };
     C.ORDRE_MODELES.forEach(function (id) {
       var m = C.MODELES[id];
       if (C.estConstruction(m) && stock[id].restant > 0) { detail.push(stock[id].restant + ' × ' + m.nom); nombre += stock[id].restant; }
@@ -282,8 +333,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * Un plateau de l'ancien catalogue (villes d'une case, aucune ville du catalogue 2) garde l'ancien contrôle.
    */
   function villes(plateau, options) {
-    var etat = P.etatVilles(plateau), pieces = plateau.pieces || [];
-    var anciennes = pieces.filter(function (p) { return p.modele === 'V'; });
+    var etat = P.etatVilles(plateau);
+    var anciennes = P.catalogueDuPlateau(plateau).tuilesVille;
     if (anciennes.length && !etat.vert.length && !etat.rouge.length && !etat.neutres.length) return villesAnciennes(plateau, options);
 
     var res = [], toutes = P.cases(plateau, BASE), terrain = P.cases(plateau, TERRAIN);
@@ -315,13 +366,25 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     // Villes neutres : une tuile ajoutée contre chaque flanc.
     var total = C.modele('VN') ? C.modele('VN').nombre : 0, flancs = {};
     if (etat.neutres.length > total) res.push(constat('villes', 'erreur', pluriel(etat.neutres.length, 'ville neutre', 'villes neutres') + ' ; il en faut ' + total + '.', etat.neutres.map(function (n) { return n.cle; })));
+    // Plateau du catalogue PRÉCÉDENT : ses villes neutres ont été posées quand la règle était « toucher 2 cases ».
+    // Une ville qui respecte cette ancienne règle sans être tenue par 2 tuiles différentes y est une ALERTE, pas une
+    // erreur (le plateau n'a pas changé, c'est la règle qui a été précisée le 2026-11-20).
+    var precedent = P.catalogueDuPlateau(plateau).precedent, tenuesParUne = [];
+    var reglesAnciennes = { contactEnCases: true };
+    Object.keys(regles).forEach(function (k) { reglesAnciennes[k] = regles[k]; });
     etat.neutres.forEach(function (n) {
       if (possede.call(terrain, n.cle)) return;                       // chevauchement : c'est le contrôle 2 qui le dit
       var raison = P.refusNeutreSurCases(terrain, n.cle, regles);
+      if (raison && precedent && P.refusNeutreSurCases(terrain, n.cle, reglesAnciennes) === null) { tenuesParUne.push(n.cle); raison = null; }
       if (raison) { res.push(constat('villes', 'erreur', 'Ville neutre en (' + n.cle + ') mal placée : ' + raison, [n.cle])); return; }
       if (flancs[n.flanc]) res.push(constat('villes', 'erreur', 'Deux villes neutres sur le flanc ' + n.flanc + ' : il en faut une par flanc.', [n.cle, flancs[n.flanc]]));
       flancs[n.flanc] = n.cle;
     });
+    if (tenuesParUne.length) {
+      res.push(constat('villes', 'alerte', pluriel(tenuesParUne.length, 'ville neutre tenue', 'villes neutres tenues') + ' par une seule tuile ' + liste(tenuesParUne)
+        + ' : permis quand ce plateau a été fait (2 cases touchées), plus depuis la règle « tenue par 2 tuiles différentes ». À reposer à l’étape « Villes » si vous retouchez ce plateau.',
+        tenuesParUne, { neutresUneTuile: tenuesParUne.length }));
+    }
     if (anciennes.length) {
       res.push(constat('villes', 'alerte', pluriel(anciennes.length, 'ville') + ' de l’ancien catalogue (tuile d’une case) sur le plateau : dans le catalogue 2, les villes sont des tuiles de déploiement ou des villes neutres.',
         anciennes.map(function (p) { return H.cle(p.q, p.r); })));
@@ -340,6 +403,13 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       });
     });
 
+    // Total (M8) : 1 ville au centre, 2 villes neutres, 4 villes de déploiement, pas davantage. Moins n'est pas une
+    // faute : ce sont des villes encore à poser.
+    var nombreVilles = reglage(options, 'nombreVilles');
+    if (cles.length > nombreVilles) {
+      res.push(constat('villes', 'erreur', pluriel(cles.length, 'ville') + ' sur le plateau ; il en faut ' + nombreVilles + ' au plus (1 au centre, ' + total + ' neutres, ' + (2 * parCamp) + ' de déploiement).', cles));
+    }
+
     // `camps` doit être celui que donnent les tuiles posées.
     var auto = P.campsAuto(plateau);
     ['vert', 'rouge'].forEach(function (camp) {
@@ -355,7 +425,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       res.push(constat('villes', reste.nombre ? 'info' : 'alerte', reste.nombre
         ? 'Villes : elles se posent une fois le terrain construit (' + manque + ' à poser).'
         : 'Construction terminée, villes à poser : ' + manque + '.', [], { manquantes: etat.manquantes }));
-    } else if (!res.length) {
+    } else if (!res.some(function (x) { return x.niveau === 'erreur'; }) && !anciennes.length) {
       res.push(constat('villes', 'info', pluriel(cles.length, 'ville') + ' ; écart minimal ' + pluriel(minimum, 'pas') + ' ; déploiement de Vert en ' + liste(auto.vert) + ', de Rouge en ' + liste(auto.rouge)
         + ' ; villes neutres en ' + liste(etat.neutres.map(function (n) { return n.cle; })) + '.', cles, { ecartMinimal: minimum }));
     }
@@ -483,12 +553,18 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * Score = somme de ces écarts (0 = les deux camps sont à égale distance de tout).
    * Renvoie {calculable, score, raison, villes: [{cle, type: 'centre' | 'neutre' | 'vert' | 'rouge', vert, rouge, ecart}],
    *          adverses: {vert: [coûts], rouge: [coûts], ecart}, horsAtteinte: [clés]}.
+   *   Chaque ligne « centre » ou « neutre » porte aussi `avantage` ('vert' | 'rouge' | null) : le camp qui y arrive pour
+   *   moins de rations. `avantages` {vert, rouge} additionne les écarts au profit de chaque camp, `avantage` et
+   *   `avantageNet` donnent le camp avantagé au total, `avantageTexte` la phrase (« avantage Vert de 9 »).
+   *   `adverses` : le premier rang est toujours égal des deux côtés et ne compte pas ; ecart, vertLoin, rougeLoin et
+   *   avantage portent sur la ville adverse la plus lointaine.
    *   Une ville de déploiement a ecart = null (elle compte dans `adverses`) ; une ville hors d'atteinte d'un camp
    *   a ecart = null, figure dans horsAtteinte et ne compte pas dans le score.
    */
   function ecartsCamps(toutes, camps, options) {
     var couts = options && options.couts;
-    var res = { calculable: false, score: null, raison: null, villes: [], adverses: { vert: [], rouge: [], ecart: null }, horsAtteinte: [] };
+    var res = { calculable: false, score: null, raison: null, villes: [], adverses: { vert: [], rouge: [], ecart: null, avantage: null, vertLoin: null, rougeLoin: null },
+      horsAtteinte: [], avantages: { vert: 0, rouge: 0 }, avantage: null, avantageNet: 0, avantageTexte: null };
     var vert = ((camps && camps.vert) || []).filter(function (k) { return possede.call(toutes, k); });
     var rouge = ((camps && camps.rouge) || []).filter(function (k) { return possede.call(toutes, k); });
     if (!vert.length || !rouge.length) {
@@ -501,20 +577,52 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var type = vert.indexOf(k) !== -1 ? 'vert' : rouge.indexOf(k) !== -1 ? 'rouge' : (k === '0,0' ? 'centre' : 'neutre');
       var ligne = { cle: k, type: type, vert: possede.call(dv, k) ? dv[k] : null, rouge: possede.call(dr, k) ? dr[k] : null, ecart: null };
       if (ligne.vert === null || ligne.rouge === null) res.horsAtteinte.push(k);
-      else if (type === 'centre' || type === 'neutre') { ligne.ecart = Math.abs(ligne.vert - ligne.rouge); score += ligne.ecart; }
+      else if (type === 'centre' || type === 'neutre') {
+        ligne.ecart = Math.abs(ligne.vert - ligne.rouge); score += ligne.ecart;
+        // Le camp qui y arrive pour moins de rations est avantagé.
+        ligne.avantage = ligne.vert < ligne.rouge ? 'vert' : (ligne.rouge < ligne.vert ? 'rouge' : null);
+        if (ligne.avantage) res.avantages[ligne.avantage] += ligne.ecart;
+      }
       res.villes.push(ligne);
     });
     var croissant = function (a, b) { return a - b; };
     res.adverses.vert = rouge.filter(function (k) { return possede.call(dv, k); }).map(function (k) { return dv[k]; }).sort(croissant);
     res.adverses.rouge = vert.filter(function (k) { return possede.call(dr, k); }).map(function (k) { return dr[k]; }).sort(croissant);
     if (res.adverses.vert.length === res.adverses.rouge.length && res.adverses.vert.length) {
+      // Le coût d'entrée d'une ville est le même pour les deux camps : le PREMIER rang (la ville adverse la plus
+      // proche) est donc toujours égal des deux côtés et ne mesure rien. Seuls les rangs suivants comptent (avec 2
+      // villes par camp : la ville adverse la plus lointaine). Le score est le même qu'en comptant tous les rangs.
       res.adverses.ecart = 0;
-      res.adverses.vert.forEach(function (c, i) { res.adverses.ecart += Math.abs(c - res.adverses.rouge[i]); });
+      var net = 0;
+      res.adverses.vert.forEach(function (c, i) { if (i > 0) { res.adverses.ecart += Math.abs(c - res.adverses.rouge[i]); net += res.adverses.rouge[i] - c; } });
       score += res.adverses.ecart;
+      var dernier = res.adverses.vert.length - 1;
+      res.adverses.vertLoin = dernier > 0 ? res.adverses.vert[dernier] : null;
+      res.adverses.rougeLoin = dernier > 0 ? res.adverses.rouge[dernier] : null;
+      res.adverses.avantage = net > 0 ? 'vert' : (net < 0 ? 'rouge' : null);
+      if (res.adverses.avantage) res.avantages[res.adverses.avantage] += Math.abs(net);
     }
     res.calculable = true;
     res.score = score;
+    // Sens de l'écart : le score additionne des valeurs absolues ; l'avantage dit à qui elles profitent.
+    res.avantageNet = res.avantages.vert - res.avantages.rouge;
+    res.avantage = res.avantageNet > 0 ? 'vert' : (res.avantageNet < 0 ? 'rouge' : null);
+    res.avantageTexte = texteAvantage(res.avantages);
     return res;
+  }
+
+  /** « avantage Vert de 9 », « avantage Vert de 3 et avantage Rouge de 2 (ils se compensent en partie) », « aucun camp avantagé ». */
+  function texteAvantage(avantages) {
+    var v = avantages.vert, r = avantages.rouge;
+    if (!v && !r) return 'aucun camp avantagé';
+    if (v && r) return 'avantage Vert de ' + v + ' et avantage Rouge de ' + r + ' (ils se compensent en partie)';
+    return v ? 'avantage Vert de ' + v : 'avantage Rouge de ' + r;
+  }
+
+  /** « avantage Vert de 3 » pour une ligne du tableau d'équilibre, « égal » si l'écart est nul, '' si non mesuré. */
+  function texteAvantageLigne(avantage, ecart) {
+    if (ecart === null || ecart === undefined) return '';
+    return avantage ? 'avantage ' + NOMS_CAMPS[avantage] + ' de ' + ecart : 'égal';
   }
 
   /** Répartition des terrains hors villes et montagnes : {total, plaine, foret, marais} en nombre de cases. */
@@ -535,7 +643,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var centre = 0, neutres = 0;
       e.villes.forEach(function (v) { if (v.ecart !== null) { if (v.type === 'centre') centre += v.ecart; else neutres += v.ecart; } });
       res.push(constat('equilibre', 'info', 'Équilibre : score ' + e.score + ' (0 = les deux camps sont à égale distance de tout, en rations). Écart vers le centre ' + centre
-        + ', vers les villes neutres ' + neutres + ', vers les villes de déploiement adverses ' + (e.adverses.ecart === null ? '–' : e.adverses.ecart) + '.', [], e));
+        + ', vers les villes neutres ' + neutres + ', vers la ville de déploiement adverse la plus lointaine ' + (e.adverses.ecart === null ? '–' : e.adverses.ecart) + '. Sens : ' + e.avantageTexte + '.', [], e));
       if (e.horsAtteinte.length) {
         res.push(constat('equilibre', 'alerte', 'Villes hors d’atteinte d’un camp : ' + liste(e.horsAtteinte) + ' ; elles ne comptent pas dans le score.', e.horsAtteinte));
       }
@@ -580,27 +688,44 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   // ------------------------------------------------------------------ étape et bilan
 
+  var TITRES_ETAPES = { construction: 'Construction en cours', villes: 'Construction terminée : posez les villes', complet: 'Plateau complet' };
+
   /**
-   * Étape du plateau (§9.1, B3). Renvoie {etape, message, restantes, detail, villes, ancien} :
+   * Étape du plateau (§9.1, B3). Renvoie {etape, titre, message, restantes, detail, villes, catalogue, ancien} :
    *   etape : 'construction' (il reste des pièces de terrain à poser), 'villes' (terrain construit, villes à poser)
    *           ou 'complet' (terrain construit, toutes les villes posées) ; l'étape ne dit rien des erreurs ;
+   *   titre / message : ce que l'écran affiche tel quel (aucune vue ne les retouche) ;
    *   restantes / detail : pièces de construction à poser (nombre, ['2 × Nom']) ;
-   *   villes : {vert, rouge, neutres} villes à poser ; ancien : le plateau porte des tuiles du premier catalogue.
+   *   villes : {vert, rouge, neutres} villes à poser ;
+   *   catalogue : 'courant' | 'precedent' | 'premier' (AT.plateau.catalogueDuPlateau) ; ancien : catalogue === 'premier'.
+   * Plateau du catalogue PRÉCÉDENT : rien n'est « à poser », l'étape se juge sur les villes seules.
+   * Plateau du PREMIER catalogue : les étapes ne s'y appliquent pas ; 'complet' s'il a ses villes d'une case.
    */
   function etape(plateau) {
-    var reste = resteConstruction(plateau), etat = P.etatVilles(plateau);
-    // « Ancien plateau » : il porte des tuiles d'une case du premier catalogue. Un monobloc retiré depuis ne suffit pas.
-    var ancien = (plateau.pieces || []).some(function (p) { var m = C.modele(p.modele); return !!m && m.ancien === true && m.cases.length === 1; });
-    var nom = reste.nombre ? 'construction' : (etat.completes ? 'complet' : 'villes'), message;
-    if (nom === 'construction') message = 'Construction en cours : ' + pluriel(reste.nombre, 'pièce') + ' de terrain à poser.';
-    else if (nom === 'villes') message = 'Construction terminée, villes à poser : ' + texteVillesManquantes(etat.manquantes) + '.';
-    else message = 'Plateau complet : terrain construit, villes posées.';
-    if (ancien) message += ' Ce plateau porte des tuiles de l’ancien catalogue.';
-    return { etape: nom, message: message, restantes: reste.nombre, detail: reste.detail, villes: etat.manquantes, ancien: ancien };
+    var cat = P.catalogueDuPlateau(plateau), reste = resteConstruction(plateau), etat = P.etatVilles(plateau);
+    var nom, titre, message;
+    if (cat.premier) {
+      nom = P.villes(plateau).length >= C.REGLAGES.nombreVilles ? 'complet' : 'villes';
+      titre = 'Plateau de l’ancien catalogue';
+      message = 'Ce plateau porte des tuiles de l’ancien catalogue (tuiles d’une case, villes posées pendant la construction). Il se juge avec les contrôles de l’ancien catalogue ; '
+        + 'les étapes du catalogue 2 (construction, puis villes) ne s’y appliquent pas.';
+    } else if (cat.precedent) {
+      nom = etat.completes ? 'complet' : 'villes';
+      titre = 'Plateau du catalogue précédent';
+      message = pluriel(cat.monoblocsRetires, 'de ses monoblocs n’est', 'de ses monoblocs ne sont') + ' plus au catalogue imprimé ; il reste lisible, jouable et modifiable, et aucune pièce n’est à poser. '
+        + (etat.completes ? 'Ses villes sont posées.' : 'Villes à poser : ' + texteVillesManquantes(etat.manquantes) + '.');
+    } else {
+      nom = reste.nombre ? 'construction' : (etat.completes ? 'complet' : 'villes');
+      titre = TITRES_ETAPES[nom];
+      if (nom === 'construction') message = 'Construction en cours : ' + pluriel(reste.nombre, 'pièce') + ' de terrain à poser.';
+      else if (nom === 'villes') message = 'Construction terminée, villes à poser : ' + texteVillesManquantes(etat.manquantes) + '.';
+      else message = 'Plateau complet : terrain construit, villes posées.';
+    }
+    return { etape: nom, titre: titre, message: message, restantes: reste.nombre, detail: reste.detail, villes: etat.manquantes, catalogue: cat.nom, ancien: cat.premier };
   }
 
   /**
-   * Lance tous les contrôles. Renvoie {ok, erreurs, alertes, resultats, equilibre, etape, etapeMessage, construction, villes} :
+   * Lance tous les contrôles. Renvoie {ok, erreurs, alertes, resultats, equilibre, etape, etapeTitre, etapeMessage, catalogue, construction, villes} :
    *   ok : aucun constat de niveau 'erreur' (un plateau sans villes peut être ok : voir `etape`) ;
    *   erreurs / alertes : nombres de constats ; resultats : tous les constats, groupe « construction » d'abord
    *   (inventaire, continuité, monoblocs, contact), puis « villes » (villes, équilibre), puis les événements ;
@@ -618,7 +743,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     var e = etape(plateau);
     return {
       ok: compte('erreur') === 0, erreurs: compte('erreur'), alertes: compte('alerte'), resultats: resultats, equilibre: equilibre(plateau, options),
-      etape: e.etape, etapeMessage: e.message,
+      etape: e.etape, etapeTitre: e.titre, etapeMessage: e.message, catalogue: e.catalogue,
       construction: { erreurs: compte('erreur', 'construction'), alertes: compte('alerte', 'construction'), terminee: e.etape !== 'construction', restantes: e.restantes },
       villes: { erreurs: compte('erreur', 'villes'), alertes: compte('alerte', 'villes'), completes: e.etape === 'complet', manquantes: e.villes }
     };
@@ -628,7 +753,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     inventaire: inventaire, continuite: continuite, monoblocs: monoblocs, villes: villes, contact: contact,
     controleEquilibre: controleEquilibre, evenements: evenements, tout: tout, etape: etape, villesAnciennes: villesAnciennes,
     contacts: contacts, equilibre: equilibre, ecartsCamps: ecartsCamps, repartition: repartition,
-    montagneHorsBloc: montagneHorsBloc
+    montagneHorsBloc: montagneHorsBloc, horsReglesForme: horsReglesForme, texteAvantage: texteAvantage, texteAvantageLigne: texteAvantageLigne
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = AT.controles;

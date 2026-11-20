@@ -360,21 +360,21 @@ test('pose hors stock : stricte par défaut, permise sur option, annoncée', () 
   assert.deepStrictEqual(relu.plateau, libre.plateau);
 });
 
-test('contrôle 1 : tuiles à prévoir en plus du catalogue, montagne d’une case, monobloc en trop', () => {
+test('contrôle 1 (I2) : tuiles de terrain d’une case et montagne d’une case hors règles, monobloc en trop', () => {
   let p = P.vierge(1);
   // 7 forêts d'une case (hors catalogue depuis le catalogue 2) ; 2 montagnes d'une case.
   for (let i = 0; i < 7; i++) p = poser(p, 'F', 3 + i, 0, 0, { horsStock: true });
   p = poser(poser(p, 'M1', 3, 2, 0, { horsStock: true }), 'M1', 4, 2, 0, { horsStock: true });
   const constats = K.inventaire(p);
-  assert.strictEqual(niveaux(constats, 'erreur').length, 0, 'une pose hors stock d’une tuile d’une case n’est pas une erreur');
+  assert.strictEqual(niveaux(constats, 'erreur').length, 2, 'sur un plateau du catalogue courant, une tuile de terrain d’une case est hors règles');
   const enPlus = constats.filter((x) => /à prévoir en plus du catalogue/.test(x.message))[0];
-  assert.strictEqual(enPlus.niveau, 'alerte');
-  assert.strictEqual(enPlus.message, 'Tuiles à prévoir en plus du catalogue (9) : 2 × Montagne d’une case, 7 × Forêt.');
-  assert.deepStrictEqual(enPlus.donnees, { enPlus: 9, parModele: { M1: 2, F: 7 } });
+  assert.strictEqual(enPlus.niveau, 'erreur');
+  assert.strictEqual(enPlus.message, 'Hors règles : 9 tuiles de terrain d’une case (2 × Montagne d’une case, 7 × Forêt). Le terrain se construit en monoblocs de 3 ou 4 cases ; seules les 2 tuiles de remplissage du catalogue sont admises. Ces tuiles seraient à prévoir en plus du catalogue.');
+  assert.deepStrictEqual(enPlus.donnees, { enPlus: 9, parModele: { M1: 2, F: 7 }, horsRegles: true });
   assert.deepStrictEqual(enPlus.cases, H.trier(['3,0', '4,0', '5,0', '6,0', '7,0', '8,0', '9,0', '3,2', '4,2']), 'toutes les tuiles hors catalogue');
-  const montagnes = constats.filter((x) => /d’une case sur le plateau/.test(x.message))[0];
-  assert.strictEqual(montagnes.niveau, 'alerte');
-  assert.match(montagnes.message, /^2 montagnes d’une case sur le plateau : la décision en vigueur est « montagnes en blocs de 4 ou 5 cases »\.$/);
+  const montagnes = constats.filter((x) => /montagnes d’une case\./.test(x.message))[0];
+  assert.strictEqual(montagnes.niveau, 'erreur');
+  assert.match(montagnes.message, /^Hors règles : 2 montagnes d’une case\. Les montagnes sont des blocs de 4 ou 5 cases\.$/);
   assert.deepStrictEqual(montagnes.cases, ['3,2', '4,2']);
   assert.ok(constats.some((x) => x.niveau === 'alerte' && /^Pièces de terrain restantes \(23\)/.test(x.message)));
   assert.ok(!/Montagne d’une case/.test(constats.filter((x) => /^Pièces de terrain restantes/.test(x.message))[0].message), 'M1 n’est jamais une pièce restante');
@@ -386,7 +386,8 @@ test('contrôle 1 : tuiles à prévoir en plus du catalogue, montagne d’une ca
   let perso = ajouter(P.vierge(1), DUO());
   assert.ok(K.inventaire(perso).some((x) => x.niveau === 'alerte' && x.message === 'Pièces personnelles restantes (1) : 1 × Duo.'));
   perso = poser(poser(perso, 'X1', 3, 0, 0), 'X1', -3, 0, 0, { horsStock: true });
-  const erreurs = niveaux(K.inventaire(perso), 'erreur');
+  // (La pièce « Duo » n'a que 2 cases : elle est aussi « hors règles », autre erreur, jugée plus bas dans tests/revue-catalogue-2.test.js.)
+  const erreurs = niveaux(K.inventaire(perso), 'erreur').filter((x) => /Stock dépassé/.test(x.message));
   assert.strictEqual(erreurs.length, 1);
   assert.match(erreurs[0].message, /Stock dépassé : 2 × « Duo » posées pour 1 prévue\(s\) \(pièce personnelle\)/);
   assert.deepStrictEqual(erreurs[0].cases, H.trier(['3,0', '3,1', '-3,0', '-3,1']));
@@ -530,7 +531,7 @@ test('équilibre : plus de « non comparable » ; le score se calcule sans symé
   assert.deepStrictEqual([e2.calculable, e2.comparable, e2.score], [true, true, 1]);
   assert.deepStrictEqual(e2.villes.map((v) => [v.cle, v.type, v.vert, v.rouge, v.ecart]),
     [['0,-2', 'vert', 0, 5, null], ['0,0', 'centre', 3, 2, 1], ['0,2', 'rouge', 5, 0, null]]);
-  assert.deepStrictEqual(e2.adverses, { vert: [5], rouge: [5], ecart: 0 });
+  assert.deepStrictEqual(e2.adverses, { vert: [5], rouge: [5], ecart: 0, avantage: null, vertLoin: null, rougeLoin: null });
   const c2 = K.controleEquilibre(forme);
   assert.strictEqual(c2[0].niveau, 'info');
   assert.strictEqual(c2[0].donnees.villes.length, 3);
@@ -539,7 +540,7 @@ test('équilibre : plus de « non comparable » ; le score se calcule sans symé
   const villes = P.avecCamps(monter([['V', 0, -2], ['P', 0, -1], ['V', 0, 0], ['P', 0, 1], ['V', 0, 2], ['V', 2, 0], ['P', -2, 0], ['P', 1, 0], ['P', -1, 0]]));
   const e3 = K.equilibre(villes);
   assert.deepStrictEqual([e3.calculable, e3.score], [true, 1]);
-  assert.deepStrictEqual(e3.villes.filter((v) => v.cle === '2,0')[0], { cle: '2,0', type: 'neutre', vert: 4, rouge: 3, ecart: 1 });
+  assert.deepStrictEqual(e3.villes.filter((v) => v.cle === '2,0')[0], { cle: '2,0', type: 'neutre', vert: 4, rouge: 3, ecart: 1, avantage: 'rouge' });
   // Le bilan complet porte le même score.
   assert.strictEqual(K.tout(forme).equilibre.score, 1);
   // Non calculable tant que les deux camps n'ont pas de ville de déploiement : pas de score, simple information.

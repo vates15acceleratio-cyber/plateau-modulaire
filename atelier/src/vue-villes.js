@@ -105,7 +105,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    *   cause 'complet'    : toutes les villes de cet outil sont posées ;
    *         'ecart'      : des cases conviendraient, mais toutes sont trop près d'une autre ville (écart de 4 pas) ;
    *         'profondeur' : rien dans les rangées de l'extrémité, mais il y en aurait avec une extrémité plus profonde ;
-   *         'hauteur'    : (ville neutre) des cases conviendraient hors du tiers central des rangées ;
+   *         'hauteur'    : (ville neutre) des cases conviendraient hors du tiers central des rangées (seulement si le
+   *                        réglage neutresTiersCentral est remis à vrai : ce n'est plus une règle) ;
    *         'flanc'      : (ville neutre) le seul flanc qui a des places porte déjà sa ville neutre ;
    *         'terrain'    : aucune case ne convient, quelle que soit la règle assouplie.
    */
@@ -130,16 +131,16 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
           + ', mais ' + phraseEcart + '. Retirez ou déplacez une ville voisine (souvent une ville de déploiement).' };
       }
       if (sansEcart.length) {
-        return { cause: 'flanc', profondeurConseillee: null, message: 'Aucune place pour une ville neutre : il en faut une par flanc, et le flanc qui reste n’a aucune case qui convienne (à mi-hauteur, touchant au moins '
-          + C.REGLAGES.villes.contactVilleNeutre + ' cases du plateau).' };
+        return { cause: 'flanc', profondeurConseillee: null, message: 'Aucune place pour une ville neutre : il en faut une par flanc, et le flanc qui reste n’a aucune case qui convienne (tenue par au moins '
+          + C.REGLAGES.villes.contactVilleNeutre + ' tuiles différentes).' };
       }
       var horsTiers = P.placesNeutresSurCases(toutes, regles(options, { sansEcart: true, neutresTiersCentral: false }));
       if (libres(horsTiers).length) {
-        return { cause: 'hauteur', profondeurConseillee: null, message: 'Aucune place pour une ville neutre à mi-hauteur du plateau : les flancs n’ont de case libre touchant au moins '
-          + C.REGLAGES.villes.contactVilleNeutre + ' cases que plus haut ou plus bas. Retouchez le bord du terrain, ou essayez en pose libre.' };
+        return { cause: 'hauteur', profondeurConseillee: null, message: 'Aucune place pour une ville neutre à mi-hauteur du plateau (réglage du tiers central) : les flancs n’ont de case libre tenue par au moins '
+          + C.REGLAGES.villes.contactVilleNeutre + ' tuiles que plus haut ou plus bas. Retouchez le bord du terrain, ou essayez en pose libre.' };
       }
-      return { cause: 'terrain', profondeurConseillee: null, message: 'Aucune place pour une ville neutre : aucune case libre contre un flanc ne touche au moins '
-        + C.REGLAGES.villes.contactVilleNeutre + ' cases du plateau. Retouchez le bord du terrain, ou essayez en pose libre.' };
+      return { cause: 'terrain', profondeurConseillee: null, message: 'Aucune place pour une ville neutre : aucune case libre contre un flanc n’est tenue par au moins '
+        + C.REGLAGES.villes.contactVilleNeutre + ' tuiles différentes. Retouchez le bord du terrain, ou essayez en pose libre.' };
     }
 
     var cote = outil === 'vert' ? 'haut' : 'bas', nom = NOMS_CAMPS[outil];
@@ -224,7 +225,11 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   function preparerPose(plateau, options) {
     var refus = function (raison, manque) { return { ok: false, plateau: plateau, score: null, raison: raison, manque: manque || null }; };
     var base = retirerToutes(plateau).plateau;
+    // Les distances et l'équilibre se mesurent sur le terrain sans les tuiles d'événement (comme les contrôles), mais
+    // une Plaine couverte par une tuile d'événement posée à l'essai ne peut pas recevoir de ville : elle est marquée,
+    // et refusDeploiementSurCases l'écarte des candidates.
     var terrain = P.cases(base, { sansRecouvrements: true });
+    (base.recouvrements || []).forEach(function (x) { if (possede.call(terrain, x.cle)) terrain[x.cle].evenement = x.evenement; });
     var centre = possede.call(terrain, '0,0') ? C.modele(terrain['0,0'].modele) : null;
     if (!centre || !centre.noyau) return refus('Le noyau doit être posé au centre du plateau : l’équilibre se mesure depuis sa ville.');
     var o = { profondeurExtremite: profondeur(options, plateau) };
@@ -253,9 +258,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   }
 
   /**
-   * « Autre proposition » : pose les villes selon la combinaison valide qui SUIT celle du plateau dans la liste de
-   * AT.generateur.propositionsVilles (de la mieux équilibrée à la moins équilibrée ; après la dernière, retour à la
-   * première). Sans villes posées, ou avec des villes qui ne sont pas une combinaison de la liste : la première.
+   * « Autre proposition » : pose les villes selon le placement qui SUIT celui du plateau dans la liste de
+   * AT.generateur.propositionsVilles (du mieux équilibré au moins équilibré ; après le dernier, retour au premier).
+   * Ce qui est parcouru : les placements des 4 villes de DÉPLOIEMENT ; à chacun, les 2 villes neutres vont à la
+   * meilleure place de chaque flanc (les autres places des villes neutres ne sont pas proposées, et le message le dit). Sans villes posées, ou avec des villes qui ne sont pas une combinaison de la liste : la première.
    * Aucun tirage : même plateau = même proposition, et la suite des propositions se retrouve après « Annuler ».
    * Renvoie {ok, plateau, score, raison, manque, rang (1 à nombre), nombre, seule (true : il n'existe qu'une
    * combinaison, et c'est celle du plateau)}.
@@ -312,7 +318,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       return el('option', { value: p, texte: p + (p > 1 ? ' rangées' : ' rangée') + (p === C.REGLAGES.villes.profondeurExtremite ? ' (défaut)' : '') });
     }));
     var btnAuto = el('button', { type: 'button', id: 'vi-auto', classe: 'at-principal-bouton', texte: 'Poser les villes automatiquement', title: 'Retire les villes posées, puis pose les 6 villes au meilleur équilibre', sur: { click: auto } });
-    var btnAutre = el('button', { type: 'button', id: 'vi-autre', texte: 'Autre proposition', title: 'Pose les villes selon la combinaison suivante, de la mieux équilibrée à la moins équilibrée (même plateau = même suite)', sur: { click: autre } });
+    var btnAutre = el('button', { type: 'button', id: 'vi-autre', texte: 'Autre proposition', title: 'Change la place des villes de déploiement (placement suivant, du mieux équilibré au moins équilibré) ; les villes neutres suivent, à la meilleure place de chaque flanc. Même plateau = même suite.', sur: { click: autre } });
     var btnRetirer = el('button', { type: 'button', id: 'vi-retirer', texte: 'Retirer toutes les villes', sur: { click: toutRetirer } });
 
     function options() { return { profondeurExtremite: profondeur(acces.reglages(), acces.plateau()), libre: libre }; }
@@ -349,9 +355,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       ['seuilContact', 'mesureContact'].forEach(function (k) { if (regl[k] !== undefined) o[k] = regl[k]; });
       var r = autreProposition(pl, o);
       if (!r.ok) { dire('Autre proposition impossible : ' + r.raison, 'erreur'); return; }
-      if (r.seule) { dire('Il n’existe qu’une seule façon de poser les villes sur ce terrain avec ces règles : rien ne change.', 'info'); return; }
+      if (r.seule) { dire('Il n’existe qu’un seul placement des villes de déploiement sur ce terrain avec ces règles : rien ne change.', 'info'); return; }
       acces.changer(r.plateau);
-      dire('Autre proposition : n° ' + r.rang + ' sur ' + r.nombre + ', de la mieux équilibrée à la moins équilibrée (score ' + r.score + ' ; 0 = équilibré). Annuler pour revenir à la précédente.', 'info');
+      dire('Autre proposition : placement n° ' + r.rang + ' sur ' + r.nombre + ' des villes de déploiement, du mieux équilibré au moins équilibré (score ' + r.score + ' ; 0 = équilibré). Les villes neutres vont à la meilleure place de chaque flanc ; leurs autres places ne sont pas parcourues. Annuler pour revenir à la précédente.', 'info');
     }
 
     function toutRetirer() {
@@ -366,13 +372,15 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var pl = acces.plateau(), c = compteurs(pl), bilan = acces.bilan();
       var etape = bilan ? bilan.etape : (c.construction ? 'construction' : (c.completes ? 'complet' : 'villes'));
       zoneEtape.setAttribute('data-etape', etape);
-      var ancien = AT.vueCreation && AT.vueCreation.estAncien(pl);
+      var catalogue = P.catalogueDuPlateau(pl), ancien = catalogue.premier;
       if (ancien) zoneEtape.setAttribute('data-etape', 'ancien');
+      zoneEtape.setAttribute('data-catalogue', catalogue.nom);
       zoneEtape.textContent = ancien
         ? 'Plateau de l’ancien catalogue : ses villes sont des tuiles d’une case, posées pendant la construction. L’étape « Villes » est faite pour le catalogue 2 ; vous pouvez tout de même essayer d’y poser des villes.'
         : etape === 'construction'
         ? 'Le terrain n’est pas fini (' + pluriel(c.construction, 'pièce', 'pièces') + ' de terrain à poser). Les villes se posent une fois la construction terminée ; vous pouvez déjà essayer.'
-        : (etape === 'villes' ? 'Construction terminée : posez les villes.' : 'Plateau complet : toutes les villes sont posées.');
+        : (catalogue.precedent ? 'Plateau du catalogue précédent : ' : '') + (etape === 'villes' ? (catalogue.precedent ? 'posez les villes.' : 'Construction terminée : posez les villes.')
+          : (catalogue.precedent ? 'toutes les villes sont posées.' : 'Plateau complet : toutes les villes sont posées.'));
       R.remplacer(zoneOutils, OUTILS.map(function (o) {
         var type = o === 'neutre' ? 'vn' : 'vd-' + o;
         return el('button', {
@@ -422,7 +430,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       ]),
       el('fieldset', null, [
         el('legend', { texte: 'Rappel des règles' }),
-        el('p', { classe: 'at-aide', texte: 'Ville de déploiement : posée PAR-DESSUS une Plaine du bord, en haut pour Vert, en bas pour Rouge, hors noyau ; 2 par joueur. Ville neutre : une tuile ajoutée contre le flanc gauche et une contre le flanc droit, à mi-hauteur. Entre deux villes : 4 pas au moins (3 cases entre elles).' })
+        el('p', { classe: 'at-aide', texte: 'Ville de déploiement : posée PAR-DESSUS une Plaine du bord, en haut pour Vert, en bas pour Rouge, hors noyau ; 2 par joueur. Ville neutre : une tuile ajoutée contre le flanc gauche et une contre le flanc droit, n’importe où sur le flanc, tenue par au moins 2 tuiles différentes. Entre deux villes : 4 pas au moins (3 cases entre elles).' })
       ])
     ]);
 

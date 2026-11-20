@@ -91,16 +91,16 @@ test('vérificateur indépendant : B5 (villes neutres)', () => {
     const vn = piece(p, (y) => y.modele === 'VN'); vn.q = sommet.q; vn.r = sommet.r - 1;
   }, /^B5 : ville neutre en .* hors des flancs/);
   detecte('ville neutre sur le terrain', (p) => { const vn = piece(p, (y) => y.modele === 'VN'); vn.q = 1; vn.r = 0; }, /^ville neutre posée sur une case du terrain/);
-  detecte('ville neutre loin du plateau', (p) => { const vn = piece(p, (y) => y.modele === 'VN'); vn.q = 25; vn.r = 0; }, /^B5 : ville neutre en .* touchant 0 case\(s\)/);
+  detecte('ville neutre loin du plateau', (p) => { const vn = piece(p, (y) => y.modele === 'VN'); vn.q = 25; vn.r = 0; }, /^B5 : ville neutre en .* tenue par 0 pièce\(s\) \(0 case\(s\)\)/);
   detecte('deux villes neutres sur le même flanc', (p) => {
     const t = terrain(p), vns = p.pieces.filter((y) => y.modele === 'VN'), r = vns[0].r + 1, qs = Object.keys(t).map(H.decle).filter((c) => c.r === r).map((c) => c.q);
     const aGauche = vns[0].q < Math.min(...Object.keys(t).map(H.decle).filter((c) => c.r === vns[0].r).map((c) => c.q));
     vns[1].r = r; vns[1].q = aGauche ? Math.min(...qs) - 1 : Math.max(...qs) + 1;
   }, /^B5 : flancs des villes neutres/);
-  detecte('ville neutre hors du tiers central', (p) => {
+  detecte('ville neutre tenue par une seule pièce (I3)', (p) => {
     const t = terrain(p), rs = Object.keys(t).map((k) => H.decle(k).r), haut = Math.min(...rs), qs = Object.keys(t).map(H.decle).filter((c) => c.r === haut).map((c) => c.q);
     const vn = piece(p, (y) => y.modele === 'VN'); vn.r = haut; vn.q = Math.max(...qs) + 1;
-  }, /^B5 : ville neutre en .* hors du tiers central des rangées/);
+  }, /^B5 : ville neutre en .* tenue par 1 pièce\(s\) \(\d case\(s\)\)/);
 });
 
 test('vérificateur indépendant : B6 (7 villes, écart de 4 pas, toutes reliées) et B7 (contact)', () => {

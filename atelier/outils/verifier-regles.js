@@ -5,17 +5,20 @@
  * comptes sont refaits ici, avec les valeurs des règles écrites en clair ci-dessous (et non lues dans les réglages).
  *
  * Règles vérifiées :
- *   B1  terrain en monoblocs de 3 ou 4 cases seulement ; noyau en (0,0) ; montagnes en blocs de 4 ou 5 ;
+ *   B1  terrain en monoblocs de 3 ou 4 cases seulement, aucun tout en plaine ; noyau en (0,0) ; montagnes en blocs
+ *       de 4 ou 5, jamais mêlées à un autre terrain. La règle vaut pour TOUTE pièce posée : du catalogue, retirée du
+ *       catalogue ou personnelle (une pièce personnelle ou retirée qui la respecte n'est pas une faute) ;
  *   B2  tuiles de remplissage : jamais plus que le nombre permis (0 par défaut pour le générateur) ;
  *   B3  toutes les pièces de construction du catalogue, une fois chacune ; pas de chevauchement, pas de trou,
  *       plateau d'un seul tenant, cases franchissables reliées ;
- *   B4  2 villes de déploiement par joueur, posées sur une Plaine du bord, hors noyau, dans les rangées du haut
+ *   B4  2 villes de déploiement par joueur, posées sur une Plaine du bord EXTÉRIEUR (un trou ne compte pas), hors noyau, dans les rangées du haut
  *       (Vert) ou du bas (Rouge) : 2 rangées par défaut, 1 ou 3 quand le plateau a été généré avec ce réglage (la
  *       profondeur demandée doit alors être celle que le plateau a enregistrée) ; `camps` = ces tuiles ;
- *   B5  2 villes neutres, tuiles ajoutées contre le bord, une par flanc, dans le tiers central des rangées,
- *       touchant au moins 2 cases ;
+ *   B5  2 villes neutres, tuiles ajoutées contre le bord, une par flanc (gauche, droit), n'importe où sur le flanc,
+ *       chacune tenue par au moins 2 PIÈCES distinctes (décisions du 2026-11-20) ;
  *   B6  7 villes, toutes reliées entre elles et à 4 pas au moins les unes des autres (par les cases franchissables) ;
- *   B7  contact : chaque monobloc touche au moins `seuil` autres tuiles ; une tuile de remplissage au moins 2 ;
+ *   B7  contact : chaque monobloc touche au moins `seuil` autres tuiles ; une tuile de remplissage au moins 2 (ou
+ *       `seuil` s'il est plus petit), avec la même mesure que les monoblocs ;
  *   A2  aucune ville imprimée dans un monobloc hors noyau.
  *
  * Combinaisons vérifiées : seuil 3 / 2 × mesure pièces / côtés (2 rangées, sans remplissage), puis seuil 3 « pièces »
@@ -48,13 +51,14 @@ function parcours(depart, permises) {
   return d;
 }
 
-/** Nombre de cases vides entièrement entourées par les cases de `occupees` (Set). */
+/** Cases vides entièrement entourées par les cases de `occupees` (Set) : Set de clés. */
 function casesEnfermees(occupees) {
   const qs = [...occupees].map((k) => coord(k)[0]), rs = [...occupees].map((k) => coord(k)[1]);
   const q0 = Math.min(...qs) - 1, q1 = Math.max(...qs) + 1, r0 = Math.min(...rs) - 1, r1 = Math.max(...rs) + 1;
   const vides = new Set();
   for (let q = q0; q <= q1; q++) for (let r = r0; r <= r1; r++) if (!occupees.has(cle(q, r))) vides.add(cle(q, r));
-  return vides.size - parcours(cle(q0, r0), vides).size;
+  const dehors = parcours(cle(q0, r0), vides);
+  return new Set([...vides].filter((k) => !dehors.has(k)));
 }
 
 /** Renvoie la liste des manquements d'un plateau (vide = conforme) et quelques mesures. */
@@ -69,8 +73,8 @@ function verifier(plateau, seuil, mesure, remplissagesPermis, profondeur) {
   // Cases du TERRAIN (tout sauf les villes neutres) et villes neutres, chevauchements.
   const cases = new Map(), neutres = [];
   for (const piece of plateau.pieces) {
-    const liste = P.casesPiece(piece);
-    if (!liste.length) fautes.push('pièce hors catalogue : ' + piece.modele);
+    const liste = P.casesPiece(piece, plateau);          // le document porte ses pièces personnelles
+    if (!liste.length) { fautes.push('pièce hors catalogue : ' + piece.modele); continue; }
     if (piece.modele === 'VN') { neutres.push(liste[0].cle); continue; }
     for (const c of liste) {
       if (cases.has(c.cle)) fautes.push('chevauchement en ' + c.cle);
@@ -81,8 +85,9 @@ function verifier(plateau, seuil, mesure, remplissagesPermis, profondeur) {
   // B1, A2 : forme des pièces de terrain.
   const parPiece = new Map();
   for (const [k, c] of cases) { if (!parPiece.has(c.piece)) parPiece.set(c.piece, { modele: c.modele, cles: [], terrains: [] }); parPiece.get(c.piece).cles.push(k); parPiece.get(c.piece).terrains.push(c.terrain); }
-  let remplissages = 0;
+  let remplissages = 0, casesEnPlus = 0;                 // casesEnPlus : cases des pièces qui ne sont pas au catalogue imprimé
   for (const [id, x] of parPiece) {
+    if (!C.MODELES[x.modele]) casesEnPlus += x.cles.length;
     const n = x.cles.length;
     if (x.modele === 'N1') continue;
     if (x.terrains.includes('ville')) fautes.push('A2 : ville dans la pièce ' + id + ' (' + x.modele + ')');
@@ -91,7 +96,7 @@ function verifier(plateau, seuil, mesure, remplissagesPermis, profondeur) {
     if (n === 1 && x.modele === 'R' && x.terrains[0] === 'plaine') { remplissages += 1; continue; }
     if (n !== 3 && n !== 4) fautes.push('B1 : pièce de terrain de ' + n + ' case(s) (' + x.modele + ')');
     // Décision du 2026-11-19 : aucun monobloc tout en plaine (chacun porte au moins une forêt ou un marais).
-    if (x.terrains.every((t) => t === 'plaine')) fautes.push('B1 : monobloc tout en plaine (' + x.modele + ')');
+    if (n > 1 && x.terrains.every((t) => t === 'plaine')) fautes.push('B1 : monobloc tout en plaine (' + x.modele + ')');
   }
   if (remplissages > remplissagesPermis) fautes.push('B2 : ' + remplissages + ' tuile(s) de remplissage pour ' + remplissagesPermis + ' permise(s)');
   // B3 : toutes les pièces de construction du catalogue, ni plus ni moins.
@@ -104,8 +109,8 @@ function verifier(plateau, seuil, mesure, remplissagesPermis, profondeur) {
     attenduCases += m.nombre * m.cases.length;
     if ((poses[id] || 0) !== m.nombre) fautes.push('B3 : pièce ' + id + ' : ' + (poses[id] || 0) + ' posée(s) pour ' + m.nombre);
   }
-  for (const id of Object.keys(poses)) if (!C.MODELES[id]) fautes.push('pièce hors catalogue imprimé : ' + id);
-  if (cases.size !== attenduCases + remplissages) fautes.push(cases.size + ' cases de terrain pour ' + (attenduCases + remplissages));
+  // Une pièce personnelle ou retirée du catalogue n'est pas une faute en soi : c'est B1, ci-dessus, qui la juge.
+  if (cases.size !== attenduCases + remplissages + casesEnPlus) fautes.push(cases.size + ' cases de terrain pour ' + (attenduCases + remplissages + casesEnPlus));
   const noyau = plateau.pieces.filter((x) => x.modele === 'N1');
   if (noyau.length !== 1 || noyau[0].q !== 0 || noyau[0].r !== 0 || noyau[0].rotation !== 0) fautes.push('B1 : noyau absent, décentré ou tourné');
   // B3 : d'un seul tenant, sans trou ; cases franchissables reliées.
@@ -113,7 +118,7 @@ function verifier(plateau, seuil, mesure, remplissagesPermis, profondeur) {
   const franchissables = new Set([...cases.keys()].filter((k) => !INFRANCHISSABLES.includes(cases.get(k).terrain)));
   if (parcours('0,0', toutes).size !== toutes.size) fautes.push('B3 : plateau en plusieurs morceaux');
   if (parcours('0,0', franchissables).size !== franchissables.size) fautes.push('B3 : cases franchissables non reliées');
-  const trous = casesEnfermees(toutes);
+  const enfermees = casesEnfermees(toutes), trous = enfermees.size;
   if (trous) fautes.push('B3 : ' + trous + ' case(s) vide(s) enfermée(s)');
   // Étendue du terrain : rangées extrêmes, bords gauche et droit de chaque rangée.
   const rangees = new Map();
@@ -130,7 +135,7 @@ function verifier(plateau, seuil, mesure, remplissagesPermis, profondeur) {
     if (!c) { fautes.push('B4 : ville de déploiement hors du terrain en ' + d.cle); continue; }
     if (c.terrain !== 'plaine') fautes.push('B4 : ville de déploiement sur ' + c.terrain + ' en ' + d.cle);
     if (c.modele === 'N1') fautes.push('B4 : ville de déploiement sur le noyau en ' + d.cle);
-    if (!voisines(d.cle).some((v) => !toutes.has(v))) fautes.push('B4 : ville de déploiement hors du bord en ' + d.cle);
+    if (!voisines(d.cle).some((v) => !toutes.has(v) && !enfermees.has(v))) fautes.push('B4 : ville de déploiement hors du bord en ' + d.cle);
     if (d.camp === 'vert' ? r > haut + rangeesExtremes - 1 : r < bas - rangeesExtremes + 1) fautes.push('B4 : ville de ' + d.camp + ' hors des ' + rangeesExtremes + ' rangée(s) extrême(s) en ' + d.cle);
   }
   for (const camp of ['vert', 'rouge']) {
@@ -141,17 +146,17 @@ function verifier(plateau, seuil, mesure, remplissagesPermis, profondeur) {
   if (new Set(deploiements.map((d) => d.cle)).size !== deploiements.length) fautes.push('B4 : deux villes de déploiement sur la même case');
   // B5 : villes neutres.
   if (neutres.length !== NEUTRES) fautes.push('B5 : ' + neutres.length + ' ville(s) neutre(s) pour ' + NEUTRES);
-  const tiers = Math.floor((bas - haut + 1) / 3), flancs = [];
+  const flancs = [];
   let contactNeutreMin = Infinity;
   for (const k of neutres) {
     const [q, r] = coord(k), rangee = rangees.get(r);
     const touchees = voisines(k).filter((v) => toutes.has(v));
-    contactNeutreMin = Math.min(contactNeutreMin, touchees.length);
-    if (touchees.length < CONTACT_NEUTRE) fautes.push('B5 : ville neutre en ' + k + ' touchant ' + touchees.length + ' case(s)');
+    const tenuePar = new Set(touchees.map((v) => cases.get(v).piece));
+    contactNeutreMin = Math.min(contactNeutreMin, tenuePar.size);
+    if (tenuePar.size < CONTACT_NEUTRE) fautes.push('B5 : ville neutre en ' + k + ' tenue par ' + tenuePar.size + ' pièce(s) (' + touchees.length + ' case(s))');
     if (!touchees.some((v) => franchissables.has(v))) fautes.push('B5 : ville neutre en ' + k + ' hors d’atteinte');
     if (!rangee || !(q < rangee.gauche || q > rangee.droite)) { fautes.push('B5 : ville neutre en ' + k + ' hors des flancs'); continue; }
     flancs.push(q < rangee.gauche ? 'gauche' : 'droite');
-    if (r < haut + tiers || r > bas - tiers) fautes.push('B5 : ville neutre en ' + k + ' hors du tiers central des rangées');
   }
   if (neutres.length === NEUTRES && flancs.slice().sort().join(' ') !== 'droite gauche') fautes.push('B5 : flancs des villes neutres : ' + flancs.join(', '));
   // B6 : 7 villes, écart de 4 pas. Les villes neutres sont franchissables ; une ville de déploiement reste une case du terrain.
@@ -173,8 +178,9 @@ function verifier(plateau, seuil, mesure, remplissagesPermis, profondeur) {
   for (const [id, x] of parPiece) {
     const cotes = new Set(), pieces = new Set();
     for (const k of x.cles) for (const v of voisines(k)) if (cases.has(v) && cases.get(v).piece !== id) { cotes.add(v); pieces.add(cases.get(v).piece); }
-    if (x.modele === 'R') { if (pieces.size < CONTACT_REMPLISSAGE) fautes.push('B7 : remplissage ' + id + ' touchant ' + pieces.size + ' pièce(s)'); continue; }
     const valeur = mesure === 'pieces' ? pieces.size : cotes.size;
+    // Tuile de remplissage : même mesure que les monoblocs, seuil propre (jamais plus exigeant que le leur).
+    if (x.modele === 'R') { const s = Math.min(seuil, CONTACT_REMPLISSAGE); if (valeur < s) fautes.push('B7 : remplissage ' + id + ' : contact ' + valeur + ' < ' + s + ' (' + mesure + ')'); continue; }
     contactMin = Math.min(contactMin, valeur);
     if (valeur < seuil) fautes.push('B7 : pièce ' + id + ' (' + x.modele + ') : contact ' + valeur + ' < ' + seuil + ' (' + mesure + ')');
   }
@@ -225,7 +231,7 @@ function lancer(nombre, premiere) {
     }
     total += reussis; fautifs += mauvais; echecsTotal += echecs;
     lignes.push('seuil ' + seuil + ', mesure ' + mesure + ', remplissages permis ' + remplissages + ', extrémités de ' + profondeur + ' rangée(s)' + (profondeur > PROFONDEUR ? ' (' + villesLoin + ' plateaux avec une ville au-delà de la 2e rangée)' : '') + ' : ' + reussis + ' générés, ' + echecs + ' échec(s) de génération, ' + mauvais + ' non conforme(s) ; écart minimal entre villes '
-      + ecartMin + ' pas ; contact minimal ' + contactMin + ' (villes neutres : ' + contactNeutreMin + ' cases) ; remplissages posés ' + poses + ' ; score d’équilibre moyen ' + (reussis ? (scoreTotal / reussis).toFixed(2) : '–') + ', maximal ' + scoreMax
+      + ecartMin + ' pas ; contact minimal ' + contactMin + ' (villes neutres : ' + contactNeutreMin + ' pièces) ; remplissages posés ' + poses + ' ; score d’équilibre moyen ' + (reussis ? (scoreTotal / reussis).toFixed(2) : '–') + ', maximal ' + scoreMax
       + ' ; plaines/forêts/marais du terrain ' + [...repartitions].join(' ') + ' ; plateaux distincts ' + formes.size + ' ; même graine = même plateau ' + identiques + '/' + comparables
       + ' ; ' + (Date.now() - debut) + ' ms (au plus ' + tempsMax + ' ms par plateau)');
   }

@@ -141,14 +141,16 @@ test('inventaire : tout posé, pièces restantes, remplissages facultatifs, stoc
   inconnue.pieces.push({ id: 'x', modele: 'ZZ', q: 20, r: 0, rotation: 0 });
   assert.match(erreurs(K.inventaire(inconnue))[0].message, /hors catalogue/);
 
-  // Tuiles d'une case de l'ancien catalogue et montagne d'une case : du carton à prévoir, pas une faute.
+  // I2 : tuiles de terrain d'une case et montagne d'une case sur un plateau du catalogue courant : hors règles, en erreur.
   const peint = monter([['N1', 0, 0], ['P', 2, 0], ['F', 3, 0], ['M1', 2, -1]]);
   const constats = K.inventaire(peint);
-  assert.strictEqual(erreurs(constats).length, 0);
-  const enPlus = alertes(constats).filter((x) => /à prévoir en plus du catalogue \(3\)/.test(x.message))[0];
-  assert.ok(enPlus, 'alerte « tuiles à prévoir en plus »');
+  assert.strictEqual(erreurs(constats).length, 2);
+  const enPlus = erreurs(constats).filter((x) => /^Hors règles : 3 tuiles de terrain d’une case/.test(x.message))[0];
+  assert.ok(enPlus, 'erreur « hors règles : tuiles de terrain d’une case »');
   assert.deepStrictEqual(enPlus.donnees.parModele, { M1: 1, P: 1, F: 1 });
-  assert.ok(alertes(constats).some((x) => /montagne d’une case/.test(x.message)));
+  assert.deepStrictEqual(enPlus.cases, ['2,-1', '2,0', '3,0']);
+  assert.ok(erreurs(constats).some((x) => /^Hors règles : 1 montagne d’une case\. Les montagnes sont des blocs de 4 ou 5 cases\.$/.test(x.message)));
+  assert.ok(!alertes(constats).some((x) => /à prévoir en plus|montagne d’une case/.test(x.message)));
 });
 
 test('continuité : chevauchement, plateau en morceaux, cases franchissables coupées', () => {
@@ -378,12 +380,15 @@ test('équilibre : un marais devant un seul camp dégrade le score (calcul sur d
   const camps = { vert: ['0,-2'], rouge: ['0,2'] };
   const egal = K.ecartsCamps(colonne('plaine'), camps);
   assert.strictEqual(egal.score, 0);
-  assert.deepStrictEqual(egal.adverses, { vert: [4], rouge: [4], ecart: 0 });
+  assert.deepStrictEqual(egal.adverses, { vert: [4], rouge: [4], ecart: 0, avantage: null, vertLoin: null, rougeLoin: null });
+  assert.deepStrictEqual([egal.avantage, egal.avantageNet, egal.avantageTexte], [null, 0, 'aucun camp avantagé']);
   const penche = K.ecartsCamps(colonne('marais'), camps);
   // Centre : 3 pour Vert (marais 2 + ville 1), 2 pour Rouge : écart 1 ; d'un camp à l'autre : 5 dans les deux sens.
   assert.strictEqual(penche.score, 1);
-  assert.deepStrictEqual(penche.villes.filter((v) => v.cle === '0,0')[0], { cle: '0,0', type: 'centre', vert: 3, rouge: 2, ecart: 1 });
-  assert.deepStrictEqual(penche.adverses, { vert: [5], rouge: [5], ecart: 0 });
+  assert.deepStrictEqual(penche.villes.filter((v) => v.cle === '0,0')[0], { cle: '0,0', type: 'centre', vert: 3, rouge: 2, ecart: 1, avantage: 'rouge' });
+  assert.deepStrictEqual(penche.adverses, { vert: [5], rouge: [5], ecart: 0, avantage: null, vertLoin: null, rougeLoin: null });
+  // M4 : le score dit de combien, l'avantage dit pour qui (moins de rations = avantage).
+  assert.deepStrictEqual([penche.avantage, penche.avantageNet, penche.avantages, penche.avantageTexte], ['rouge', -1, { vert: 0, rouge: 1 }, 'avantage Rouge de 1']);
   assert.strictEqual(K.ecartsCamps(colonne('marais'), camps, { couts: { plaine: 1, ville: 1, marais: 4 } }).score, 3);
   // Sans villes de déploiement : rien n'est calculé, et ce n'est pas une alerte.
   const sans = K.ecartsCamps(colonne('plaine'), { vert: [], rouge: ['0,2'] });
@@ -398,7 +403,7 @@ test('équilibre : un marais devant un seul camp dégrade le score (calcul sur d
 test('équilibre : message et répartition des terrains', () => {
   const complets = K.controleEquilibre(complet());
   assert.strictEqual(erreurs(complets).length, 0);
-  assert.match(complets[0].message, /^Équilibre : score \d+ .*Écart vers le centre \d+, vers les villes neutres \d+, vers les villes de déploiement adverses \d+\./);
+  assert.match(complets[0].message, /^Équilibre : score \d+ .*Écart vers le centre \d+, vers les villes neutres \d+, vers la ville de déploiement adverse la plus lointaine \d+\. Sens : (aucun camp avantagé|avantage (Vert|Rouge) de \d+( et avantage Rouge de \d+ \(ils se compensent en partie\))?)\.$/);
   // Terrain construit : 55 plaines (49 des monoblocs + 6 du noyau), 13 forêts, 13 marais.
   assert.deepStrictEqual(K.repartition(construit()), { total: 81, plaine: 55, foret: 13, marais: 13 });
   // Plateau fini : 4 Plaines portent une ville de déploiement.

@@ -155,7 +155,7 @@ test('fichiers du catalogue d’avant la décision : plateaux, partie et bibliot
   bib.liste.forEach((x) => assert.ok(P.valider(JSON.parse(JSON.stringify(x.plateau))).ok, x.nom));
 });
 
-test('contrôle 1 : un monobloc personnel tout en plaine est une alerte, pas une erreur', () => {
+test('contrôle 1 (I2) : un monobloc personnel tout en plaine, posé sur un plateau du catalogue courant, est une erreur « hors règles »', () => {
   let p = P.ajouterModele(P.vierge(1), { nom: 'Grand pré', quantite: 1, cases: [{ q: 0, r: 0, terrain: 'plaine' }, { q: 1, r: 0, terrain: 'plaine' }, { q: 1, r: 1, terrain: 'plaine' }] });
   assert.ok(p.ok, p.raison);
   assert.ok(!K.inventaire(p.plateau).some((x) => /tout en plaine/.test(x.message)), 'non posé : rien à dire');
@@ -163,11 +163,12 @@ test('contrôle 1 : un monobloc personnel tout en plaine est une alerte, pas une
   assert.ok(p.ok, p.raison);
   const constats = K.inventaire(p.plateau).filter((x) => /tout en plaine/.test(x.message));
   assert.strictEqual(constats.length, 1);
-  assert.strictEqual(constats[0].niveau, 'alerte');
-  assert.match(constats[0].message, /^1 monobloc personnel tout en plaine \(Grand pré\) : la décision en vigueur est « chaque monobloc de terrain porte au moins une forêt ou un marais »\.$/);
+  assert.strictEqual(constats[0].niveau, 'erreur');
+  assert.match(constats[0].message, /^Hors règles : 1 monobloc tout en plaine \(1 monobloc personnel \(Grand pré\)\)\. Chaque monobloc de terrain porte au moins une forêt ou un marais\.$/);
   assert.deepStrictEqual(constats[0].cases, ['3,0', '4,0', '4,1']);
-  assert.deepStrictEqual(constats[0].donnees, { monoblocsToutPlaine: 1 });
-  assert.strictEqual(K.inventaire(p.plateau).filter((x) => x.niveau === 'erreur').length, 0);
+  assert.deepStrictEqual(constats[0].donnees, { monoblocsToutPlaine: 1, horsRegles: true });
+  assert.strictEqual(K.inventaire(p.plateau).filter((x) => x.niveau === 'erreur').length, 1);
+  assert.strictEqual(K.tout(p.plateau).ok, false);
   // Avec une forêt au bout : plus d'alerte.
   const bon = P.ajouterModele(P.vierge(1), { nom: 'Pré boisé', quantite: 1, cases: [{ q: 0, r: 0, terrain: 'foret' }, { q: 1, r: 0, terrain: 'plaine' }] });
   assert.ok(!K.inventaire(P.poser(bon.plateau, bon.id, 3, 0, 0).plateau).some((x) => /tout en plaine/.test(x.message)));

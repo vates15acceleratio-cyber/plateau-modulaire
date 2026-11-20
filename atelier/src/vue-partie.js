@@ -108,8 +108,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var bilan = AT.controles.tout(r.etat.plateau, ctx.reglagesControles());
       var sansEssais = essais ? ' Les tuiles d’événement posées à l’essai (' + essais + ') ne sont pas reprises : elles restent en réserve.' : '';
       rafraichir(false);
-      if (bilan.erreurs) ctx.message('Partie créée, mais le plateau a ' + bilan.erreurs + ' erreur(s) aux contrôles (voir l’onglet Plateau).' + sansEssais, 'alerte');
-      else ctx.message('Nouvelle partie (graine ' + g + '). ' + NOMS[r.etat.actif] + ' commence.' + sansEssais + (precedente ? ' « Annuler » revient à la partie précédente.' : ''), essais ? 'alerte' : 'info');
+      // Villes de déploiement absentes, ou « camps » en désaccord avec les tuiles posées : dit clairement, sans bloquer.
+      var avis = PA.avisPlateau(r.etat.plateau), suite = avis.length ? ' ' + avis.join(' ') : '';
+      if (bilan.erreurs) ctx.message('Partie créée, mais le plateau a ' + bilan.erreurs + ' erreur(s) aux contrôles (voir l’onglet Plateau).' + suite + sansEssais, 'alerte');
+      else ctx.message('Nouvelle partie (graine ' + g + '). ' + NOMS[r.etat.actif] + ' commence.' + suite + sansEssais + (precedente ? ' « Annuler » revient à la partie précédente.' : ''), essais || avis.length ? 'alerte' : 'info');
       return true;
     }
 
@@ -179,8 +181,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       // Comme à la création : le plateau du fichier est passé aux contrôles (construction seulement), pour information.
       var bilan = AT.controles.tout(r.etat.plateau, ctx.reglagesControles());
       var erreurs = bilan.resultats.filter(function (x) { return x.niveau === 'erreur' && x.regle !== 'evenements'; }).length;
+      var avisOuverture = PA.avisPlateau(r.etat.plateau);
       ctx.message('Partie ouverte : tour ' + r.etat.tour + ', au tour de ' + NOMS[r.etat.actif] + '.'
-        + (erreurs ? ' Le plateau de ce fichier a ' + erreurs + ' erreur(s) aux contrôles.' : ''), erreurs ? 'alerte' : 'info');
+        + (erreurs ? ' Le plateau de ce fichier a ' + erreurs + ' erreur(s) aux contrôles.' : '') + (avisOuverture.length ? ' ' + avisOuverture.join(' ') : ''), erreurs || avisOuverture.length ? 'alerte' : 'info');
       return true;
     }
 
@@ -315,7 +318,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       if (ui.evenement) {
         admissibles = AT.vuePlateau.casesAdmissibles(e.plateau, ui.evenement, occupees);
       } else if (ui.carte) {
-        admissibles = (e.plateau.camps[ui.carte.joueur] || []).filter(function (k) { return occupees.indexOf(k) === -1; });
+        // Les villes de déploiement sont les tuiles posées (PA.villesDeDeploiement), pas la liste « camps » d'un fichier.
+        admissibles = PA.villesDeDeploiement(e.plateau, ui.carte.joueur).filter(function (k) { return occupees.indexOf(k) === -1; });
       } else if (ui.bataillon) {
         var b = PA.bataillon(e, ui.bataillon.joueur, ui.bataillon.numero);
         if (b && b.case !== null) {
@@ -474,7 +478,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       ];
       if (ui.carte && ui.carte.joueur === j) {
         var occupees = casesOccupees(e);
-        var ligne = (e.plateau.camps[j] || []).map(function (cle) {
+        var ligne = PA.villesDeDeploiement(e.plateau, j).map(function (cle) {
           return bouton('Former en (' + cle + ')', function () { former(j, ui.carte.carte, cle); }, { 'data-former': cle, title: occupees.indexOf(cle) !== -1 ? 'Ville occupée : un avertissement sera affiché' : 'Former un bataillon sur cette ville de déploiement' });
         });
         ligne.push(bouton('Défausser', function () { executer('paquet', { joueur: j, operation: 'defausser', carte: ui.carte.carte }, { apres: function () { ui.carte = null; } }); }, { 'data-defausser': j }));

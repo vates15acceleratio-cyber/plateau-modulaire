@@ -308,6 +308,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     var o = { profondeurExtremite: R.profondeurExtremite, ecartVilles: R.ecartVilles, contactVilleNeutre: R.contactVilleNeutre, neutresTiersCentral: R.neutresTiersCentral, couts: R.couts };
     var candidats = { vert: P.placesDeploiementSurCases(toutes, 'vert', o), rouge: P.placesDeploiementSurCases(toutes, 'rouge', o) };
     var neutres = P.placesNeutresSurCases(toutes, o);
+    // Le tiers central des rangées n'est pas une règle : c'est une PRÉFÉRENCE (réglage prefererTiersCentral). Chaque
+    // place sait si elle y est ; à défaut de place centrale qui convienne, une autre place du flanc est prise.
+    var etendue = P.etendueSurCases(toutes), tiersRangees = etendue ? Math.floor((etendue.bas - etendue.haut + 1) / 3) : 0;
+    neutres.forEach(function (x) { var rx = H.decle(x.cle).r; x.central = !!etendue && rx >= etendue.haut + tiersRangees && rx <= etendue.bas - tiersRangees; });
     var parFlanc = { gauche: neutres.filter(function (x) { return x.flanc === 'gauche'; }), droite: neutres.filter(function (x) { return x.flanc === 'droite'; }) };
     res.places = { vert: candidats.vert.length, rouge: candidats.rouge.length, gauche: parFlanc.gauche.length, droite: parFlanc.droite.length };
     var noms = { vert: 'le déploiement de Vert (bord haut)', rouge: 'le déploiement de Rouge (bord bas)', gauche: 'la ville neutre du flanc gauche', droite: 'la ville neutre du flanc droit' };
@@ -357,8 +361,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
           parFlanc[flanc].forEach(function (n) {
             if (quatre.some(function (k) { return pasNeutre(k, n) < R.ecartVilles; })) return;
             var ecart = Math.abs(Math.min(rationsNeutre(V[0], n), rationsNeutre(V[1], n)) - Math.min(rationsNeutre(Rg[0], n), rationsNeutre(Rg[1], n)));
-            // À écart égal, la case qui touche le plus de tuiles.
-            var valeur = ecart - n.cotes / 100;
+            // À écart égal, la case qui touche le plus de tuiles. Une place hors du tiers central ne sert que s'il
+            // n'y en a aucune au centre pour ces villes de déploiement (préférence, pas règle).
+            var valeur = ecart - n.cotes / 100 + (R.prefererTiersCentral && !n.central ? 1000 : 0);
             if (valeur < noteMieux) { noteMieux = valeur; mieux = { cle: n.cle, ecart: ecart }; }
           });
           if (!mieux) possible = false; else { choisis[flanc] = mieux.cle; note += mieux.ecart; }
@@ -380,8 +385,11 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   function signatureVilles(x) { return [x.vert.join(' '), x.rouge.join(' '), x.neutres.gauche, x.neutres.droite].join(' | '); }
 
   /**
-   * Toutes les façons valides de poser les villes sur un terrain construit, de la mieux équilibrée à la moins
-   * équilibrée (à score égal : ordre fixe des cases). Aucun tirage : même terrain et mêmes réglages = même liste.
+   * Les placements des VILLES DE DÉPLOIEMENT qui conviennent sur un terrain construit, du mieux équilibré au moins
+   * équilibré (à score égal : ordre fixe des cases). Pour chaque placement (2 villes par camp), les deux villes
+   * neutres sont celles que chercherVilles retient : la meilleure place de chaque flanc. Ce n'est donc PAS la liste
+   * de toutes les combinaisons de six villes : les autres places des villes neutres ne sont pas parcourues.
+   * Aucun tirage : même terrain et mêmes réglages = même liste.
    * Renvoie [{score, vert: [clés], rouge: [clés], neutres: {gauche, droite}}] ([] s'il n'y en a aucune).
    */
   function propositionsVilles(toutes, R) {
