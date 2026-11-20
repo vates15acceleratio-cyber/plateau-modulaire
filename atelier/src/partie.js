@@ -335,8 +335,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     var champs = ['version', 'graine', 'pieces', 'recouvrements', 'camps'];
     exiger(estObjet(pl), 'Plateau : objet attendu.');
     var avecModeles = possede(pl, 'modeles');                       // champ facultatif
-    var avecDeploiements = possede(pl, 'deploiements');             // champ facultatif (villes de déploiement, catalogue 2)
-    var avecProfondeur = possede(pl, 'profondeurExtremite');         // champ facultatif (rangées des extrémités retenues pour les villes)
+    var avecDeploiements = possede(pl, 'deploiements');             // champ facultatif (villes posées par-dessus une Plaine : neutres et déploiement)
+    var avecProfondeur = possede(pl, 'profondeurExtremite');         // champ des règles précédentes : validé, puis abandonné (sans effet)
     clesExactes(pl, champs.concat(avecModeles ? ['modeles'] : [], avecDeploiements ? ['deploiements'] : [], avecProfondeur ? ['profondeurExtremite'] : []), 'Plateau');
     exiger(estEntier(pl.version, 0, 1000), 'Plateau : version invalide.');
     // La graine du plateau est moins contrainte que celle de la partie (chaîne vide ou null admis),
@@ -375,12 +375,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       propre.recouvrements.push({ evenement: rc.evenement, cle: rc.cle });
     });
     if (avecDeploiements) {
-      exiger(Array.isArray(pl.deploiements) && pl.deploiements.length <= 8, 'Plateau : villes de déploiement invalides.');
+      exiger(Array.isArray(pl.deploiements) && pl.deploiements.length <= 8, 'Plateau : villes posées invalides.');
       var villesPosees = [];
       pl.deploiements.forEach(function (d, i) {
-        var ou = 'Plateau, ville de déploiement ' + (i + 1);
+        var ou = 'Plateau, ville posée ' + (i + 1);
         clesExactes(d, ['cle', 'camp'], ou);
-        exiger(JOUEURS.indexOf(d.camp) >= 0, ou + ' : camp invalide.');
+        exiger(typeof d.camp === 'string' && (d.camp === 'neutre' || JOUEURS.indexOf(d.camp) >= 0), ou + ' : propriétaire invalide (neutre, vert ou rouge).');
         exiger(typeof d.cle === 'string' && MOTIF_CLE.test(d.cle), ou + ' : clé de case invalide.');
         villesPosees.push({ cle: d.cle, camp: d.camp });
       });
@@ -388,7 +388,6 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     }
     if (avecProfondeur) {
       exiger(estEntier(pl.profondeurExtremite, 1, 3), 'Plateau : profondeur des extrémités invalide (1 à 3).');
-      propre.profondeurExtremite = pl.profondeurExtremite;
     }
     clesExactes(pl.camps, JOUEURS, 'Plateau, camps');
     JOUEURS.forEach(function (j) {

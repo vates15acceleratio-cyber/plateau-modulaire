@@ -132,8 +132,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     // Réglages partagés par les contrôles, le générateur et l'étape « Villes ». Jamais écrits dans AT.catalogue.REGLAGES.
     var reglages = {
       seuilContact: C.REGLAGES.seuilContact, mesureContact: C.REGLAGES.mesureContact,
-      profondeurExtremite: C.REGLAGES.villes.profondeurExtremite,          // rangées des extrémités (étape « Villes »)
-      remplissages: C.REGLAGES.generateur.remplissages                     // tuiles de remplissage permises au générateur
+      remplissages: C.REGLAGES.generateur.remplissages,                    // tuiles de remplissage permises au générateur
+      accolerSpeciales: 0                                                  // générateur : « Regrouper forêts et marais » (2 quand la case est cochée)
     };
     var selection = null;        // identifiant de la pièce sélectionnée
     var caseSelection = null;    // case cliquée lors de la sélection (pour retirer une tuile d'événement)
@@ -163,7 +163,11 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     var stockRemplissage = C.MODELES.R ? C.MODELES.R.nombre : 0, choixRemplissages = el('select', { id: 'pl-remplissages' });
     for (var nr = 0; nr <= stockRemplissage; nr++) choixRemplissages.appendChild(el('option', { value: nr, texte: nr === 0 ? 'aucune (défaut)' : nr + (nr > 1 ? ' tuiles au plus' : ' tuile au plus') }));
     choixRemplissages.value = String(reglages.remplissages);
+    // « Regrouper forêts et marais » (§10, C6) : décochée par défaut ; cochée, le générateur accole forêt à forêt et marais à marais.
+    var caseRegrouper = el('input', { type: 'checkbox', id: 'pl-regrouper' });
+    var VALEUR_REGROUPER = 2;
     var avisGeneration = el('p', { classe: 'at-avis', id: 'pl-avis', hidden: true });
+    var avisEquilibre = el('p', { classe: 'at-avis at-niveau-alerte', id: 'pl-avis-equilibre', hidden: true });
     var bandeauAncien = el('p', { classe: 'at-bandeau-ancien', id: 'pl-ancien', hidden: true,
       texte: 'Plateau de l’ancien catalogue (tuiles d’une case, villes posées pendant la construction) : il reste lisible et modifiable, et les contrôles s’y adaptent.' });
     var zoneOutil = el('div', { classe: 'at-outil', id: 'pl-outil' });
@@ -238,20 +242,25 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       if (g === null) g = 1;
       champGraine.value = String(g);
       // Les pièces personnelles du document sont reportées dans le plateau généré (non posées) : r.note le dit.
-      var r = AT.generateur.generer(g, { seuilContact: reglages.seuilContact, mesureContact: reglages.mesureContact, profondeurExtremite: reglages.profondeurExtremite,
-        remplissages: reglages.remplissages, modeles: P.modeles(plateau()) });
+      var r = AT.generateur.generer(g, { seuilContact: reglages.seuilContact, mesureContact: reglages.mesureContact,
+        remplissages: reglages.remplissages, accolerSpeciales: reglages.accolerSpeciales, modeles: P.modeles(plateau()) });
       if (!r.ok) {
         avisGeneration.hidden = false;
+        avisEquilibre.hidden = true;
         // Catalogue ou rayon hors de ce que le générateur sait poser : changer de graine n'y ferait rien.
-        // Profondeur des extrémités en cause : la raison le dit et donne le remède, on n'en propose pas un autre.
-        avisGeneration.textContent = 'Échec de la génération avec la graine « ' + g + ' » : ' + r.raison + (r.incompatible || r.profondeur ? '' : ' Essayez la graine suivante, ou le seuil de contact 2.');
+        avisGeneration.textContent = 'Échec de la génération avec la graine « ' + g + ' » : ' + r.raison + (r.incompatible ? '' : ' Essayez la graine suivante, ou le seuil de contact 2.');
         ctx.message('Échec de la génération : le plateau affiché n’a pas changé.', 'erreur');
         return false;
       }
       avisGeneration.hidden = true;
       quitterModes();
       changer(r.plateau, { garderVue: false, nouveauDocument: true });      // un plateau généré n'est plus celui de la fiche ouverte
-      ctx.message('Plateau généré (graine ' + g + ', score d’équilibre ' + r.score + (r.remplissages ? ', ' + r.remplissages + (r.remplissages > 1 ? ' tuiles' : ' tuile') + ' de remplissage' : '') + ').' + (r.note ? ' ' + r.note : ''), 'info');
+      // Aucun plateau n'est écarté pour déséquilibre (§10, C5) : le message donne le score et le camp avantagé, et un
+      // déséquilibre marqué (au-delà du seuil d'annonce) est dit en clair, dans le message et sous le bouton.
+      avisEquilibre.hidden = !r.annonce;
+      avisEquilibre.textContent = r.annonce || '';
+      ctx.message('Plateau généré (graine ' + g + ', score d’équilibre ' + r.score + ' : ' + r.avantageTexte + (r.remplissages ? ', ' + r.remplissages + (r.remplissages > 1 ? ' tuiles' : ' tuile') + ' de remplissage' : '')
+        + (reglages.accolerSpeciales ? ', forêts et marais regroupés' : '') + ').' + (r.annonce ? ' ' + r.annonce : '') + (r.note ? ' ' + r.note : ''), r.annonce ? 'alerte' : 'info');
       return true;
     }
 
@@ -321,7 +330,6 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       quitterModes();
       var vide = P.vide(plateau().graine);
       if (P.modeles(plateau()).length) vide.modeles = P.modeles(plateau());      // les pièces personnelles restent dans le document
-      vide = P.avecProfondeurExtremite(vide, P.profondeurExtremite(plateau())).plateau;      // le réglage des extrémités aussi
       changer(vide);
       ctx.message('Plateau vidé : toutes les pièces sont au stock (Annuler pour revenir en arrière).', 'info');
     }
@@ -331,7 +339,6 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       quitterModes();
       var vierge = P.vierge('fait main');
       if (P.modeles(plateau()).length) vierge.modeles = P.modeles(plateau());
-      vierge = P.avecProfondeurExtremite(vierge, P.profondeurExtremite(plateau())).plateau;
       changer(vierge, { garderVue: false, nouveauDocument: true });
       ctx.message('Nouveau plateau vierge : le noyau est posé au centre (Annuler pour revenir au plateau précédent).', 'info');
     }
@@ -567,7 +574,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       // L'étape « Villes » se propose d'elle-même quand la construction est terminée (bouton de mode mis en avant).
       var proposer = !!bilan && bilan.etape === 'villes' && mode !== 'villes' && bilan.catalogue !== 'premier';
       boutonsModes.villes.setAttribute('data-propose', proposer ? 'oui' : 'non');
-      boutonsModes.villes.title = proposer ? 'Construction terminée : c’est le moment de poser les villes' : 'Poser les villes de déploiement et les villes neutres';
+      boutonsModes.villes.title = proposer ? 'Construction terminée : c’est le moment de poser les villes' : 'Poser les villes neutres et les villes de déploiement, sur des Plaines';
       if (mode === 'monoblocs') monoblocs.rafraichir();
       biblio.rafraichir();
       btnAnnuler.disabled = rang === 0;
@@ -655,7 +662,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
           corpsTable,
           pied
         ]));
-        blocs.push(el('p', { id: 'pl-score', 'data-avantage': e.avantage || 'aucun', texte: 'Score d’équilibre : ' + e.score + ' (0 = équilibré) ; ' + e.avantageTexte + '. Le score additionne l’écart entre Vert et Rouge vers le centre et vers chaque ville neutre'
+        // Déséquilibre marqué (au-delà du seuil d'annonce) : une mention visible, jamais une erreur.
+        if (e.annonce) blocs.push(el('p', { id: 'pl-annonce', classe: 'at-avis at-niveau-alerte', texte: K.texteAnnonce(e) }));
+        blocs.push(el('p', { id: 'pl-score', 'data-avantage': e.avantage || 'aucun', 'data-annonce': e.annonce ? 'oui' : 'non', texte: 'Score d’équilibre : ' + e.score + ' (0 = équilibré) ; ' + e.avantageTexte + '. Le score additionne l’écart entre Vert et Rouge vers le centre et vers chaque ville neutre'
           + (e.adverses && e.adverses.ecart !== null ? ', et l’écart vers la ville de déploiement adverse la plus lointaine (' + e.adverses.ecart + ').' : '.') }));
       }
 
@@ -680,9 +689,6 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
     function rafraichir(garderVue) {
       var pl = plateau();
-      // La profondeur des extrémités est celle du DOCUMENT affiché (champ enregistré, sinon le réglage par défaut) :
-      // elle suit donc l'ouverture d'un fichier ou d'une fiche, l'annulation et le rétablissement.
-      reglages.profondeurExtremite = P.profondeurExtremite(pl);
       vue.afficher(scene(pl, true), garderVue);
       infoPlateau.textContent = 'Graine du plateau : ' + pl.graine + ' ; ' + pl.pieces.length + ' pièce(s), ' + Object.keys(P.cases(pl)).length + ' case(s)';
       rafraichirControles();
@@ -690,20 +696,18 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     }
 
     /**
-     * Scène à dessiner : la grille vide (rayon 7) s'ajoute dans les modes de création ; à l'étape « Villes », le
-     * cadre s'élargit d'une case autour du plateau (les villes neutres se posent sur des cases vides, contre le bord).
+     * Scène à dessiner : la grille vide (rayon 7) s'ajoute dans les modes de création.
      */
     function scene(pl, avecEtiquettes) {
       var s = { plateau: pl };
       if (avecEtiquettes) s.etiquettes = etiquettes(pl, affichage);
       if (mode === 'creer' || mode === 'pinceau') s.grille = R.casesGrille(pl, AT.vueCreation.RAYON_GRILLE);
-      if (mode === 'villes') s.autour = AT.vueVilles.anneau(pl);
       return s;
     }
 
 
     /** Ce qui élargit le cadre selon le mode : il faut recadrer quand cela change. */
-    function cadreDuMode(m) { return (m === 'creer' || m === 'pinceau') ? 'grille' : (m === 'villes' ? 'anneau' : 'plateau'); }
+    function cadreDuMode(m) { return (m === 'creer' || m === 'pinceau') ? 'grille' : 'plateau'; }
 
     /** Aperçu d'un plateau provisoire (trait de pinceau en cours), hors historique et sans contrôles ; null : retour au plateau courant. */
     function apercu(provisoire) { vue.afficher(provisoire ? scene(provisoire, false) : scene(plateau(), true), true); }
@@ -724,7 +728,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       guide.reste.hidden = !(grilleApres || mode === 'villes');
       element.setAttribute('data-mode', mode);
       biblio.montrer(mode === 'bibliotheque');
-      rafraichir(cadreAvant === cadreApres);            // la grille ou l'anneau changent le cadre : on recadre
+      rafraichir(cadreAvant === cadreApres);            // la grille change le cadre : on recadre
       return true;
     }
 
@@ -791,6 +795,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     choixSeuil.addEventListener('change', function () { reglages.seuilContact = parseInt(choixSeuil.value, 10); rafraichir(true); });
     choixMesure.addEventListener('change', function () { reglages.mesureContact = choixMesure.value; rafraichir(true); });
     choixRemplissages.addEventListener('change', function () { reglages.remplissages = parseInt(choixRemplissages.value, 10); });
+    caseRegrouper.addEventListener('change', function () { reglages.accolerSpeciales = caseRegrouper.checked ? VALEUR_REGROUPER : 0; });
     choixAffichage.addEventListener('change', function () { affichage = choixAffichage.value; rafraichir(true); });
     champGraine.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') generer(); });
 
@@ -800,9 +805,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
           return el('span', { classe: 'at-legende-item' }, [R.pastilleTerrain(C.EVENEMENTS[id].terrain, true), id + ' ' + C.EVENEMENTS[id].nom]);
         }))
         .concat([
-          el('span', { classe: 'at-legende-item' }, [R.pastilleTuile('vd-vert'), 'ville de déploiement de Vert, posée sur une Plaine (haut)']),
-          el('span', { classe: 'at-legende-item' }, [R.pastilleTuile('vd-rouge'), 'ville de déploiement de Rouge, posée sur une Plaine (bas)']),
-          el('span', { classe: 'at-legende-item' }, [R.pastilleTuile('vn'), 'ville neutre (tuile ajoutée sur un flanc)']),
+          el('span', { classe: 'at-legende-item' }, [R.pastilleTuile('vn-plaine'), 'ville neutre, posée sur une Plaine']),
+          el('span', { classe: 'at-legende-item' }, [R.pastilleTuile('vd-vert'), 'ville de déploiement de Vert, posée sur une Plaine']),
+          el('span', { classe: 'at-legende-item' }, [R.pastilleTuile('vd-rouge'), 'ville de déploiement de Rouge, posée sur une Plaine']),
+          el('span', { classe: 'at-legende-item' }, [R.pastilleTuile('vn'), 'ville neutre des règles précédentes (tuile ajoutée contre le plateau)']),
           el('span', { classe: 'at-legende-item' }, [R.pastilleTuile('remplissage'), 'tuile de remplissage (facultative)']),
           el('span', { classe: 'at-legende-item' }, [el('span', { classe: 'at-trait-epais' }), 'contour d’une pièce monobloc']),
           el('span', { classe: 'at-legende-item' }, [el('span', { classe: 'at-trait-epais at-trait-noyau' }), 'noyau'])
@@ -844,8 +850,11 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         el('div', { classe: 'at-ligne' }, [el('label', { for: 'pl-seuil', texte: 'Seuil de contact' }), choixSeuil]),
         el('div', { classe: 'at-ligne' }, [el('label', { for: 'pl-mesure', texte: 'Mesure' }), choixMesure]),
         el('div', { classe: 'at-ligne' }, [el('label', { for: 'pl-remplissages', texte: 'Tuiles de remplissage permises' }), choixRemplissages]),
-        el('p', { classe: 'at-aide', texte: 'Le générateur construit le terrain en monoblocs, comme des joueurs, puis pose les villes. Les tuiles de remplissage (une case de plaine) restent l’exception : il en pose le moins possible.' }),
-        avisGeneration
+        el('div', { classe: 'at-ligne' }, [caseRegrouper, el('label', { for: 'pl-regrouper', texte: 'Regrouper forêts et marais' })]),
+        el('p', { classe: 'at-aide', texte: 'Le générateur construit le terrain en monoblocs, comme des joueurs, puis pose les 6 villes sur des Plaines, au meilleur équilibre entre Vert et Rouge. Il n’écarte aucun plateau pour déséquilibre : il l’indique. '
+          + 'Les tuiles de remplissage (une case de plaine) restent l’exception : il en pose le moins possible. « Regrouper forêts et marais » lui fait accoler forêt à forêt et marais à marais.' }),
+        avisGeneration,
+        avisEquilibre
       ]),
       el('fieldset', null, [
         el('legend', { texte: 'Fichier et image' }),

@@ -26,9 +26,15 @@ const fixture = (dossier, nom) => P.lire(fs.readFileSync(path.join(__dirname, do
 const FORET3 = [{ q: 0, r: 0, terrain: 'foret' }, { q: 1, r: 0, terrain: 'plaine' }, { q: 1, r: 1, terrain: 'plaine' }];
 const forme = (n, terrains) => [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [5, 0]].slice(0, n).map((c, i) => ({ q: c[0], r: c[1], terrain: terrains[i] || terrains[terrains.length - 1] }));
 
+/** Cases vides qui touchent le plateau : clés triées. */
+function anneau(plateau) {
+  const toutes = P.cases(plateau, { sansRecouvrements: true }), vues = new Set();
+  Object.keys(toutes).forEach((k) => H.voisines(k).forEach((v) => { if (!toutes[v]) vues.add(v); }));
+  return H.trier([...vues]);
+}
 /** Pose le modèle (hors stock) contre le plateau, à la première place et rotation acceptées par `condition`. */
 function poserContre(plateau, idModele, condition) {
-  for (const k of V.anneau(plateau)) {
+  for (const k of anneau(plateau)) {
     const c = H.decle(k);
     for (let rot = 0; rot < 6; rot++) {
       const r = P.poser(plateau, idModele, c.q, c.r, rot, { horsStock: true });
@@ -39,7 +45,7 @@ function poserContre(plateau, idModele, condition) {
 }
 /** Peint le terrain sur la première case du pourtour acceptée par `condition`. */
 function peindreContre(plateau, terrain, condition) {
-  for (const k of V.anneau(plateau)) {
+  for (const k of anneau(plateau)) {
     const r = P.peindre(plateau, k, terrain);
     if (r.ok && (!condition || condition(P.avecCamps(r.plateau)))) return P.avecCamps(r.plateau);
   }
@@ -75,16 +81,16 @@ test('I1 : un plateau fait avec le catalogue précédent a son état propre : ri
     // Sans ses villes : étape « villes », toujours sans erreur ni pièce à poser.
     const nu = V.retirerToutes(p).plateau, bn = K.tout(nu);
     assert.deepStrictEqual([bn.etape, bn.erreurs, bn.construction.restantes, bn.etapeTitre], ['villes', 0, 0, 'Plateau du catalogue précédent']);
-    assert.match(bn.etapeMessage, /Villes à poser : 2 villes de déploiement pour Vert, 2 villes de déploiement pour Rouge, 2 villes neutres\.$/);
+    assert.match(bn.etapeMessage, /Villes à poser : 2 villes neutres, 2 villes de déploiement pour Vert, 2 villes de déploiement pour Rouge\.$/);
     // Il se rouvre, se réenregistre et porte une partie.
     assert.deepStrictEqual(P.lire(P.serialiser(p)).plateau, p);
     assert.ok(T.creer({ graine: 1, plateau: { version: p.version, graine: p.graine, pieces: p.pieces, recouvrements: [], camps: p.camps, deploiements: p.deploiements } }, env(1)).ok);
   });
-  // Les villes neutres de ces plateaux touchaient 2 cases, parfois d'une seule pièce : alerte, pas erreur (voir I3).
+  // Les villes neutres de ces plateaux sont des tuiles ajoutées contre le plateau (règles précédentes) : alerte, pas erreur.
   const b = K.tout(fixture('fixtures-v2', 'plateau-genere.json'));
   const villes = b.resultats.filter((x) => x.groupe === 'villes' && x.niveau === 'alerte');
   assert.strictEqual(villes.length, 1);
-  assert.match(villes[0].message, /^2 villes neutres tenues par une seule tuile \(-7,0\) \(5,0\) : permis quand ce plateau a été fait/);
+  assert.match(villes[0].message, /^Règles précédentes pour les villes : 2 villes neutres en tuiles ajoutées contre le plateau \(-7,0\) \(5,0\)\./);
   assert.strictEqual(b.alertes, 2);
 });
 
@@ -241,64 +247,6 @@ test('I2 : le pinceau et l’éditeur disent « hors règles, signalé par les c
 
 // ------------------------------------------------------------------ I3 et I4
 
-test('I3 : une ville neutre est tenue par 2 PIÈCES distinctes (modèle, contrôles, générateur, vérificateur)', () => {
-  assert.strictEqual(C.REGLAGES.villes.contactVilleNeutre, 2);
-  let unePiece = null;
-  for (let g = 1; g <= 25; g++) {
-    const p = genere(g), terrain = P.cases(p, { sansVilles: true });
-    P.etatVilles(p).neutres.forEach((n) => {
-      const pieces = new Set(H.voisines(n.cle).filter((v) => terrain[v]).map((v) => terrain[v].piece));
-      assert.ok(pieces.size >= 2, 'graine ' + g + ' : ville neutre en ' + n.cle + ' tenue par ' + pieces.size + ' pièce(s)');
-    });
-    // Une case de flanc qui touche 2 cases d'une SEULE pièce, à 4 pas des autres villes : permise hier, refusée aujourd'hui.
-    if (!unePiece) {
-      const sans = P.retirerVilleNeutre(p, P.etatVilles(p).neutres[0].cle).plateau, flanc = P.etatVilles(p).neutres[0].flanc;
-      const place = P.placesNeutresSurCases(P.cases(sans), { contactEnCases: true }).filter((x) => x.pieces === 1 && x.flanc === flanc)[0];
-      if (place) unePiece = { sans: sans, cle: place.cle };
-    }
-  }
-  assert.ok(unePiece, 'une place tenue par une seule pièce sur 25 graines');
-  const refus = P.poserVilleNeutre(unePiece.sans, unePiece.cle);
-  assert.strictEqual(refus.ok, false);
-  assert.match(refus.raison, /^Cette case ne touche que 1 pièce du plateau \(\d cases\) ; une ville neutre doit être tenue par au moins 2 tuiles différentes\.$/);
-  assert.ok(V.places(unePiece.sans, 'neutre').indexOf(unePiece.cle) === -1, 'elle n’est plus proposée');
-  // Posée quand même (pose libre) : erreur des contrôles, faute du vérificateur.
-  const force = P.poserVilleNeutre(unePiece.sans, unePiece.cle, { libre: true });
-  assert.ok(force.ok, force.raison);
-  assert.ok(erreurs(K.tout(force.plateau)).some((m) => /^Ville neutre en \(.*\) mal placée : Cette case ne touche que 1 pièce du plateau/.test(m)));
-  assert.ok(verifier(force.plateau, 3, 'pieces', 0).fautes.some((f) => /^B5 : ville neutre en .* tenue par 1 pièce\(s\) \(\d case\(s\)\)/.test(f)));
-  // Sur un plateau du catalogue précédent, la même situation n'est qu'une alerte (I1).
-  assert.strictEqual(K.tout(fixture('fixtures-v2', 'plateau-genere.json')).villes.erreurs, 0);
-});
-
-test('I4 : une ville neutre se pose n’importe où sur un flanc ; le tiers central n’est plus une règle, seulement une préférence du générateur', () => {
-  assert.strictEqual(C.REGLAGES.villes.neutresTiersCentral, false);
-  assert.strictEqual(G.reglages({}).prefererTiersCentral, true);
-  let horsTiers = null, generesHorsTiers = 0, villes = 0;
-  for (let g = 1; g <= 25; g++) {
-    const p = genere(g), terrain = P.cases(p, { sansVilles: true }), e = P.etendueSurCases(terrain), tiers = Math.floor((e.bas - e.haut + 1) / 3);
-    const dehors = (k) => { const r = H.decle(k).r; return r < e.haut + tiers || r > e.bas - tiers; };
-    P.etatVilles(p).neutres.forEach((n) => { villes += 1; if (dehors(n.cle)) generesHorsTiers += 1; });
-    if (horsTiers) continue;
-    const vn = P.etatVilles(p).neutres[0], sans = P.retirerVilleNeutre(p, vn.cle).plateau;
-    const place = P.placesNeutres(sans).filter((x) => x.flanc === vn.flanc && dehors(x.cle))[0];
-    if (place) horsTiers = { sans: sans, cle: place.cle };
-  }
-  assert.ok(generesHorsTiers * 5 < villes, 'le générateur préfère le tiers central : ' + generesHorsTiers + ' villes sur ' + villes + ' en dehors');
-  assert.ok(horsTiers, 'une place de flanc hors du tiers central');
-  const pose = P.poserVilleNeutre(horsTiers.sans, horsTiers.cle);
-  assert.ok(pose.ok, pose.raison);
-  const b = K.tout(pose.plateau);
-  assert.deepStrictEqual([b.ok, b.etape], [true, 'complet'], erreurs(b).join(' | '));
-  assert.deepStrictEqual(verifier(pose.plateau, 3, 'pieces', 0).fautes, []);
-  // Le réglage reste un paramètre : remis à vrai, c'est de nouveau un refus et une erreur.
-  assert.match(P.poserVilleNeutre(horsTiers.sans, horsTiers.cle, { neutresTiersCentral: true }).raison, /à mi-hauteur du plateau/);
-  assert.ok(erreurs(K.tout(pose.plateau, { neutresTiersCentral: true })).some((m) => /mal placée : Une ville neutre se pose à mi-hauteur/.test(m)));
-  // Toujours une par flanc, et jamais en haut ni en bas.
-  const terrain = P.cases(horsTiers.sans), e = P.etendueSurCases(terrain), sommet = H.decle(Object.keys(terrain).filter((k) => H.decle(k).r === e.haut)[0]);
-  assert.match(P.poserVilleNeutre(horsTiers.sans, H.cle(sommet.q, sommet.r - 1)).raison, /sur un côté du plateau \(flanc gauche ou droit\)/);
-});
-
 // ------------------------------------------------------------------ M2 à M8, M10
 
 test('M2 : la pose automatique et « Autre proposition » ignorent une Plaine couverte par une tuile d’événement', () => {
@@ -324,20 +272,6 @@ test('M2 : la pose automatique et « Autre proposition » ignorent une Plaine co
   assert.deepStrictEqual(V.poserAuto(nu, nu.graine, {}).plateau, libre.plateau);
 });
 
-test('M3 : « Autre proposition » parcourt les placements des villes de déploiement, un par quadruplet, et le dit', () => {
-  const nu = V.retirerToutes(genere(7)).plateau;
-  const liste = G.propositionsVilles(P.cases(nu, { sansRecouvrements: true }), G.reglages({}));
-  const quadruplets = new Set(liste.map((x) => x.vert.join(' ') + ' / ' + x.rouge.join(' ')));
-  assert.strictEqual(quadruplets.size, liste.length, 'chaque placement des 4 villes de déploiement n’apparaît qu’une fois');
-  const r = V.autreProposition(nu, {});
-  assert.deepStrictEqual([r.rang, r.nombre], [1, liste.length]);
-  // Le libellé ne promet plus « toutes les combinaisons ».
-  const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'vue-villes.js'), 'utf8');
-  assert.match(source, /placement n° ' \+ r\.rang \+ ' sur ' \+ r\.nombre \+ ' des villes de déploiement/);
-  assert.match(source, /leurs autres places ne sont pas parcourues/);
-  assert.ok(!/Toutes les façons valides/.test(fs.readFileSync(path.join(__dirname, '..', 'src', 'generateur.js'), 'utf8')));
-});
-
 test('M4 : l’équilibre dit quel camp est avantagé ; la ville adverse la plus proche, toujours égale, ne compte plus', () => {
   let penches = 0;
   for (let g = 1; g <= 30; g++) {
@@ -358,7 +292,8 @@ test('M4 : l’équilibre dit quel camp est avantagé ; la ville adverse la plus
     if (e.score) penches += 1;
     assert.match(K.controleEquilibre(genere(g))[0].message, new RegExp('Sens : ' + e.avantageTexte.replace(/[()]/g, '\\$&') + '\\.$'));
   }
-  assert.ok(penches > 5);
+  // La pose automatique minimise désormais le déséquilibre : un plateau penché se trouve dans les fichiers témoins.
+  assert.ok(penches >= 0 && K.equilibre(fixture('fixtures-v3', 'plateau-genere.json')).score > 0);
   assert.strictEqual(K.texteAvantage({ vert: 0, rouge: 0 }), 'aucun camp avantagé');
   assert.strictEqual(K.texteAvantage({ vert: 9, rouge: 0 }), 'avantage Vert de 9');
   assert.strictEqual(K.texteAvantage({ vert: 0, rouge: 4 }), 'avantage Rouge de 4');
@@ -393,7 +328,7 @@ test('M5 : la table de jeu s’en tient aux tuiles posées, avertit sans bloquer
   const nu = V.retirerToutes(p).plateau, sans = T.creer({ graine: 3, plateau: nu }, env(3));
   assert.ok(sans.ok, sans.raison);
   assert.match(T.avisPlateau(sans.etat.plateau)[0], /^Ce plateau n’a aucune ville de déploiement : former un bataillon demandera « Faire quand même »\. Posez d’abord les villes/);
-  const unCamp = P.poserVilleDeploiement(nu, 'vert', V.places(nu, 'vert')[0]).plateau;
+  const unCamp = P.poserVille(nu, 'vert', V.places(nu, 'vert')[0]).plateau;
   assert.match(T.avisPlateau(unCamp)[0], /^Rouge n’a aucune ville de déploiement sur ce plateau/);
   // Ancien plateau (villes d'une case, pas de tuiles posées) : `camps` fait foi, rien à dire.
   const v1 = fixture('fixtures-v1', 'plateau-genere.json');
@@ -414,7 +349,9 @@ test('M6 : le noyau ne se tourne pas et ne se déplace pas (modèle et vues), av
   assert.deepStrictEqual([d.ok, d.raison, d.plateau === seul], [false, P.RAISON_NOYAU_FIXE, true]);
   assert.strictEqual(VP.refusRetouche(p, noyau.id), P.RAISON_NOYAU_FIXE);
   assert.strictEqual(VP.refusRetouche(p, autre.id), null);
-  assert.strictEqual(VP.refusRetouche(p, P.etatVilles(p).neutres[0].piece), P.RAISON_VILLE_NEUTRE);
+  // Une ancienne tuile de ville neutre (règles précédentes) ne se retouche qu'à l'étape « Villes ».
+  const v3 = fixture('fixtures-v3', 'plateau-genere.json');
+  assert.strictEqual(VP.refusRetouche(v3, P.etatVilles(v3).neutres[0].piece), P.RAISON_VILLE_NEUTRE);
   // Les autres pièces se tournent et se déplacent toujours ; la gomme garde son refus du noyau.
   assert.notStrictEqual(P.tourner(seul, P.poser(seul, 'F3', 3, 0, 0).id, 1).raison, P.RAISON_NOYAU_FIXE);
   assert.ok(VP.deplacerPiece(P.poser(seul, 'F3', 3, 0, 0).plateau, P.poser(seul, 'F3', 3, 0, 0).id, -4, 0).ok);
@@ -425,32 +362,6 @@ test('M6 : le noyau ne se tourne pas et ne se déplace pas (modèle et vues), av
   assert.ok(verifier(tourne, 3, 'pieces', 0).fautes.some((f) => /^B1 : noyau absent, décentré ou tourné/.test(f)));
 });
 
-test('M7 : « au bord » veut dire au bord EXTÉRIEUR : une Plaine qui ne touche qu’un trou intérieur est refusée', () => {
-  // Disque de rayon 2 autour de (0,0), tout en plaine, percé en son centre.
-  const toutes = {};
-  for (let q = -2; q <= 2; q++) for (let r = -2; r <= 2; r++) {
-    const k = H.cle(q, r);
-    if (H.distance(k, '0,0') <= 2 && k !== '0,0') toutes[k] = { terrain: 'plaine', piece: 'p' + k, origine: 'plaine', modele: 'P', evenement: null };
-  }
-  assert.deepStrictEqual(Object.keys(P.casesEnfermees(toutes)), ['0,0']);
-  const o = { profondeurExtremite: 2, sansEcart: true };
-  assert.strictEqual(P.refusDeploiementSurCases(toutes, 'vert', '0,-2', o), null, 'case du pourtour : au bord');
-  assert.match(P.refusDeploiementSurCases(toutes, 'vert', '0,-1', o), /^Cette case n’est pas au bord du plateau : elle ne touche qu’un trou intérieur, pas le bord extérieur\.$/);
-  assert.ok(P.placesDeploiementSurCases(toutes, 'vert', o).indexOf('0,-1') === -1);
-  assert.match(P.refusDeploiementSurCases(toutes, 'rouge', '0,1', o), /trou intérieur/);
-  // Sans le trou, la même case est simplement « entourée de tuiles ».
-  toutes['0,0'] = { terrain: 'plaine', piece: 'centre', origine: 'plaine', modele: 'P', evenement: null };
-  const plein = Object.assign({}, toutes);
-  assert.match(P.refusDeploiementSurCases(plein, 'vert', '0,-1', o), /elle est entourée de tuiles/);
-  // Une échancrure ouverte sur l'extérieur reste un bord.
-  const ouvert = Object.assign({}, plein);
-  delete ouvert['0,0']; delete ouvert['0,-1']; delete ouvert['0,-2'];
-  assert.strictEqual(P.refusDeploiementSurCases(ouvert, 'vert', '1,-1', { profondeurExtremite: 3, sansEcart: true }), null);
-  // Les plateaux générés n'ont pas de trou : rien ne change pour eux.
-  const p = genere(2), nu = V.retirerToutes(p).plateau;
-  assert.deepStrictEqual(Object.keys(P.casesEnfermees(P.cases(nu))), []);
-});
-
 test('M8 : le contrôle des villes vérifie le total : 1 au centre, 2 neutres, 4 de déploiement, pas davantage', () => {
   const p = genere(1);
   assert.ok(!erreurs(K.tout(p)).length);
@@ -459,14 +370,14 @@ test('M8 : le contrôle des villes vérifie le total : 1 au centre, 2 neutres, 4
   const constats = K.villes(huit).filter((x) => x.niveau === 'erreur');
   assert.ok(constats.some((x) => /^8 villes sur le plateau ; il en faut 7 au plus \(1 au centre, 2 neutres, 4 de déploiement\)\.$/.test(x.message) && x.cases.length === 8), constats.map((x) => x.message).join(' | '));
   // Une troisième ville neutre (fichier) : c'est le contrôle des villes qui le dit, pas « tuile de terrain d'une case ».
-  const troisNeutres = copie(p), ajout = P.placesNeutresSurCases(P.cases(V.retirerToutes(p).plateau), { sansEcart: true }).filter((x) => !P.cases(p)[x.cle])[0];
-  troisNeutres.pieces.push({ id: 'vn3', modele: 'VN', q: H.decle(ajout.cle).q, r: H.decle(ajout.cle).r, rotation: 0 });
+  const troisNeutres = copie(p), ajout = anneau(p)[0];
+  troisNeutres.pieces.push({ id: 'vn3', modele: 'VN', q: H.decle(ajout).q, r: H.decle(ajout).r, rotation: 0 });
   const b3 = K.tout(troisNeutres);
   assert.ok(erreurs(b3).some((m) => /^3 villes neutres ; il en faut 2\.$/.test(m)), erreurs(b3).join(' | '));
   assert.ok(erreurs(b3).some((m) => /^8 villes sur le plateau ; il en faut 7 au plus/.test(m)));
   assert.ok(!b3.resultats.some((x) => /tuile de terrain d’une case|à prévoir en plus/.test(x.message)), b3.resultats.map((x) => x.message).join(' | '));
   // Moins de 7 : ce sont des villes à poser, pas une erreur.
-  const six = P.retirerVilleNeutre(p, P.etatVilles(p).neutres[0].cle).plateau;
+  const six = P.retirerVille(p, P.etatVilles(p).neutres[0].cle).plateau;
   assert.ok(!K.villes(six).some((x) => /villes sur le plateau ; il en faut/.test(x.message)));
   assert.strictEqual(K.tout(six).villes.erreurs, 0);
 });
@@ -475,7 +386,7 @@ test('M10 : contrôles et vérificateur comptent le contact d’une tuile de rem
   const base = genere(1);
   // Une tuile de remplissage qui touche 2 cases d'UNE seule pièce : 2 « côtés », 1 « pièce ».
   let cas = null;
-  for (const k of V.anneau(base)) {
+  for (const k of anneau(base)) {
     const r = P.peindre(base, k, 'plaine');
     if (!r.ok) continue;
     const x = K.contacts(r.plateau).filter((c) => c.modele === 'R')[0];

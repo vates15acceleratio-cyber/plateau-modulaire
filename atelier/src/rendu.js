@@ -29,7 +29,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   var COULEURS_CAMPS = { vert: '#007A4D', rouge: '#D8321C' };
   var NOMS_CAMPS = { vert: 'Vert', rouge: 'Rouge' };
   var INITIALES_CAMPS = { vert: 'V', rouge: 'R' };
-  var COULEUR_NEUTRE = '#8A6400';        // liseré des villes neutres
+  var COULEUR_NEUTRE = '#8A6400';        // liseré et pastille des villes neutres
 
   /**
    * L'arête n° i d'une case va du sommet i au sommet i + 1 (AT.hex.sommets, à partir du sommet du haut).
@@ -291,7 +291,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         gDessus.appendChild(texteSvg(c.x, y - (occupee ? 0 : 3), String(numeros[k]), { 'font-size': occupee ? 12 : 14, 'font-weight': 'bold', fill: '#FFFFFF' }));
         if (!occupee) gDessus.appendChild(texteSvg(c.x, y + 10, INITIALES_CAMPS[camp], { 'font-size': 9, 'font-weight': 'bold', fill: '#FFFFFF' }));
       } else {
-        var neutre = toutes[k].modele === 'VN';
+        var neutre = toutes[k].modele === 'VN' || toutes[k].camp === 'neutre';
         gDessus.appendChild(svg('circle', { cx: arrondi(c.x), cy: arrondi(y), r: r, fill: '#FFFFFF', stroke: neutre ? COULEUR_NEUTRE : '#1F1F1F', 'stroke-width': neutre ? 3 : 2 }));
         gDessus.appendChild(texteSvg(c.x, y - (neutre && !occupee ? 3 : 0), String(numeros[k]), { 'font-size': occupee ? 12 : (neutre ? 13 : 15), 'font-weight': 'bold', fill: '#111111' }));
         if (neutre && !occupee) gDessus.appendChild(texteSvg(c.x, y + 9, 'N', { 'font-size': 8, 'font-weight': 'bold', fill: COULEUR_NEUTRE }));
@@ -332,10 +332,11 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     racine.appendChild(gDessus);
   }
 
-  /** Type de tuile particulière d'une case de AT.plateau.cases() : 'vd-vert', 'vd-rouge', 'vn', 'remplissage', ou null. */
+  /** Type de tuile particulière d'une case de AT.plateau.cases() : 'vd-vert', 'vd-rouge', 'vn-plaine', 'vn', 'remplissage', ou null. */
   function typeTuile(c) {
     if (!c) return null;
     if (c.ville && (c.camp === 'vert' || c.camp === 'rouge')) return 'vd-' + c.camp;
+    if (c.ville && c.camp === 'neutre') return 'vn-plaine';
     if (c.modele === 'VN') return 'vn';
     if (c.modele === 'R') return 'remplissage';
     return null;
@@ -345,7 +346,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * Dessin d'une tuile particulière sur la case `cle`, tout en attributs SVG (l'export reste autonome) :
    *   'vd-vert' / 'vd-rouge' : ville de déploiement, tuile plus petite posée PAR-DESSUS la Plaine (qui reste visible
    *                            autour), bordée d'un liseré à la couleur du camp ;
-   *   'vn'                   : ville neutre, tuile entière à double liseré doré ;
+   *   'vn-plaine'            : ville neutre, tuile plus petite posée PAR-DESSUS la Plaine, à double liseré doré (elle
+   *                            se distingue d'une ville de déploiement par sa couleur et son double trait) ;
+   *   'vn'                   : ville neutre des règles précédentes (pièce VN), tuile entière à double liseré doré ;
    *   'remplissage'          : tuile de remplissage, Plaine d'une case à liseré pointillé et point central.
    */
   function decorTuile(g, cle, type, prefixe) {
@@ -354,6 +357,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var couleur = COULEURS_CAMPS[type === 'vd-vert' ? 'vert' : 'rouge'];
       g.appendChild(polygoneCase(cle, { fill: '#000000', 'fill-opacity': 0.28, stroke: 'none' }, 0.15));                     // ombre : la tuile est posée dessus
       g.appendChild(polygoneCase(cle, { fill: remplissage(prefixe, 'ville'), stroke: couleur, 'stroke-width': 4, 'stroke-linejoin': 'round' }, 0.22));
+    } else if (type === 'vn-plaine') {
+      g.appendChild(polygoneCase(cle, { fill: '#000000', 'fill-opacity': 0.28, stroke: 'none' }, 0.15));
+      g.appendChild(polygoneCase(cle, { fill: remplissage(prefixe, 'ville'), stroke: COULEUR_NEUTRE, 'stroke-width': 4, 'stroke-linejoin': 'round' }, 0.22));
+      g.appendChild(polygoneCase(cle, { fill: 'none', stroke: '#FFFFFF', 'stroke-width': 1.5, 'stroke-dasharray': '4 3' }, 0.22));
     } else if (type === 'vn') {
       g.appendChild(polygoneCase(cle, { fill: 'none', stroke: COULEUR_NEUTRE, 'stroke-width': 4, 'stroke-linejoin': 'round' }, 0.07));
       g.appendChild(polygoneCase(cle, { fill: 'none', stroke: COULEUR_NEUTRE, 'stroke-width': 1.5 }, 0.2));
@@ -476,7 +483,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       scene = nouvelleScene;
       dessinerScene(gScene, scene, prefixe);
       dessinerGrille(gGrille, scene.grille);
-      cadreScene = cadrePlateau(scene.plateau, undefined, (scene.grille || []).concat(scene.autour || []));      // `autour` : cases vides à garder dans le cadre, sans les dessiner
+      cadreScene = cadrePlateau(scene.plateau, undefined, scene.grille || []);
       if (premiere || !garderVue) cadrer();
     }
 
@@ -662,7 +669,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     cases.forEach(function (x) {
       racine.appendChild(polygoneCase(x.cle, { fill: remplissage(prefixe, x.terrain), stroke: '#6E6A58', 'stroke-width': 1.5 }));
     });
-    // Tuiles d'une case du catalogue 2 : mêmes repères que sur le plateau (remplissage, ville neutre).
+    // Tuiles d'une case : mêmes repères que sur le plateau (remplissage, ville neutre des règles précédentes).
     if (idModele === 'R') decorTuile(racine, '0,0', 'remplissage', prefixe);
     if (idModele === 'VN') decorTuile(racine, '0,0', 'vn', prefixe);
     if (cles.length > 1) {

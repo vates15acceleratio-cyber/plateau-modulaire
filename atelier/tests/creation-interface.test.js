@@ -82,7 +82,7 @@ test('palette : catalogue imprimé puis pièces personnelles, jamais la montagne
   assert.deepStrictEqual(p0.filter((x) => x.id === 'N1')[0], { id: 'N1', nom: 'Noyau', cases: 7, total: 1, poses: 1, restant: 0, perso: false, role: 'noyau', facultatif: false });
   assert.deepStrictEqual(p0.filter((x) => x.id === 'X1')[0], { id: 'X1', nom: 'Crête', cases: 3, total: 2, poses: 0, restant: 2, perso: true, role: 'perso', facultatif: false });
   assert.deepStrictEqual(p0.filter((x) => x.id === 'R')[0], { id: 'R', nom: 'Remplissage', cases: 1, total: 2, poses: 0, restant: 2, perso: false, role: 'remplissage', facultatif: true });
-  assert.strictEqual(p0.filter((x) => x.id === 'VN')[0].role, 'ville');
+  assert.ok(!p0.some((x) => x.id === 'VN' || x.role === 'ville'), 'aucune ville dans la palette : elles se posent à l’étape « Villes »');
   assert.ok(!p0.some((x) => ['P', 'F', 'S', 'V'].includes(x.id)), 'les tuiles d’une case du premier catalogue ne sont plus dans la palette');
   // Plaines peintes : les 2 remplissages du stock, puis des Plaines hors catalogue ; le stock restant ne passe pas sous 0.
   for (let i = 0; i < 4; i++) pl = P.peindre(pl, (i - 3) + ',-3', 'plaine').plateau;
@@ -100,8 +100,8 @@ test('resteAFaire : plateau vierge, plateau en cours, plateau généré terminé
   assert.strictEqual(r0.etape, 'construction');
   assert.ok(!r0.pieces.some((x) => x.id === 'N1'));
   assert.deepStrictEqual(r0.villes, { posees: 1, voulues: 7, manquantes: 6, enTrop: 0 });
-  assert.deepStrictEqual(r0.haut, { posees: 0, voulues: 2, manquantes: 2, enTrop: 0 });
-  assert.deepStrictEqual(r0.bas, { posees: 0, voulues: 2, manquantes: 2, enTrop: 0 });
+  assert.deepStrictEqual(r0.vert, { posees: 0, voulues: 2, manquantes: 2, enTrop: 0 });
+  assert.deepStrictEqual(r0.rouge, { posees: 0, voulues: 2, manquantes: 2, enTrop: 0 });
   // Le noyau seul ne touche encore aucune pièce (contact) ; les villes à poser, elles, ne sont pas une erreur.
   assert.strictEqual(r0.erreurs.length, 1);
   assert.match(r0.erreurs[0], /^Contact/);
@@ -111,8 +111,8 @@ test('resteAFaire : plateau vierge, plateau en cours, plateau généré terminé
   pl = pose(pose(pose(pl, 'V', -1, -3), 'V', 2, -3), 'V', 0, -3);
   pl = P.avecCamps(pose(pl, 'V', 1, 3));
   const r1 = VC.resteAFaire(pl);
-  assert.deepStrictEqual(r1.haut, { posees: 3, voulues: 2, manquantes: 0, enTrop: 1 }, '3 villes sur la rangée du haut : une en trop');
-  assert.deepStrictEqual(r1.bas, { posees: 1, voulues: 2, manquantes: 1, enTrop: 0 });
+  assert.deepStrictEqual(r1.vert, { posees: 3, voulues: 2, manquantes: 0, enTrop: 1 }, 'premier catalogue : 3 villes sur la rangée extrême de Vert, une en trop');
+  assert.deepStrictEqual(r1.rouge, { posees: 1, voulues: 2, manquantes: 1, enTrop: 0 });
   assert.strictEqual(r1.villes.posees, 5);
   assert.deepStrictEqual(r1.persos, [{ id: 'X1', nom: 'Crête', restant: 2 }]);
   assert.strictEqual(r1.nbPersos, 2);
@@ -121,15 +121,15 @@ test('resteAFaire : plateau vierge, plateau en cours, plateau généré terminé
   const fini = genere(), r2 = VC.resteAFaire(fini, K.tout(fini));
   assert.strictEqual(r2.etape, 'complet');
   assert.deepStrictEqual(r2.neutres, { posees: 2, voulues: 2, manquantes: 0, enTrop: 0 });
-  assert.deepStrictEqual(r2.haut, { posees: 2, voulues: 2, manquantes: 0, enTrop: 0 });
+  assert.deepStrictEqual(r2.vert, { posees: 2, voulues: 2, manquantes: 0, enTrop: 0 });
   // Terrain construit, villes retirées : étape « villes ».
   let sansVilles = fini;
-  P.deploiements(fini).forEach((d) => { sansVilles = P.retirerVilleDeploiement(sansVilles, d.cle).plateau; });
+  P.deploiements(fini).forEach((d) => { sansVilles = P.retirerVille(sansVilles, d.cle).plateau; });
   const r3 = VC.resteAFaire(sansVilles, K.tout(sansVilles));
   assert.strictEqual(r3.etape, 'villes');
-  assert.deepStrictEqual([r3.haut.manquantes, r3.bas.manquantes, r3.neutres.manquantes, r3.termine], [2, 2, 0, false]);
+  assert.deepStrictEqual([r3.vert.manquantes, r3.rouge.manquantes, r3.neutres.manquantes, r3.termine], [2, 2, 2, false]);
   assert.strictEqual(r2.nbPieces, 0);
-  assert.strictEqual(r2.villes.manquantes + r2.haut.manquantes + r2.bas.manquantes, 0);
+  assert.strictEqual(r2.villes.manquantes + r2.vert.manquantes + r2.rouge.manquantes, 0);
   assert.strictEqual(r2.termine, true);
 });
 
@@ -366,8 +366,8 @@ test('plateau.modifierModele : pièce posée, le nom et la quantité se changent
 
 test('inventaire : totaux du catalogue imprimé inchangés, restantes jamais négatives, hors catalogue et pièces personnelles à part', () => {
   const plein = genere(), b0 = VI.bilan(plein);
-  assert.strictEqual(b0.lignes.length, 26);
-  assert.deepStrictEqual([b0.poses, b0.casesPosees, b0.restantes], [26, 93, 2], '24 pièces de terrain et 2 villes neutres posées ; 2 remplissages restent');
+  assert.strictEqual(b0.lignes.length, 25);
+  assert.deepStrictEqual([b0.poses, b0.casesPosees, b0.restantes], [24, 91, 2], '24 pièces de terrain posées ; 2 remplissages restent');
   assert.deepStrictEqual(b0.horsCatalogue, { pieces: 0, cases: 0, detail: [] });
   assert.deepStrictEqual(b0.persos, []);
 
@@ -377,21 +377,21 @@ test('inventaire : totaux du catalogue imprimé inchangés, restantes jamais né
   for (let i = 0; i < 7; i++) pl = P.peindre(pl, (i - 3) + ',-3', 'foret').plateau;
   const b = VI.bilan(pl);
   assert.ok(!b.lignes.some((x) => x.id === 'F'), 'la forêt d’une case n’est plus au catalogue imprimé');
-  assert.deepStrictEqual([b.poses, b.casesPosees, b.restantes], [1, 7, 27], 'le noyau seul ; 28 − 1 = 27 restantes');
+  assert.deepStrictEqual([b.poses, b.casesPosees, b.restantes], [1, 7, 25], 'le noyau seul ; 26 − 1 = 25 restantes');
   assert.strictEqual(b.poses + b.restantes, C.totaux().pieces);
   assert.deepStrictEqual(b.horsCatalogue, { pieces: 8, cases: 8, detail: [{ id: 'M1', nom: 'Montagne d’une case', nombre: 1 }, { id: 'F', nom: 'Forêt', nombre: 7 }] });
   assert.deepStrictEqual(b.persos, [{ id: 'X1', nom: 'Crête', cases: 3, total: 2, poses: 1, restantes: 1, enPlus: 0 }]);
   assert.ok(b.lignes.every((x) => x.restantes >= 0 && x.poses <= x.total));
   assert.ok(!b.lignes.some((x) => x.id === 'M1' || x.id === 'X1'));
-  assert.deepStrictEqual(C.totaux().pieces, 28);
-  assert.deepStrictEqual(C.totaux().cases, 95);
+  assert.deepStrictEqual(C.totaux().pieces, 26);
+  assert.deepStrictEqual(C.totaux().cases, 93);
 });
 
 // ------------------------------------------------------------------ bibliothèque (vue)
 
 test('bibliothèque : résumé d’une fiche, date lisible, nom proposé, plateaux identiques', () => {
   const plein = genere();
-  assert.deepStrictEqual(VB.resume(plein), { cases: 93, pieces: 26, villes: 7, erreurs: K.tout(plein).erreurs, alertes: K.tout(plein).alertes });
+  assert.deepStrictEqual(VB.resume(plein), { cases: 91, pieces: 24, villes: 7, erreurs: K.tout(plein).erreurs, alertes: K.tout(plein).alertes });
   assert.strictEqual(VB.texteResume({ cases: 91, pieces: 64, villes: 7, erreurs: 0, alertes: 0 }), '91 cases, 64 pièces, 7 villes ; aucune erreur, aucune alerte');
   assert.strictEqual(VB.texteResume({ cases: 1, pieces: 1, villes: 1, erreurs: 1, alertes: 2 }), '1 case, 1 pièce, 1 ville ; 1 erreur, 2 alertes');
   assert.strictEqual(VB.texteResume({ cases: 0, pieces: 0, villes: 0, erreurs: 3, alertes: 0 }), 'aucune case, aucune pièce, aucune ville ; 3 erreurs, aucune alerte');

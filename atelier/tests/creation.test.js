@@ -36,8 +36,8 @@ test('catalogue : M1 est connu, hors catalogue imprimé ; les totaux ne changent
   assert.deepStrictEqual(m.cases, [{ q: 0, r: 0, terrain: 'montagne' }]);
   assert.ok(!C.ORDRE_MODELES.includes('M1') && !Object.keys(C.MODELES).includes('M1'));
   assert.deepStrictEqual(C.ORDRE_HORS_CATALOGUE.slice(0, 5), ['M1', 'P', 'F', 'S', 'V']);
-  assert.strictEqual(C.totaux().pieces, 28);
-  assert.strictEqual(C.totaux().cases, 95);
+  assert.strictEqual(C.totaux().pieces, 26);
+  assert.strictEqual(C.totaux().cases, 93);
   assert.deepStrictEqual(C.totaux().construction, { pieces: 24, cases: 91 });
   assert.strictEqual(G.incompatibilite(G.reglages()), null);
   assert.deepStrictEqual(C.REGLAGES.perso.terrains, ['plaine', 'foret', 'marais', 'montagne']);

@@ -1,21 +1,21 @@
 /*
  * catalogue.js : DONNÉES de l'atelier (catalogue des pièces, réserve d'événements, réglages).
- * Aucun accès au DOM, aucune dépendance. Source : docs/02-atelier-cahier-des-charges.md, §9 (catalogue 2),
- * mesures dans docs/07-mesures-catalogue-2.md.
+ * Aucun accès au DOM, aucune dépendance. Source : docs/02-atelier-cahier-des-charges.md, §9 (catalogue 2) et §10
+ * (villes libres sur une Plaine), mesures dans docs/07-mesures-catalogue-2.md.
  *
  * Tout ce qui est ici est PROVISOIRE (à valider par l'utilisateur) :
  *  - MODELES    : le catalogue 2. Noyau, 2 montagnes, 21 monoblocs de terrain de 3 ou 4 cases (75 cases : 49 plaines,
- *                 13 forêts, 13 marais ; aucun tout en plaine), 2 tuiles de remplissage (facultatives), 2 villes neutres ;
- *  - VILLE_DEPLOIEMENT : la tuile de ville de déploiement, posée par-dessus une Plaine (4 tuiles, 2 par joueur) ;
- *  - MODELES_HORS_CATALOGUE : M1 (pinceau) et les tuiles d'une case du premier catalogue (P, F, S, V), gardées
- *                 lisibles pour les anciens fichiers ;
+ *                 13 forêts, 13 marais ; aucun tout en plaine), 2 tuiles de remplissage (facultatives) ;
+ *  - VILLE_DEPLOIEMENT, VILLE_NEUTRE : les 6 tuiles de ville posées par-dessus une Plaine (2 par joueur, 2 neutres) ;
+ *  - MODELES_HORS_CATALOGUE : M1 (pinceau), les tuiles d'une case du premier catalogue (P, F, S, V) et la ville
+ *                 neutre d'une case VN (règles d'avant le 2026-11-20), gardées lisibles pour les anciens fichiers ;
  *  - EVENEMENTS : la réserve de 8 tuiles d'événement (uniques, posées par-dessus une case) ;
  *  - REGLAGES   : coûts en rations, seuils de contact, villes, trous, réglages du générateur, bornes des fichiers,
  *                 des pièces personnelles et de la bibliothèque.
  *
  * Ce qui se change ICI SEULEMENT (plateau, contrôles, inventaire, création à la main et générateur suivent) :
- *  - les noms ; les coûts en rations ; les seuils de contact ; l'écart entre villes ; la profondeur des extrémités ;
- *    le niveau du constat « trous » ; la condition de pose et le terrain produit par un événement existant ;
+ *  - les noms ; les coûts en rations ; les seuils de contact ; l'écart entre villes ; le seuil d'annonce du
+ *    déséquilibre ; le niveau du constat « trous » ; la condition de pose et le terrain produit par un événement existant ;
  *  - la forme, les terrains et le nombre d'exemplaires d'un monobloc de terrain ou d'une montagne ; l'ajout ou le
  *    retrait d'un monobloc (rôle 'terrain' ou 'montagne') : le générateur pose tout ce que le catalogue contient ;
  *  - le nombre de tuiles de remplissage.
@@ -23,7 +23,7 @@
  * changer (un test le fige), sinon les anciens plateaux ne se rouvrent plus à l'identique.
  *
  * Ce qui demande de modifier AUSSI d'autres fichiers :
- *  - le nombre de villes (2 de déploiement par joueur, 1 neutre par flanc) : src/plateau.js, src/controles.js,
+ *  - le nombre de villes (2 de déploiement par joueur, 2 neutres) : src/plateau.js, src/controles.js,
  *    src/generateur.js ;
  *  - ajouter ou retirer un événement : sa carte dans src/cartes.js (liste EVENEMENTS, même identifiant), et pour un
  *    nouveau terrain son coût dans REGLAGES.couts et son motif dans src/rendu.js.
@@ -95,21 +95,22 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     S12: { id: 'S12', nom: 'Étang', nombre: 1, role: 'terrain', cases: forme(TRIANGLE, [MA, PL, PL]) },
     S12B: { id: 'S12B', nom: 'Fossé', nombre: 1, role: 'terrain', cases: forme(LIGNE, [MA, PL, PL]) },
     S12C: { id: 'S12C', nom: 'Roselière', nombre: 1, role: 'terrain', cases: forme(COUDE, [MA, PL, PL]) },
-    // Tuiles d'une case : remplissage (l'exception, B2) et villes neutres (B5).
-    R: { id: 'R', nom: 'Remplissage', nombre: 2, role: 'remplissage', facultatif: true, cases: forme([[0, 0]], PL) },
-    VN: { id: 'VN', nom: 'Ville neutre', nombre: 2, role: 'ville', cases: forme([[0, 0]], 'ville') }
+    // Tuile d'une case : remplissage (l'exception, B2). Les villes ne sont plus des pièces (§10) : voir VILLE_NEUTRE.
+    R: { id: 'R', nom: 'Remplissage', nombre: 2, role: 'remplissage', facultatif: true, cases: forme([[0, 0]], PL) }
   };
 
   /** Ordre d'affichage des modèles du catalogue imprimé. */
   var ORDRE_MODELES = ['N1', 'M4', 'M5',
     'F31', 'F31B', 'F31C', 'F31D', 'F31E', 'S31', 'S31B', 'S31C', 'S31D', 'S31E', 'S31F', 'FS4B',
-    'F3', 'S3', 'F12A', 'F12B', 'F12C', 'F12D', 'S12', 'S12B', 'S12C', 'R', 'VN'];
+    'F3', 'S3', 'F12A', 'F12B', 'F12C', 'F12D', 'S12', 'S12B', 'S12C', 'R'];
 
   /**
-   * Ville de déploiement (B4) : une tuile posée PAR-DESSUS une case de Plaine, avec un propriétaire. Ce n'est pas une
-   * pièce du plateau (champ `deploiements` du document) ; `nombre` tuiles au catalogue, `parCamp` par joueur.
+   * Villes hors noyau (§10, C1) : des tuiles posées PAR-DESSUS une case de Plaine, avec un propriétaire ('vert',
+   * 'rouge' ou 'neutre'). Ce ne sont pas des pièces du plateau (champ `deploiements` du document).
+   * Ville de déploiement : `nombre` tuiles au catalogue, `parCamp` par joueur. Ville neutre : `nombre` tuiles.
    */
   var VILLE_DEPLOIEMENT = { id: 'VD', nom: 'Ville de déploiement', nombre: 4, parCamp: 2, camps: ['vert', 'rouge'] };
+  var VILLE_NEUTRE = { id: 'VNP', nom: 'Ville neutre', nombre: 2, proprietaire: 'neutre' };
 
   /*
    * Modèles de base HORS CATALOGUE IMPRIMÉ : connus de modele(), posables seulement « hors stock » (quantité 0),
@@ -124,6 +125,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     F: { id: 'F', nom: 'Forêt', nombre: 0, horsCatalogue: true, ancien: true, cases: forme([[0, 0]], FO) },
     S: { id: 'S', nom: 'Marais', nombre: 0, horsCatalogue: true, ancien: true, cases: forme([[0, 0]], MA) },
     V: { id: 'V', nom: 'Ville (ancien catalogue)', nombre: 0, horsCatalogue: true, ancien: true, cases: forme([[0, 0]], 'ville') },
+    // Ville neutre d'une case des règles d'avant le 2026-11-20 (tuile AJOUTÉE contre un flanc du plateau). Elle n'est
+    // plus au catalogue : les villes neutres se posent par-dessus une Plaine. Elle reste lisible (anciens fichiers).
+    VN: { id: 'VN', nom: 'Ville neutre (règles précédentes)', nombre: 0, horsCatalogue: true, role: 'ville', cases: forme([[0, 0]], 'ville') },
     // Monoblocs du catalogue 2 du 2026-11-19 (première version), retirés par la décision « aucun monobloc tout en
     // plaine, forêt ou marais à une extrémité ». Leurs cases ne doivent plus changer : des plateaux, des parties et
     // des fiches de bibliothèque enregistrés ce jour-là les portent (tests/fixtures-v2).
@@ -150,7 +154,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   var CATALOGUE_PRECEDENT = ['P4A', 'P4B', 'P4C', 'P4D', 'P4E', 'F31', 'F31B', 'S31', 'S31B', 'F22', 'S22', 'FS4',
     'P3A', 'P3B', 'P3C', 'F3', 'S3', 'F21', 'S21', 'F12', 'S12'];
 
-  var ORDRE_HORS_CATALOGUE = ['M1', 'P', 'F', 'S', 'V', 'P4A', 'P4B', 'P4C', 'P4D', 'P4E', 'P3A', 'P3B', 'P3C', 'F22', 'S22', 'FS4', 'F21', 'S21', 'F12'];
+  var ORDRE_HORS_CATALOGUE = ['M1', 'P', 'F', 'S', 'V', 'VN', 'P4A', 'P4B', 'P4C', 'P4D', 'P4E', 'P3A', 'P3B', 'P3C', 'F22', 'S22', 'FS4', 'F21', 'S21', 'F12'];
 
   /*
    * Réserve d'événements. `sur` = condition de pose sur le terrain d'ORIGINE de la case :
@@ -189,17 +193,17 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     nombreVilles: 7,                        // le centre, 2 de déploiement par joueur, 2 neutres
     villesParCamp: 2,                       // villes de déploiement par joueur
     ecartVilles: 4,                         // pas au moins entre deux villes (4 pas = 3 cases entre elles)
-    // Phase « villes » (§9.1, B4 et B5).
+    // Phase « villes » (§10) : toutes les villes hors noyau se posent par-dessus une Plaine ; seule règle, l'écart.
     villes: {
-      profondeurExtremite: 2,               // rangées du haut (Vert) ou du bas (Rouge) où se pose une ville de déploiement
-      profondeursExtremite: [1, 2, 3],      // valeurs permises (réglage de l'étape « Villes », champ `profondeurExtremite` d'un fichier)
-      // Décision du 2026-11-20 : une ville neutre se pose n'importe où sur un flanc (gauche ou droit), une par flanc.
-      // Le tiers central des rangées n'est plus une règle (false) ; le générateur le préfère seulement (generateur.prefererTiersCentral).
-      neutresTiersCentral: false,
-      // Décision du 2026-11-20 : une ville neutre est « tenue par 2 tuiles », c'est-à-dire qu'elle touche au moins
-      // 2 PIÈCES distinctes du plateau (et non 2 cases, qui peuvent être du même monobloc).
-      contactVilleNeutre: 2
+      neutres: 2,                           // villes neutres à poser
+      propositionsMax: 60,                  // « Autre proposition » : nombre de placements parcourus, du mieux équilibré au moins équilibré
+      // Pose automatique, à score d'équilibre égal : 'eloignement' préfère le placement où les villes de déploiement
+      // des deux camps sont le plus loin les unes des autres (en rations) ; 'ordre' prend le premier dans l'ordre des
+      // cases. Aucun tirage dans les deux cas. PROVISOIRE (choix prudent du lot H, à faire valider).
+      departage: 'eloignement'
     },
+    // Équilibre (§10, C5) : aucun plateau n'est écarté pour déséquilibre ; au-delà de ce score, il est ANNONCÉ (provisoire).
+    equilibre: { seuilAnnonce: 4 },
     // Répartition visée des terrains hors villes et montagnes, en pourcentage (affichage seulement).
     repartitionVisee: { plaine: 65, foret: 17.5, marais: 17.5 },
     // Événements : jamais sur ces terrains d'origine, jamais sur le noyau.
@@ -221,7 +225,6 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       montagnesEcart: 2,                    // distance minimale entre deux blocs de montagne (2 = une case entre eux)
       reprises: 30,                         // monoblocs repris et reposés au plus, quand ils ne touchent pas assez de pièces
       remplissageTot: false,                // true : combler tout de suite une case enfermée plutôt que poser sous le seuil
-      prefererTiersCentral: true,           // villes neutres : préférer une place du tiers central des rangées quand il y en a une (ce n'est pas une règle)
       accolerSpeciales: 0                   // > 0 : préférer les poses qui accolent forêt à forêt et marais à marais (bois et marécages plus gros) ; 0 : indifférent
     },
     // Bornes de validation d'un plateau lu dans un fichier.
@@ -277,7 +280,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * Totaux du catalogue imprimé : {pieces, cases, parTerrain: {terrain: nombre de cases}, facultatives, construction:
    * {pieces, cases}}. `facultatives` : pièces qui peuvent rester dans la boîte (remplissages) ; `construction` : les
    * pièces qu'un plateau construit doit toutes porter (noyau, montagnes, monoblocs de terrain), sans villes ni remplissages.
-   * Les tuiles de ville de déploiement (VILLE_DEPLOIEMENT), posées par-dessus, ne sont pas comptées ici.
+   * Les tuiles de ville (VILLE_DEPLOIEMENT, VILLE_NEUTRE), posées par-dessus, ne sont pas comptées ici.
    */
   function totaux() {
     var pieces = 0, cases = 0, parTerrain = {}, facultatives = 0, construction = { pieces: 0, cases: 0 };
@@ -319,7 +322,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   AT.catalogue = {
     MODELES: MODELES, ORDRE_MODELES: ORDRE_MODELES,
     MODELES_HORS_CATALOGUE: MODELES_HORS_CATALOGUE, ORDRE_HORS_CATALOGUE: ORDRE_HORS_CATALOGUE, CATALOGUE_PRECEDENT: CATALOGUE_PRECEDENT,
-    VILLE_DEPLOIEMENT: VILLE_DEPLOIEMENT, VERSION: 2,
+    VILLE_DEPLOIEMENT: VILLE_DEPLOIEMENT, VILLE_NEUTRE: VILLE_NEUTRE, VERSION: 2,
     EVENEMENTS: EVENEMENTS, ORDRE_EVENEMENTS: ORDRE_EVENEMENTS,
     REGLAGES: REGLAGES,
     modele: modele, evenement: evenement, estMonobloc: estMonobloc, coutTerrain: coutTerrain,

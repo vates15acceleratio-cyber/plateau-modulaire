@@ -79,8 +79,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     P.deploiements(apres).forEach(function (x) { restent[x.cle] = true; });
     P.deploiements(avant).forEach(function (x) { if (restent[x.cle] !== true) perdues.push(x); });
     if (!perdues.length) return '';
-    var noms = { vert: 'Vert', rouge: 'Rouge' };
-    return ' ' + (perdues.length > 1 ? perdues.length + ' villes de déploiement ont été retirées' : 'La ville de déploiement de ' + noms[perdues[0].camp] + ' a été retirée')
+    var noms = { vert: 'La ville de déploiement de Vert', rouge: 'La ville de déploiement de Rouge', neutre: 'La ville neutre' };
+    return ' ' + (perdues.length > 1 ? perdues.length + ' villes ont été retirées' : noms[perdues[0].camp] + ' a été retirée')
       + ' avec la Plaine qui ' + (perdues.length > 1 ? 'les' : 'la') + ' portait : à reposer à l’étape « Villes ».';
   }
 
@@ -112,15 +112,15 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * `bilan` (facultatif) : résultat de AT.controles.tout, pour la liste des erreurs en cours.
    * Renvoie {pieces: [{id, nom, restant}], nbPieces (pièces de TERRAIN à poser : noyau, montagnes, monoblocs),
    *          facultatives: [{id, nom, restant}] (tuiles de remplissage en stock), persos: [...], nbPersos,
-   *          villes, haut, bas, neutres : {posees, voulues, manquantes, enTrop} (haut = villes de déploiement de Vert,
-   *          bas = celles de Rouge, neutres = villes neutres), etape ('construction' | 'villes' | 'complet'),
+   *          villes, neutres, vert, rouge : {posees, voulues, manquantes, enTrop} (neutres = villes neutres, vert et
+   *          rouge = villes de déploiement de chaque camp), etape ('construction' | 'villes' | 'complet'),
    *          erreurs: [messages], inconnues: nombre de pièces de modèle inconnu, termine}.
-   * Sur un plateau de l'ancien catalogue (villes d'une case), haut et bas comptent les villes des rangées extrêmes.
+   * Sur un plateau du premier catalogue (villes d'une case), vert et rouge comptent les villes des rangées extrêmes.
    */
   function resteAFaire(plateau, bilan) {
     var R = C.REGLAGES, res = { pieces: [], nbPieces: 0, facultatives: [], persos: [], nbPersos: 0 };
     palette(plateau).forEach(function (x) {
-      if (x.restant <= 0 || x.role === 'ville') return;              // les villes neutres sont comptées plus bas
+      if (x.restant <= 0) return;
       if (x.facultatif) { res.facultatives.push({ id: x.id, nom: x.nom, restant: x.restant }); return; }
       (x.perso ? res.persos : res.pieces).push({ id: x.id, nom: x.nom, restant: x.restant });
       if (x.perso) res.nbPersos += x.restant; else res.nbPieces += x.restant;
@@ -133,18 +133,17 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     res.catalogue = cat.nom;
     // Plateau d'un catalogue antérieur : aucune pièce du catalogue courant n'est « à poser » sur lui.
     if (!cat.courant) { res.pieces = []; res.nbPieces = 0; res.facultatives = []; }
-    var neutre = C.modele('VN');
     res.villes = compte(nbVilles, R.nombreVilles);
-    res.haut = compte(ancien ? rangees.vert.length : etat.vert.length, R.villesParCamp);
-    res.bas = compte(ancien ? rangees.rouge.length : etat.rouge.length, R.villesParCamp);
-    res.neutres = compte(etat.neutres.length, ancien || !neutre ? 0 : neutre.nombre);
-    res.etape = res.nbPieces ? 'construction' : (res.haut.manquantes || res.bas.manquantes || res.neutres.manquantes ? 'villes' : 'complet');
+    res.neutres = compte(etat.neutres.length, ancien ? 0 : P.quotaVilles('neutre'));
+    res.vert = compte(ancien ? rangees.vert.length : etat.vert.length, R.villesParCamp);
+    res.rouge = compte(ancien ? rangees.rouge.length : etat.rouge.length, R.villesParCamp);
+    res.etape = res.nbPieces ? 'construction' : (res.vert.manquantes || res.rouge.manquantes || res.neutres.manquantes ? 'villes' : 'complet');
     res.erreurs = bilan && Array.isArray(bilan.resultats)
       ? bilan.resultats.filter(function (x) { return x.niveau === 'erreur'; }).map(function (x) { return x.message; })
       : [];
     res.inconnues = piecesInconnues(plateau).length;
-    res.termine = !res.nbPieces && !res.nbPersos && !res.villes.manquantes && !res.villes.enTrop && !res.haut.manquantes && !res.haut.enTrop
-      && !res.bas.manquantes && !res.bas.enTrop && !res.neutres.manquantes && !res.neutres.enTrop && !res.erreurs.length && !res.inconnues;
+    res.termine = !res.nbPieces && !res.nbPersos && !res.villes.manquantes && !res.villes.enTrop && !res.vert.manquantes && !res.vert.enTrop
+      && !res.rouge.manquantes && !res.rouge.enTrop && !res.neutres.manquantes && !res.neutres.enTrop && !res.erreurs.length && !res.inconnues;
     return res;
   }
 
@@ -409,11 +408,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       if (r.facultatives.length) construction.push(ligneReste('facultatives', true, 'Tuiles de remplissage en réserve (facultatives) : ' + detailler(r.facultatives)));
       if (r.nbPersos) construction.push(ligneReste('persos', false, 'Monoblocs personnels à poser : ' + r.nbPersos, detailler(r.persos)));
       var villes = [
-        ligneReste('villes', !r.villes.manquantes && !r.villes.enTrop, phraseCompte(r.villes, 'Villes')),
-        ligneReste('haut', !r.haut.manquantes && !r.haut.enTrop, phraseCompte(r.haut, 'Villes de déploiement en haut (Vert)')),
-        ligneReste('bas', !r.bas.manquantes && !r.bas.enTrop, phraseCompte(r.bas, 'Villes de déploiement en bas (Rouge)'))
+        ligneReste('villes', !r.villes.manquantes && !r.villes.enTrop, phraseCompte(r.villes, 'Villes'))
       ];
-      if (r.neutres.voulues || r.neutres.posees) villes.push(ligneReste('neutres', !r.neutres.manquantes && !r.neutres.enTrop, phraseCompte(r.neutres, 'Villes neutres (une par flanc)')));
+      // Ordre conseillé : les villes neutres d'abord, puis les villes de déploiement de chaque camp.
+      if (r.neutres.voulues || r.neutres.posees) villes.push(ligneReste('neutres', !r.neutres.manquantes && !r.neutres.enTrop, phraseCompte(r.neutres, 'Villes neutres, sur une Plaine (à poser d’abord)')));
+      villes.push(ligneReste('vert', !r.vert.manquantes && !r.vert.enTrop, phraseCompte(r.vert, 'Villes de déploiement de Vert' + (r.catalogue === 'premier' ? '' : ', sur une Plaine'))));
+      villes.push(ligneReste('rouge', !r.rouge.manquantes && !r.rouge.enTrop, phraseCompte(r.rouge, 'Villes de déploiement de Rouge' + (r.catalogue === 'premier' ? '' : ', sur une Plaine'))));
       var erreurs = [ligneReste('erreurs', !r.erreurs.length, r.erreurs.length ? 'Erreurs en cours : ' + r.erreurs.length : 'Aucune erreur aux contrôles',
         r.erreurs.length ? r.erreurs.slice(0, 4).join(' ') + (r.erreurs.length > 4 ? ' …' : '') : null)];
       var titreEtape = function (numero, nom, etat) {

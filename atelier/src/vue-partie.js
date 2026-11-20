@@ -18,7 +18,6 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   var JOUEURS = ['vert', 'rouge'];
   var NOMS = { vert: 'Vert', rouge: 'Rouge' };
-  var COTES = { vert: 'nord, en haut', rouge: 'sud, en bas' };
   var JOURNAL_AFFICHE = 300;
 
   /** Opérations de paquet proposées pour résoudre à la main un effet (carte Campement…). */
@@ -97,8 +96,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var source = ctx.plateau(), essais = source.recouvrements.length;
       var plateau = { version: source.version, graine: source.graine, pieces: source.pieces, recouvrements: [], camps: source.camps };
       if (source.modeles) plateau.modeles = source.modeles;          // pièces personnelles du document : la partie les emporte
-      if (source.deploiements) plateau.deploiements = source.deploiements;   // villes de déploiement posées par-dessus une Plaine (catalogue 2)
-      if (source.profondeurExtremite !== undefined) plateau.profondeurExtremite = source.profondeurExtremite;   // rangées des extrémités retenues pour ces villes
+      if (source.deploiements) plateau.deploiements = source.deploiements;   // villes posées par-dessus une Plaine (neutres et déploiement)
       var premier = JOUEURS.indexOf(choixPremier.value) !== -1 ? choixPremier.value : AT.cartes.REGLAGES.premierJoueur;
       var r = PA.creer({ graine: g, plateau: plateau, reglages: { premierJoueur: premier } }, { alea: AT.alea.creer(g), hex: H, plateau: P });
       if (!r.ok) { ctx.message('Partie impossible : ' + r.raison, 'erreur'); return false; }
@@ -461,7 +459,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var p = e.paquets[j], max = e.reglages.gloireVictoire, gagne = e.gloire[j] >= max;
       var main = p.main.map(function (c) { return carteTroupe(e, j, c); });
       var blocs = [
-        el('h2', { classe: 'at-joueur-titre' }, [NOMS[j] + ' (' + COTES[j] + ')', e.actif === j ? el('span', { classe: 'at-badge-actif', texte: 'joue' }) : null]),
+        el('h2', { classe: 'at-joueur-titre' }, [NOMS[j], e.actif === j ? el('span', { classe: 'at-badge-actif', texte: 'joue' }) : null]),
         el('div', { classe: 'at-ligne at-gloire' }, [
           el('span', { texte: 'Gloire' }),
           bouton('−', function () { executer('modifierGloire', { joueur: j, delta: -1 }); }, { class: 'at-petit', disabled: e.gloire[j] === 0, 'aria-label': 'Retirer 1 point de Gloire à ' + NOMS[j] }),

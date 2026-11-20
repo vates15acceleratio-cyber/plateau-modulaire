@@ -1,5 +1,23 @@
 # Catalogue 2 : mesures de faisabilité (2026-11-19)
 
+## Mesures du 2026-11-20 : villes libres sur une Plaine (cahier des charges §10)
+
+Mesure courte sur 100 graines (1 à 100), réglages par défaut : `node outils/mesures-villes-libres.js 100` depuis `atelier/`. Elle remplace, pour les villes, les comptes de places de bord et de flanc donnés plus bas (règles abandonnées : bords haut et bas, flancs, profondeur des extrémités, ville neutre tenue par 2 pièces).
+
+| Mesure | Résultat |
+|---|---|
+| Plateaux générés | 100 sur 100 (169 terrains construits ou tentés) |
+| Plaines admissibles par plateau (hors noyau, à 4 pas au moins de la ville du centre) | minimum 25, moyenne 31,6, médiane 31,5, maximum 38 |
+| Terrains sans solution pour les 6 villes | 1 terrain (le générateur en a construit un autre) ; **aucun plateau sans solution** |
+| Score d'équilibre (0 = équilibré) | moyen 0,01, médian 0, maximal 1 (99 plateaux à 0, 1 plateau à 1) |
+| Plateaux au-dessus du seuil d'annonce (4, provisoire) | 0 (0 %) |
+| Temps de génération par plateau | moyen 56 ms, médian 35 ms, maximal 215 ms |
+| Avec « Regrouper forêts et marais » (`accolerSpeciales` 2) | 100 sur 100, score moyen 0,02, maximal 1 |
+
+Lecture : avec une trentaine de Plaines admissibles, la pose automatique trouve presque toujours un placement à égale distance des deux camps ; le seuil d'annonce de 4 ne se déclenche sur aucun plateau généré (il sert aux villes posées à la main et aux anciens plateaux ; le fichier témoin `atelier/tests/fixtures-v3/plateau-genere.json` est à 4, juste au seuil, donc non annoncé). À score égal, le placement retenu est celui qui éloigne le plus les villes de déploiement des deux camps (réglage `REGLAGES.villes.departage`, provisoire). Vérification indépendante : `node outils/verifier-regles.js 50` = 250 plateaux, 0 non conforme.
+
+Captures refaites le même jour (1366 × 768) : `docs/captures/villes.png` (étape « Villes ») et `docs/captures/capture-plateau.png` (plateau généré). Les six autres captures datent d'avant ces règles.
+
 > **Note du 2026-11-20.** Les comptes de places pour les villes neutres et les scores d'équilibre ci-dessous datent d'avant la revue `docs/08` (ville neutre tenue par 2 pièces, permise sur tout le flanc). Mesure refaite sur 300 graines après ces corrections : réussite 300 / 300, 4,3 places par flanc, score d'équilibre moyen 3,27 (2,18 avant), maximal 14 (10 avant). Détail dans `docs/04-recette-atelier.md`.
 
 

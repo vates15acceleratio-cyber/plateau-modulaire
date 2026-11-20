@@ -1,35 +1,37 @@
 'use strict';
-// outils/verifier-regles.js vérifie les règles B1 à B7 du §9.1 sans passer par AT.controles. Ce test prouve qu'il ne
+// outils/verifier-regles.js vérifie les règles du §9.1 (B1 à B3, B7) et du §10 (C1 à C3, villes libres sur une Plaine) sans passer par AT.controles. Ce test prouve qu'il ne
 // laisse rien passer : un plateau généré est conforme, et chaque règle enfreinte exprès est bien signalée.
 const test = require('node:test');
 const assert = require('node:assert');
 const { verifier } = require('../outils/verifier-regles.js');
 const AT = globalThis.AT;
-const P = AT.plateau, G = AT.generateur, H = AT.hex;
+const P = AT.plateau, G = AT.generateur, H = AT.hex, K = AT.controles;
 
 const MODELE = (() => { const r = G.generer(1); if (!r.ok) throw new Error(r.raison); return JSON.stringify(r.plateau); })();
 const bon = () => JSON.parse(MODELE);
-const fautes = (plateau, options) => { const o = options || {}; return verifier(plateau, o.seuil || 3, o.mesure || 'pieces', o.remplissages || 0, o.profondeur).fautes; };
+const fautes = (plateau, options) => { const o = options || {}; return verifier(plateau, o.seuil || 3, o.mesure || 'pieces', o.remplissages || 0).fautes; };
 /** Le plateau modifié doit être signalé par une faute qui correspond au motif. */
 function detecte(nom, modifier, motif, options) {
   const p = bon();
   modifier(p);
   const liste = fautes(p, options);
   assert.ok(liste.some((x) => motif.test(x)), nom + ' : non détecté. Fautes : ' + (liste.join(' | ') || 'aucune'));
+  return p;
+}
+/** Test croisé : le plateau fautif est aussi en erreur pour les contrôles de l'outil (groupe « villes »), écrits à part. */
+function croise(nom, modifier, motif) {
+  const p = detecte(nom, modifier, motif), bilan = K.tout(p);
+  assert.ok(bilan.villes.erreurs > 0, nom + ' : le vérificateur le signale, pas les contrôles');
 }
 const terrain = (p) => P.cases(p, { sansVilles: true });
 const casesDe = (p, f) => Object.keys(terrain(p)).filter((k) => f(terrain(p)[k], k));
 const piece = (p, f) => p.pieces.filter(f)[0];
 const camps = (p) => { p.camps = { vert: p.deploiements.filter((d) => d.camp === 'vert').map((d) => d.cle), rouge: p.deploiements.filter((d) => d.camp === 'rouge').map((d) => d.cle) }; };
+const de = (p, qui) => p.deploiements.filter((d) => d.camp === qui);
 
-test('vérificateur indépendant : un plateau généré est conforme (2 rangées, 1 et 3 rangées, remplissages)', () => {
+test('vérificateur indépendant : un plateau généré est conforme (avec et sans remplissages) ; contrôles et vérificateur d’accord', () => {
   assert.deepStrictEqual(fautes(bon()), []);
-  const trois = G.generer(2, { profondeurExtremite: 3 }).plateau;
-  assert.deepStrictEqual(fautes(trois, { profondeur: 3 }), []);
-  let un = null;      // à 1 rangée, toutes les graines ne réussissent pas : la première qui réussit
-  for (let g = 1; g <= 80 && !un; g++) un = G.generer(g, { profondeurExtremite: 1 }).plateau;
-  assert.ok(un, 'une graine de 1 à 80 réussit à 1 rangée');
-  assert.deepStrictEqual(fautes(un, { profondeur: 1 }), []);
+  for (let g = 2; g <= 6; g++) { const r = G.generer(g); assert.ok(r.ok, r.raison); assert.deepStrictEqual(fautes(r.plateau), []); assert.strictEqual(K.tout(r.plateau).erreurs, 0); }
   let avecR = null;
   for (let g = 1; g <= 40 && !avecR; g++) { const r = G.generer(g, { remplissages: 2 }); if (r.ok && r.plateau.pieces.some((x) => x.modele === 'R')) avecR = r.plateau; }
   assert.ok(avecR, 'un plateau avec une tuile de remplissage');
@@ -43,7 +45,7 @@ test('vérificateur indépendant : B1 (monoblocs de 3 ou 4 cases, noyau, montagn
   detecte('noyau décentré', (p) => { piece(p, (x) => x.modele === 'N1').q = 1; }, /^B1 : noyau absent, décentré ou tourné/);
   detecte('noyau tourné', (p) => { piece(p, (x) => x.modele === 'N1').rotation = 1; }, /^B1 : noyau absent, décentré ou tourné/);
   detecte('noyau absent', (p) => { p.pieces = p.pieces.filter((x) => x.modele !== 'N1'); }, /^B1 : noyau absent/);
-  detecte('ville d’une case de l’ancien catalogue', (p) => { piece(p, (x) => !['N1', 'VN', 'M4', 'M5'].includes(x.modele)).modele = 'V'; }, /^A2 : ville dans la pièce/);
+  detecte('ville d’une case de l’ancien catalogue', (p) => { piece(p, (x) => !['N1', 'VN', 'M4', 'M5'].includes(x.modele)).modele = 'V'; }, /^C1 : ville en pièce d’une case \(V\)/);
 });
 
 test('vérificateur indépendant : B3 (toutes les pièces une fois, sans chevauchement, d’un seul tenant, sans trou)', () => {
@@ -56,60 +58,44 @@ test('vérificateur indépendant : B3 (toutes les pièces une fois, sans chevauc
   detecte('trou', (p) => { p.pieces = p.pieces.filter((x) => x.modele !== 'N1'); }, /^B3 : \d+ case\(s\) vide\(s\) enfermée\(s\)/);
 });
 
-test('vérificateur indépendant : B4 (villes de déploiement)', () => {
-  detecte('une ville de moins', (p) => { p.deploiements.pop(); camps(p); }, /^B4 : 3 ville\(s\) de déploiement pour 4/);
-  detecte('sur une forêt', (p) => { p.deploiements[0].cle = casesDe(p, (c) => c.terrain === 'foret')[0]; camps(p); }, /^B4 : ville de déploiement sur foret/);
-  detecte('sur une montagne', (p) => { p.deploiements[0].cle = casesDe(p, (c) => c.terrain === 'montagne')[0]; camps(p); }, /^B4 : ville de déploiement sur montagne/);
-  detecte('sur le noyau', (p) => { p.deploiements[0].cle = '1,0'; camps(p); }, /^B4 : ville de déploiement sur le noyau/);
-  detecte('hors du terrain', (p) => { p.deploiements[0].cle = '20,20'; camps(p); }, /^B4 : ville de déploiement hors du terrain/);
-  detecte('pas au bord', (p) => { const t = terrain(p); p.deploiements[0].cle = casesDe(p, (c, k) => c.terrain === 'plaine' && c.modele !== 'N1' && H.voisines(k).every((v) => t[v]))[0]; camps(p); },
-    /^B4 : ville de déploiement hors du bord/);
-  detecte('Vert en bas', (p) => { const d = p.deploiements; const vert = d.filter((x) => x.camp === 'vert')[0], rouge = d.filter((x) => x.camp === 'rouge')[0]; vert.camp = 'rouge'; rouge.camp = 'vert'; camps(p); },
-    /^B4 : ville de (vert|rouge) hors des 2 rangée\(s\) extrême\(s\)/);
-  detecte('3 villes pour Vert', (p) => { p.deploiements.filter((x) => x.camp === 'rouge')[0].camp = 'vert'; camps(p); }, /^B4 : 3 ville\(s\) de déploiement pour vert/);
-  detecte('camps enregistrés faux', (p) => { p.camps.vert = []; }, /^B4 : camp vert enregistré/);
-  detecte('camp inconnu', (p) => { p.deploiements[0].camp = 'bleu'; }, /^B4 : camp inconnu/);
-  detecte('deux villes sur la même case', (p) => { const d = p.deploiements.filter((x) => x.camp === 'vert'); d[1].cle = d[0].cle; camps(p); }, /^B4 : deux villes de déploiement sur la même case|^B4 : camp vert enregistré/);
-  // Profondeur : un plateau fait à 3 rangées, avec une ville en troisième rangée, n'est pas conforme à 2 rangées.
-  let loin = null;
-  for (let g = 1; g <= 40 && !loin; g++) {
-    const r = G.generer(g, { profondeurExtremite: 3 });
-    if (r.ok && fautes(Object.assign({}, r.plateau, { profondeurExtremite: undefined }), { profondeur: 2 }).some((x) => /hors des 2 rangée/.test(x))) loin = r.plateau;
-  }
-  assert.ok(loin, 'un plateau à 3 rangées avec une ville en troisième rangée');
-  assert.deepStrictEqual(fautes(loin, { profondeur: 3 }), []);
-  assert.ok(fautes(loin, { profondeur: 2 }).some((x) => /^B4 : profondeur des extrémités enregistrée \(3\) ≠ profondeur demandée \(2\)/.test(x)));
-  // La profondeur demandée doit être celle que le plateau a enregistrée ; 2 (défaut) s'écrit par l'absence du champ.
-  detecte('profondeur écrite en clair à la valeur par défaut', (p) => { p.profondeurExtremite = 2; }, /^B4 : profondeur des extrémités enregistrée/);
-  detecte('profondeur enregistrée différente', (p) => { p.profondeurExtremite = 3; }, /^B4 : profondeur des extrémités enregistrée \(3\) ≠ profondeur demandée \(2\)/);
+test('vérificateur indépendant : C1 (6 villes posées par-dessus : 2 neutres, 2 par camp ; camps), test croisé avec les contrôles', () => {
+  croise('une ville neutre de trop', (p) => { de(p, 'vert')[0].camp = 'neutre'; camps(p); }, /^C1 : 3 ville\(s\) neutre\(s\) pour 2/);
+  croise('trois villes pour Vert', (p) => { de(p, 'neutre')[0].camp = 'vert'; camps(p); }, /^C1 : 3 ville\(s\) de déploiement pour vert/);
+  croise('camps enregistrés faux', (p) => { p.camps.vert = [p.camps.vert[0]]; }, /^C1 : camp vert enregistré/);
+  detecte('une ville de moins', (p) => { p.deploiements.pop(); camps(p); }, /^C1 : 5 ville\(s\) posée\(s\) pour 6/);
+  detecte('propriétaire inconnu', (p) => { de(p, 'neutre')[0].camp = 'bleu'; }, /^C1 : propriétaire inconnu/);
+  detecte('ville neutre en pièce d’une case (règles précédentes)', (p) => {
+    const t = terrain(p), bord = Object.keys(t).map((k) => H.voisines(k).filter((v) => !t[v])[0]).filter(Boolean)[0], c = H.decle(bord);
+    p.pieces.push({ id: 'vn', modele: 'VN', q: c.q, r: c.r, rotation: 0 });
+  }, /^C1 : ville en pièce d’une case \(VN\)/);
+  detecte('champ des règles précédentes écrit', (p) => { p.profondeurExtremite = 3; }, /^format : champ profondeurExtremite/);
 });
 
-test('vérificateur indépendant : B5 (villes neutres)', () => {
-  detecte('une ville neutre de moins', (p) => { p.pieces = p.pieces.filter((x) => x !== piece(p, (y) => y.modele === 'VN')); }, /^B5 : 1 ville\(s\) neutre\(s\) pour 2/);
-  detecte('ville neutre au-dessus du plateau', (p) => {
-    const t = terrain(p), haut = Math.min(...Object.keys(t).map((k) => H.decle(k).r)), sommet = H.decle(Object.keys(t).filter((k) => H.decle(k).r === haut)[0]);
-    const vn = piece(p, (y) => y.modele === 'VN'); vn.q = sommet.q; vn.r = sommet.r - 1;
-  }, /^B5 : ville neutre en .* hors des flancs/);
-  detecte('ville neutre sur le terrain', (p) => { const vn = piece(p, (y) => y.modele === 'VN'); vn.q = 1; vn.r = 0; }, /^ville neutre posée sur une case du terrain/);
-  detecte('ville neutre loin du plateau', (p) => { const vn = piece(p, (y) => y.modele === 'VN'); vn.q = 25; vn.r = 0; }, /^B5 : ville neutre en .* tenue par 0 pièce\(s\) \(0 case\(s\)\)/);
-  detecte('deux villes neutres sur le même flanc', (p) => {
-    const t = terrain(p), vns = p.pieces.filter((y) => y.modele === 'VN'), r = vns[0].r + 1, qs = Object.keys(t).map(H.decle).filter((c) => c.r === r).map((c) => c.q);
-    const aGauche = vns[0].q < Math.min(...Object.keys(t).map(H.decle).filter((c) => c.r === vns[0].r).map((c) => c.q));
-    vns[1].r = r; vns[1].q = aGauche ? Math.min(...qs) - 1 : Math.max(...qs) + 1;
-  }, /^B5 : flancs des villes neutres/);
-  detecte('ville neutre tenue par une seule pièce (I3)', (p) => {
-    const t = terrain(p), rs = Object.keys(t).map((k) => H.decle(k).r), haut = Math.min(...rs), qs = Object.keys(t).map(H.decle).filter((c) => c.r === haut).map((c) => c.q);
-    const vn = piece(p, (y) => y.modele === 'VN'); vn.r = haut; vn.q = Math.max(...qs) + 1;
-  }, /^B5 : ville neutre en .* tenue par 1 pièce\(s\) \(\d case\(s\)\)/);
+test('vérificateur indépendant : C2 (sur une Plaine du plateau, hors noyau, une par case), test croisé avec les contrôles', () => {
+  croise('ville sur une forêt', (p) => { de(p, 'neutre')[0].cle = casesDe(p, (c) => c.terrain === 'foret')[0]; }, /^C2 : ville sur foret/);
+  croise('ville sur le noyau', (p) => { de(p, 'rouge')[0].cle = '1,0'; camps(p); }, /^C2 : ville sur le noyau/);
+  croise('ville hors du terrain', (p) => { de(p, 'vert')[0].cle = '25,0'; camps(p); }, /^C2 : ville hors du terrain/);
+  detecte('deux villes sur la même case', (p) => { de(p, 'neutre')[1].cle = de(p, 'neutre')[0].cle; }, /^C2 : deux villes sur la même case/);
+  // Plus aucune règle de bord : une ville au milieu du plateau, entourée de tuiles et à l'écart des autres, est conforme.
+  const p = bon(), t = terrain(p), sans = JSON.parse(JSON.stringify(p));
+  sans.deploiements = sans.deploiements.filter((d) => d !== de(sans, 'vert')[0]);
+  const milieu = P.placesVille(P.avecCamps(sans), 'vert').filter((k) => H.voisines(k).every((v) => t[v]))[0];
+  assert.ok(milieu, 'une Plaine admissible entourée de tuiles');
+  de(p, 'vert')[0].cle = milieu; camps(p);
+  assert.deepStrictEqual(fautes(p), []);
+  assert.strictEqual(K.tout(p).erreurs, 0);
 });
 
-test('vérificateur indépendant : B6 (7 villes, écart de 4 pas, toutes reliées) et B7 (contact)', () => {
-  detecte('deux villes voisines', (p) => {
-    const t = terrain(p), d = p.deploiements.filter((x) => x.camp === 'vert');
-    d[1].cle = H.voisines(d[0].cle).filter((v) => t[v])[0]; camps(p);
-  }, /^B6 : villes .* à 1 pas/);
-  detecte('une ville de moins', (p) => { p.pieces = p.pieces.filter((x) => x !== piece(p, (y) => y.modele === 'VN')); }, /^B6 : 6 villes pour 7/);
-  detecte('ville hors d’atteinte', (p) => { const vn = piece(p, (y) => y.modele === 'VN'); vn.q = 25; vn.r = 0; }, /^B6 : villes .* non reliées par les cases franchissables/);
+test('vérificateur indépendant : C3 (7 villes, écart de 4 pas) et B7 (contact), test croisé avec les contrôles', () => {
+  croise('deux villes voisines', (p) => {
+    const t = terrain(p), d = de(p, 'vert'), proche = H.voisines(d[0].cle).filter((v) => t[v] && t[v].terrain === 'plaine' && t[v].modele !== 'N1')[0] || H.voisines(de(p, 'neutre')[0].cle).filter((v) => t[v] && t[v].terrain === 'plaine')[0];
+    d[1].cle = proche; camps(p);
+  }, /^C3 : villes .* à [123] pas/);
+  croise('ville à 3 pas du centre', (p) => {
+    const d0 = P.distancesPas(p, '0,0'), t = terrain(p);
+    de(p, 'neutre')[0].cle = Object.keys(t).filter((k) => t[k].terrain === 'plaine' && t[k].modele !== 'N1' && d0[k] === 3)[0];
+  }, /^C3 : villes .* à 3 pas/);
+  detecte('une ville de moins', (p) => { p.deploiements.shift(); }, /^C3 : 6 villes pour 7/);
   // Contact : le même plateau jugé avec un seuil plus exigeant que celui de sa génération.
   assert.ok(fautes(bon(), { seuil: 7 }).some((x) => /^B7 : pièce .* contact \d < 7 \(pieces\)/.test(x)));
   assert.ok(fautes(bon(), { seuil: 12, mesure: 'cotes' }).some((x) => /^B7 : pièce .* contact \d+ < 12 \(cotes\)/.test(x)));

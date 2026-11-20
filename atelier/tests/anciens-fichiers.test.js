@@ -72,16 +72,20 @@ test('plateau retouché en version 1 : pièce personnelle, tuiles peintes, évé
   assert.ok(P.lire(P.serialiser(P.avecCamps(peint.plateau))).ok);
 });
 
-test('ancien plateau : on peut y poser les villes du catalogue 2, les camps suivent alors les tuiles posées', () => {
-  const p = P.lire(fichier('plateau-genere.json')).plateau, cases = P.cases(p, { sansVilles: true });
-  const e = P.etendueSurCases(cases);
-  const k = Object.keys(cases).filter((x) => cases[x].terrain === 'plaine' && H.decle(x).r <= e.haut + 1 && H.voisines(x).some((v) => !cases[v]))[0];
-  assert.ok(k);
-  const r = P.poserVilleDeploiement(p, 'vert', k, { libre: true });
+test('ancien plateau : on peut y poser une ville sur une Plaine, les camps suivent alors les tuiles posées', () => {
+  // Sur ce plateau, aucune Plaine n'est à 4 pas de ses 7 villes : une de ses tuiles de ville redevient d'abord une plaine.
+  const brut = JSON.parse(fichier('plateau-genere.json'));
+  assert.deepStrictEqual(P.placesVille(P.valider(JSON.parse(JSON.stringify(brut))).plateau, 'vert'), []);
+  brut.pieces.filter((x) => x.modele === 'V' && H.cle(x.q, x.r) === brut.camps.rouge[0])[0].modele = 'P';
+  brut.camps.rouge = [brut.camps.rouge[1]];
+  const p = P.valider(brut).plateau;
+  const k = P.placesVille(p, 'vert')[0];
+  assert.ok(k, 'une Plaine à 4 pas de toutes ses villes');
+  const r = P.poserVille(p, 'vert', k);
   assert.ok(r.ok, r.raison);
   assert.deepStrictEqual(r.plateau.camps, { vert: [k], rouge: [] });
   assert.ok(P.lire(P.serialiser(r.plateau)).ok);
-  const retour = P.retirerVilleDeploiement(r.plateau, k).plateau;
+  const retour = P.retirerVille(r.plateau, k).plateau;
   assert.deepStrictEqual(retour.camps, p.camps, 'sans tuile posée, on revient aux villes des rangées extrêmes');
 });
 

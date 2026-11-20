@@ -24,8 +24,7 @@ const complet = () => JSON.parse(MODELE);
 /** Le même plateau à l'étape des villes : terrain construit, aucune ville posée. */
 function construit() {
   let p = complet();
-  P.etatVilles(p).neutres.forEach((n) => { p = P.retirerVilleNeutre(p, n.cle).plateau; });
-  P.deploiements(p).forEach((d) => { p = P.retirerVilleDeploiement(p, d.cle).plateau; });
+  P.deploiements(p).forEach((d) => { p = P.retirerVille(p, d.cle).plateau; });
   return p;
 }
 
@@ -95,15 +94,15 @@ test('étapes : construction en cours, puis « construction terminée, villes à
   assert.strictEqual(bilan.construction.erreurs, 0);
   assert.strictEqual(bilan.villes.completes, false);
   assert.deepStrictEqual(bilan.villes.manquantes, { vert: 2, rouge: 2, neutres: 2 });
-  assert.strictEqual(bilan.etapeMessage, 'Construction terminée, villes à poser : 2 villes de déploiement pour Vert, 2 villes de déploiement pour Rouge, 2 villes neutres.');
+  assert.strictEqual(bilan.etapeMessage, 'Construction terminée, villes à poser : 2 villes neutres, 2 villes de déploiement pour Vert, 2 villes de déploiement pour Rouge.');
   const villes = bilan.resultats.filter((x) => x.regle === 'villes');
   assert.deepStrictEqual(villes.map((x) => x.niveau), ['alerte']);
   assert.match(villes[0].message, /^Construction terminée, villes à poser/);
   assert.deepStrictEqual(K.etape(p).villes, { vert: 2, rouge: 2, neutres: 2 });
 
   // Une ville posée : il en reste cinq.
-  const une = P.poserVilleDeploiement(p, 'vert', P.placesDeploiement(p, 'vert')[0]).plateau;
-  assert.match(K.etape(une).message, /1 ville de déploiement pour Vert, 2 villes de déploiement pour Rouge, 2 villes neutres/);
+  const une = P.poserVille(p, 'vert', P.placesVille(p, 'vert')[0]).plateau;
+  assert.match(K.etape(une).message, /2 villes neutres, 1 ville de déploiement pour Vert, 2 villes de déploiement pour Rouge/);
   assert.strictEqual(K.etape(complet()).etape, 'complet');
 });
 
@@ -272,65 +271,62 @@ test('contact : une tuile de remplissage a son propre seuil ; les villes neutres
   assert.deepStrictEqual(K.contacts(construit()), tous);
 });
 
-test('villes : ville de déploiement mal placée (B4)', () => {
+test('villes (§10) : une ville ailleurs que sur une Plaine hors noyau est une erreur (C2) ; quota dépassé (C1)', () => {
   const p = construit(), cases = P.cases(p);
-  // Une Plaine du milieu du plateau, hors noyau : pose « libre » acceptée, contrôle en erreur.
-  const milieu = Object.keys(cases).filter((k) => cases[k].terrain === 'plaine' && cases[k].modele !== 'N1' && Math.abs(H.decle(k).r) <= 1 && H.distance(k, '0,0') >= 4)[0];
-  assert.ok(milieu);
-  assert.strictEqual(P.poserVilleDeploiement(p, 'vert', milieu).ok, false, 'la pose stricte refuse');
-  const fautif = P.poserVilleDeploiement(p, 'vert', milieu, { libre: true });
-  assert.ok(fautif.ok);
-  const e = erreurs(K.villes(fautif.plateau));
-  assert.strictEqual(e.length, 1);
-  assert.match(e[0].message, /Ville de déploiement de Vert en \(.*\) mal placée : Cette case n’est pas à l’extrémité du haut/);
-  assert.deepStrictEqual(e[0].cases, [milieu]);
-  assert.strictEqual(K.tout(fautif.plateau).ok, false);
-  // La profondeur des extrémités est un réglage : avec 11 rangées, toute case de bord devient admissible.
-  const bord = H.voisines(milieu).some((v) => !cases[v]);
-  assert.strictEqual(erreurs(K.villes(fautif.plateau, { profondeurExtremite: 11 })).length, bord ? 0 : 1);
-  // Bien placée : aucune erreur.
-  const bon = P.poserVilleDeploiement(p, 'vert', P.placesDeploiement(p, 'vert')[0]);
-  assert.strictEqual(erreurs(K.villes(bon.plateau)).length, 0);
+  const enMemoire = (liste) => { const q = JSON.parse(JSON.stringify(p)); q.deploiements = liste; return P.avecCamps(q); };
+  // Sur le noyau.
+  const noyau = erreurs(K.villes(enMemoire([{ cle: '1,0', camp: 'neutre' }])));
+  assert.ok(noyau.some((x) => /^Ville neutre en \(1,0\) mal placée : Une ville ne se pose pas sur le noyau\.$/.test(x.message) && x.donnees.cause === 'noyau'), noyau.map((x) => x.message).join(' | '));
+  // Sur une forêt, loin de tout.
+  const foret = Object.keys(cases).filter((k) => cases[k].terrain === 'foret' && P.distancesPas(p, '0,0')[k] >= 4)[0];
+  const surForet = erreurs(K.villes(enMemoire([{ cle: foret, camp: 'vert' }])));
+  assert.strictEqual(surForet.length, 1, surForet.map((x) => x.message).join(' | '));
+  assert.match(surForet[0].message, /^Ville de déploiement de Vert en \(.*\) mal placée : Ce n’est pas une Plaine \(ici : foret\)/);
+  assert.deepStrictEqual(surForet[0].cases, [foret]);
+  // Trois villes neutres, chacune bien placée : le quota est dépassé.
+  let deux = P.poserVille(p, 'neutre', P.placesVille(p, 'neutre')[0]).plateau;
+  deux = P.poserVille(deux, 'neutre', P.placesVille(deux, 'neutre')[0]).plateau;
+  assert.deepStrictEqual(P.placesVille(deux, 'neutre'), [], 'quota atteint : plus aucune place proposée');
+  const refus = P.poserVille(deux, 'neutre', P.placesVille(deux, 'vert')[0]);
+  assert.deepStrictEqual([refus.ok, refus.cause], [false, 'quota']);
+  assert.match(refus.raison, /^Quota atteint : les 2 villes neutres sont déjà posées/);
+  const trois = JSON.parse(JSON.stringify(deux));
+  trois.deploiements.push({ cle: P.placesVille(deux, 'vert')[0], camp: 'neutre' });
+  const trop = erreurs(K.villes(trois));
+  assert.strictEqual(trop.length, 1, trop.map((x) => x.message).join(' | '));
+  assert.match(trop[0].message, /^3 villes neutres ; il en faut 2\.$/);
+  assert.strictEqual(P.valider(JSON.parse(JSON.stringify(trois))).ok, false, 'un fichier à 3 villes neutres est refusé à la lecture');
 });
 
-test('villes : ville neutre mal placée (B5), deux villes neutres sur le même flanc', () => {
-  const p = construit(), terrain = P.cases(p), e = P.etendueSurCases(terrain);
-  // Tout en haut du plateau : ce n'est pas un flanc.
-  const haut = Object.keys(terrain).filter((k) => H.decle(k).r === e.haut)[0], c = H.decle(haut);
-  const auDessus = H.cle(c.q, c.r - 1);
-  assert.strictEqual(P.poserVilleNeutre(p, auDessus).ok, false);
-  const fautif = P.poserVilleNeutre(p, auDessus, { libre: true });
-  assert.ok(fautif.ok, fautif.raison);
-  const err = erreurs(K.villes(fautif.plateau));
-  assert.strictEqual(err.length, 1);
-  assert.match(err[0].message, /Ville neutre en \(.*\) mal placée/);
-  // Deux villes neutres à gauche.
-  const gauches = P.placesNeutres(p).filter((x) => x.flanc === 'gauche');
-  assert.ok(gauches.length >= 2, 'au moins deux places à gauche sur ce plateau');
-  const un = P.poserVilleNeutre(p, gauches[0].cle).plateau;
-  const loin = gauches.filter((x) => P.distancesPas(un, gauches[0].cle)[x.cle] === undefined && H.distance(x.cle, gauches[0].cle) >= 2)[0] || gauches[gauches.length - 1];
-  assert.match(P.poserVilleNeutre(un, loin.cle).raison, /Le flanc gauche a déjà sa ville neutre/);
-  const deux = P.poserVilleNeutre(un, loin.cle, { libre: true });
-  assert.ok(deux.ok);
-  assert.ok(erreurs(K.villes(deux.plateau)).some((x) => /Deux villes neutres sur le flanc gauche/.test(x.message)));
-});
-
-test('villes : écart de 4 pas entre toutes les villes (B6), camps enregistrés', () => {
-  const p = construit();
-  const places = P.placesDeploiement(p, 'vert');
-  const un = P.poserVilleDeploiement(p, 'vert', places[0]).plateau;
-  // Une case admissible avant la première pose, mais à moins de 4 pas d'elle : refusée ensuite, erreur si on force.
+test('villes (§10) : écart de 4 pas entre toutes les villes (C3), aucune règle de bord, camps enregistrés', () => {
+  const p = construit(), cases = P.cases(p);
+  const places = P.placesVille(p, 'neutre');
+  assert.deepStrictEqual(places, P.placesVille(p, 'vert'), 'mêmes places pour tous les propriétaires');
+  assert.ok(places.every((k) => cases[k].origine === 'plaine' && cases[k].modele !== 'N1' && P.distancesPas(p, '0,0')[k] >= 4));
+  const un = P.poserVille(p, 'neutre', places[0]).plateau;
+  // Une Plaine admissible avant la première pose, mais à moins de 4 pas d'elle : refusée ensuite, erreur si on force.
   const proche = places.filter((k) => k !== places[0] && P.distancesPas(un, places[0])[k] < 4)[0];
-  if (proche) {
-    assert.match(P.poserVilleDeploiement(un, 'vert', proche).raison, /Trop près d’une autre ville : \d pas, il en faut 4/);
-    const force = P.poserVilleDeploiement(un, 'vert', proche, { libre: true }).plateau;
-    const e = erreurs(K.villes(force));
-    assert.strictEqual(e.length, 1);
-    assert.match(e[0].message, /Villes trop proches/);
-    assert.deepStrictEqual(e[0].cases, H.trier([places[0], proche]));
-    assert.strictEqual(erreurs(K.villes(force, { ecartVilles: 1 })).length, 0);
-  }
-  assert.strictEqual(P.placesDeploiement(un, 'vert').includes(places[0]), false);
+  assert.ok(proche);
+  const refus = P.poserVille(un, 'vert', proche);
+  assert.strictEqual(refus.cause, 'ecart');
+  assert.match(refus.raison, /^Trop près de la ville n° \d \(.*\) : \d pas, il en faut 4 \(soit 3 cases entre elles\)\.$/);
+  assert.ok(refus.raison.includes('(' + places[0] + ')'), 'le refus nomme la ville en cause');
+  assert.strictEqual(P.placesVille(un, 'vert').includes(proche), false);
+  const force = JSON.parse(JSON.stringify(un));
+  force.deploiements.push({ cle: proche, camp: 'vert' });
+  const e = erreurs(K.villes(P.avecCamps(force)));
+  assert.strictEqual(e.length, 1);
+  assert.match(e[0].message, /^Villes trop proches : la ville n° \d \(.*\) et la ville n° \d \(.*\) sont à \d pas ; il en faut 4/);
+  assert.deepStrictEqual(e[0].cases, H.trier([places[0], proche]));
+  assert.strictEqual(erreurs(K.villes(P.avecCamps(force), { ecartVilles: 1 })).length, 0);
+  // Aucune règle de bord : une Plaine entourée de tuiles, au milieu du plateau, convient à n'importe quel propriétaire.
+  const milieu = places.filter((k) => H.voisines(k).every((v) => cases[v]))[0];
+  assert.ok(milieu, 'une Plaine admissible entourée de tuiles');
+  ['neutre', 'vert', 'rouge'].forEach((qui) => {
+    const r = P.poserVille(p, qui, milieu);
+    assert.ok(r.ok, r.raison);
+    assert.strictEqual(erreurs(K.villes(r.plateau)).length, 0);
+  });
   // Camps enregistrés faux.
   const r = complet();
   r.camps.rouge = [r.camps.rouge[0]];
@@ -342,7 +338,48 @@ test('villes : écart de 4 pas entre toutes les villes (B6), camps enregistrés'
   assert.deepStrictEqual(bon.map((x) => x.niveau), ['info']);
   assert.ok(bon[0].donnees.ecartMinimal >= 4);
   assert.strictEqual(bon[0].cases.length, 7);
-  assert.match(bon[0].message, /7 villes ; écart minimal \d+ pas ; déploiement de Vert en .*, de Rouge en .* ; villes neutres en /);
+  assert.match(bon[0].message, /^7 villes ; écart minimal \d+ pas ; villes neutres en .* ; déploiement de Vert en .*, de Rouge en /);
+  assert.ok(!K.tout(complet()).resultats.some((x) => /flanc|extrémité|bord|rangée/.test(x.message)), 'plus aucun constat ne parle de bord ni de flanc');
+});
+
+test('villes : un plateau des règles précédentes est signalé par une alerte, jamais mis en erreur pour ses anciennes villes', () => {
+  const lire = (dossier, nom) => P.lire(fs.readFileSync(path.join(__dirname, dossier, nom), 'utf8')).plateau;
+  [['fixtures-v3', 'plateau-genere.json'], ['fixtures-v2', 'plateau-genere.json'], ['fixtures-v2', 'plateau-retouche.json']].forEach(([dossier, nom]) => {
+    const p = lire(dossier, nom), constats = K.villes(p), bilan = K.tout(p);
+    assert.strictEqual(erreurs(constats).length, 0, dossier + ' : ' + erreurs(constats).map((x) => x.message).join(' | '));
+    const avant = alertes(constats).filter((x) => /^Règles précédentes pour les villes : 2 villes neutres en tuiles ajoutées contre le plateau/.test(x.message));
+    assert.strictEqual(avant.length, 1, dossier + ' / ' + nom);
+    assert.deepStrictEqual(avant[0].donnees, { reglesPrecedentes: true, neutresTuiles: 2, villesTuiles: 0 });
+    assert.strictEqual(avant[0].cases.length, 2);
+    assert.deepStrictEqual([bilan.ok, bilan.etape, bilan.villes.erreurs], [true, 'complet', 0]);
+    assert.strictEqual(P.etatVilles(p).reglesPrecedentes, true);
+    assert.strictEqual(P.etatVilles(p).neutres.every((n) => n.ancienne && n.piece), true);
+  });
+  // Premier catalogue : même alerte, pour ses villes en tuiles d'une case.
+  const v1 = ancien(), a1 = alertes(K.villes(v1));
+  assert.strictEqual(a1.length, 1);
+  assert.match(a1[0].message, /^Règles précédentes pour les villes : 6 villes en tuile d’une case du premier catalogue/);
+  // Un plateau d'aujourd'hui n'est pas signalé.
+  assert.strictEqual(P.etatVilles(complet()).reglesPrecedentes, false);
+  assert.ok(!K.villes(complet()).some((x) => /Règles précédentes/.test(x.message)));
+});
+
+test('équilibre (§10, C5) : au-delà du seuil d’annonce, le déséquilibre est annoncé (alerte), jamais une erreur', () => {
+  const t = {};
+  [['0,-2', 'ville'], ['0,-1', 'marais'], ['0,0', 'ville'], ['0,1', 'plaine'], ['0,2', 'ville']].forEach(([k, terrain], i) => { t[k] = { terrain, piece: 'p' + i, origine: terrain, modele: 'P', evenement: null }; });
+  const camps = { vert: ['0,-2'], rouge: ['0,2'] };
+  const leger = K.ecartsCamps(t, camps);
+  assert.deepStrictEqual([leger.score, leger.seuilAnnonce, leger.annonce, K.texteAnnonce(leger)], [1, 4, false, null]);
+  const marque = K.ecartsCamps(t, camps, { couts: { plaine: 1, ville: 1, marais: 9 } });
+  assert.deepStrictEqual([marque.score, marque.annonce], [8, true]);
+  assert.match(K.texteAnnonce(marque), /^Déséquilibre marqué : score 8, au-delà du seuil d’annonce \(4\) ; avantage Rouge de 8\. Le plateau reste valide/);
+  assert.strictEqual(K.ecartsCamps(t, camps, { couts: { plaine: 1, ville: 1, marais: 9 }, seuilAnnonce: 8 }).annonce, false, 'le seuil lui-même n’est pas « au-delà »');
+  // Dans les contrôles : une alerte du groupe « villes », aucune erreur.
+  const p = complet(), constats = K.controleEquilibre(p, { seuilAnnonce: -1 });
+  assert.strictEqual(erreurs(constats).length, 0);
+  assert.strictEqual(alertes(constats).filter((x) => /^Déséquilibre marqué/.test(x.message)).length, 1);
+  assert.strictEqual(K.tout(p, { seuilAnnonce: -1 }).ok, true);
+  assert.strictEqual(alertes(K.controleEquilibre(p)).length, 0);
 });
 
 test('équilibre sans symétrie : écarts vers le centre, les villes neutres et les villes de déploiement adverses', () => {
@@ -406,12 +443,12 @@ test('équilibre : message et répartition des terrains', () => {
   assert.match(complets[0].message, /^Équilibre : score \d+ .*Écart vers le centre \d+, vers les villes neutres \d+, vers la ville de déploiement adverse la plus lointaine \d+\. Sens : (aucun camp avantagé|avantage (Vert|Rouge) de \d+( et avantage Rouge de \d+ \(ils se compensent en partie\))?)\.$/);
   // Terrain construit : 55 plaines (49 des monoblocs + 6 du noyau), 13 forêts, 13 marais.
   assert.deepStrictEqual(K.repartition(construit()), { total: 81, plaine: 55, foret: 13, marais: 13 });
-  // Plateau fini : 4 Plaines portent une ville de déploiement.
-  assert.deepStrictEqual(K.repartition(complet()), { total: 77, plaine: 51, foret: 13, marais: 13 });
-  assert.ok(complets.some((x) => /plaines 66,2 %, forêts 16,9 %, marais 16,9 % \(visé : 65 \/ 17,5 \/ 17,5\)/.test(x.message)));
+  // Plateau fini : 6 Plaines portent une ville (2 neutres, 4 de déploiement).
+  assert.deepStrictEqual(K.repartition(complet()), { total: 75, plaine: 49, foret: 13, marais: 13 });
+  assert.ok(complets.some((x) => /plaines 65,3 %, forêts 17,3 %, marais 17,3 % \(visé : 65 \/ 17,5 \/ 17,5\)/.test(x.message)));
 });
 
-test('événements : pose correcte, pose fautive venue d’un fichier, jamais sur une ville de déploiement, coupure', () => {
+test('événements : pose correcte, pose fautive venue d’un fichier, jamais sur une ville posée, coupure', () => {
   assert.deepStrictEqual(K.evenements(complet()).map((x) => x.niveau), ['info']);
 
   const p = complet();
@@ -427,8 +464,8 @@ test('événements : pose correcte, pose fautive venue d’un fichier, jamais su
   assert.ok(e.some((x) => /« Tunnel » mal posé/.test(x.message) && x.cases[0] === foret));
   assert.ok(e.some((x) => /« Crevasse » mal posé/.test(x.message)));
   assert.ok(e.some((x) => /inconnu/.test(x.message)));
-  assert.ok(e.some((x) => /« Inondation » mal posé : Un événement ne se pose jamais sur une ville de déploiement/.test(x.message)));
-  assert.match(P.poserEvenement(p, 'E5', p.camps.vert[0]).raison, /jamais sur une ville de déploiement/);
+  assert.ok(e.some((x) => /« Inondation » mal posé : Un événement ne se pose jamais sur une ville\./.test(x.message)));
+  assert.match(P.poserEvenement(p, 'E5', p.camps.vert[0]).raison, /jamais sur une ville\./);
 
   const ligne = monter([['P', 0, 0], ['P', 1, 0], ['V', 2, 0]]);
   const coupe = P.poserEvenement(ligne, 'E2', '1,0').plateau;

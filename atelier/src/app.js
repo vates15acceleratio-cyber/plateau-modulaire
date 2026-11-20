@@ -186,11 +186,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       message: message, telecharger: telecharger, ouvrirFichier: ouvrirFichier,
       confirmer: confirmer, indiquerPlateau: indiquerPlateau, stockage: AT.app.stockage,
       plateau: function () { return vues.plateau.plateau(); },
-      // Réglages des contrôles pour un AUTRE document que le plateau affiché (le plateau d'une partie) : sans la
-      // profondeur des extrémités, qui est celle du document jugé (enregistrée, sinon le réglage par défaut).
+      // Réglages des contrôles pour un AUTRE document que le plateau affiché (le plateau d'une partie) : une copie.
       reglagesControles: function () {
         var source = vues.plateau.reglages(), copie = {};
-        Object.keys(source).forEach(function (k) { if (k !== 'profondeurExtremite') copie[k] = source[k]; });
+        Object.keys(source).forEach(function (k) { copie[k] = source[k]; });
         return copie;
       },
       montrer: montrer

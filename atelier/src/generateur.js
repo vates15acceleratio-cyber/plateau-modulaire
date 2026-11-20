@@ -5,9 +5,11 @@
  * AT.generateur.generer(graine, options) construit « comme des joueurs » :
  *   1. le noyau au centre, puis les montagnes et les monoblocs de terrain du catalogue, posés un à un contre le
  *      plateau (batir) ; les tuiles de remplissage ne servent qu'en dernier recours, si le réglage en autorise ;
- *   2. les villes (chercherVilles) : 2 villes de déploiement par camp sur des Plaines des bords haut et bas, une
- *      ville neutre contre chaque flanc, en retenant la combinaison la mieux équilibrée ;
+ *   2. les villes (chercherVilles, §10) : 2 villes neutres et 2 villes de déploiement par camp, toutes posées
+ *      par-dessus une Plaine, à 4 pas au moins les unes des autres, en retenant le placement le mieux équilibré ;
  *   3. le plateau doit passer AT.controles.tout sans erreur et être « complet » ; sinon on reconstruit.
+ * Aucun plateau n'est écarté pour déséquilibre : le résultat donne le score, le camp avantagé et, au-delà du seuil
+ * d'annonce (REGLAGES.equilibre.seuilAnnonce), une phrase d'annonce.
  * Même graine et mêmes options = même plateau (aucune horloge, aucun Math.random).
  *
  * Le générateur pose tout ce que le catalogue contient (rôles 'montagne' et 'terrain') : changer les formes ou le
@@ -295,121 +297,145 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   }
 
   /**
-   * Cherche les villes d'un terrain construit (résultat de AT.plateau.cases, sans ville autre que le centre) :
-   * 2 villes de déploiement par camp et une ville neutre par flanc, toutes à `ecartVilles` pas les unes des autres,
-   * en retenant la combinaison au meilleur score d'équilibre (AT.controles.ecartsCamps) ; à score égal, le hasard choisit.
-   * Renvoie {ok, raison, manque ('vert' | 'rouge' | 'gauche' | 'droite' | 'ecart' | null), vert: [clés], rouge: [clés],
-   *          neutres: {gauche, droite}, score, places: {vert, rouge, gauche, droite} (nombres de places admissibles)}.
-   * `combinaisons` (facultatif) : tableau qui reçoit TOUTES les combinaisons valides {score, vert, rouge, neutres},
-   * dans l'ordre du parcours (voir propositionsVilles) ; le résultat et les tirages de l'aléa n'en dépendent pas.
+   * Cherche les 6 villes d'un terrain construit (§10) : 2 villes neutres et 2 villes de déploiement par camp, sur des
+   * Plaines admissibles (AT.plateau.placesVilleSurCases), toutes à `ecartVilles` pas les unes des autres et de la
+   * ville du centre, en MINIMISANT le déséquilibre entre Vert et Rouge : écart de coût en rations vers le centre,
+   * vers chaque ville neutre et vers les villes de déploiement adverses (le score de AT.controles.ecartsCamps).
+   * `toutes` : AT.plateau.casesPourVilles d'un plateau sans autre ville que celle du centre.
+   * DÉTERMINISTE, sans aucun tirage : à score égal, le réglage `departage` choisit ('eloignement' : les villes de
+   * déploiement des deux camps le plus loin possible les unes des autres ; sinon l'ordre des cases).
+   * Les deux camps jouant le même rôle, chaque placement n'est examiné qu'une fois : Vert reçoit la paire qui vient
+   * la première dans l'ordre des cases.
+   * Renvoie {ok, raison, manque ('places' | 'ecart' | null), neutres: [clés], vert: [clés], rouge: [clés], score,
+   *          places (nombre de Plaines admissibles), examines (placements des villes de déploiement examinés)}.
+   * `combinaisons` (facultatif) : tableau qui reçoit les placements valides {score, eloignement, neutres, vert,
+   * rouge} : un par placement des 4 villes de déploiement, avec ses deux meilleures villes neutres (voir propositionsVilles).
    */
-  function chercherVilles(toutes, alea, R, combinaisons) {
-    var res = { ok: false, raison: null, manque: null, vert: [], rouge: [], neutres: { gauche: null, droite: null }, score: null, places: { vert: 0, rouge: 0, gauche: 0, droite: 0 } };
-    var o = { profondeurExtremite: R.profondeurExtremite, ecartVilles: R.ecartVilles, contactVilleNeutre: R.contactVilleNeutre, neutresTiersCentral: R.neutresTiersCentral, couts: R.couts };
-    var candidats = { vert: P.placesDeploiementSurCases(toutes, 'vert', o), rouge: P.placesDeploiementSurCases(toutes, 'rouge', o) };
-    var neutres = P.placesNeutresSurCases(toutes, o);
-    // Le tiers central des rangées n'est pas une règle : c'est une PRÉFÉRENCE (réglage prefererTiersCentral). Chaque
-    // place sait si elle y est ; à défaut de place centrale qui convienne, une autre place du flanc est prise.
-    var etendue = P.etendueSurCases(toutes), tiersRangees = etendue ? Math.floor((etendue.bas - etendue.haut + 1) / 3) : 0;
-    neutres.forEach(function (x) { var rx = H.decle(x.cle).r; x.central = !!etendue && rx >= etendue.haut + tiersRangees && rx <= etendue.bas - tiersRangees; });
-    var parFlanc = { gauche: neutres.filter(function (x) { return x.flanc === 'gauche'; }), droite: neutres.filter(function (x) { return x.flanc === 'droite'; }) };
-    res.places = { vert: candidats.vert.length, rouge: candidats.rouge.length, gauche: parFlanc.gauche.length, droite: parFlanc.droite.length };
-    var noms = { vert: 'le déploiement de Vert (bord haut)', rouge: 'le déploiement de Rouge (bord bas)', gauche: 'la ville neutre du flanc gauche', droite: 'la ville neutre du flanc droit' };
-    var manquant = candidats.vert.length < 2 ? 'vert' : candidats.rouge.length < 2 ? 'rouge' : !parFlanc.gauche.length ? 'gauche' : !parFlanc.droite.length ? 'droite' : null;
-    if (manquant) { res.manque = manquant; res.raison = 'Pas assez de places pour ' + noms[manquant] + '.'; return res; }
-
-    // Pas et rations depuis chaque candidat ; une ville neutre (case ajoutée) se mesure par ses voisines.
-    var pas = {}, rations = {}, coutVille = C.coutTerrain('ville', R.couts);
-    candidats.vert.concat(candidats.rouge).forEach(function (k) {
-      pas[k] = P.pasSurCases(toutes, [k], { couts: R.couts });
+  function chercherVilles(toutes, R, combinaisons) {
+    var res = { ok: false, raison: null, manque: null, neutres: [], vert: [], rouge: [], score: null, places: 0, examines: 0 };
+    var possede = Object.prototype.hasOwnProperty, ecart = R.ecartVilles;
+    var CENTRE = '0,0';
+    // Candidates : Plaines admissibles, reliées à la ville du centre (l'équilibre se mesure en rations depuis elles).
+    var rations = {}, pas = {};
+    var cand = P.placesVilleSurCases(toutes, { ecartVilles: ecart, couts: R.couts }).filter(function (k) {
       rations[k] = P.rationsSurCases(toutes, [k], { couts: R.couts });
+      return possede.call(rations[k], CENTRE);
     });
-    var vers = function (table, cle) {                      // valeur vers une case du plateau ou vers une case vide
-      if (Object.prototype.hasOwnProperty.call(table, cle)) return table[cle];
-      var mieux = Infinity;
-      H.voisines(cle).forEach(function (v) { if (Object.prototype.hasOwnProperty.call(table, v)) mieux = Math.min(mieux, table[v]); });
-      return mieux;
-    };
-    var paires = function (liste) {
-      var r = [];
-      for (var i = 0; i < liste.length; i++) for (var j = i + 1; j < liste.length; j++) if (vers(pas[liste[i]], liste[j]) >= R.ecartVilles) r.push([liste[i], liste[j]]);
-      return r;
-    };
-    var pv = paires(candidats.vert), pr = paires(candidats.rouge);
-    if (!pv.length || !pr.length) {
-      res.manque = !pv.length ? 'vert' : 'rouge';
-      res.raison = 'Aucune paire de places à ' + R.ecartVilles + ' pas l’une de l’autre pour ' + noms[res.manque] + '.';
+    var n = cand.length, i, j, k;
+    res.places = n;
+    if (n < 6) {
+      res.manque = 'places';
+      res.raison = 'Pas assez de Plaines admissibles pour les 6 villes : ' + n + ' (une Plaine hors noyau, à ' + ecart + ' pas au moins de la ville du centre).';
       return res;
     }
-    // Pour une ville neutre : pas et rations depuis un candidat (une case de plus que sa meilleure voisine).
-    var pasNeutre = function (k, n) { return vers(pas[k], n.cle) + 1; };
-    var rationsNeutre = function (k, n) { return vers(rations[k], n.cle) + coutVille; };
-    var croissant = function (a, b) { return a - b; };
-    var meilleur = null, egaux = 0;
-    for (var a = 0; a < pv.length; a++) {
-      for (var b = 0; b < pr.length; b++) {
-        var V = pv[a], Rg = pr[b], quatre = V.concat(Rg);
-        if (vers(pas[V[0]], Rg[0]) < R.ecartVilles || vers(pas[V[0]], Rg[1]) < R.ecartVilles || vers(pas[V[1]], Rg[0]) < R.ecartVilles || vers(pas[V[1]], Rg[1]) < R.ecartVilles) continue;
-        var cv = Math.min(rations[V[0]]['0,0'], rations[V[1]]['0,0']), cr = Math.min(rations[Rg[0]]['0,0'], rations[Rg[1]]['0,0']);
-        var note = Math.abs(cv - cr);
-        var lv = Rg.map(function (k) { return Math.min(rations[V[0]][k], rations[V[1]][k]); }).sort(croissant);
-        var lr = V.map(function (k) { return Math.min(rations[Rg[0]][k], rations[Rg[1]][k]); }).sort(croissant);
-        note += Math.abs(lv[0] - lr[0]) + Math.abs(lv[1] - lr[1]);
-        var choisis = {}, possible = true;
-        ['gauche', 'droite'].forEach(function (flanc) {
-          var mieux = null, noteMieux = Infinity;
-          parFlanc[flanc].forEach(function (n) {
-            if (quatre.some(function (k) { return pasNeutre(k, n) < R.ecartVilles; })) return;
-            var ecart = Math.abs(Math.min(rationsNeutre(V[0], n), rationsNeutre(V[1], n)) - Math.min(rationsNeutre(Rg[0], n), rationsNeutre(Rg[1], n)));
-            // À écart égal, la case qui touche le plus de tuiles. Une place hors du tiers central ne sert que s'il
-            // n'y en a aucune au centre pour ces villes de déploiement (préférence, pas règle).
-            var valeur = ecart - n.cotes / 100 + (R.prefererTiersCentral && !n.central ? 1000 : 0);
-            if (valeur < noteMieux) { noteMieux = valeur; mieux = { cle: n.cle, ecart: ecart }; }
-          });
-          if (!mieux) possible = false; else { choisis[flanc] = mieux.cle; note += mieux.ecart; }
-        });
-        if (!possible) continue;
-        if (combinaisons) combinaisons.push({ score: note, vert: H.trier(V), rouge: H.trier(Rg), neutres: { gauche: choisis.gauche, droite: choisis.droite } });
-        if (meilleur === null || note < meilleur.score) { meilleur = { score: note, vert: V, rouge: Rg, neutres: choisis }; egaux = 1; }
-        else if (note === meilleur.score) { egaux += 1; if (alea.entier(egaux) === 0) meilleur = { score: note, vert: V, rouge: Rg, neutres: choisis }; }
+    // Une candidate devenue ville coûte le prix d'une ville et non plus celui d'une Plaine, à l'arrivée.
+    var surcout = C.coutTerrain('ville', R.couts) - C.coutTerrain('plaine', R.couts);
+    var loin = [], rat = [], centre = [];
+    for (i = 0; i < n; i++) {
+      pas[cand[i]] = P.pasSurCases(toutes, [cand[i]], { couts: R.couts });
+      loin.push(new Uint8Array(n)); rat.push(new Float64Array(n));
+      centre.push(rations[cand[i]][CENTRE]);
+    }
+    for (i = 0; i < n; i++) for (j = 0; j < n; j++) {
+      var p = pas[cand[i]];
+      loin[i][j] = (i !== j && (!possede.call(p, cand[j]) || p[cand[j]] >= ecart)) ? 1 : 0;
+      rat[i][j] = possede.call(rations[cand[i]], cand[j]) ? rations[cand[i]][cand[j]] + surcout : Infinity;
+    }
+    // Paires de villes d'un même camp ; pour chacune, coût du camp vers le centre et vers chaque candidate.
+    var paires = [];
+    for (i = 0; i < n; i++) for (j = i + 1; j < n; j++) {
+      if (!loin[i][j]) continue;
+      var vers = new Float64Array(n), libre = new Uint8Array(n);
+      for (k = 0; k < n; k++) { vers[k] = Math.min(rat[i][k], rat[j][k]); libre[k] = (loin[i][k] && loin[j][k]) ? 1 : 0; }
+      paires.push({ a: i, b: j, centre: Math.min(centre[i], centre[j]), vers: vers, libre: libre });
+    }
+    var parEloignement = R.departage === 'eloignement';
+    var meilleur = null;
+    var mieux = function (score, eloignement) {
+      if (meilleur === null || score < meilleur.score) return true;
+      return score === meilleur.score && parEloignement && eloignement > meilleur.eloignement;
+    };
+    var ecartsN = new Float64Array(n), ordreN = [];
+    for (var x = 0; x < paires.length; x++) {
+      var V = paires[x];
+      for (var y = x + 1; y < paires.length; y++) {
+        var Rg = paires[y];
+        if (!V.libre[Rg.a] || !V.libre[Rg.b]) continue;
+        res.examines += 1;
+        // Centre, puis villes de déploiement adverses (rangées du plus proche au plus lointain, comparées rang par rang).
+        var note = Math.abs(V.centre - Rg.centre);
+        var v1 = V.vers[Rg.a], v2 = V.vers[Rg.b], r1 = Rg.vers[V.a], r2 = Rg.vers[V.b];
+        var vProche = Math.min(v1, v2), rProche = Math.min(r1, r2);
+        note += Math.abs(vProche - rProche) + Math.abs(Math.max(v1, v2) - Math.max(r1, r2));
+        var eloignement = Math.min(vProche, rProche);
+        // Élagage : les villes neutres ne peuvent qu'ajouter au score. (Sans élagage quand on collecte tout.)
+        if (!combinaisons && meilleur !== null && (note > meilleur.score || (note === meilleur.score && !(parEloignement && eloignement > meilleur.eloignement)))) continue;
+        // Les deux villes neutres : la paire de candidates libres, à l'écart l'une de l'autre, au plus petit écart total.
+        ordreN.length = 0;
+        for (k = 0; k < n; k++) {
+          if (!V.libre[k] || !Rg.libre[k] || k === Rg.a || k === Rg.b) continue;
+          ecartsN[k] = Math.abs(V.vers[k] - Rg.vers[k]);
+          ordreN.push(k);
+        }
+        if (ordreN.length < 2) continue;
+        ordreN.sort(function (a, b) { return ecartsN[a] - ecartsN[b] || a - b; });
+        var n1 = -1, n2 = -1, somme = Infinity;
+        for (i = 0; i < ordreN.length - 1; i++) {
+          if (ecartsN[ordreN[i]] * 2 >= somme) break;
+          for (j = i + 1; j < ordreN.length; j++) {
+            var s = ecartsN[ordreN[i]] + ecartsN[ordreN[j]];
+            if (s >= somme) break;
+            if (loin[ordreN[i]][ordreN[j]]) { somme = s; n1 = ordreN[i]; n2 = ordreN[j]; break; }
+          }
+        }
+        if (n1 === -1) continue;
+        note += somme;
+        if (combinaisons) combinaisons.push({ score: note, eloignement: eloignement, neutres: H.trier([cand[n1], cand[n2]]), vert: H.trier([cand[V.a], cand[V.b]]), rouge: H.trier([cand[Rg.a], cand[Rg.b]]) });
+        if (mieux(note, eloignement)) meilleur = { score: note, eloignement: eloignement, V: V, Rg: Rg, n1: n1, n2: n2 };
       }
     }
-    if (!meilleur) { res.manque = 'ecart'; res.raison = 'Aucune combinaison de villes ne respecte l’écart de ' + R.ecartVilles + ' pas.'; return res; }
+    if (!meilleur) {
+      res.manque = 'ecart';
+      res.raison = 'Aucun placement des 6 villes ne respecte l’écart de ' + ecart + ' pas entre deux villes (' + n + ' Plaines admissibles, trop proches les unes des autres).';
+      return res;
+    }
     res.ok = true;
-    res.vert = H.trier(meilleur.vert); res.rouge = H.trier(meilleur.rouge);
-    res.neutres = meilleur.neutres; res.score = meilleur.score;
+    res.neutres = H.trier([cand[meilleur.n1], cand[meilleur.n2]]);
+    res.vert = H.trier([cand[meilleur.V.a], cand[meilleur.V.b]]);
+    res.rouge = H.trier([cand[meilleur.Rg.a], cand[meilleur.Rg.b]]);
+    res.score = meilleur.score;
     return res;
   }
 
-  /** Signature d'une combinaison de villes (pour la reconnaître et la ranger) : les six cases, dans un ordre fixe. */
-  function signatureVilles(x) { return [x.vert.join(' '), x.rouge.join(' '), x.neutres.gauche, x.neutres.droite].join(' | '); }
+  /** Signature d'un placement de villes (pour le reconnaître et le ranger) : les six cases, dans un ordre fixe. */
+  function signatureVilles(x) { return [(x.neutres || []).join(' '), x.vert.join(' '), x.rouge.join(' ')].join(' | '); }
 
   /**
-   * Les placements des VILLES DE DÉPLOIEMENT qui conviennent sur un terrain construit, du mieux équilibré au moins
-   * équilibré (à score égal : ordre fixe des cases). Pour chaque placement (2 villes par camp), les deux villes
-   * neutres sont celles que chercherVilles retient : la meilleure place de chaque flanc. Ce n'est donc PAS la liste
-   * de toutes les combinaisons de six villes : les autres places des villes neutres ne sont pas parcourues.
-   * Aucun tirage : même terrain et mêmes réglages = même liste.
-   * Renvoie [{score, vert: [clés], rouge: [clés], neutres: {gauche, droite}}] ([] s'il n'y en a aucune).
+   * Les placements proposés par « Autre proposition » sur un terrain construit, du mieux équilibré au moins équilibré
+   * (à score égal : selon le réglage `departage`, puis l'ordre fixe des cases), limités aux `propositionsMax` premiers.
+   * Un placement = les 4 villes de déploiement, avec les deux villes neutres qui lui conviennent le mieux : ce n'est
+   * donc PAS la liste de toutes les combinaisons de six villes. Aucun tirage : même terrain = même liste, et son
+   * premier élément est le placement de chercherVilles.
+   * Renvoie [{score, eloignement, neutres: [clés], vert: [clés], rouge: [clés]}] ([] s'il n'y en a aucun).
    */
   function propositionsVilles(toutes, R) {
     var liste = [];
-    chercherVilles(toutes, AT.alea.creer(0), R, liste);
-    var signatures = liste.map(signatureVilles), rangs = liste.map(function (x, i) { return i; });
-    rangs.sort(function (a, b) { return liste[a].score - liste[b].score || (signatures[a] < signatures[b] ? -1 : signatures[a] > signatures[b] ? 1 : 0); });
-    return rangs.map(function (i) { return liste[i]; });
+    chercherVilles(toutes, R, liste);
+    var parEloignement = R.departage === 'eloignement', rangs = liste.map(function (x, i) { return i; });
+    rangs.sort(function (a, b) { return liste[a].score - liste[b].score || (parEloignement ? liste[b].eloignement - liste[a].eloignement : 0) || a - b; });
+    var max = Number.isInteger(R.propositionsMax) && R.propositionsMax > 0 ? R.propositionsMax : 60;
+    return rangs.slice(0, max).map(function (i) { return liste[i]; });
   }
 
   // ------------------------------------------------------------------ ce que le générateur pose
 
-  /** Pièces du catalogue à poser : {noyau, pieces (un élément par exemplaire : montagnes et monoblocs), remplissage, villeNeutre}. */
+  /** Pièces du catalogue à poser : {noyau, pieces (un élément par exemplaire : montagnes et monoblocs), remplissage}. */
   function piecesDuCatalogue() {
-    var res = { noyau: null, pieces: [], remplissage: null, villeNeutre: null };
+    var res = { noyau: null, pieces: [], remplissage: null };
     C.ORDRE_MODELES.forEach(function (id) {
       var m = C.MODELES[id];
       if (m.noyau) { if (!res.noyau) res.noyau = m; return; }
       if (m.role === 'remplissage') { if (!res.remplissage && m.cases.length === 1) res.remplissage = m; return; }
-      if (m.role === 'ville') { if (!res.villeNeutre && m.cases.length === 1) res.villeNeutre = m; return; }
       if (m.role === 'montagne' || m.role === 'terrain') for (var i = 0; i < m.nombre; i++) res.pieces.push(m);
     });
     return res;
@@ -424,7 +450,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     var cat = piecesDuCatalogue();
     if (!cat.noyau || cat.noyau.id !== 'N1') return 'Catalogue : le noyau N1 est absent.' + suite;
     if (!cat.pieces.length) return 'Catalogue : aucune pièce de terrain à poser (rôles « terrain » et « montagne »).' + suite;
-    if (!cat.villeNeutre || cat.villeNeutre.nombre !== 2) return 'Catalogue : le générateur pose 2 villes neutres d’une case (une par flanc).' + suite;
+    if (P.quotaVilles('neutre') !== 2) return 'Réglage villes.neutres = ' + P.quotaVilles('neutre') + ', or le générateur pose 2 villes neutres.' + suite;
     if (C.REGLAGES.villesParCamp !== 2) return 'Réglage villesParCamp = ' + C.REGLAGES.villesParCamp + ', or le générateur pose 2 villes de déploiement par camp.' + suite;
     var stock = cat.remplissage ? cat.remplissage.nombre : 0;
     if (!Number.isInteger(R.remplissages) || R.remplissages < 0) return 'Nombre de tuiles de remplissage invalide.';
@@ -432,23 +458,13 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     return null;
   }
 
-  /** Profondeurs des extrémités permises au-delà de `p`, de la plus petite à la plus grande. */
-  function profondeursPlusGrandes(p) {
-    return P.profondeursPermises().filter(function (x) { return x > p; }).sort(function (a, b) { return a - b; });
-  }
-
-  /** Construit le plateau (objet JSON) : terrain, villes neutres, villes de déploiement, camps, profondeur des extrémités. */
-  function construire(graine, construction, villes, profondeur) {
+  /** Construit le plateau (objet JSON) : terrain, puis les villes posées par-dessus (neutres d'abord), et les camps. */
+  function construire(graine, construction, villes) {
     var plateau = P.vide(graine);
     plateau.pieces = construction.pieces.map(function (p, i) { return { id: 'p' + (i + 1), modele: p.modele, q: p.q, r: p.r, rotation: p.rotation }; });
-    ['gauche', 'droite'].forEach(function (flanc) {
-      var p = H.decle(villes.neutres[flanc]);
-      plateau.pieces.push({ id: 'p' + (plateau.pieces.length + 1), modele: 'VN', q: p.q, r: p.r, rotation: 0 });
-    });
-    plateau.deploiements = villes.vert.map(function (k) { return { cle: k, camp: 'vert' }; }).concat(villes.rouge.map(function (k) { return { cle: k, camp: 'rouge' }; }));
+    plateau.deploiements = villes.neutres.map(function (k) { return { cle: k, camp: 'neutre' }; })
+      .concat(villes.vert.map(function (k) { return { cle: k, camp: 'vert' }; }), villes.rouge.map(function (k) { return { cle: k, camp: 'rouge' }; }));
     plateau.camps = { vert: villes.vert.slice(), rouge: villes.rouge.slice() };
-    // La profondeur des extrémités retenue pour ces villes est enregistrée dans le document (absente = réglage par défaut).
-    if (profondeur !== undefined && profondeur !== C.REGLAGES.villes.profondeurExtremite) plateau.profondeurExtremite = profondeur;
     return plateau;
   }
 
@@ -457,24 +473,24 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   /**
    * Génère un plateau complet. `graine` : entier ou chaîne. options (facultatives) :
    *   seuilContact (2 ou 3), mesureContact ('cotes' | 'pieces'), tentatives (constructions essayées au plus),
-   *   remplissages (tuiles de remplissage autorisées), demiHauteur, profondeurExtremite, contactVilleNeutre, ecartVilles,
-   *   couts, et tout réglage de AT.catalogue.REGLAGES.generateur ;
+   *   remplissages (tuiles de remplissage autorisées), demiHauteur, ecartVilles, couts, accolerSpeciales (regrouper
+   *   forêts et marais), departage, et tout réglage de AT.catalogue.REGLAGES.generateur ;
    *   modeles : pièces personnelles du document courant (AT.plateau.modeles(plateau)). Le générateur ne connaît que
    *   le catalogue de base : elles sont REPORTÉES dans le plateau généré (champ `modeles`), non posées, et `note` le dit.
-   * Renvoie {ok, plateau, score, raison, note, essais, remplissages, echecs, controles} :
+   * Renvoie {ok, plateau, score, avantage, avantageTexte, annonce, raison, note, essais, remplissages, echecs, controles} :
    *   ok = true : `plateau` porte toutes les pièces de construction et toutes les villes, et passe tous les contrôles
-   *   de niveau erreur (étape « complet ») ; `score` est son score d'équilibre ; `remplissages` le nombre de tuiles
-   *   de remplissage posées ;
+   *   de niveau erreur (étape « complet ») ; `score` est son score d'équilibre, `avantage` le camp avantagé ('vert',
+   *   'rouge' ou null) et `avantageTexte` la phrase ; `annonce` est la phrase « Déséquilibre marqué… » quand le score
+   *   dépasse REGLAGES.equilibre.seuilAnnonce, null sinon (AUCUN plateau n'est écarté pour déséquilibre) ;
+   *   `remplissages` le nombre de tuiles de remplissage posées ;
    *   ok = false : plateau = null et `raison` explique l'échec ; `echecs` compte les essais ratés par étape
-   *   (pose, trou, franchissable, contact, contactRemplissage, villes, controles) ; `echecs.profondeur` compte, parmi
-   *   les échecs « villes », les terrains qui auraient eu leurs villes avec des extrémités plus profondes : la raison
-   *   le dit alors, et `profondeur` vaut {essais, conseillee (la plus petite profondeur qui aurait suffi)}.
+   *   (pose, trou, franchissable, contact, contactRemplissage, villes (terrain sans place pour les 6 villes), controles).
    */
   function generer(graine, options) {
     var R = reglages(options);
     var res = {
-      ok: false, plateau: null, score: null, raison: null, note: null, essais: 0, remplissages: 0,
-      echecs: { pose: 0, trou: 0, franchissable: 0, contact: 0, contactRemplissage: 0, villes: 0, profondeur: 0, controles: 0 }, controles: null
+      ok: false, plateau: null, score: null, avantage: null, avantageTexte: null, annonce: null, raison: null, note: null, essais: 0, remplissages: 0,
+      echecs: { pose: 0, trou: 0, franchissable: 0, contact: 0, contactRemplissage: 0, villes: 0, controles: 0 }, controles: null
     };
     if (C.REGLAGES.mesuresContact.indexOf(R.mesureContact) === -1) { res.raison = 'Mesure de contact inconnue.'; return res; }
     if (!Number.isInteger(R.seuilContact) || R.seuilContact < 0 || R.seuilContact > 6) { res.raison = 'Seuil de contact invalide.'; return res; }
@@ -493,37 +509,24 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     var alea = AT.alea.creer(graineUtile), cat = piecesDuCatalogue();
     var optionsControles = {
       seuilContact: R.seuilContact, mesureContact: R.mesureContact, seuilContactRemplissage: R.seuilContactRemplissage,
-      ecartVilles: R.ecartVilles, couts: R.couts, profondeurExtremite: R.profondeurExtremite,
-      contactVilleNeutre: R.contactVilleNeutre, neutresTiersCentral: R.neutresTiersCentral
+      ecartVilles: R.ecartVilles, couts: R.couts
     };
-    var raisonVilles = null, profondeurUtile = null;
+    var raisonVilles = null;
 
     for (var t = 0; t < R.tentatives && !res.ok; t++) {
       res.essais += 1;
       var construction = batir(alea, cat.noyau, cat.pieces, cat.remplissage, R);
       if (!construction.ok) { res.echecs[construction.echec] += 1; continue; }
-      var villes = chercherVilles(construction.cases, alea, R);
-      if (!villes.ok) {
-        res.echecs.villes += 1; raisonVilles = villes.raison;
-        // Ce terrain aurait-il ses villes avec des extrémités plus profondes ? Essai à part, sur un autre aléa : la
-        // suite des tirages de la génération n'en dépend pas.
-        var plusProfond = profondeursPlusGrandes(R.profondeurExtremite).filter(function (p) {
-          var Rp = {};
-          Object.keys(R).forEach(function (k) { Rp[k] = R[k]; });
-          Rp.profondeurExtremite = p;
-          return chercherVilles(construction.cases, AT.alea.creer(0), Rp).ok;
-        })[0];
-        if (plusProfond !== undefined) { res.echecs.profondeur += 1; if (profondeurUtile === null || plusProfond < profondeurUtile) profondeurUtile = plusProfond; }
-        continue;
-      }
+      var villes = chercherVilles(construction.cases, R);
+      if (!villes.ok) { res.echecs.villes += 1; raisonVilles = villes.raison; continue; }
       // Un plateau n'est rendu que s'il passe les contrôles et se trouve à l'étape « complet ».
-      var plateau = construire(graineUtile, construction, villes, R.profondeurExtremite);
+      var plateau = construire(graineUtile, construction, villes);
       var bilan = K.tout(plateau, optionsControles);
       if (!bilan.ok || bilan.etape !== 'complet') { res.echecs.controles += 1; continue; }
       res.ok = true;
       res.plateau = plateau;
       res.controles = bilan;
-      res.score = bilan.equilibre.score;
+      majEquilibre(res, bilan);
       res.remplissages = construction.remplissages;
     }
 
@@ -531,14 +534,6 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var e = res.echecs;
       res.raison = 'Aucun plateau valide en ' + res.essais + ' essais (échecs : pose ' + e.pose + ', trou ' + (e.trou + e.franchissable) + ', contact ' + (e.contact + e.contactRemplissage)
         + ', villes ' + e.villes + ', contrôles ' + e.controles + ').' + (raisonVilles ? ' Dernier refus des villes : ' + raisonVilles : '');
-      // La profondeur des extrémités est en cause : des terrains construits n'ont manqué de places que pour cela.
-      if (e.profondeur) {
-        var prof = R.profondeurExtremite;
-        res.profondeur = { essais: e.profondeur, conseillee: profondeurUtile };
-        res.raison += ' La profondeur des extrémités (' + prof + (prof > 1 ? ' rangées' : ' rangée') + ' en haut et en bas) est en cause : ' + e.profondeur
-          + (e.profondeur > 1 ? ' terrains construits auraient eu leurs villes' : ' terrain construit aurait eu ses villes') + ' avec ' + profondeurUtile
-          + ' rangées. Changez le réglage « Profondeur des extrémités » (étape « Villes »), ou essayez la graine suivante.';
-      }
       return res;
     }
     if (persos.length) {
@@ -548,6 +543,13 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         + (persos.length > 1 ? ' pièces personnelles sont conservées dans le plateau, non posées.' : ' pièce personnelle est conservée dans le plateau, non posée.');
     }
     return res;
+  }
+
+  /** Reporte dans le résultat de generer() le score, le camp avantagé et l'annonce éventuelle du bilan. */
+  function majEquilibre(res, bilan) {
+    var e = bilan.equilibre;
+    res.score = e.score; res.avantage = e.avantage; res.avantageTexte = e.avantageTexte;
+    res.annonce = K.texteAnnonce(e);
   }
 
   AT.generateur = {

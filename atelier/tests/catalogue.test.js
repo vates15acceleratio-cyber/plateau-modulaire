@@ -7,13 +7,13 @@ const C = require('../src/catalogue.js');
 test('totaux du catalogue 2 : 24 pièces de construction pour 91 cases ; 21 monoblocs = 49 plaines / 13 forêts / 13 marais', () => {
   const t = C.totaux();
   assert.deepStrictEqual(t.construction, { pieces: 24, cases: 91 });
-  assert.strictEqual(t.pieces, 28, 'avec 2 remplissages et 2 villes neutres');
-  assert.strictEqual(t.cases, 95);
+  assert.strictEqual(t.pieces, 26, 'avec 2 remplissages ; les villes ne sont plus des pièces');
+  assert.strictEqual(t.cases, 93);
   assert.strictEqual(t.facultatives, 2);
   assert.strictEqual(t.parTerrain.montagne, 9);
   assert.strictEqual(t.parTerrain.foret, 13);
   assert.strictEqual(t.parTerrain.marais, 13);
-  assert.strictEqual(t.parTerrain.ville, 3, 'le centre et les 2 villes neutres');
+  assert.strictEqual(t.parTerrain.ville, 1, 'la ville du centre ; les 6 autres sont des tuiles posées par-dessus une Plaine');
   // Les 21 monoblocs de terrain : 75 cases.
   const terrain = C.idsParRole('terrain'), n = { plaine: 0, foret: 0, marais: 0 };
   assert.strictEqual(terrain.length, 21);
@@ -41,16 +41,19 @@ test('catalogue 2 : terrain en monoblocs de 3 ou 4 cases seulement, composition 
   });
   // Aucune pièce de terrain d'une case au catalogue, sauf le remplissage (l'exception) ; les montagnes restent des blocs.
   const uneCase = C.ORDRE_MODELES.filter((id) => C.MODELES[id].cases.length === 1);
-  assert.deepStrictEqual(uneCase, ['R', 'VN']);
+  assert.deepStrictEqual(uneCase, ['R']);
   assert.strictEqual(C.MODELES.R.role, 'remplissage');
   assert.strictEqual(C.MODELES.R.facultatif, true);
   assert.deepStrictEqual(C.MODELES.R.cases, [{ q: 0, r: 0, terrain: 'plaine' }]);
-  assert.deepStrictEqual(C.MODELES.VN.cases, [{ q: 0, r: 0, terrain: 'ville' }]);
-  assert.strictEqual(C.MODELES.VN.nombre, 2);
+  // La ville neutre d'une case (règles précédentes) reste connue, hors catalogue imprimé ; les villes neutres sont des tuiles posées par-dessus.
+  assert.strictEqual(C.MODELES.VN, undefined);
+  assert.deepStrictEqual(C.modele('VN').cases, [{ q: 0, r: 0, terrain: 'ville' }]);
+  assert.deepStrictEqual([C.modele('VN').nombre, C.modele('VN').horsCatalogue, C.modele('VN').role], [0, true, 'ville']);
+  assert.deepStrictEqual([C.VILLE_NEUTRE.nombre, C.REGLAGES.villes.neutres, C.REGLAGES.equilibre.seuilAnnonce], [2, 2, 4]);
   assert.deepStrictEqual(C.idsParRole('montagne'), ['M4', 'M5']);
   assert.deepStrictEqual(C.VILLE_DEPLOIEMENT, { id: 'VD', nom: 'Ville de déploiement', nombre: 4, parCamp: 2, camps: ['vert', 'rouge'] });
   assert.strictEqual(C.estConstruction(C.MODELES.N1) && C.estConstruction(C.MODELES.M4) && C.estConstruction(C.MODELES.F31C), true);
-  assert.strictEqual(C.estConstruction(C.MODELES.R) || C.estConstruction(C.MODELES.VN), false);
+  assert.strictEqual(C.estConstruction(C.MODELES.R) || C.estConstruction(C.modele('VN')), false);
 });
 
 test('formes variées : 3 formes de 3 cases et 6 formes de 4 cases, à rotation près', () => {

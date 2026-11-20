@@ -57,14 +57,14 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     { id: 'montagne', titre: 'Montagnes', note: 'blocs de 4 et 5 cases, infranchissables' },
     { id: 'quatre', titre: 'Monoblocs de 4 cases', note: 'terrain' },
     { id: 'trois', titre: 'Monoblocs de 3 cases', note: 'terrain' },
-    { id: 'remplissage', titre: 'Tuiles de remplissage', note: 'facultatives : elles peuvent rester dans la boîte' },
-    { id: 'ville', titre: 'Villes neutres', note: 'tuiles ajoutées contre les flancs, à l’étape « Villes »' }
+    { id: 'remplissage', titre: 'Tuiles de remplissage', note: 'facultatives : elles peuvent rester dans la boîte' }
   ];
 
   /**
    * Inventaire du catalogue 2 PAR RÔLE (fonction pure), à partir de bilan(). Renvoie {
    *   roles: [{id, titre, note, lignes: [lignes de bilan()], pieces, cases, poses}]   (dans l'ordre de ROLES),
-   *   deploiements: {total, parCamp, poses, restantes, vert, rouge}   (tuiles posées PAR-DESSUS une Plaine),
+   *   deploiements: {total, parCamp, poses, restantes, vert, rouge}   (villes de déploiement, posées PAR-DESSUS une Plaine),
+   *   tuilesVilles: {total, neutres, poses, restantes}   (les 6 tuiles de ville posées par-dessus : 2 neutres, 2 par camp),
    *   terrain: {cases, plaine, foret, marais}   (monoblocs de terrain seuls : la répartition visée 65 / 17,5 / 17,5),
    *   remplissage: {pieces, plaine}, montagne: cases, villes: nombre total de villes d'un plateau complet,
    *   ancien: {present, lignes: [{id, nom, cases, poses}], pieces}   (tuiles du premier catalogue sur CE plateau ;
@@ -91,7 +91,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       if (m.role === 'remplissage') { remplissage.pieces += m.nombre; remplissage.plaine += m.nombre * m.cases.length; }
       if (m.role === 'montagne') montagne += m.nombre * m.cases.length;
     });
-    var etat = P.etatVilles(plateau), VD = C.VILLE_DEPLOIEMENT, posees = etat.vert.length + etat.rouge.length;
+    var etat = P.etatVilles(plateau), VD = C.VILLE_DEPLOIEMENT, VNE = C.VILLE_NEUTRE, posees = etat.vert.length + etat.rouge.length;
+    var neutresPosees = etat.neutres.filter(function (x) { return !x.ancienne; }).length, totalTuiles = VD.nombre + VNE.nombre;
     var stock = P.stock(plateau), anciennes = [], nbAnciennes = 0, aUneVille = P.catalogueDuPlateau(plateau).premier;
     C.ORDRE_HORS_CATALOGUE.forEach(function (id) {
       var m = C.MODELES_HORS_CATALOGUE[id];
@@ -103,7 +104,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       roles: roles,
       deploiements: { total: VD.nombre, parCamp: VD.parCamp, poses: posees, restantes: Math.max(0, VD.nombre - posees), vert: etat.vert.length, rouge: etat.rouge.length },
       terrain: terrain, remplissage: remplissage, montagne: montagne,
-      villes: 1 + (C.MODELES.VN ? C.MODELES.VN.nombre : 0) + VD.nombre,
+      tuilesVilles: { total: totalTuiles, neutres: VNE.nombre, poses: posees + neutresPosees, restantes: Math.max(0, totalTuiles - posees - neutresPosees) },
+      villes: 1 + totalTuiles,
       ancien: { present: aUneVille, lignes: aUneVille ? anciennes : [], pieces: aUneVille ? nbAnciennes : 0 }
     };
   }
@@ -149,7 +151,16 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         r.lignes.forEach(function (x) { lignes.push(ligneModele(x)); });
       });
       var vd = roles.deploiements, VD = C.VILLE_DEPLOIEMENT;
-      lignes.push(titreRole('deploiement', 'Villes de déploiement', 'tuiles posées PAR-DESSUS une Plaine du bord, ' + vd.parCamp + ' par joueur ; elles n’ajoutent aucune case', vd.total + ' tuiles'));
+      var tv = roles.tuilesVilles, VNE = C.VILLE_NEUTRE, neutresPosees = tv.poses - vd.poses;
+      lignes.push(titreRole('deploiement', 'Villes', 'tuiles posées PAR-DESSUS une Plaine, à l’étape « Villes » : ' + tv.neutres + ' neutres, ' + vd.parCamp + ' par joueur ; elles n’ajoutent aucune case', tv.total + ' tuiles'));
+      lignes.push(el('tr', { 'data-ville-neutre': VNE.id }, [
+        el('td', { classe: 'at-cellule-dessin' }, [R.pastilleTuile('vn-plaine', 0.42)]),
+        el('th', { scope: 'row' }, [VNE.nom]),
+        el('td', { texte: '1 case : posée sur une plaine' }),
+        el('td', { classe: 'at-nombre', texte: VNE.nombre }),
+        el('td', { classe: 'at-nombre', texte: neutresPosees }),
+        el('td', { classe: 'at-nombre', texte: Math.max(0, VNE.nombre - neutresPosees) })
+      ]));
       lignes.push(el('tr', { 'data-deploiement': VD.id }, [
         el('td', { classe: 'at-cellule-dessin' }, [R.pastilleTuile('vd-vert', 0.42), R.pastilleTuile('vd-rouge', 0.42)]),
         el('th', { scope: 'row' }, [VD.nom, el('span', { classe: 'at-identifiant', texte: ' ' + VD.id })]),
@@ -218,13 +229,13 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         el('p', { id: 'inv-repartition', texte: 'Répartition du terrain (les ' + tr.cases + ' cases des monoblocs de 3 et 4 cases) : ' + tr.plaine + ' plaines (' + partTerrain(tr.plaine) + '), '
           + tr.foret + ' forêts (' + partTerrain(tr.foret) + '), ' + tr.marais + ' marais (' + partTerrain(tr.marais) + ') ; visé : ' + ['plaine', 'foret', 'marais'].map(function (t) { return String(C.REGLAGES.repartitionVisee[t]).replace('.', ','); }).join(' / ')
           + '. En plus : ' + roles.montagne + ' cases de montagne, les 6 plaines du noyau, ' + roles.remplissage.plaine + ' plaines de remplissage facultatives, et ' + roles.villes
-          + ' villes sur un plateau complet (celle du noyau, ' + (C.MODELES.VN ? C.MODELES.VN.nombre : 0) + ' neutres, ' + C.VILLE_DEPLOIEMENT.nombre + ' de déploiement).' }),
+          + ' villes sur un plateau complet (celle du noyau, ' + C.VILLE_NEUTRE.nombre + ' neutres, ' + C.VILLE_DEPLOIEMENT.nombre + ' de déploiement).' }),
         el('table', { classe: 'at-table at-table-large', id: 'inv-pieces' }, [
           entetes(['Dessin', 'Pièce', 'Contenu', 'Total', 'Posées', 'Restantes']),
           el('tbody', null, lignes)
         ]),
-        el('p', { id: 'inv-villes', texte: 'Villes : la ville du noyau, ' + (C.MODELES.VN ? C.MODELES.VN.nombre : 0) + ' villes neutres (tuiles ajoutées contre les flancs) et ' + C.VILLE_DEPLOIEMENT.nombre
-          + ' tuiles de ville de déploiement, posées par-dessus une Plaine après la construction (' + C.VILLE_DEPLOIEMENT.parCamp + ' par joueur) ; ' + P.deploiements(plateau).length + ' posée(s) sur le plateau courant.' }),
+        el('p', { id: 'inv-villes', texte: 'Villes : la ville du noyau, et ' + roles.tuilesVilles.total + ' tuiles de ville posées par-dessus une Plaine après la construction (' + C.VILLE_NEUTRE.nombre
+          + ' villes neutres, ' + C.VILLE_DEPLOIEMENT.parCamp + ' villes de déploiement par joueur) : elles n’ajoutent aucune case ; ' + roles.tuilesVilles.poses + ' posée(s) sur le plateau courant, ' + roles.tuilesVilles.restantes + ' restante(s).' }),
         el('p', { id: 'inv-hors-catalogue', classe: hors.pieces ? 'at-niveau-alerte' : 'at-aide', texte: texteHors }),
         blocAncien,
         el('h2', { texte: 'Mes monoblocs' }),

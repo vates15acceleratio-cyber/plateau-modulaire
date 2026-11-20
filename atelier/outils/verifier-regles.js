@@ -1,8 +1,8 @@
 /*
- * verifier-regles.js : vérifie les règles du §9.1 du cahier des charges (catalogue 2) sur des plateaux générés,
+ * verifier-regles.js : vérifie les règles des §9.1 et §10 du cahier des charges sur des plateaux générés,
  * SANS passer par AT.controles (le générateur s'en sert déjà pour accepter un plateau : ce serait circulaire).
- * Seule la position des cases d'une pièce vient de AT.plateau.casesPiece ; voisinage, parcours, bords, flancs et
- * comptes sont refaits ici, avec les valeurs des règles écrites en clair ci-dessous (et non lues dans les réglages).
+ * Seule la position des cases d'une pièce vient de AT.plateau.casesPiece ; voisinage, parcours et comptes sont
+ * refaits ici, avec les valeurs des règles écrites en clair ci-dessous (et non lues dans les réglages).
  *
  * Règles vérifiées :
  *   B1  terrain en monoblocs de 3 ou 4 cases seulement, aucun tout en plaine ; noyau en (0,0) ; montagnes en blocs
@@ -11,23 +11,22 @@
  *   B2  tuiles de remplissage : jamais plus que le nombre permis (0 par défaut pour le générateur) ;
  *   B3  toutes les pièces de construction du catalogue, une fois chacune ; pas de chevauchement, pas de trou,
  *       plateau d'un seul tenant, cases franchissables reliées ;
- *   B4  2 villes de déploiement par joueur, posées sur une Plaine du bord EXTÉRIEUR (un trou ne compte pas), hors noyau, dans les rangées du haut
- *       (Vert) ou du bas (Rouge) : 2 rangées par défaut, 1 ou 3 quand le plateau a été généré avec ce réglage (la
- *       profondeur demandée doit alors être celle que le plateau a enregistrée) ; `camps` = ces tuiles ;
- *   B5  2 villes neutres, tuiles ajoutées contre le bord, une par flanc (gauche, droit), n'importe où sur le flanc,
- *       chacune tenue par au moins 2 PIÈCES distinctes (décisions du 2026-11-20) ;
- *   B6  7 villes, toutes reliées entre elles et à 4 pas au moins les unes des autres (par les cases franchissables) ;
+ *   C1  villes hors noyau : 6 tuiles posées PAR-DESSUS une case (aucune ville en pièce d'une case), 2 neutres,
+ *       2 pour Vert, 2 pour Rouge ; `camps` = les tuiles de Vert et de Rouge ;
+ *   C2  chacune sur une Plaine du plateau, hors noyau, une seule par case (aucune règle de bord ni de flanc) ;
+ *   C3  7 villes avec celle du centre, toutes reliées entre elles et à 4 pas au moins les unes des autres (par les
+ *       cases franchissables) ;
  *   B7  contact : chaque monobloc touche au moins `seuil` autres tuiles ; une tuile de remplissage au moins 2 (ou
  *       `seuil` s'il est plus petit), avec la même mesure que les monoblocs ;
  *   A2  aucune ville imprimée dans un monobloc hors noyau.
+ * Le déséquilibre n'est pas une règle (§10, C5) : le score est seulement rapporté.
  *
- * Combinaisons vérifiées : seuil 3 / 2 × mesure pièces / côtés (2 rangées, sans remplissage), puis seuil 3 « pièces »
- * avec 2 remplissages permis, avec des extrémités de 1 rangée, de 3 rangées, et de 3 rangées avec 2 remplissages.
+ * Combinaisons vérifiées : seuil 3 / 2 × mesure pièces / côtés (sans remplissage), puis seuil 3 « pièces » avec
+ * 2 remplissages permis.
  *
  * Usage, depuis atelier/ :  node outils/verifier-regles.js [nombre de graines = 50] [première graine = 1]
- * Code de sortie 0 si aucun plateau n'enfreint une règle, 1 sinon. Les générations en échec sont comptées, pas ignorées
- * (à 1 rangée, des graines échouent faute de places pour les villes : voir docs/07-mesures-catalogue-2.md).
- * tests/verifier-regles.test.js prouve que chaque règle B1 à B7 est bien détectée quand on l'enfreint.
+ * Code de sortie 0 si aucun plateau n'enfreint une règle, 1 sinon. Les générations en échec sont comptées, pas ignorées.
+ * tests/verifier-regles.test.js prouve que chaque règle est bien détectée quand on l'enfreint.
  */
 'use strict';
 const P = require('../src/plateau.js');
@@ -40,7 +39,7 @@ const coord = (k) => k.split(',').map(Number);
 const voisines = (k) => { const [q, r] = coord(k); return DIRS.map((d) => cle(q + d[0], r + d[1])); };
 const INFRANCHISSABLES = ['montagne'];
 const TERRAINS = ['plaine', 'foret', 'marais'];
-const ECART = 4, VILLES = 7, PAR_CAMP = 2, NEUTRES = 2, PROFONDEUR = 2, CONTACT_NEUTRE = 2, CONTACT_REMPLISSAGE = 2;
+const ECART = 4, VILLES = 7, PAR_CAMP = 2, NEUTRES = 2, CONTACT_REMPLISSAGE = 2;
 
 /** Parcours en largeur depuis `depart` sur les clés de `permises` (Set) : Map clé → pas. */
 function parcours(depart, permises) {
@@ -62,26 +61,23 @@ function casesEnfermees(occupees) {
 }
 
 /** Renvoie la liste des manquements d'un plateau (vide = conforme) et quelques mesures. */
-function verifier(plateau, seuil, mesure, remplissagesPermis, profondeur) {
-  const fautes = [], rangeesExtremes = profondeur === undefined ? PROFONDEUR : profondeur;
-  // Format : un plateau généré est en version 2, sans tuile d'événement, et enregistre la profondeur de ses extrémités
-  // (champ absent pour 2 rangées, la valeur par défaut).
+function verifier(plateau, seuil, mesure, remplissagesPermis) {
+  const fautes = [];
+  // Format : un plateau généré est en version 2, sans tuile d'événement, sans champ des règles précédentes.
   if (plateau.version !== 2) fautes.push('format : version ' + plateau.version);
   if ((plateau.recouvrements || []).length) fautes.push('format : tuile d’événement sur un plateau généré');
-  const enregistree = plateau.profondeurExtremite === undefined ? PROFONDEUR : plateau.profondeurExtremite;
-  if (enregistree !== rangeesExtremes || plateau.profondeurExtremite === PROFONDEUR) fautes.push('B4 : profondeur des extrémités enregistrée (' + plateau.profondeurExtremite + ') ≠ profondeur demandée (' + rangeesExtremes + ')');
-  // Cases du TERRAIN (tout sauf les villes neutres) et villes neutres, chevauchements.
-  const cases = new Map(), neutres = [];
+  if ('profondeurExtremite' in plateau) fautes.push('format : champ profondeurExtremite (règles précédentes) écrit dans le plateau');
+  // Cases du terrain, chevauchements. Une ville en pièce d'une case (VN, V) est une faute : les villes se posent par-dessus.
+  const cases = new Map();
   for (const piece of plateau.pieces) {
     const liste = P.casesPiece(piece, plateau);          // le document porte ses pièces personnelles
     if (!liste.length) { fautes.push('pièce hors catalogue : ' + piece.modele); continue; }
-    if (piece.modele === 'VN') { neutres.push(liste[0].cle); continue; }
+    if (liste.length === 1 && liste[0].terrain === 'ville') { fautes.push('C1 : ville en pièce d’une case (' + piece.modele + ') en ' + liste[0].cle); continue; }
     for (const c of liste) {
       if (cases.has(c.cle)) fautes.push('chevauchement en ' + c.cle);
       cases.set(c.cle, { terrain: c.terrain, piece: piece.id, modele: piece.modele, taille: liste.length });
     }
   }
-  for (const k of neutres) if (cases.has(k)) fautes.push('ville neutre posée sur une case du terrain : ' + k);
   // B1, A2 : forme des pièces de terrain.
   const parPiece = new Map();
   for (const [k, c] of cases) { if (!parPiece.has(c.piece)) parPiece.set(c.piece, { modele: c.modele, cles: [], terrains: [] }); parPiece.get(c.piece).cles.push(k); parPiece.get(c.piece).terrains.push(c.terrain); }
@@ -105,7 +101,7 @@ function verifier(plateau, seuil, mesure, remplissagesPermis, profondeur) {
   let attenduCases = 0;
   for (const id of C.ORDRE_MODELES) {
     const m = C.MODELES[id];
-    if (id === 'R' || id === 'VN') continue;
+    if (id === 'R') continue;
     attenduCases += m.nombre * m.cases.length;
     if ((poses[id] || 0) !== m.nombre) fautes.push('B3 : pièce ' + id + ' : ' + (poses[id] || 0) + ' posée(s) pour ' + m.nombre);
   }
@@ -120,57 +116,36 @@ function verifier(plateau, seuil, mesure, remplissagesPermis, profondeur) {
   if (parcours('0,0', franchissables).size !== franchissables.size) fautes.push('B3 : cases franchissables non reliées');
   const enfermees = casesEnfermees(toutes), trous = enfermees.size;
   if (trous) fautes.push('B3 : ' + trous + ' case(s) vide(s) enfermée(s)');
-  // Étendue du terrain : rangées extrêmes, bords gauche et droit de chaque rangée.
-  const rangees = new Map();
-  for (const k of toutes) { const [q, r] = coord(k); const x = rangees.get(r) || { gauche: q, droite: q }; x.gauche = Math.min(x.gauche, q); x.droite = Math.max(x.droite, q); rangees.set(r, x); }
-  const haut = Math.min(...rangees.keys()), bas = Math.max(...rangees.keys());
-  // B4 : villes de déploiement.
-  const deploiements = plateau.deploiements || [];
-  if (deploiements.length !== 2 * PAR_CAMP) fautes.push('B4 : ' + deploiements.length + ' ville(s) de déploiement pour ' + (2 * PAR_CAMP));
-  const parCamp = { vert: [], rouge: [] };
-  for (const d of deploiements) {
-    if (!parCamp[d.camp]) { fautes.push('B4 : camp inconnu'); continue; }
-    parCamp[d.camp].push(d.cle);
-    const c = cases.get(d.cle), r = coord(d.cle)[1];
-    if (!c) { fautes.push('B4 : ville de déploiement hors du terrain en ' + d.cle); continue; }
-    if (c.terrain !== 'plaine') fautes.push('B4 : ville de déploiement sur ' + c.terrain + ' en ' + d.cle);
-    if (c.modele === 'N1') fautes.push('B4 : ville de déploiement sur le noyau en ' + d.cle);
-    if (!voisines(d.cle).some((v) => !toutes.has(v) && !enfermees.has(v))) fautes.push('B4 : ville de déploiement hors du bord en ' + d.cle);
-    if (d.camp === 'vert' ? r > haut + rangeesExtremes - 1 : r < bas - rangeesExtremes + 1) fautes.push('B4 : ville de ' + d.camp + ' hors des ' + rangeesExtremes + ' rangée(s) extrême(s) en ' + d.cle);
+  // C1, C2 : les 6 villes posées par-dessus une Plaine.
+  const posees = plateau.deploiements || [];
+  if (posees.length !== 2 * PAR_CAMP + NEUTRES) fautes.push('C1 : ' + posees.length + ' ville(s) posée(s) pour ' + (2 * PAR_CAMP + NEUTRES));
+  const parProprietaire = { neutre: [], vert: [], rouge: [] };
+  for (const d of posees) {
+    if (!Object.prototype.hasOwnProperty.call(parProprietaire, d.camp)) { fautes.push('C1 : propriétaire inconnu'); continue; }
+    parProprietaire[d.camp].push(d.cle);
+    const c = cases.get(d.cle);
+    if (!c) { fautes.push('C2 : ville hors du terrain en ' + d.cle); continue; }
+    if (c.terrain !== 'plaine') fautes.push('C2 : ville sur ' + c.terrain + ' en ' + d.cle);
+    if (c.modele === 'N1') fautes.push('C2 : ville sur le noyau en ' + d.cle);
   }
+  if (parProprietaire.neutre.length !== NEUTRES) fautes.push('C1 : ' + parProprietaire.neutre.length + ' ville(s) neutre(s) pour ' + NEUTRES);
   for (const camp of ['vert', 'rouge']) {
-    if (parCamp[camp].length !== PAR_CAMP) fautes.push('B4 : ' + parCamp[camp].length + ' ville(s) de déploiement pour ' + camp);
+    if (parProprietaire[camp].length !== PAR_CAMP) fautes.push('C1 : ' + parProprietaire[camp].length + ' ville(s) de déploiement pour ' + camp);
     const notees = ((plateau.camps && plateau.camps[camp]) || []).slice().sort();
-    if (notees.join(' ') !== parCamp[camp].slice().sort().join(' ')) fautes.push('B4 : camp ' + camp + ' enregistré [' + notees + '] ≠ tuiles posées [' + parCamp[camp] + ']');
+    if (notees.join(' ') !== parProprietaire[camp].slice().sort().join(' ')) fautes.push('C1 : camp ' + camp + ' enregistré [' + notees + '] ≠ tuiles posées [' + parProprietaire[camp] + ']');
   }
-  if (new Set(deploiements.map((d) => d.cle)).size !== deploiements.length) fautes.push('B4 : deux villes de déploiement sur la même case');
-  // B5 : villes neutres.
-  if (neutres.length !== NEUTRES) fautes.push('B5 : ' + neutres.length + ' ville(s) neutre(s) pour ' + NEUTRES);
-  const flancs = [];
-  let contactNeutreMin = Infinity;
-  for (const k of neutres) {
-    const [q, r] = coord(k), rangee = rangees.get(r);
-    const touchees = voisines(k).filter((v) => toutes.has(v));
-    const tenuePar = new Set(touchees.map((v) => cases.get(v).piece));
-    contactNeutreMin = Math.min(contactNeutreMin, tenuePar.size);
-    if (tenuePar.size < CONTACT_NEUTRE) fautes.push('B5 : ville neutre en ' + k + ' tenue par ' + tenuePar.size + ' pièce(s) (' + touchees.length + ' case(s))');
-    if (!touchees.some((v) => franchissables.has(v))) fautes.push('B5 : ville neutre en ' + k + ' hors d’atteinte');
-    if (!rangee || !(q < rangee.gauche || q > rangee.droite)) { fautes.push('B5 : ville neutre en ' + k + ' hors des flancs'); continue; }
-    flancs.push(q < rangee.gauche ? 'gauche' : 'droite');
-  }
-  if (neutres.length === NEUTRES && flancs.slice().sort().join(' ') !== 'droite gauche') fautes.push('B5 : flancs des villes neutres : ' + flancs.join(', '));
-  // B6 : 7 villes, écart de 4 pas. Les villes neutres sont franchissables ; une ville de déploiement reste une case du terrain.
-  const villes = [...cases.keys()].filter((k) => cases.get(k).terrain === 'ville').concat(deploiements.map((d) => d.cle), neutres);
-  if (villes.length !== VILLES || new Set(villes).size !== VILLES) fautes.push('B6 : ' + villes.length + ' villes pour ' + VILLES);
-  const marchables = new Set([...franchissables, ...neutres]);
+  if (new Set(posees.map((d) => d.cle)).size !== posees.length) fautes.push('C2 : deux villes sur la même case');
+  // C3 : 7 villes, écart de 4 pas. Une ville posée par-dessus reste une case franchissable du terrain.
+  const villes = [...cases.keys()].filter((k) => cases.get(k).terrain === 'ville').concat(posees.map((d) => d.cle));
+  if (villes.length !== VILLES || new Set(villes).size !== VILLES) fautes.push('C3 : ' + villes.length + ' villes pour ' + VILLES);
   let ecartMin = Infinity;
   villes.forEach((a, i) => {
-    const d = parcours(a, marchables);
+    const d = parcours(a, franchissables);
     villes.slice(i + 1).forEach((b) => {
       const pas = d.has(b) ? d.get(b) : Infinity;
-      if (pas === Infinity) fautes.push('B6 : villes ' + a + ' et ' + b + ' non reliées par les cases franchissables');
+      if (pas === Infinity) fautes.push('C3 : villes ' + a + ' et ' + b + ' non reliées par les cases franchissables');
       ecartMin = Math.min(ecartMin, pas);
-      if (pas < ECART) fautes.push('B6 : villes ' + a + ' et ' + b + ' à ' + pas + ' pas');
+      if (pas < ECART) fautes.push('C3 : villes ' + a + ' et ' + b + ' à ' + pas + ' pas');
     });
   });
   // B7 : contact de chaque pièce du terrain (cases voisines d'une autre pièce : côtés ; pièces voisines distinctes).
@@ -184,54 +159,48 @@ function verifier(plateau, seuil, mesure, remplissagesPermis, profondeur) {
     contactMin = Math.min(contactMin, valeur);
     if (valeur < seuil) fautes.push('B7 : pièce ' + id + ' (' + x.modele + ') : contact ' + valeur + ' < ' + seuil + ' (' + mesure + ')');
   }
-  // Répartition des terrains (information) : terrain construit, puis plateau fini (4 Plaines sous les villes de déploiement).
+  // Répartition des terrains (information) : terrain construit (6 Plaines portent ensuite une ville).
   const n = { plaine: 0, foret: 0, marais: 0 };
   for (const c of cases.values()) if (c.terrain in n) n[c.terrain] += 1;
-  return { fautes, ecartMin, contactMin, contactNeutreMin, terrains: n, cases: cases.size, remplissages, hauteur: bas - haut + 1 };
+  return { fautes, ecartMin, contactMin, terrains: n, cases: cases.size, remplissages };
 }
 
 function lancer(nombre, premiere) {
   let total = 0, fautifs = 0, echecsTotal = 0;
   const lignes = [];
   const combinaisons = [];
-  for (const seuil of [3, 2]) for (const mesure of ['pieces', 'cotes']) combinaisons.push({ seuil, mesure, remplissages: 0, profondeur: PROFONDEUR });
-  combinaisons.push({ seuil: 3, mesure: 'pieces', remplissages: 2, profondeur: PROFONDEUR });
-  combinaisons.push({ seuil: 3, mesure: 'pieces', remplissages: 0, profondeur: 1 });
-  combinaisons.push({ seuil: 3, mesure: 'pieces', remplissages: 0, profondeur: 3 });
-  combinaisons.push({ seuil: 3, mesure: 'pieces', remplissages: 2, profondeur: 3 });
-  for (const { seuil, mesure, remplissages, profondeur } of combinaisons) {
-    let reussis = 0, echecs = 0, mauvais = 0, ecartMin = Infinity, contactMin = Infinity, contactNeutreMin = Infinity, identiques = 0, scoreMax = 0, scoreTotal = 0, poses = 0, tempsMax = 0;
+  for (const seuil of [3, 2]) for (const mesure of ['pieces', 'cotes']) combinaisons.push({ seuil, mesure, remplissages: 0 });
+  combinaisons.push({ seuil: 3, mesure: 'pieces', remplissages: 2 });
+  for (const { seuil, mesure, remplissages } of combinaisons) {
+    let reussis = 0, echecs = 0, mauvais = 0, ecartMin = Infinity, contactMin = Infinity, identiques = 0, scoreMax = 0, scoreTotal = 0, annonces = 0, poses = 0, tempsMax = 0;
     const repartitions = new Set(), formes = new Set();
     const options = { seuilContact: seuil, mesureContact: mesure, remplissages };
-    if (profondeur !== PROFONDEUR) options.profondeurExtremite = profondeur;
-    let villesLoin = 0, comparables = 0;      // comparables : plateaux générés parmi les 5 premières graines
+    let comparables = 0;      // comparables : plateaux générés parmi les 5 premières graines
     const debut = Date.now();
     for (let g = premiere; g < premiere + nombre; g++) {
       const t = Date.now();
       const r = G.generer(g, options);
       tempsMax = Math.max(tempsMax, Date.now() - t);
-      if (!r.ok) { echecs += 1; console.log('  ÉCHEC DE GÉNÉRATION graine ' + g + ' seuil ' + seuil + ' ' + mesure + ', ' + profondeur + ' rangée(s) : ' + r.raison); continue; }
+      if (!r.ok) { echecs += 1; console.log('  ÉCHEC DE GÉNÉRATION graine ' + g + ' seuil ' + seuil + ' ' + mesure + ' : ' + r.raison); continue; }
       reussis += 1;
-      const v = verifier(r.plateau, seuil, mesure, remplissages, profondeur);
-      // À plus de 2 rangées : le même plateau jugé à 2 rangées dit combien de plateaux ont une ville plus loin du bord.
-      if (profondeur > PROFONDEUR && verifier(Object.assign({}, r.plateau, { profondeurExtremite: undefined }), seuil, mesure, remplissages, PROFONDEUR).fautes.some((x) => /hors des 2 rangée/.test(x))) villesLoin += 1;
+      const v = verifier(r.plateau, seuil, mesure, remplissages);
       ecartMin = Math.min(ecartMin, v.ecartMin);
       contactMin = Math.min(contactMin, v.contactMin);
-      contactNeutreMin = Math.min(contactNeutreMin, v.contactNeutreMin);
       scoreMax = Math.max(scoreMax, r.score);
       scoreTotal += r.score;
+      if (r.annonce) annonces += 1;
       poses += v.remplissages;
       repartitions.add(v.terrains.plaine + '/' + v.terrains.foret + '/' + v.terrains.marais);
       formes.add(r.plateau.pieces.map((x) => x.modele + ':' + x.q + ',' + x.r + ',' + x.rotation).join(' '));
       if (JSON.stringify(P.avecCamps(r.plateau).camps) !== JSON.stringify(r.plateau.camps)) v.fautes.push('camps du générateur ≠ campsAuto');
       const relu = P.lire(P.serialiser(r.plateau));
       if (!relu.ok || JSON.stringify(relu.plateau) !== JSON.stringify(r.plateau)) v.fautes.push('fichier non relisible à l’identique');
-      if (v.fautes.length) { mauvais += 1; console.log('  NON CONFORME graine ' + g + ' seuil ' + seuil + ' ' + mesure + ', ' + profondeur + ' rangée(s) : ' + v.fautes.slice(0, 5).join(' ; ')); }
+      if (v.fautes.length) { mauvais += 1; console.log('  NON CONFORME graine ' + g + ' seuil ' + seuil + ' ' + mesure + ' : ' + v.fautes.slice(0, 5).join(' ; ')); }
       if (g < premiere + 5) { comparables += 1; if (JSON.stringify(G.generer(g, options).plateau) === JSON.stringify(r.plateau)) identiques += 1; }
     }
     total += reussis; fautifs += mauvais; echecsTotal += echecs;
-    lignes.push('seuil ' + seuil + ', mesure ' + mesure + ', remplissages permis ' + remplissages + ', extrémités de ' + profondeur + ' rangée(s)' + (profondeur > PROFONDEUR ? ' (' + villesLoin + ' plateaux avec une ville au-delà de la 2e rangée)' : '') + ' : ' + reussis + ' générés, ' + echecs + ' échec(s) de génération, ' + mauvais + ' non conforme(s) ; écart minimal entre villes '
-      + ecartMin + ' pas ; contact minimal ' + contactMin + ' (villes neutres : ' + contactNeutreMin + ' pièces) ; remplissages posés ' + poses + ' ; score d’équilibre moyen ' + (reussis ? (scoreTotal / reussis).toFixed(2) : '–') + ', maximal ' + scoreMax
+    lignes.push('seuil ' + seuil + ', mesure ' + mesure + ', remplissages permis ' + remplissages + ' : ' + reussis + ' générés, ' + echecs + ' échec(s) de génération, ' + mauvais + ' non conforme(s) ; écart minimal entre villes '
+      + ecartMin + ' pas ; contact minimal ' + contactMin + ' ; remplissages posés ' + poses + ' ; score d’équilibre moyen ' + (reussis ? (scoreTotal / reussis).toFixed(2) : '–') + ', maximal ' + scoreMax + ', ' + annonces + ' déséquilibre(s) annoncé(s)'
       + ' ; plaines/forêts/marais du terrain ' + [...repartitions].join(' ') + ' ; plateaux distincts ' + formes.size + ' ; même graine = même plateau ' + identiques + '/' + comparables
       + ' ; ' + (Date.now() - debut) + ' ms (au plus ' + tempsMax + ' ms par plateau)');
   }

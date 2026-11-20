@@ -76,10 +76,10 @@
     var vp = AT.app.vues.plateau;
     verifier('trois onglets', $$('[role="tab"]').length === 3);
     verifier('onglet Plateau affiché', AT.app.ongletActif() === 'plateau' && !$('#panneau-plateau').hidden && $('#panneau-partie').hidden);
-    verifier('plateau généré au démarrage : 26 pièces (24 de terrain, 2 villes neutres)', vp.plateau().pieces.length === 26, vp.plateau().pieces.length);
-    verifier('plateau généré au démarrage : 4 villes de déploiement posées par-dessus une Plaine, étape « complet »', AT.plateau.deploiements(vp.plateau()).length === 4 && vp.bilan().etape === 'complet'
+    verifier('plateau généré au démarrage : 24 pièces de terrain (les villes ne sont plus des pièces)', vp.plateau().pieces.length === 24, vp.plateau().pieces.length);
+    verifier('plateau généré au démarrage : 6 villes posées par-dessus une Plaine (2 neutres, 2 par camp), étape « complet »', AT.plateau.deploiements(vp.plateau()).length === 6 && vp.bilan().etape === 'complet'
       && /Plateau complet/.test($('#pl-etape').textContent), $('#pl-etape') && $('#pl-etape').textContent);
-    verifier('93 cases dessinées (91 de terrain, 2 villes neutres)', $$('svg > g:first-of-type > g:first-child > polygon', vp.vue.parentSvg || vp.vue.svg.parentNode).length === 93, $$('svg > g:first-of-type > g:first-child > polygon', vp.vue.parentSvg || vp.vue.svg.parentNode).length);
+    verifier('91 cases dessinées (les villes n’ajoutent aucune case)', $$('svg > g:first-of-type > g:first-child > polygon', vp.vue.parentSvg || vp.vue.svg.parentNode).length === 91, $$('svg > g:first-of-type > g:first-child > polygon', vp.vue.parentSvg || vp.vue.svg.parentNode).length);
     verifier('12 motifs de terrain définis', $$('pattern', vp.vue.svg).length === 12, $$('pattern', vp.vue.svg).length);
     verifier('aucune erreur aux contrôles', vp.bilan().erreurs === 0 && /aucune erreur/i.test($('#pl-bilan').textContent), $('#pl-bilan').textContent);
     verifier('les 7 contrôles sont listés', $$('#pl-controles .at-regle').length === 7);
@@ -90,7 +90,7 @@
     verifier('score d’équilibre affiché, avec son sens (M4 : « avantage Vert de n », « avantage Rouge de n » ou « aucun camp avantagé »)', /Score d’équilibre : \d+ \(0 = équilibré\) ; (aucun camp avantagé|avantage (Vert|Rouge) de \d+)/.test($('#pl-score').textContent)
       && /ville de déploiement adverse la plus lointaine/.test($('#pl-score').textContent), $('#pl-score').textContent);
     verifier('répartition des terrains : 3 lignes', $$('#pl-terrains tbody tr').length === 3);
-    verifier('légende : 5 terrains, 8 événements, 6 repères (2 villes de déploiement, ville neutre, remplissage, monobloc, noyau)', $$('#pl-legende .at-legende-item').length === 19 && $$('#pl-legende svg').length === 17, $$('#pl-legende .at-legende-item').length);
+    verifier('légende : 5 terrains, 8 événements, 7 repères (ville neutre, 2 villes de déploiement, ville neutre des règles précédentes, remplissage, monobloc, noyau)', $$('#pl-legende .at-legende-item').length === 20 && $$('#pl-legende svg').length === 18, $$('#pl-legende .at-legende-item').length);
     verifier('7 villes numérotées sur le plateau', [1, 2, 3, 4, 5, 6, 7].every(function (n) {
       return $$('text', vp.vue.svg).some(function (t) { return t.textContent === String(n); });
     }));
@@ -133,64 +133,62 @@
   // ================================================================== C. retouche à la main
   scenario('Retouche', function () {
     var vp = AT.app.vues.plateau, P = AT.plateau, vue = vp.vue;
+    // Plateau des règles précédentes (ses 2 villes neutres sont des tuiles ajoutées contre le plateau, pièces « VN »).
+    vp.ouvrirTexte(RECETTE_REGLES_PRECEDENTES_PLATEAU);
     var plaine = vp.plateau().pieces.filter(function (p) { return p.modele === 'VN'; })[0];
     var cle = AT.hex.cle(plaine.q, plaine.r);
-    // Une case vide au-dessus du plateau : une ville neutre y est mal placée (erreur du contrôle des villes).
-    var terrainRetouche = P.cases(vp.plateau(), { sansVilles: true }), etendueRetouche = P.etendueSurCases(terrainRetouche);
-    var sommet = AT.hex.decle(Object.keys(terrainRetouche).filter(function (k) { return AT.hex.decle(k).r === etendueRetouche.haut; })[0]);
-    var mauvaise = AT.hex.cle(sommet.q, sommet.r - 1);
-    // Une ville neutre ne se déplace que par l'étape « Villes » : on la retire d'un clic, puis on la repose (en pose
-    // libre, pour pouvoir la mettre à une mauvaise place). Deux étapes d'annulation.
-    function deplacerVilleNeutre(depuis, vers) {
-      clic($('#pl-mode-villes'));
-      clicCase(vue, depuis);
-      clic($('#vi-outil-neutre'));
-      if (!$('#vi-libre').checked) clic($('#vi-libre'));
-      clicCase(vue, vers);
-      clic($('#vi-libre'));
+    /** Retire par l'interface un monobloc dont l'absence met ses voisins sous le seuil de contact (erreur avec cases) : une étape. */
+    function fauter() {
+      var pl = vp.plateau(), choisi = pl.pieces.filter(function (x) {
+        if (x.modele === 'N1' || P.modele(pl, x.modele).cases.length < 2) return false;
+        var premiere = AT.controles.tout(P.retirer(pl, x.id).plateau).resultats.filter(function (c) { return c.niveau === 'erreur'; })[0];
+        return !!premiere && premiere.regle === 'contact' && premiere.cases.length > 0;
+      })[0];
       clic($('#pl-mode-generer'));
+      clicCase(vue, P.casesPiece(choisi, pl)[0].cle);
+      clic($('#pl-retirer'));
     }
     clicCase(vue, cle);
     verifier('clic sur une case : la pièce est sélectionnée', vp.etat().selection === plaine.id && marques(vue, 'at-selection') === 1, vp.etat().selection);
-    // Correction 2 : une ville neutre posée ne se retire, ne se tourne et ne se déplace que par l'étape « Villes ».
-    var rangVille = vp.etat().rang, refusVille = /Une ville neutre ne se déplace, ne se tourne et ne se retire qu’à l’étape « Villes »/;
+    // Une ancienne tuile de ville neutre ne se retire, ne se tourne et ne se déplace que par l'étape « Villes ».
+    var rangVille = vp.etat().rang, refusVille = /ville neutre est une tuile des règles précédentes .* ne se déplace, ne se tourne et ne se retire qu’à l’étape « Villes »/;
     clic($('#pl-retirer'));
-    verifier('ville neutre sélectionnée, « Retirer » : refusé, message qui renvoie à l’étape « Villes »', vp.plateau().pieces.length === 26 && vp.etat().rang === rangVille && refusVille.test($('#barre-etat').textContent)
+    verifier('ancienne tuile de ville neutre sélectionnée, « Retirer » : refusé, message qui renvoie à l’étape « Villes »', vp.plateau().pieces.length === 26 && vp.etat().rang === rangVille && refusVille.test($('#barre-etat').textContent)
       && /at-etat-erreur/.test(etatBarre()), $('#barre-etat').textContent);
     ctxMessageEfface();
     touche('Delete');
-    verifier('ville neutre sélectionnée, touche Suppr : refusé de même', vp.plateau().pieces.length === 26 && vp.etat().rang === rangVille && refusVille.test($('#barre-etat').textContent), $('#barre-etat').textContent);
+    verifier('ancienne tuile de ville neutre sélectionnée, touche Suppr : refusé de même', vp.plateau().pieces.length === 26 && vp.etat().rang === rangVille && refusVille.test($('#barre-etat').textContent), $('#barre-etat').textContent);
     ctxMessageEfface();
     touche('r');
-    verifier('ville neutre sélectionnée, touche R (tourner) : refusé de même', vp.etat().rang === rangVille && refusVille.test($('#barre-etat').textContent), $('#barre-etat').textContent);
+    verifier('ancienne tuile de ville neutre sélectionnée, touche R (tourner) : refusé de même', vp.etat().rang === rangVille && refusVille.test($('#barre-etat').textContent), $('#barre-etat').textContent);
     ctxMessageEfface();
     clic($('#pl-deplacer'));
-    verifier('ville neutre sélectionnée, « Déplacer » : refusé, aucun déplacement en attente', vp.etat().rang === rangVille && vp.etat().aPoser === null && refusVille.test($('#barre-etat').textContent), $('#barre-etat').textContent);
+    verifier('ancienne tuile de ville neutre sélectionnée, « Déplacer » : refusé, aucun déplacement en attente', vp.etat().rang === rangVille && vp.etat().aPoser === null && refusVille.test($('#barre-etat').textContent), $('#barre-etat').textContent);
     touche('Escape');
     clic($('#pl-mode-villes'));
     clicCase(vue, cle);
-    verifier('retirer (étape « Villes », clic sur la ville neutre) : 25 pièces', vp.plateau().pieces.length === 25 && vp.etat().rang === rangVille + 1 && /Ville neutre retirée/.test($('#barre-etat').textContent), $('#barre-etat').textContent);
-    verifier('retirer : la ville neutre revient au stock (compteur de l’étape « Villes » : 1 / 2)', $('#vi-outils [data-compteur="neutre"]').textContent === '1 / 2' && !$('#pl-stock [data-modele="VN"]'), $('#vi-outils').textContent);
+    verifier('retirer (étape « Villes », clic sur l’ancienne tuile) : 25 pièces', vp.plateau().pieces.length === 25 && vp.etat().rang === rangVille + 1 && /Ville neutre des règles précédentes retirée/.test($('#barre-etat').textContent), $('#barre-etat').textContent);
+    verifier('retirer : une ville neutre est de nouveau à poser (compteur de l’étape « Villes » : 1 / 2) ; les villes ne sont pas dans la palette', $('#vi-outils [data-compteur="neutre"]').textContent === '1 / 2' && !$('#pl-stock [data-modele="VN"]'), $('#vi-outils').textContent);
     verifier('retirer : les contrôles signalent le changement en direct (ville à poser : alerte, pas erreur)', /villes à poser : 1 ville neutre/.test($('#pl-controles').textContent) && vp.bilan().alertes > 0
       && vp.bilan().erreurs === 0 && vp.bilan().etape === 'villes', $('#pl-bilan').textContent);
-    // La ville neutre se repose par l'étape « Villes » (elle n'est plus dans la palette).
+    // La ville neutre se repose par l'étape « Villes », sur une Plaine.
     clic($('#pl-mode-villes'));
     clic($('#vi-outil-neutre'));
     var placesNeutres = AT.vueVilles.places(vp.plateau(), 'neutre');
-    verifier('étape « Villes », outil « ville neutre » : les places admissibles sont en surbrillance', $('#vi-outil-neutre').getAttribute('aria-pressed') === 'true' && placesNeutres.indexOf(cle) !== -1
+    verifier('étape « Villes », outil « ville neutre » : les Plaines admissibles sont en surbrillance', $('#vi-outil-neutre').getAttribute('aria-pressed') === 'true' && placesNeutres.length > 0
       && marques(vue, 'at-admissible') === placesNeutres.length, marques(vue, 'at-admissible') + ' / ' + placesNeutres.length);
     clicCase(vue, '1,0');
-    verifier('pose refusée sur une case occupée, avec la raison du modèle', vp.plateau().pieces.length === 25 && /at-etat-erreur/.test(etatBarre()) && /Pose refusée : .*déjà occupée/.test($('#barre-etat').textContent), $('#barre-etat').textContent);
-    clicCase(vue, cle);
-    verifier('pose : 26 pièces, plateau de nouveau complet', vp.plateau().pieces.length === 26 && vp.bilan().erreurs === 0 && vp.bilan().etape === 'complet');
+    verifier('pose refusée sur le noyau, avec la raison du modèle', vp.plateau().pieces.length === 25 && /at-etat-erreur/.test(etatBarre()) && /Pose refusée : Une ville ne se pose pas sur le noyau/.test($('#barre-etat').textContent), $('#barre-etat').textContent);
+    clicCase(vue, placesNeutres[0]);
+    verifier('pose sur une Plaine : 25 pièces, 5 villes posées par-dessus, plateau de nouveau complet', vp.plateau().pieces.length === 25 && P.deploiements(vp.plateau()).length === 5 && vp.bilan().erreurs === 0 && vp.bilan().etape === 'complet');
     clic($('#pl-mode-generer'));
     touche('z', { ctrlKey: true });
-    verifier('Ctrl+Z annule la pose', vp.plateau().pieces.length === 25);
+    verifier('Ctrl+Z annule la pose', P.deploiements(vp.plateau()).length === 4);
     touche('y', { ctrlKey: true });
-    verifier('Ctrl+Y la rétablit', vp.plateau().pieces.length === 26);
+    verifier('Ctrl+Y la rétablit', P.deploiements(vp.plateau()).length === 5);
     clic($('#pl-annuler'));
     clic($('#pl-retablir'));
-    verifier('boutons Annuler / Rétablir', vp.plateau().pieces.length === 26 && $('#pl-retablir').disabled);
+    verifier('boutons Annuler / Rétablir', P.deploiements(vp.plateau()).length === 5 && $('#pl-retablir').disabled);
 
     // Vider, puis reconstruire à la main : noyau, montagne tournée, déplacement.
     clic($('#pl-vider'));
@@ -241,18 +239,19 @@
     touche('Escape');
 
     // Une erreur épinglée puis corrigée ne laisse pas de surbrillance orpheline.
-    deplacerVilleNeutre(cle, mauvaise);
-    clic($$('#pl-controles button.at-constat[data-niveau="erreur"]')[0]);
-    var epinglees = marques(vue, 'at-surbrillance');
-    deplacerVilleNeutre(mauvaise, cle);
-    verifier('surbrillance épinglée effacée dès que le plateau change', epinglees > 0 && marques(vue, 'at-surbrillance') === 0, epinglees);
     touche('Escape');
     $('#pl-graine').value = '1';
     clic($('#pl-generer'));
+    fauter();
+    clic($$('#pl-controles button.at-constat[data-niveau="erreur"]')[0]);
+    var epinglees = marques(vue, 'at-surbrillance');
+    clic($('#pl-annuler'));
+    verifier('surbrillance épinglée effacée dès que le plateau change', epinglees > 0 && marques(vue, 'at-surbrillance') === 0, epinglees);
+    touche('Escape');
 
-    deplacerVilleNeutre(cle, mauvaise);
+    fauter();
     var constat = $$('#pl-controles button.at-constat[data-niveau="erreur"]')[0];
-    verifier('ville neutre déplacée au-dessus du plateau : erreur « mal placée » avec case à montrer', !!constat && vp.bilan().erreurs > 0 && /Ville neutre en .* mal placée/.test(constat.textContent), constat && constat.textContent);
+    verifier('monobloc retiré : erreur de contact avec ses cases à montrer', !!constat && vp.bilan().erreurs > 0 && /Contact, mesure/.test(constat.textContent), constat && constat.textContent);
     constat.dispatchEvent(new MouseEvent('mouseenter'));
     var surlignees = marques(vue, 'at-surbrillance');
     constat.dispatchEvent(new MouseEvent('mouseleave'));
@@ -260,8 +259,7 @@
     clic(constat);
     verifier('clic sur un constat : surbrillance épinglée', marques(vue, 'at-surbrillance') === surlignees && !!$('#pl-controles button.at-constat[aria-pressed="true"]'));
     clic($('#pl-annuler'));
-    clic($('#pl-annuler'));
-    verifier('annuler (la pose, puis le retrait de la ville neutre) : plateau de nouveau conforme', vp.bilan().erreurs === 0 && vp.plateau().pieces.length === 26);
+    verifier('annuler (le retrait du monobloc) : plateau de nouveau conforme', vp.bilan().erreurs === 0 && vp.plateau().pieces.length === 24);
     // Le cadre a suivi la ville posée au-dessus du plateau ; annuler garde la vue : on recadre avant les essais de zoom.
     clic($$('.at-vue-barre button', vp.element)[2]);
 
@@ -329,7 +327,7 @@
 
     var image = vp.imageExport(), doc = new DOMParser().parseFromString(image.texte, 'image/svg+xml');
     verifier('export SVG : document valide', !doc.querySelector('parsererror') && doc.documentElement.nodeName === 'svg');
-    verifier('export SVG : 93 cases, 12 motifs', doc.querySelectorAll('svg > g:first-of-type > g:first-child > polygon').length === 93 && doc.querySelectorAll('pattern').length === 12);
+    verifier('export SVG : 91 cases, 12 motifs', doc.querySelectorAll('svg > g:first-of-type > g:first-child > polygon').length === 91 && doc.querySelectorAll('pattern').length === 12);
     verifier('export SVG : autonome (ni classe, ni style, ni élément d’interface)', !/ class=| style=|at-/.test(image.texte));
     telecharges.length = 0;
     clic($('#pl-svg'));
@@ -379,19 +377,19 @@
   scenario('Inventaire', function () {
     AT.app.montrer('inventaire');
     verifier('onglet Inventaire affiché', !$('#panneau-inventaire').hidden && $('#panneau-plateau').hidden);
-    verifier('26 modèles de pièces, tous dessinés', $$('#inv-pieces tbody tr[data-modele]').length === 26 && $$('#inv-pieces tbody tr[data-modele] svg').length === 26, $$('#inv-pieces tbody tr[data-modele]').length);
-    verifier('catalogue 2 : terrain en monoblocs de 3 ou 4 cases ; seules tuiles d’une case : remplissage et ville neutre', $$('#inv-pieces tbody tr[data-modele]').filter(function (tr) {
+    verifier('25 modèles de pièces, tous dessinés', $$('#inv-pieces tbody tr[data-modele]').length === 25 && $$('#inv-pieces tbody tr[data-modele] svg').length === 25, $$('#inv-pieces tbody tr[data-modele]').length);
+    verifier('catalogue 2 : terrain en monoblocs de 3 ou 4 cases ; seule tuile d’une case : le remplissage (les villes ne sont plus des pièces)', $$('#inv-pieces tbody tr[data-modele]').filter(function (tr) {
       return /^1 case/.test(tr.querySelectorAll('td')[1].textContent);
-    }).map(function (tr) { return tr.getAttribute('data-modele'); }).join() === 'R,VN' && !$('#inv-pieces [data-modele="P"]'));
-    verifier('totaux : 28 pièces, 95 cases, dont 24 pièces de terrain pour 91 cases', /28 pièces, 95 cases \(dont 24 pièces de terrain pour 91 cases, et 2 tuiles de remplissage facultatives\)/.test($('#inv-totaux').textContent), $('#inv-totaux').textContent);
-    verifier('quantités posées sur le plateau courant', /26 pièces posées \(93 cases\), 2 restantes/.test($('#inv-totaux').textContent), $('#inv-totaux').textContent);
+    }).map(function (tr) { return tr.getAttribute('data-modele'); }).join() === 'R' && !$('#inv-pieces [data-modele="P"]') && !$('#inv-pieces [data-modele="VN"]'));
+    verifier('totaux : 26 pièces, 93 cases, dont 24 pièces de terrain pour 91 cases', /26 pièces, 93 cases \(dont 24 pièces de terrain pour 91 cases, et 2 tuiles de remplissage facultatives\)/.test($('#inv-totaux').textContent), $('#inv-totaux').textContent);
+    verifier('quantités posées sur le plateau courant', /24 pièces posées \(91 cases\), 2 restantes/.test($('#inv-totaux').textContent), $('#inv-totaux').textContent);
     verifier('répartition affichée', /75 cases des monoblocs/.test($('#inv-repartition').textContent) && /49 plaines \(65,3 %\)/.test($('#inv-repartition').textContent) && /13 forêts \(17,3 %\)/.test($('#inv-repartition').textContent) && /13 marais \(17,3 %\)/.test($('#inv-repartition').textContent)
       && /visé : 65 \/ 17,5 \/ 17,5/.test($('#inv-repartition').textContent), $('#inv-repartition').textContent);
     verifier('catalogue : aucun monobloc de terrain tout en plaine (chaque ligne de monobloc porte une forêt ou un marais)', AT.catalogue.monoblocsToutPlaine().length === 0
       && $$('#inv-pieces tbody tr[data-modele]').filter(function (tr) { var t = tr.textContent; return /[34] cases : /.test(t) && !/forêt|marais|montagne/.test(t); }).length === 0
       && !$('#inv-pieces [data-modele="P4A"]') && !!$('#inv-pieces [data-modele="FS4B"]'));
-    verifier('villes : 2 villes neutres et 4 tuiles de ville de déploiement, 4 posées', /2 villes neutres/.test($('#inv-villes').textContent) && /4 tuiles de ville de déploiement/.test($('#inv-villes').textContent)
-      && /4 posée\(s\) sur le plateau courant/.test($('#inv-villes').textContent), $('#inv-villes').textContent);
+    verifier('villes : 6 tuiles posées par-dessus une Plaine (2 villes neutres, 2 villes de déploiement par joueur), 6 posées', /6 tuiles de ville posées par-dessus une Plaine/.test($('#inv-villes').textContent) && /2 villes neutres, 2 villes de déploiement par joueur/.test($('#inv-villes').textContent)
+      && /6 posée\(s\) sur le plateau courant, 0 restante/.test($('#inv-villes').textContent) && !/flanc/.test($('#panneau-inventaire').textContent), $('#inv-villes').textContent);
     var plaines = $('#inv-pieces [data-modele="R"]').querySelectorAll('td.at-nombre');
     verifier('remplissage : 2 au total, 0 posée, 2 restantes (le générateur n’en pose pas)', plaines[0].textContent === '2' && plaines[1].textContent === '0' && plaines[2].textContent === '2');
     verifier('réserve : 8 tuiles d’événement avec condition et effet', $$('#inv-evenements tbody tr').length === 8 && /montagne/.test($('#inv-evenements [data-evenement="E3"]').textContent) && /coût 2/i.test($('#inv-evenements [data-evenement="E3"]').textContent));
@@ -412,7 +410,7 @@
     verifier('mains affichées, cartes étiquetées « provisoire »', $$('[data-main="vert"] .at-carte').length === 3 && $$('[data-main="rouge"] .at-carte').length === 2 && $$('[data-main="vert"] .at-etiquette-provisoire').length === 3);
     verifier('tour, joueur actif et actions affichés', /Tour 1 — au tour de Vert — actions comptées : 0 \/ 2/.test($('#pa-tour-texte').textContent), $('#pa-tour-texte').textContent);
     verifier('4 bataillons par joueur, en réserve', $$('.at-bataillon-reserve').length === 8);
-    verifier('plateau de la partie dessiné', $$('svg > g:first-of-type > g:first-child > polygon', vue.svg.parentNode).length === 93);
+    verifier('plateau de la partie dessiné', $$('svg > g:first-of-type > g:first-child > polygon', vue.svg.parentNode).length === 91);
 
     // Former : par bouton, par clic sur le plateau, puis hors déploiement (avertissement à forcer).
     var camps = e.plateau.camps.vert;
@@ -621,14 +619,14 @@
         clic($('#pl-generer'));
         var pl = vp.plateau(), premier = JSON.stringify(pl);
         clic($('#pl-generer'));
-        var bon = String(pl.graine) === g && vp.bilan().erreurs === 0 && vp.bilan().etape === 'complet' && pl.pieces.length === 26 && casesDessinees(vp.vue) === 93
-          && pl.camps.vert.length === 2 && pl.camps.rouge.length === 2 && P.deploiements(pl).length === 4 && $('#pl-avis').hidden && relisible(vp)
+        var bon = String(pl.graine) === g && vp.bilan().erreurs === 0 && vp.bilan().etape === 'complet' && pl.pieces.length === 24 && casesDessinees(vp.vue) === 91
+          && pl.camps.vert.length === 2 && pl.camps.rouge.length === 2 && P.deploiements(pl).length === 6 && $('#pl-avis').hidden && relisible(vp)
           && JSON.stringify(vp.plateau()) === premier && P.villes(pl).length === 7;
         if (!bon) mauvais.push(g + ' (seuil ' + seuil + ') : ' + $('#barre-etat').textContent + ' ' + $('#pl-bilan').textContent);
         differents[premier.replace(/"graine":[^,]*,/, '')] = true;
       });
     });
-    verifier('6 graines × 2 seuils : 26 pièces, 93 cases, 7 villes, 2 + 2 villes de déploiement posées sur une Plaine, aucune erreur, étape « complet », fichier relisible, même graine = même plateau', mauvais.length === 0, mauvais.join(' | '));
+    verifier('6 graines × 2 seuils : 24 pièces, 91 cases, 7 villes, 6 villes posées sur une Plaine (2 neutres, 2 par camp), aucune erreur, étape « complet », fichier relisible, même graine = même plateau', mauvais.length === 0, mauvais.join(' | '));
     verifier('les graines donnent des plateaux différents', Object.keys(differents).length >= 6, Object.keys(differents).length);
     $('#pl-graine').value = '   ';
     clic($('#pl-generer'));
@@ -672,31 +670,16 @@
     clic($('#pl-enregistrer'));
     verifier('plateau vide : fichier produit', telecharges.length === 1);
     verifier('noyau posé au centre', poser('N1', '0,0'));
-    // Catalogue 2 : une ville neutre est une tuile ajoutée contre un flanc ; posée ailleurs par la palette, elle est
-    // acceptée (pose libre) et le contrôle des villes dit qu'elle est mal placée. Elle ne désigne aucun camp.
+    // Une ville ne se pose que par-dessus une Plaine du plateau : hors du plateau ou sur le noyau, la pose est refusée.
     clic($('#pl-mode-villes'));
     clic($('#vi-outil-neutre'));
     clicCase(vue, '0,-2');
-    verifier('ville neutre au-dessus du plateau : refusée en pose stricte, avec la raison du modèle', vp.plateau().pieces.length === 1 && /Pose refusée : Une ville neutre se pose sur un côté du plateau/.test($('#barre-etat').textContent), $('#barre-etat').textContent);
-    clic($('#vi-libre'));
-    clicCase(vue, '0,-2');
-    clic($('#vi-libre'));
+    verifier('ville neutre hors du plateau : refusée, avec la raison du modèle', vp.plateau().pieces.length === 1 && /Pose refusée : Cette case n’est pas sur le plateau/.test($('#barre-etat').textContent), $('#barre-etat').textContent);
+    clicCase(vue, '0,-1');
+    verifier('ville neutre sur le noyau : refusée, aucun camp désigné, aucune ville posée', /Pose refusée : Une ville ne se pose pas sur le noyau/.test($('#barre-etat').textContent) && !vp.plateau().deploiements
+      && vp.plateau().camps.vert.length === 0 && relisible(vp), $('#barre-etat').textContent);
     clic($('#pl-mode-generer'));
-    verifier('la même en pose libre : acceptée, « mal placée » au contrôle des villes, aucun camp désigné', vp.plateau().pieces.length === 2 && relisible(vp)
-      && /Ville neutre en \(0,-2\) mal placée/.test($('#pl-controles').textContent) && vp.plateau().camps.vert.length === 0 && vp.bilan().villes.erreurs > 0, $('#pl-bilan').textContent);
-    telecharges.length = 0;
-    clic($('#pl-enregistrer'));
-    var ambigu = vp.texteEnregistrement();
-    verifier('plateau en cours de retouche, ville mal placée comprise : enregistré et rouvert', telecharges.length === 1 && vp.ouvrirTexte(ambigu) === true && vp.plateau().pieces.length === 2);
-    clicCase(vue, '0,-2');
-    touche('Delete');
-    verifier('ville neutre mal placée, touche Suppr hors de l’étape « Villes » : refusée, renvoi à l’étape « Villes »', vp.plateau().pieces.length === 2
-      && /ville neutre .* qu’à l’étape « Villes »/.test($('#barre-etat').textContent) && /at-etat-erreur/.test(etatBarre()), $('#barre-etat').textContent);
-    touche('Escape');
-    clic($('#pl-mode-villes'));
-    clicCase(vue, '0,-2');
-    clic($('#pl-mode-generer'));
-    verifier('ville neutre retirée (étape « Villes ») : plus d’erreur de villes, étape « construction »', !/mal placée/.test($('#pl-controles').textContent) && vp.bilan().villes.erreurs === 0 && vp.bilan().etape === 'construction'
+    verifier('noyau seul : aucune erreur de villes, étape « construction »', vp.bilan().villes.erreurs === 0 && vp.bilan().etape === 'construction'
       && /Construction en cours : 23 pièces de terrain à poser/.test($('#pl-etape').textContent), $('#pl-etape').textContent);
     // Monoblocs : pose tournée, rotation sur place (comparée au modèle), déplacement, retrait.
     verifier('monoblocs posés tournés (bois, lisière, marécage, montagne peigne)', poser('F3', '3,0', 2) && poser('F31', '-4,1', 1) && poser('S3', '2,2', 5) && poser('M5', '-3,-1', 3));
@@ -798,10 +781,10 @@
     // Identifiants de pièce valides mais homonymes de propriétés d'objet : le dessin ne doit pas planter.
     var homonymes = mute(function (o) { ['constructor', 'toString', 'valueOf', 'hasOwnProperty'].forEach(function (nom, i) { o.pieces[i].id = nom; }); });
     var ouvert = vp.ouvrirTexte(homonymes);
-    verifier('identifiants de pièce « constructor », « toString »… : plateau ouvert et dessiné en entier', ouvert === true && casesDessinees(vp.vue) === 93 && vp.bilan().erreurs === 0, casesDessinees(vp.vue));
+    verifier('identifiants de pièce « constructor », « toString »… : plateau ouvert et dessiné en entier', ouvert === true && casesDessinees(vp.vue) === 91 && vp.bilan().erreurs === 0, casesDessinees(vp.vue));
     AT.app.montrer('partie');
     clic($('#pa-nouvelle'));
-    verifier('partie sur ce plateau : créée et dessinée', casesDessinees(vq.vue) === 93 && vq.etat().plateau.pieces[0].id === 'constructor', casesDessinees(vq.vue));
+    verifier('partie sur ce plateau : créée et dessinée', casesDessinees(vq.vue) === 91 && vq.etat().plateau.pieces[0].id === 'constructor', casesDessinees(vq.vue));
     AT.app.montrer('plateau');
     vp.ouvrirTexte(bon);
     // Fichiers au bon format mais au contenu fautif : ouverts, dessinés, et les contrôles disent ce qui ne va pas.
@@ -812,7 +795,7 @@
     var orphelines = mute(function (o) { o.pieces = o.pieces.slice(0, 3); o.camps = { vert: [], rouge: [] }; });
     var avantOrphelines = JSON.stringify(vp.plateau());
     verifier('fichier dont les villes de déploiement visent des cases absentes : refusé avec la raison, plateau inchangé', vp.ouvrirTexte(orphelines) === false
-      && /Fichier refusé : Ville de déploiement n° 1 : aucune case du plateau en \(/.test($('#barre-etat').textContent) && JSON.stringify(vp.plateau()) === avantOrphelines, $('#barre-etat').textContent);
+      && /Fichier refusé : Ville posée n° 1 : aucune case du plateau en \(/.test($('#barre-etat').textContent) && JSON.stringify(vp.plateau()) === avantOrphelines, $('#barre-etat').textContent);
     verifier('fichier valide très dispersé, tuile d’événement hors plateau : ouvert sans erreur JavaScript, signalé', vp.ouvrirTexte(disperse) === true && vp.bilan().erreurs > 0 && /mal posé/.test($('#pl-controles').textContent), $('#barre-etat').textContent);
     AT.app.montrer('partie');
     var partieAvant = JSON.stringify(vq.etat());
@@ -922,9 +905,10 @@
     touche('Escape');
     clic($('#pa-fin-tour')); e = suivre();
 
-    // Tour 3 (Vert) : marche vers la ville neutre la plus proche, case par case.
+    // Tour 3 (Vert) : marche vers la ville neutre la plus proche, case par case (par un chemin sans pion : cliquer un pion
+    // de son camp le sélectionnerait au lieu d'avancer).
     var libres = P.villes(e.plateau).filter(function (k) { return campsV.indexOf(k) === -1 && campsR.indexOf(k) === -1 && k !== '0,0'; });
-    var trajets = libres.map(function (k) { return P.chemin(e.plateau, campsV[1], k); }).filter(function (c) { return c.ok; }).sort(function (a, b) { return a.cout - b.cout; });
+    var trajets = libres.map(function (k) { return P.chemin(e.plateau, campsV[1], k); }).filter(function (c) { return c.ok && c.cases.slice(1).every(function (k) { return !PA.occupants(e, k).length; }); }).sort(function (a, b) { return a.cout - b.cout; });
     var trajet = trajets[0], rations = 0, ecartsCout = [];
     clicCase(vue, campsV[1]);
     for (var i = 1; i < trajet.cases.length; i++) {
@@ -1116,13 +1100,13 @@
     verifier('retour au plateau généré', JSON.stringify(vp.plateau()) === depart && vp.bilan().erreurs === 0);
 
     // Générateur : catalogue hors de ce qu'il sait poser → échec immédiat, cause nommée, pas de conseil trompeur.
-    var villes = C.MODELES.VN.nombre;
-    C.MODELES.VN.nombre = 3;
-    try { clic($('#pl-generer')); } finally { C.MODELES.VN.nombre = villes; }
-    verifier('catalogue à 3 villes neutres : la génération échoue tout de suite en nommant la cause', !$('#pl-avis').hidden && /le générateur pose 2 villes neutres/.test($('#pl-avis').textContent)
+    var villes = C.REGLAGES.villes.neutres;
+    C.REGLAGES.villes.neutres = 3;
+    try { clic($('#pl-generer')); } finally { C.REGLAGES.villes.neutres = villes; }
+    verifier('catalogue à 3 villes neutres : la génération échoue tout de suite en nommant la cause', !$('#pl-avis').hidden && /or le générateur pose 2 villes neutres/.test($('#pl-avis').textContent)
       && !/Essayez la graine suivante/.test($('#pl-avis').textContent) && JSON.stringify(vp.plateau()) === depart, $('#pl-avis').textContent);
     clic($('#pl-generer'));
-    verifier('catalogue rétabli : la génération reprend', $('#pl-avis').hidden && vp.bilan().erreurs === 0 && vp.plateau().pieces.length === 26);
+    verifier('catalogue rétabli : la génération reprend', $('#pl-avis').hidden && vp.bilan().erreurs === 0 && vp.plateau().pieces.length === 24);
 
     // Partie : choix du premier joueur.
     AT.app.montrer('partie');
@@ -1210,11 +1194,11 @@
     $('#pl-graine').value = '1';
     clic($('#pl-generer'));
     verifier('générer sur un document à pièces personnelles : plateau généré, pièces reportées non posées, note affichée',
-      vp.plateau().pieces.length === 26 && vp.plateau().modeles.length === 1 && $('#pl-avis').hidden && /1 pièce personnelle est conservée dans le plateau, non posée/.test($('#barre-etat').textContent)
+      vp.plateau().pieces.length === 24 && vp.plateau().modeles.length === 1 && $('#pl-avis').hidden && /1 pièce personnelle est conservée dans le plateau, non posée/.test($('#barre-etat').textContent)
       && /Pièces personnelles restantes \(2\) : 2 × Crête/.test($('#pl-controles').textContent) && vp.bilan().erreurs === 0, $('#barre-etat').textContent);
     AT.app.montrer('inventaire');
     verifier('inventaire : le catalogue imprimé ne compte ni M1 ni les pièces personnelles',
-      $$('#inv-pieces tbody tr[data-modele]').length === 26 && /Catalogue : 28 pièces, 95 cases/.test($('#inv-totaux').textContent) && !$('#inv-pieces [data-modele="M1"]') && !$('#inv-pieces [data-modele="X1"]')
+      $$('#inv-pieces tbody tr[data-modele]').length === 25 && /Catalogue : 26 pièces, 93 cases/.test($('#inv-totaux').textContent) && !$('#inv-pieces [data-modele="M1"]') && !$('#inv-pieces [data-modele="X1"]')
       && !$('#inv-pieces [data-modele="P"]'), $('#inv-totaux').textContent);
     // Bibliothèque : module chargé ; le stockage du navigateur est seulement LU ici (rien n'est écrit sur ce poste).
     var stockage = B.stockageNavigateur(), lu = B.charger(stockage), travail = B.chargerTravail(stockage);
@@ -1282,16 +1266,16 @@
     plateauDeReference();
     verifier('six modes en tête de la colonne de gauche (dont « Villes »), « Générer » au démarrage', $$('#pl-modes button').length === 6 && !!$('#pl-mode-villes') && vp.mode() === 'generer'
       && $('#pl-mode-generer').getAttribute('aria-pressed') === 'true' && visible($('#pl-generer')) && !visible($('#pl-stock')) && !visible($('#cr-reste')));
-    verifier('mode « Générer » : aucune grille vide, 93 cases', casesGrilleDessinees(vue) === 0 && casesDessinees(vue) === 93, casesGrilleDessinees(vue));
+    verifier('mode « Générer » : aucune grille vide, 91 cases', casesGrilleDessinees(vue) === 0 && casesDessinees(vue) === 91, casesGrilleDessinees(vue));
     mode('creer');
     var attendu = AT.rendu.casesGrille(vp.plateau(), 7).length;
     verifier('mode « Créer à la main » : palette et « reste à faire » visibles, « Générer » masqué', vp.mode() === 'creer' && visible($('#pl-stock')) && visible($('#cr-reste')) && !visible($('#pl-generer'))
       && $('#pl-mode-creer').getAttribute('aria-pressed') === 'true');
-    verifier('grille vide jusqu’au rayon 7 : cases fantômes dessinées hors de la scène (les 93 cases restent 93)', casesGrilleDessinees(vue) === attendu && attendu > 60 && casesDessinees(vue) === 93, casesGrilleDessinees(vue) + ' / ' + attendu);
+    verifier('grille vide jusqu’au rayon 7 : cases fantômes dessinées hors de la scène (les 91 cases restent 91)', casesGrilleDessinees(vue) === attendu && attendu > 60 && casesDessinees(vue) === 91, casesGrilleDessinees(vue) + ' / ' + attendu);
     verifier('plateau généré complet : « Plateau terminé », terrain construit, villes posées, remplissages facultatifs en réserve', !!$('#cr-termine') && /toutes les pièces de terrain sont posées/.test(reste('pieces'))
-      && /Villes : 7 \/ 7/.test(reste('villes')) && /Villes neutres \(une par flanc\) : 2 \/ 2/.test(reste('neutres')) && /facultatives\) : 2 × Remplissage/.test(reste('facultatives')), $('#cr-reste').textContent);
-    // 93 cases, plus les tuiles dessinées par-dessus : 2 polygones par ville de déploiement (4) et par ville neutre (2).
-    verifier('l’export ne contient pas la grille vide', (vp.imageExport().texte.match(/<polygon/g) || []).length === 93 + 8 + 4, (vp.imageExport().texte.match(/<polygon/g) || []).length);
+      && /Villes : 7 \/ 7/.test(reste('villes')) && /Villes neutres, sur une Plaine \(à poser d’abord\) : 2 \/ 2/.test(reste('neutres')) && /facultatives\) : 2 × Remplissage/.test(reste('facultatives')), $('#cr-reste').textContent);
+    // 91 cases, plus les tuiles dessinées par-dessus : 2 polygones par ville de déploiement (4) et 3 par ville neutre (2).
+    verifier('l’export ne contient pas la grille vide', (vp.imageExport().texte.match(/<polygon/g) || []).length === 91 + 8 + 6, (vp.imageExport().texte.match(/<polygon/g) || []).length);
 
     var rangAvant = vp.etat().rang;
     clic($('#cr-vierge'));
@@ -1301,12 +1285,12 @@
       && $('#pl-stock [data-modele="N1"]').disabled && /Haie × 1/.test($('#pl-stock [data-modele="F31C"]').textContent) && !$('#pl-stock [data-modele="VN"]') && !!$('#cr-note-villes')
       && $$('#pl-stock h3[data-groupe]').map(function (h) { return h.getAttribute('data-groupe'); }).join() === 'socle,quatre,trois,remplissage' && /facultatif/.test($('#pl-stock [data-modele="R"]').textContent)
       && /Remplissage × 2/.test($('#pl-stock [data-modele="R"]').textContent) && !$('#pl-stock [data-modele="P"]') && !$('#pl-stock [data-modele="V"]'), $$('#pl-stock [data-modele]').length);
-    verifier('reste à faire : 23 pièces de terrain, 6 villes, 2 villes de déploiement en haut et 2 en bas, 2 villes neutres, erreurs en cours',
-      /à poser : 23/.test(reste('pieces')) && /1 × Haie/.test(reste('pieces')) && /Villes : 1 \/ 7 — il en manque 6/.test(reste('villes')) && /Villes neutres \(une par flanc\) : 0 \/ 2 — il en manque 2/.test(reste('neutres'))
-      && /en haut \(Vert\) : 0 \/ 2 — il en manque 2/.test(reste('haut')) && /en bas \(Rouge\) : 0 \/ 2 — il en manque 2/.test(reste('bas'))
+    verifier('reste à faire : 23 pièces de terrain, 6 villes, 2 villes neutres, 2 villes de déploiement par camp, erreurs en cours',
+      /à poser : 23/.test(reste('pieces')) && /1 × Haie/.test(reste('pieces')) && /Villes : 1 \/ 7 — il en manque 6/.test(reste('villes')) && /Villes neutres, sur une Plaine \(à poser d’abord\) : 0 \/ 2 — il en manque 2/.test(reste('neutres'))
+      && /de Vert, sur une Plaine : 0 \/ 2 — il en manque 2/.test(reste('vert')) && /de Rouge, sur une Plaine : 0 \/ 2 — il en manque 2/.test(reste('rouge'))
       && /Erreurs en cours : [1-9]/.test(reste('erreurs')) && !$('#cr-termine'), $('#cr-reste').textContent);
     clic($('#pl-annuler'));
-    verifier('le plateau vierge s’annule : retour au plateau généré', vp.plateau().pieces.length === 26);
+    verifier('le plateau vierge s’annule : retour au plateau généré', vp.plateau().pieces.length === 24);
     clic($('#pl-retablir'));
 
     // Pose par clic, sur une case vide de la grille.
@@ -1461,7 +1445,7 @@
     verifier('montagne : tuile d’une case hors catalogue, annoncée ; le contrôle 1 la liste', pieceEn(vp, '-3,2').modele === 'M1' && /hors stock/.test($('#pi-message').textContent)
       && /Hors règles : 9 tuiles de terrain d’une case/.test($('#pl-controles').textContent) && /Hors règles : 1 montagne d’une case/.test($('#pl-controles').textContent), $('#pl-controles').textContent.slice(0, 400));
     verifier('le pinceau ne désigne aucune ville de déploiement : camps vides, étape « construction »', vp.plateau().camps.vert.length === 0 && vp.plateau().camps.rouge.length === 0 && vp.bilan().etape === 'construction'
-      && /en haut \(Vert\) : 0 \/ 2/.test(reste('haut')), JSON.stringify(vp.plateau().camps));
+      && /de Vert, sur une Plaine : 0 \/ 2/.test(reste('vert')), JSON.stringify(vp.plateau().camps));
     clic($('#pi-terrain-plaine'));
     clicCase(vue, '3,2');
     verifier('repeindre une case : la tuile est remplacée (forêt hors catalogue → plaine prise dans les remplissages du stock)', pieceEn(vp, '3,2').modele === 'R'
@@ -1611,11 +1595,11 @@
     for (var i = 0; i < 6; i++) avecMontagne = P.peindre(avecMontagne, (i - 3) + ',-3', 'foret').plateau;
     vp.ouvrirTexte(P.serialiser(P.avecCamps(avecMontagne)));
     AT.app.montrer('inventaire');
-    verifier('inventaire : le catalogue imprimé garde 26 lignes et ses totaux (28 pièces, 95 cases)', $$('#inv-pieces tbody tr[data-modele]').length === 26 && /Catalogue : 28 pièces, 95 cases/.test($('#inv-totaux').textContent)
+    verifier('inventaire : le catalogue imprimé garde 25 lignes et ses totaux (26 pièces, 93 cases)', $$('#inv-pieces tbody tr[data-modele]').length === 25 && /Catalogue : 26 pièces, 93 cases/.test($('#inv-totaux').textContent)
       && !$('#inv-pieces [data-modele="X1"]') && !$('#inv-pieces [data-modele="M1"]'), $('#inv-totaux').textContent);
     verifier('inventaire : les tuiles d’une case du premier catalogue (plaine, forêt, marais, ville) ne sont plus des lignes du catalogue imprimé',
       !$('#inv-pieces [data-modele="F"]') && !$('#inv-pieces [data-modele="P"]') && !$('#inv-pieces [data-modele="S"]') && !$('#inv-pieces [data-modele="V"]'));
-    verifier('inventaire : total des pièces posées et restantes sans les tuiles hors catalogue', /Sur le plateau courant : 1 pièces posées \(7 cases\), 27 restantes/.test($('#inv-totaux').textContent), $('#inv-totaux').textContent);
+    verifier('inventaire : total des pièces posées et restantes sans les tuiles hors catalogue', /Sur le plateau courant : 1 pièces posées \(7 cases\), 25 restantes/.test($('#inv-totaux').textContent), $('#inv-totaux').textContent);
     verifier('inventaire : ligne « Tuiles hors catalogue posées », forêts peintes et montagne d’une case comprises', /Tuiles hors catalogue posées : 7 \(1 × Montagne d’une case, 6 × Forêt\)/.test($('#inv-hors-catalogue').textContent), $('#inv-hors-catalogue').textContent);
     verifier('inventaire : section « Mes monoblocs » séparée, avec dessin, total, posées, restantes', $$('#inv-monoblocs tbody tr').length === 2 && $$('#inv-monoblocs svg').length === 2
       && (function () { var c = $('#inv-monoblocs [data-modele="X1"]').querySelectorAll('td.at-nombre'); return c[0].textContent === '3' && c[1].textContent === '2' && c[2].textContent === '1'; })()
@@ -1654,7 +1638,7 @@
       && B.charger(stockageRecette).liste.length === 1 && JSON.stringify(B.charger(stockageRecette).liste[0].plateau) === JSON.stringify(vp.plateau()));
     var id1 = bib.liste()[0].id, id2 = null;
     verifier('fiche : vignette SVG, résumé (cases, pièces, erreurs / alertes), date', $$('#bi-liste .at-bib-fiche svg.at-vignette').length === 1 && $$('#bi-liste .at-vignette polygon').length >= 91
-      && /93 cases, 26 pièces, 7 villes ; aucune erreur, aucune alerte/.test($('#bi-liste').textContent) && /Modifié le \d\d\/\d\d\/\d{4} à \d\d:\d\d/.test($('#bi-liste').textContent), $('#bi-liste').textContent);
+      && /91 cases, 24 pièces, 7 villes ; aucune erreur, aucune alerte/.test($('#bi-liste').textContent) && /Modifié le \d\d\/\d\d\/\d{4} à \d\d:\d\d/.test($('#bi-liste').textContent), $('#bi-liste').textContent);
     verifier('nom saisi affiché comme du texte, dans la fiche et dans la barre', $$('#atelier b').length === 0 && /Essai <b>gras<\/b>/.test($('#bi-liste .at-bib-nom').textContent)
       && $('#at-nom-plateau').textContent === 'Plateau : « Essai <b>gras</b> »', $('#at-nom-plateau').textContent);
     verifier('plateau ouvert : « à jour », bouton de mise à jour désactivé', /à jour dans la bibliothèque/.test($('#bi-etat').textContent) && $('#bi-mettre-a-jour').disabled && bib.ouvert() === id1);
@@ -1673,7 +1657,7 @@
     verifier('bibliothèque : « modifié depuis son enregistrement », mise à jour proposée', /modifié depuis son enregistrement/.test($('#bi-etat').textContent) && !$('#bi-mettre-a-jour').disabled);
     clic($('#bi-mettre-a-jour'));
     verifier('mettre à jour l’entrée ouverte : toujours une seule fiche, plateau enregistré = plateau affiché', bib.liste().length === 1 && JSON.stringify(bib.liste()[0].plateau) === JSON.stringify(vp.plateau())
-      && /94 cases, 27 pièces/.test($('#bi-liste').textContent) && $('#at-nom-plateau').textContent === 'Plateau : « Essai <b>gras</b> »', $('#bi-liste').textContent);
+      && /92 cases, 25 pièces/.test($('#bi-liste').textContent) && $('#at-nom-plateau').textContent === 'Plateau : « Essai <b>gras</b> »', $('#bi-liste').textContent);
 
     // Dupliquer, renommer, ouvrir, supprimer.
     clic($('#bi-liste [data-dupliquer="' + id1 + '"]'));
@@ -1690,14 +1674,14 @@
     verifier('générer ou ouvrir un fichier détache le plateau de l’entrée ouverte', bib.ouvert() === null && $('#at-nom-plateau').textContent === 'Plateau : sans nom');
     var rang = vp.etat().rang;
     clic($('#bi-liste [data-ouvrir="' + id2 + '"]'));
-    verifier('ouvrir : le plateau de la fiche est affiché, la barre porte son nom', JSON.stringify(vp.plateau()) === JSON.stringify(bib.liste()[1].plateau) && vp.plateau().pieces.length === 27
+    verifier('ouvrir : le plateau de la fiche est affiché, la barre porte son nom', JSON.stringify(vp.plateau()) === JSON.stringify(bib.liste()[1].plateau) && vp.plateau().pieces.length === 25
       && $('#at-nom-plateau').textContent === 'Plateau : « Variante marais »' && $('#bi-liste [data-entree="' + id2 + '"]').classList.contains('at-bib-ouverte'), $('#at-nom-plateau').textContent);
     verifier('ouvrir est annulable', vp.etat().rang === rang + 1);
     clic($('#pl-annuler'));
-    verifier('annuler : retour au plateau précédent, détaché de la fiche ouverte (« Mettre à jour » ne peut pas écraser une autre fiche)', vp.plateau().pieces.length === 26 && bib.ouvert() === null
+    verifier('annuler : retour au plateau précédent, détaché de la fiche ouverte (« Mettre à jour » ne peut pas écraser une autre fiche)', vp.plateau().pieces.length === 24 && bib.ouvert() === null
       && $('#at-nom-plateau').textContent === 'Plateau : sans nom' && !$('#bi-mettre-a-jour'), $('#at-nom-plateau').textContent);
     clic($('#pl-retablir'));
-    verifier('rétablir : le plateau ouvert revient avec son attache', vp.plateau().pieces.length === 27 && bib.ouvert() === id2 && $('#at-nom-plateau').textContent === 'Plateau : « Variante marais »', $('#at-nom-plateau').textContent);
+    verifier('rétablir : le plateau ouvert revient avec son attache', vp.plateau().pieces.length === 25 && bib.ouvert() === id2 && $('#at-nom-plateau').textContent === 'Plateau : « Variante marais »', $('#at-nom-plateau').textContent);
     clic($('#bi-liste [data-supprimer-entree="' + id1 + '"]'));
     verifier('supprimer : confirmation demandée', $('#at-confirmation').open === true && /Supprimer « Essai <b>gras<\/b> » de la bibliothèque/.test($('#at-confirmation').textContent) && bib.liste().length === 2);
     clic($('#at-confirmer-non'));
@@ -1793,15 +1777,13 @@
     glisserCases(vue, ['-2,0', '-2,1', '-3,1', '-3,2', '-2,2', '-2,-1']);
     clic($('#pi-terrain-montagne'));
     clicCase(vue, '3,-2');
-    // Les villes ne se peignent plus : les 4 villes de déploiement sont des tuiles posées par-dessus une Plaine, par les
-    // fonctions de la phase « villes » (leur interface est le lot suivant). Ici en pose libre, sur des Plaines peintes.
-    var avecVilles = vp.plateau(), posesVilles = [];
-    [['vert', '-1,-2'], ['vert', '1,-3'], ['rouge', '-1,3'], ['rouge', '1,2']].forEach(function (x) {
-      var r = P.poserVilleDeploiement(avecVilles, x[0], x[1], { libre: true });
-      posesVilles.push(r.ok);
-      if (r.ok) avecVilles = r.plateau;
-    });
-    verifier('villes de déploiement posées par-dessus des Plaines peintes (pose libre), plateau rouvert avec elles', posesVilles.every(Boolean) && vp.ouvrirTexte(P.serialiser(avecVilles)) === true
+    // Les villes ne se peignent pas : ce sont des tuiles posées par-dessus une Plaine. Ici le fichier est monté à la
+    // main, sur des Plaines peintes trop proches du centre : il se rouvre (les contrôles disent l'écart), on y joue.
+    var avecVilles = JSON.parse(JSON.stringify(vp.plateau())), casesPeintes = P.cases(avecVilles);
+    avecVilles.deploiements = [['vert', '-1,-2'], ['vert', '1,-3'], ['rouge', '-1,3'], ['rouge', '1,2']].map(function (x) { return { cle: x[1], camp: x[0] }; });
+    var posesVilles = avecVilles.deploiements.map(function (d) { return !!casesPeintes[d.cle] && casesPeintes[d.cle].origine === 'plaine'; });
+    avecVilles = P.avecCamps(avecVilles);
+    verifier('villes de déploiement posées par-dessus des Plaines peintes (fichier monté à la main), plateau rouvert avec elles', posesVilles.every(Boolean) && vp.ouvrirTexte(P.serialiser(avecVilles)) === true
       && P.deploiements(vp.plateau()).length === 4, posesVilles.join());
     var pl = vp.plateau();
     verifier('plateau fait à la main : pièce personnelle, tuiles hors stock, montagne d’une case, 2 villes de déploiement par camp',
@@ -1960,7 +1942,7 @@
     verifier('I3 : le compteur des fiches a sa propre clé ; l’enveloppe de la bibliothèque reste à trois champs (une copie plus ancienne de l’atelier la relit)',
       stockageRecette.getItem(B.cleCompteur()) === String(B.numero(idZ) + 1) && Object.keys(JSON.parse(stockageRecette.getItem(B.cleListe()))).join() === 'format,version,plateaux', stockageRecette.getItem(B.cleCompteur()));
     clic($('#pl-annuler'));
-    verifier('I3 : Annuler ramène l’ancien plateau A, qui n’est PAS rattaché à la fiche Z', vp.plateau().pieces.length === 27 && bib.ouvert() === null && $('#at-nom-plateau').textContent === 'Plateau : sans nom' && !$('#bi-mettre-a-jour'),
+    verifier('I3 : Annuler ramène l’ancien plateau A, qui n’est PAS rattaché à la fiche Z', vp.plateau().pieces.length === 25 && bib.ouvert() === null && $('#at-nom-plateau').textContent === 'Plateau : sans nom' && !$('#bi-mettre-a-jour'),
       $('#at-nom-plateau').textContent);
     verifier('I3 : « Mettre à jour » est alors refusé ; la fiche Z garde son contenu', bib.mettreAJour() === false && JSON.stringify(bib.liste()[0].plateau) === contenuZ && JSON.stringify(B.charger(stockageRecette).liste[0].plateau) === contenuZ);
     clic($('#pl-retablir'));
@@ -2152,214 +2134,190 @@
   });
 
   // ================================================================== lot G : catalogue 2 et étape « Villes »
+  /** Cases vides qui touchent le plateau (pourtour) : clés triées. */
+  function anneauVide(plateau) {
+    var toutes = AT.plateau.cases(plateau, { sansRecouvrements: true }), vues = {};
+    Object.keys(toutes).forEach(function (k) { AT.hex.voisines(k).forEach(function (v) { if (!toutes[v]) vues[v] = true; }); });
+    return AT.hex.trier(Object.keys(vues));
+  }
   function compteur(nom) { var e = $('#vi-outils [data-compteur="' + nom + '"]'); return e ? e.textContent : ''; }
   function reglagesParDefaut() {
     var vp = AT.app.vues.plateau, C = AT.catalogue;
-    if ($('#vi-libre').checked) clic($('#vi-libre'));
-    choisir($('#vi-profondeur'), C.REGLAGES.villes.profondeurExtremite);
+    if ($('#pl-regrouper').checked) clic($('#pl-regrouper'));
     choisir($('#pl-remplissages'), C.REGLAGES.generateur.remplissages);
-    return vp.reglages().profondeurExtremite === C.REGLAGES.villes.profondeurExtremite && vp.reglages().remplissages === C.REGLAGES.generateur.remplissages && !vp.villes.libre();
+    return vp.reglages().remplissages === C.REGLAGES.generateur.remplissages && vp.reglages().accolerSpeciales === 0;
   }
 
-  scenario('Lot G : étape « Villes » (pose par clic, refus, compteurs, annulation, pose libre, profondeur, automatique)', async function () {
-    var vp = AT.app.vues.plateau, P = AT.plateau, C = AT.catalogue, V = AT.vueVilles, vue = vp.vue;
+  scenario('Lot H : étape « Villes », villes libres sur une Plaine (plateau fait entièrement par l’interface, pose par clic des 6 villes, refus par distance, annulation, automatique, autre proposition, ancien plateau ouvert)', async function () {
+    var vp = AT.app.vues.plateau, P = AT.plateau, C = AT.catalogue, V = AT.vueVilles, K = AT.controles, vue = vp.vue;
     plateauDeReference();
-    var complet = JSON.stringify(vp.plateau());
-    mode('villes');
-    verifier('mode « Villes » sur un plateau complet : compteurs 2 / 2, aucune place en surbrillance, « Plateau complet »', vp.mode() === 'villes' && visible($('#vi-panneau'))
-      && compteur('vert') === '2 / 2' && compteur('rouge') === '2 / 2' && compteur('neutre') === '2 / 2' && marques(vue, 'at-admissible') === 0
-      && /Plateau complet/.test($('#vi-etape').textContent) && $('#vi-diagnostic').hidden && !visible($('#pl-outil')) && visible($('#cr-reste')), $('#vi-etape').textContent);
-    verifier('trois villes à choisir, chacune dessinée ; réglages : profondeur des extrémités (1, 2, 3) et pose libre', $$('#vi-outils button').length === 3 && $$('#vi-outils svg').length === 3
-      && $$('#vi-profondeur option').length === 3 && $('#vi-profondeur').value === String(C.REGLAGES.villes.profondeurExtremite) && $('#vi-libre').checked === false);
+    verifier('historique remis à neuf par la reprise du travail en cours', await historiqueNeuf());
 
-    // Retirer toutes les villes : un plateau construit sans villes n'est pas en erreur.
-    var rang = vp.etat().rang;
-    clic($('#vi-retirer'));
-    var nu = JSON.stringify(vp.plateau());
-    verifier('« Retirer toutes les villes » : 6 villes retirées en une étape, terrain intact', vp.etat().rang === rang + 1 && vp.plateau().pieces.length === 24 && P.deploiements(vp.plateau()).length === 0
-      && compteur('vert') === '0 / 2' && compteur('neutre') === '0 / 2' && /6 villes retirées/.test($('#vi-message').textContent), $('#vi-message').textContent);
-    verifier('plateau sans villes : pas en erreur ; ligne d’étape en tête « Construction terminée : posez les villes »', vp.bilan().erreurs === 0 && vp.bilan().etape === 'villes'
-      && !/at-niveau-erreur/.test($('#pl-bilan').className) && $('#pl-controles').firstElementChild.id === 'pl-etape' && $('#pl-etape-titre').textContent === 'Construction terminée : posez les villes'
-      && /2 villes de déploiement pour Vert, 2 villes de déploiement pour Rouge, 2 villes neutres/.test($('#pl-etape').textContent), $('#pl-etape').textContent + ' / ' + $('#pl-bilan').textContent);
-    verifier('contrôles en deux groupes titrés « Construction » et « Villes » (7 contrôles en tout)', $$('#pl-controles .at-groupe').length === 3 && /^Construction/.test($('#pl-groupe-construction').textContent)
-      && /^Villes/.test($('#pl-groupe-villes').textContent) && /à poser/.test($('#pl-groupe-villes').textContent) && /conforme/.test($('#pl-groupe-construction').textContent) && $$('#pl-controles .at-regle').length === 7
-      && $$('#pl-controles [data-groupe="construction"].at-constat').length >= 4 && $$('#pl-controles [data-groupe="villes"].at-constat').length >= 2
-      && !$('#pl-controles [data-groupe="villes"][data-niveau="erreur"]'), $('#pl-groupe-villes').textContent);
-    touche('z', { ctrlKey: true });
-    verifier('Ctrl+Z : les 6 villes reviennent', JSON.stringify(vp.plateau()) === complet && compteur('rouge') === '2 / 2');
-    touche('y', { ctrlKey: true });
-
-    // Pose par clic : la Plaine reste dessous, la ville est une tuile posée par-dessus.
-    clic($('#vi-outil-vert'));
-    var places = V.places(vp.plateau(), 'vert'), plainesAvant = $$('svg > g:first-of-type > g:first-child > polygon[fill*="plaine"]', vue.svg.parentNode).length;
-    verifier('outil « déploiement de Vert » : les places admissibles du modèle sont en surbrillance', places.length > 1 && marques(vue, 'at-admissible') === places.length
-      && JSON.stringify(places) === JSON.stringify(P.placesDeploiement(vp.plateau(), 'vert', { profondeurExtremite: 2 })), marques(vue, 'at-admissible') + ' / ' + places.length);
-    rang = vp.etat().rang;
-    clicCase(vue, places[0]);
-    verifier('clic sur une place : ville de déploiement de Vert posée, une étape, compteur 1 / 2', vp.etat().rang === rang + 1 && vp.plateau().camps.vert.join() === places[0] && compteur('vert') === '1 / 2'
-      && /Ville de déploiement de Vert posée sur la Plaine/.test($('#barre-etat').textContent) && /at-etat-info/.test(etatBarre()), $('#barre-etat').textContent);
-    verifier('rendu : la ville est une tuile bordée de vert posée PAR-DESSUS, la Plaine reste dessinée dessous', $$('polygon[stroke="#007A4D"]', vue.svg).length === 1
-      && $$('svg > g:first-of-type > g:first-child > polygon[fill*="plaine"]', vue.svg.parentNode).length === plainesAvant && P.cases(vp.plateau())[places[0]].origine === 'plaine'
-      && $$('circle[fill="#007A4D"]', vue.svg).length === 1, $$('polygon[stroke="#007A4D"]', vue.svg).length);
-    // Refus expliqués, avec la raison du modèle.
-    rang = vp.etat().rang;
-    clicCase(vue, '1,0');
-    verifier('refus sur le noyau : la raison du modèle, rien ne change', vp.etat().rang === rang && $('#barre-etat').textContent === 'Pose refusée : Une ville de déploiement ne se pose pas sur le noyau.'
-      && /at-etat-erreur/.test(etatBarre()) && /noyau/.test($('#vi-message').textContent), $('#barre-etat').textContent);
-    var tropPres = P.placesDeploiementSurCases(P.cases(vp.plateau()), 'vert', { profondeurExtremite: 2, sansEcart: true }).filter(function (k) { return V.places(vp.plateau(), 'vert').indexOf(k) === -1; })[0];
-    clicCase(vue, tropPres);
-    verifier('refus pour l’écart : « Trop près d’une autre ville : n pas, il en faut 4 »', !!tropPres && vp.etat().rang === rang && /Pose refusée : Trop près d’une autre ville : \d pas, il en faut 4 \(soit 3 cases entre elles\)/.test($('#barre-etat').textContent),
-      tropPres + ' : ' + $('#barre-etat').textContent);
-    var enBas = V.places(vp.plateau(), 'rouge')[0];
-    clicCase(vue, enBas);
-    verifier('refus hors de l’extrémité du camp : expliqué', vp.etat().rang === rang && /n’est pas à l’extrémité du haut/.test($('#barre-etat').textContent), $('#barre-etat').textContent);
-    // Cliquer une ville posée la retire ; tout s'annule.
-    clicCase(vue, places[0]);
-    verifier('clic sur la ville posée : elle est retirée (une étape), la Plaine est libre', vp.etat().rang === rang + 1 && vp.plateau().camps.vert.length === 0 && compteur('vert') === '0 / 2'
-      && /retirée de/.test($('#barre-etat').textContent) && $$('polygon[stroke="#007A4D"]', vue.svg).length === 0, $('#barre-etat').textContent);
-    clic($('#pl-annuler'));
-    verifier('Annuler : la ville retirée revient', vp.plateau().camps.vert.join() === places[0] && compteur('vert') === '1 / 2');
-    var seconde = V.places(vp.plateau(), 'vert')[0];
-    clicCase(vue, seconde);
-    verifier('seconde ville de Vert : compteur 2 / 2, et l’outil passe de lui-même à Rouge', compteur('vert') === '2 / 2' && vp.villes.outil() === 'rouge' && $('#vi-outil-rouge').getAttribute('aria-pressed') === 'true'
-      && marques(vue, 'at-admissible') === V.places(vp.plateau(), 'rouge').length, vp.villes.outil());
-    clic($('#vi-outil-vert'));
-    rang = vp.etat().rang;
-    clicCase(vue, V.places(nuPlateau(), 'vert').filter(function (k) { return vp.plateau().camps.vert.indexOf(k) === -1; })[0]);
-    verifier('troisième ville de Vert : refusée (« a déjà ses 2 villes »)', vp.etat().rang === rang && /Vert a déjà ses 2 villes de déploiement/.test($('#barre-etat').textContent), $('#barre-etat').textContent);
-    function nuPlateau() { return JSON.parse(nu); }
-
-    // Pose libre : hors règles, acceptée, signalée par les contrôles.
-    clic($('#vi-outil-rouge'));
-    var horsRegle = P.placesDeploiementSurCases(P.cases(vp.plateau()), 'vert', { profondeurExtremite: 2, sansEcart: true })[0];
-    clicCase(vue, horsRegle);
-    var refusStrict = vp.etat().rang === rang && /Pose refusée/.test($('#barre-etat').textContent);
-    clic($('#vi-libre'));
-    verifier('pose libre cochée : bien plus de places en surbrillance', vp.villes.libre() === true && marques(vue, 'at-admissible') > V.places(vp.plateau(), 'rouge').length && marques(vue, 'at-admissible') === V.places(vp.plateau(), 'rouge', { libre: true }).length,
-      marques(vue, 'at-admissible'));
-    clicCase(vue, horsRegle);
-    verifier('pose libre : la ville de Rouge refusée en pose stricte est acceptée en haut du plateau, et c’est annoncé', refusStrict && vp.etat().rang === rang + 1 && vp.plateau().camps.rouge.join() === horsRegle
-      && /Pose libre : les contrôles disent si elle respecte les règles/.test($('#barre-etat').textContent) && /at-etat-alerte/.test(etatBarre()), $('#barre-etat').textContent);
-    var erreurVille = $$('#pl-controles [data-groupe="villes"][data-niveau="erreur"]')[0];
-    verifier('pose libre : les contrôles la signalent (« mal placée »), groupe Villes en erreur', !!erreurVille && /Ville de déploiement de Rouge en \(.*\) mal placée/.test(erreurVille.textContent)
-      && /erreur/.test($('#pl-groupe-villes').textContent) && vp.bilan().villes.erreurs > 0, erreurVille && erreurVille.textContent);
-    clic($('#vi-libre'));
-    clicCase(vue, horsRegle);
-    verifier('pose libre décochée ; la ville mal placée se retire d’un clic', vp.villes.libre() === false && vp.plateau().camps.rouge.length === 0 && vp.bilan().villes.erreurs === 0);
-
-    // Profondeur des extrémités : un seul réglage pour la surbrillance, la pose et les contrôles ; le catalogue n'est pas modifié.
-    var parProfondeur = {};
-    [1, 3, 2].forEach(function (p) { choisir($('#vi-profondeur'), p); parProfondeur[p] = marques(vue, 'at-admissible'); });
-    verifier('profondeur des extrémités 1, 2, 3 rangées : de plus en plus de places ; le réglage du catalogue n’est pas touché', parProfondeur[1] <= parProfondeur[2] && parProfondeur[2] <= parProfondeur[3] && parProfondeur[1] < parProfondeur[3]
-      && vp.reglages().profondeurExtremite === 2 && C.REGLAGES.villes.profondeurExtremite === 2 && parProfondeur[2] === V.places(vp.plateau(), 'rouge').length, JSON.stringify(parProfondeur));
-
-    // Poser automatiquement, au meilleur équilibre.
-    rang = vp.etat().rang;
-    clic($('#vi-auto'));
-    verifier('« Poser les villes automatiquement » : plateau complet, aucune erreur, en UNE étape, score annoncé', vp.etat().rang === rang + 1 && vp.bilan().etape === 'complet' && vp.bilan().erreurs === 0
-      && compteur('vert') === '2 / 2' && compteur('rouge') === '2 / 2' && compteur('neutre') === '2 / 2' && /au meilleur équilibre \(score \d+/.test($('#vi-message').textContent)
-      && $('#pl-etape-titre').textContent === 'Plateau complet' && relisible(vp), $('#vi-message').textContent + ' ' + $('#pl-bilan').textContent);
-    verifier('pose automatique : au moins aussi équilibrée que les villes du générateur sur ce terrain', vp.bilan().equilibre.score <= AT.controles.equilibre(JSON.parse(complet)).score, vp.bilan().equilibre.score);
-    verifier('tableau d’équilibre selon les écarts entre camps : centre, 2 neutres, villes de déploiement, ligne « villes adverses », score', $$('#pl-equilibre tbody tr').length === 7
-      && $$('#pl-equilibre tbody tr[data-type="centre"]').length === 1 && $$('#pl-equilibre tbody tr[data-type="neutre"]').length === 2 && $$('#pl-equilibre tbody tr[data-type="vert"]').length === 2
-      && /^Ville de déploiement adverse la plus lointaine\d+\d+(égal|avantage (Vert|Rouge) de \d+)$/.test($('#pl-adverses').textContent) && $$('#pl-equilibre tbody td[data-avantage]').length === 7
-      && new RegExp('Score d’équilibre : ' + vp.bilan().equilibre.score + ' ').test($('#pl-score').textContent), $('#pl-adverses').textContent + ' / ' + $('#pl-score').textContent);
-    clic($('#pl-annuler'));
-    verifier('la pose automatique s’annule d’un coup', vp.etat().rang === rang && vp.bilan().etape === 'villes' && compteur('vert') === '2 / 2' && compteur('neutre') === '0 / 2');
-    clic($('#pl-retablir'));
-
-    // Aucune place : dit clairement, avec la cause, et le réglage de profondeur proposé.
-    var cas = null;
-    for (var g = 1; g <= 12 && !cas; g++) {
-      var terrain = V.retirerToutes(AT.generateur.generer(g).plateau).plateau;
-      ['vert', 'rouge'].forEach(function (camp) {
-        V.places(terrain, camp, { profondeurExtremite: 1 }).forEach(function (k) {
-          if (cas) return;
-          var un = V.cliquer(terrain, camp, k, { profondeurExtremite: 1 }).plateau, d = V.diagnostic(un, camp, { profondeurExtremite: 1 });
-          if (d && d.cause === 'ecart' && d.profondeurConseillee) cas = { plateau: un, camp: camp, conseil: d.profondeurConseillee };
-        });
-      });
-    }
-    verifier('recherche d’un plateau où un camp n’a plus aucune place à cause de l’écart', !!cas);
-    if (cas) {
-      vp.ouvrirTexte(P.serialiser(cas.plateau));
-      choisir($('#vi-profondeur'), 1);
-      clic($('#vi-outil-' + cas.camp));
-      verifier('aucune place : dit clairement, avec la cause (écart de 4 pas), aucune surbrillance', !$('#vi-diagnostic').hidden && $('#vi-diagnostic').getAttribute('data-cause') === 'ecart' && marques(vue, 'at-admissible') === 0
-        && /Aucune place pour (Vert|Rouge)/.test($('#vi-diagnostic').textContent) && /il faut 4 pas entre deux villes \(soit 3 cases entre elles\)/.test($('#vi-diagnostic').textContent), $('#vi-diagnostic').textContent);
-      verifier('aucune place : le réglage de profondeur des extrémités est proposé', new RegExp('élargissez l’extrémité à ' + cas.conseil + ' rangées \\(réglage « Profondeur des extrémités »').test($('#vi-diagnostic').textContent), $('#vi-diagnostic').textContent);
-      choisir($('#vi-profondeur'), cas.conseil);
-      verifier('profondeur conseillée choisie : des places apparaissent, l’avis disparaît, et la pose réussit', $('#vi-diagnostic').hidden && marques(vue, 'at-admissible') > 0);
-      clicCase(vue, V.places(vp.plateau(), cas.camp, { profondeurExtremite: cas.conseil })[0]);
-      verifier('ville posée à la profondeur choisie : acceptée par les contrôles sous ce même réglage', compteur(cas.camp) === '2 / 2' && vp.bilan().villes.erreurs === 0, $('#barre-etat').textContent);
-    }
-    verifier('réglages remis à leur valeur par défaut', reglagesParDefaut());
-
-    // Pose automatique impossible : dit pourquoi.
+    // 1. Le terrain entier, posé à la main par la palette (clic, et une pièce sur trois au clavier).
+    var patron = AT.generateur.generer(7).plateau, aPoser = patron.pieces.filter(function (p) { return p.modele !== 'N1'; });
     mode('creer');
     clic($('#cr-vierge'));
+    var rangDepart = vp.etat().rang;
+    aPoser.forEach(function (p, i) {
+      clic($('#pl-stock [data-modele="' + p.modele + '"]'));
+      for (var t = 0; t < p.rotation; t++) touche('r');
+      if (i % 3 === 2) { vue.svg.focus(); allerCurseur(vue, AT.hex.cle(p.q, p.r)); touche('Enter', {}, vue.svg); }
+      else clicCase(vue, AT.hex.cle(p.q, p.r));
+      touche('Escape');
+    });
+    verifier('terrain entier posé à la main (' + aPoser.length + ' pièces, clic et clavier) : le même terrain que le patron, une étape par pièce, 91 cases', terrainSeul(vp.plateau()) === terrainSeul(patron)
+      && vp.etat().rang === rangDepart + aPoser.length && casesDessinees(vue) === 91 && relisible(vp), vp.plateau().pieces.length + ' pièces');
+    verifier('terrain construit sans villes : aucune erreur, étape « villes », « reste à faire » dans l’ordre conseillé (neutres, Vert, Rouge), sans « haut » ni « bas »', vp.bilan().erreurs === 0 && vp.bilan().etape === 'villes'
+      && visible($('#cr-vers-villes')) && $('#pl-mode-villes').getAttribute('data-propose') === 'oui' && !$('#cr-termine')
+      && /Villes neutres, sur une Plaine/.test(reste('neutres')) && /Villes de déploiement de Vert, sur une Plaine/.test(reste('vert')) && /Villes de déploiement de Rouge, sur une Plaine/.test(reste('rouge'))
+      && !/haut|bas\b|flanc|extrémité/.test($('#cr-reste').textContent)
+      && $('#pl-etape').textContent.indexOf('villes à poser : 2 villes neutres, 2 villes de déploiement pour Vert, 2 villes de déploiement pour Rouge') !== -1, $('#cr-reste').textContent + ' / ' + $('#pl-etape').textContent);
+
+    // 2. Étape « Villes » : trois outils, ordre conseillé affiché, toutes les Plaines admissibles en surbrillance.
+    clic($('#cr-vers-villes'));
+    var cases = P.cases(vp.plateau()), d0 = P.distancesPas(vp.plateau(), '0,0');
+    var plaines = Object.keys(cases).filter(function (k) { return cases[k].terrain === 'plaine' && cases[k].modele !== 'N1' && d0[k] >= 4; });
+    verifier('« Passer à l’étape Villes » : mode « Villes », outil « ville neutre » d’abord, compteurs à 0, trois outils dessinés', vp.mode() === 'villes' && visible($('#vi-panneau')) && vp.villes.outil() === 'neutre'
+      && compteur('neutre') === '0 / 2' && compteur('vert') === '0 / 2' && compteur('rouge') === '0 / 2' && $$('#vi-outils button').length === 3 && $$('#vi-outils svg').length === 3
+      && $$('#vi-outils button')[0].id === 'vi-outil-neutre' && $('#vi-outil-neutre').getAttribute('aria-pressed') === 'true');
+    verifier('ordre conseillé affiché (neutres d’abord) ; rappel des règles sans bord, flanc ni extrémité ; plus de réglage de profondeur ni de pose libre', /Ordre conseillé : les 2 villes neutres d’abord/.test($('#vi-ordre').textContent)
+      && /PAR-DESSUS une case de Plaine/.test($('#vi-regles').textContent) && /4 pas au moins entre deux villes/.test($('#vi-regles').textContent)
+      && !/haut|\bbas\b|flanc|extrémité|\bbords?\b|rangée/i.test($('#vi-panneau').textContent) && !$('#vi-profondeur') && !$('#vi-libre'), $('#vi-panneau').textContent.slice(0, 300));
+    verifier('toutes les Plaines admissibles sont en surbrillance (hors noyau, à 4 pas au moins de la ville du centre), les mêmes pour les trois outils', plaines.length > 6 && marques(vue, 'at-admissible') === plaines.length
+      && V.places(vp.plateau(), 'neutre').slice().sort().join() === plaines.slice().sort().join() && V.places(vp.plateau(), 'rouge').length === plaines.length, marques(vue, 'at-admissible') + ' / ' + plaines.length);
+    verifier('légende : ville neutre posée sur une Plaine, villes de déploiement de Vert et de Rouge, sans « haut » ni « bas »', /ville neutre, posée sur une Plaine/.test($('.at-legende').textContent)
+      && /ville de déploiement de Vert, posée sur une Plaine/.test($('.at-legende').textContent) && !/\(haut\)|\(bas\)|flanc/.test($('.at-legende').textContent), $('.at-legende').textContent.slice(-330));
+
+    // 3. Refus expliqués : rien ne change, la raison est dite.
+    function refuse(cle, motif) {
+      var avant = JSON.stringify(vp.plateau()), rang = vp.etat().rang;
+      ctxMessageEfface();
+      clicCase(vue, cle);
+      return !!cle && JSON.stringify(vp.plateau()) === avant && vp.etat().rang === rang && motif.test($('#barre-etat').textContent) && /at-etat-erreur/.test(etatBarre()) && motif.test($('#vi-message').textContent);
+    }
+    var pres = Object.keys(cases).filter(function (k) { return cases[k].terrain === 'plaine' && cases[k].modele !== 'N1' && d0[k] === 3; })[0];
+    var foret = Object.keys(cases).filter(function (k) { return cases[k].terrain === 'foret' && d0[k] >= 4; })[0];
+    verifier('refus par distance : à 3 pas de la ville du centre, « Trop près de la ville n° 1 (0,0) : 3 pas, il en faut 4 »', refuse(pres, /^Pose refusée : Trop près de la ville n° 1 \(0,0\) : 3 pas, il en faut 4 \(soit 3 cases entre elles\)\.$/), $('#barre-etat').textContent);
+    verifier('refus sur le noyau et sur une forêt, avec la cause', refuse('1,0', /^Pose refusée : Une ville ne se pose pas sur le noyau\.$/) && refuse(foret, /^Pose refusée : Ce n’est pas une Plaine \(ici : foret\)/), $('#barre-etat').textContent);
+
+    // 4. Pose par clic des 6 villes, aux places du patron (ordre conseillé) ; une au clavier.
+    var rang = vp.etat().rang, villesPatron = P.etatVilles(patron), n1 = villesPatron.neutres[0].cle, n2 = villesPatron.neutres[1].cle;
+    clicCase(vue, n1);
+    verifier('première ville neutre posée par un clic : une étape, compteur 1 / 2, dessinée par-dessus sa Plaine (liseré doré), aucune erreur', vp.etat().rang === rang + 1 && compteur('neutre') === '1 / 2'
+      && P.cases(vp.plateau())[n1].ville === 'VNP' && P.cases(vp.plateau())[n1].origine === 'plaine' && $$('polygon[stroke="#8A6400"]', vue.svg).length >= 1 && casesDessinees(vue) === 91 && vp.bilan().erreurs === 0
+      && /^Ville neutre posée sur la Plaine \(/.test($('#vi-message').textContent), $('#vi-message').textContent);
+    var voisine = AT.hex.voisines(n1).filter(function (k) { return plaines.indexOf(k) !== -1; })[0] || plaines.filter(function (k) { return k !== n1 && P.distancesPas(vp.plateau(), n1)[k] < 4; })[0];
+    var numero = P.villes(vp.plateau()).indexOf(n1) + 1;
+    verifier('refus par distance d’une ville posée : la ville en cause est nommée par son numéro et sa case ; la case n’est plus en surbrillance', !!voisine && V.places(vp.plateau(), 'neutre').indexOf(voisine) === -1
+      && refuse(voisine, new RegExp('^Pose refusée : Trop près de la ville n° ' + numero + ' \\(' + n1.replace('-', '\\-') + '\\) : \\d pas, il en faut 4')), voisine + ' → ' + $('#barre-etat').textContent);
+    vue.svg.focus();
+    allerCurseur(vue, n2);
+    touche('Enter', {}, vue.svg);
+    verifier('seconde ville neutre posée au clavier (flèches puis Entrée) : 2 / 2, l’outil passe de lui-même au déploiement de Vert', compteur('neutre') === '2 / 2' && vp.villes.outil() === 'vert'
+      && $('#vi-outil-vert').getAttribute('aria-pressed') === 'true', $('#barre-etat').textContent);
+    verifier('quota : une troisième ville neutre est refusée (« Quota atteint »)', (function () { clic($('#vi-outil-neutre')); var r = refuse(V.places(vp.plateau(), 'vert')[0], /^Pose refusée : Quota atteint : les 2 villes neutres sont déjà posées/); clic($('#vi-outil-vert')); return r; })(), $('#barre-etat').textContent);
+    patron.camps.vert.forEach(function (k) { clicCase(vue, k); });
+    verifier('2 villes de déploiement de Vert posées : l’outil passe à Rouge, camps tenus à jour', compteur('vert') === '2 / 2' && vp.villes.outil() === 'rouge' && vp.plateau().camps.vert.join() === patron.camps.vert.join());
+    patron.camps.rouge.forEach(function (k) { clicCase(vue, k); });
+    verifier('les 6 villes posées par clic, chacune à une place proposée : le même plateau que le patron généré, « Toutes les villes sont posées », plateau complet sans erreur ni alerte', compteur('rouge') === '2 / 2'
+      && JSON.stringify(vp.plateau().deploiements) === JSON.stringify(patron.deploiements) && terrainSeul(vp.plateau()) === terrainSeul(patron) && /Toutes les villes sont posées\.$/.test($('#vi-message').textContent)
+      && vp.bilan().erreurs === 0 && vp.bilan().alertes === 0 && vp.bilan().etape === 'complet' && marques(vue, 'at-admissible') === 0 && /Plateau complet/.test($('#vi-etape').textContent) && relisible(vp)
+      && vp.etat().rang === rang + 6, $('#vi-message').textContent + ' / ' + $('#pl-bilan').textContent);
+    var complet = JSON.stringify(vp.plateau());
+    verifier('plateau complet fait entièrement par l’interface : 7 villes dessinées (4 au liseré du camp, 2 au liseré doré), 91 cases, contrôles « Villes » sans mot de bord', $$('polygon[stroke="#007A4D"]', vue.svg).length === 2
+      && $$('polygon[stroke="#D8321C"]', vue.svg).length === 2 && $$('polygon[stroke="#8A6400"]', vue.svg).length === 2 && casesDessinees(vue) === 91 && P.villes(vp.plateau()).length === 7
+      && !/flanc|extrémité|bord haut|bord bas|rangée/.test($('#pl-controles').textContent), $('#pl-controles').textContent.slice(0, 200));
+    mode('creer');
+    verifier('« reste à faire » : « Plateau terminé »', !!$('#cr-termine') && /Villes neutres, sur une Plaine/.test(reste('neutres')), $('#cr-reste').textContent);
     mode('villes');
+
+    // 5. Annulation : chaque pose est une étape ; un clic sur une ville la retire.
+    clic($('#pl-annuler')); clic($('#pl-annuler'));
+    verifier('Annuler deux fois : les 2 villes de Rouge repartent, étape « villes »', compteur('rouge') === '0 / 2' && compteur('vert') === '2 / 2' && vp.bilan().etape === 'villes' && vp.bilan().erreurs === 0);
+    clic($('#pl-retablir')); clic($('#pl-retablir'));
+    verifier('Rétablir deux fois : le plateau complet revient à l’identique', JSON.stringify(vp.plateau()) === complet);
+    clicCase(vue, n1);
+    verifier('clic sur une ville posée : elle est retirée, sa Plaine est de nouveau libre et proposée', compteur('neutre') === '1 / 2' && P.cases(vp.plateau())[n1].terrain === 'plaine'
+      && /^Ville neutre retirée de \(/.test($('#vi-message').textContent), $('#vi-message').textContent);
+    clic($('#pl-annuler'));
+    clic($('#vi-retirer'));
+    verifier('« Retirer toutes les villes » : 6 villes retirées en une étape, terrain intact, outil « ville neutre »', /6 villes retirées/.test($('#vi-message').textContent) && P.deploiements(vp.plateau()).length === 0
+      && vp.plateau().pieces.length === 24 && vp.villes.outil() === 'neutre' && vp.bilan().erreurs === 0 && vp.bilan().etape === 'villes');
+
+    // 6. Pose automatique et « Autre proposition ».
     rang = vp.etat().rang;
     clic($('#vi-auto'));
-    verifier('pose automatique sur le noyau seul : impossible, avec la cause et le nombre de places trouvées', vp.etat().rang === rang && /Pose automatique impossible : Pas assez de places/.test($('#vi-message').textContent)
-      && /Places trouvées : 0 pour Vert/.test($('#vi-message').textContent) && /at-etat-erreur/.test(etatBarre()), $('#vi-message').textContent);
-    verifier('terrain non fini : l’étape le dit, sans interdire d’essayer', /Le terrain n’est pas fini \(23 pièces de terrain à poser\)/.test($('#vi-etape').textContent) && !$('#vi-diagnostic').hidden
-      && $('#pl-etape-titre').textContent === 'Construction en cours' && /après la construction/.test($('#pl-groupe-villes').textContent), $('#vi-etape').textContent + ' / ' + $('#pl-groupe-villes').textContent);
-
-    // Une retouche du terrain qui enlève une ville : annoncé à l'écran.
-    plateauDeReference();
-    var vd = vp.plateau().camps.vert[0];
-    clicCase(vue, vd);
-    clic($('#pl-retirer'));
-    verifier('retirer la pièce qui porte une ville de déploiement : annoncé (« retirée avec la Plaine qui la portait »), en alerte', vp.plateau().camps.vert.length === 1
-      && /La ville de déploiement de Vert a été retirée avec la Plaine qui la portait : à reposer à l’étape « Villes »/.test($('#barre-etat').textContent) && /at-etat-alerte/.test(etatBarre()), $('#barre-etat').textContent);
+    var auto = JSON.stringify(vp.plateau());
+    verifier('« Poser les villes automatiquement » : une étape, les 6 villes du générateur (même placement que le patron), score et camp avantagé dans le message', vp.etat().rang === rang + 1 && auto === complet
+      && /^Villes posées automatiquement au meilleur équilibre : score d’équilibre \d+ \(0 = équilibré ; (aucun camp avantagé|avantage )/.test($('#vi-message').textContent) && vp.bilan().etape === 'complet', $('#vi-message').textContent);
+    clic($('#vi-autre'));
+    var autre = JSON.stringify(vp.plateau());
+    verifier('« Autre proposition » : placement n° 2 sur ' + C.REGLAGES.villes.propositionsMax + ', différent, complet et sans erreur ; le message donne le score', autre !== auto && vp.bilan().erreurs === 0 && vp.bilan().etape === 'complet'
+      && new RegExp('^Autre proposition : placement n° 2 sur ' + C.REGLAGES.villes.propositionsMax + ', du mieux équilibré au moins équilibré ; score d’équilibre \\d+').test($('#vi-message').textContent), $('#vi-message').textContent);
     clic($('#pl-annuler'));
-    clicCase(vue, vd);
-    var avantRotation = vp.plateau().camps.vert.length;
-    touche('r');
-    verifier('tourner la pièce qui porte une ville : la ville part et c’est dit (ou elle reste, ou la rotation est refusée)', /at-etat-erreur/.test(etatBarre()) || vp.plateau().camps.vert.length === avantRotation
-      || /ville de déploiement de Vert a été retirée/.test($('#barre-etat').textContent), $('#barre-etat').textContent);
-    touche('Escape');
-    // « Déplacer » la pièce qui porte une ville : la ville ne suit pas, et c'est dit.
-    plateauDeReference();
-    var vdRouge = vp.plateau().camps.rouge[0], porteuse = pieceEn(vp, vdRouge);
-    clicCase(vue, vdRouge);
-    clic($('#pl-deplacer'));
-    clicCase(vue, '12,0');
-    verifier('déplacer la pièce qui porte une ville de déploiement : la pièce part, la ville est retirée et c’est annoncé', !pieceEn(vp, vdRouge) && !!pieceEn(vp, '12,0') && pieceEn(vp, '12,0').modele === porteuse.modele
-      && vp.plateau().camps.rouge.length === 1 && /Pièce déplacée en \(12,0\)\. La ville de déploiement de Rouge a été retirée avec la Plaine qui la portait/.test($('#barre-etat').textContent) && /at-etat-alerte/.test(etatBarre()),
-      $('#barre-etat').textContent);
-    touche('Escape');
-    plateauDeReference();
-    mode('pinceau');
-    clic($('#pi-gomme'));
-    clicCase(vue, vp.plateau().camps.rouge[0]);
-    verifier('gomme sur une ville de déploiement : elle est retirée, et le message du pinceau le dit', vp.plateau().camps.rouge.length === 1 && /ville de déploiement de Rouge a été retirée/.test($('#pi-message').textContent), $('#pi-message').textContent);
-    verifier('pinceau : plus de terrain « ville » (les villes se posent à l’étape « Villes »)', !$('#pi-terrain-ville') && $$('#pi-outils button').length === 5);
+    verifier('Annuler : retour à la proposition précédente', JSON.stringify(vp.plateau()) === auto);
+    clic($('#vi-autre'));
+    verifier('« Autre proposition » de nouveau : la même suite (aucun tirage)', JSON.stringify(vp.plateau()) === autre);
 
-    // Correction 5 : une ville de déploiement enregistrée hors du plateau, ou sur une case qui n'est pas une Plaine,
-    // est refusée à la lecture du fichier (l'outil n'en écrit jamais).
-    var fautif = JSON.parse(P.serialiser(V.retirerToutes(AT.generateur.generer(1).plateau).plateau)), avantFautif = JSON.stringify(vp.plateau());
-    fautif.deploiements = [{ cle: '20,20', camp: 'vert' }];
-    verifier('ville de déploiement hors du plateau (fichier retouché) : fichier refusé, avec la case en cause', vp.ouvrirTexte(JSON.stringify(fautif)) === false
-      && /Fichier refusé : Ville de déploiement n° 1 : aucune case du plateau en \(20,20\)/.test($('#barre-etat').textContent) && JSON.stringify(vp.plateau()) === avantFautif, $('#barre-etat').textContent);
-    var casesFautif = P.cases(fautif), foretFautif = Object.keys(casesFautif).filter(function (k) { return casesFautif[k].origine === 'foret'; })[0];
-    fautif.deploiements = [{ cle: foretFautif, camp: 'rouge' }];
-    verifier('ville de déploiement sur une forêt (fichier retouché) : fichier refusé (« n’est pas une Plaine »)', vp.ouvrirTexte(JSON.stringify(fautif)) === false
-      && /Fichier refusé : Ville de déploiement n° 1 : la case \(.*\) n’est pas une Plaine \(foret\)/.test($('#barre-etat').textContent) && JSON.stringify(vp.plateau()) === avantFautif, $('#barre-etat').textContent);
-    plateauDeReference();
+    // 7. Équilibre annoncé, jamais refusé ; « Regrouper forêts et marais ».
+    var seuil = C.REGLAGES.equilibre.seuilAnnonce;
+    mode('generer');
+    try {
+      C.REGLAGES.equilibre.seuilAnnonce = -1;
+      $('#pl-graine').value = '3';
+      clic($('#pl-generer'));
+      verifier('déséquilibre au-delà du seuil d’annonce : le plateau est généré quand même, et c’est dit (barre d’état en alerte, avis sous le bouton, mention au tableau d’équilibre)', $('#pl-avis').hidden
+        && vp.plateau().graine === 3 && vp.bilan().erreurs === 0 && /Déséquilibre marqué : score \d+/.test($('#barre-etat').textContent) && /at-etat-alerte/.test(etatBarre()) && visible($('#pl-avis-equilibre'))
+        && !!$('#pl-annonce') && /^Déséquilibre marqué/.test($('#pl-annonce').textContent) && $('#pl-score').getAttribute('data-annonce') === 'oui', $('#barre-etat').textContent);
+    } finally { C.REGLAGES.equilibre.seuilAnnonce = seuil; }
+    clic($('#pl-generer'));
+    var sansRegrouper = JSON.stringify(vp.plateau().pieces);
+    verifier('génération ordinaire : message avec le score et le camp avantagé, aucune annonce', /^Plateau généré \(graine 3, score d’équilibre \d+ : (aucun camp avantagé|avantage )/.test($('#barre-etat').textContent)
+      && !visible($('#pl-avis-equilibre')) && !$('#pl-annonce') && $('#pl-score').getAttribute('data-annonce') === 'non', $('#barre-etat').textContent);
+    verifier('case « Regrouper forêts et marais » : présente dans « Générer », décochée par défaut', !!$('#pl-regrouper') && $('#pl-regrouper').checked === false && vp.reglages().accolerSpeciales === 0
+      && /Regrouper forêts et marais/.test($('label[for="pl-regrouper"]').textContent));
+    clic($('#pl-regrouper'));
+    clic($('#pl-generer'));
+    verifier('cochée : le générateur regroupe (accolerSpeciales 2), autre terrain pour la même graine, plateau complet sans erreur, et le message le dit', vp.reglages().accolerSpeciales === 2
+      && JSON.stringify(vp.plateau().pieces) !== sansRegrouper && vp.bilan().erreurs === 0 && vp.bilan().etape === 'complet' && /forêts et marais regroupés/.test($('#barre-etat').textContent), $('#barre-etat').textContent);
+    clic($('#pl-regrouper'));
+    clic($('#pl-generer'));
+    verifier('décochée de nouveau : le plateau d’origine revient', vp.reglages().accolerSpeciales === 0 && JSON.stringify(vp.plateau().pieces) === sansRegrouper);
+
+    // 8. Ancien plateau (règles d'avant le 2026-11-20 : villes neutres en tuiles ajoutées, déploiement au bord).
+    var ouvert = vp.ouvrirTexte(RECETTE_REGLES_PRECEDENTES_PLATEAU) === true;
+    verifier('ancien plateau ouvert : 26 pièces dont 2 villes neutres en tuiles, 93 cases dessinées, complet, AUCUNE erreur, une alerte « Règles précédentes pour les villes »', ouvert && vp.plateau().pieces.length === 26
+      && nombreDe(vp.plateau(), 'VN') === 2 && casesDessinees(vue) === 93 && vp.bilan().erreurs === 0 && vp.bilan().etape === 'complet' && vp.bilan().villes.alertes === 1
+      && /Règles précédentes pour les villes : 2 villes neutres en tuiles ajoutées contre le plateau/.test($('#pl-controles').textContent), $('#pl-bilan').textContent);
+    verifier('il se réenregistre et se relit à l’identique', relisible(vp) && JSON.stringify(P.lire(vp.texteEnregistrement()).plateau) === JSON.stringify(vp.plateau()));
+    mode('villes');
+    verifier('étape « Villes » sur cet ancien plateau : avis « Règles précédentes », compteurs 2 / 2 partout', visible($('#vi-precedentes')) && /^Règles précédentes pour les villes/.test($('#vi-precedentes').textContent)
+      && compteur('neutre') === '2 / 2' && compteur('vert') === '2 / 2', $('#vi-precedentes').textContent);
     AT.app.montrer('partie');
+    $('#pa-graine').value = '3';
+    clic($('#pa-nouvelle'));
+    var vq = AT.app.vues.partie, e = vq.etat();
+    verifier('une partie se crée sur cet ancien plateau (7 villes, villes de déploiement de chaque camp)', !!e && P.villes(e.plateau).length === 7 && e.plateau.camps.vert.length === 2 && e.plateau.camps.rouge.length === 2
+      && !/at-etat-erreur/.test(etatBarre()), $('#barre-etat').textContent);
+    AT.app.montrer('plateau');
+    clic($('#vi-auto'));
+    verifier('pose automatique sur l’ancien plateau : les tuiles de ville neutre partent, 6 villes sur des Plaines, plus d’alerte « règles précédentes », 91 cases', nombreDe(vp.plateau(), 'VN') === 0
+      && P.deploiements(vp.plateau()).length === 6 && vp.bilan().erreurs === 0 && vp.bilan().villes.alertes === 0 && vp.bilan().etape === 'complet' && !visible($('#vi-precedentes')) && casesDessinees(vue) === 91, $('#pl-bilan').textContent);
+    clic($('#pl-annuler'));
+    verifier('Annuler : l’ancien plateau revient tel quel', nombreDe(vp.plateau(), 'VN') === 2 && vp.bilan().villes.alertes === 1);
+    mode('generer');
+    verifier('réglages remis à leur valeur par défaut', reglagesParDefaut());
   });
 
   scenario('Lot G : catalogue 2 (palette, reste à faire, générer avec remplissages, inventaire, ancien catalogue, partie fictive)', async function () {
     var vp = AT.app.vues.plateau, vq = AT.app.vues.partie, P = AT.plateau, C = AT.catalogue, vue = vp.vue;
     plateauDeReference();
     // Rendu et légende.
-    verifier('rendu d’un plateau généré : 4 villes de déploiement posées par-dessus (liseré du camp), 2 villes neutres à liseré doré, pastilles des camps',
-      $$('polygon[stroke="#007A4D"]', vue.svg).length === 2 && $$('polygon[stroke="#D8321C"]', vue.svg).length === 2 && $$('polygon[stroke="#8A6400"]', vue.svg).length === 4
+    verifier('rendu d’un plateau généré : 4 villes de déploiement posées par-dessus (liseré du camp), 2 villes neutres posées par-dessus (liseré doré), pastilles des camps',
+      $$('polygon[stroke="#007A4D"]', vue.svg).length === 2 && $$('polygon[stroke="#D8321C"]', vue.svg).length === 2 && $$('polygon[stroke="#8A6400"]', vue.svg).length === 2
       && $$('circle[fill="#007A4D"]', vue.svg).length === 2 && $$('circle[fill="#D8321C"]', vue.svg).length === 2 && $$('circle[stroke="#8A6400"]', vue.svg).length === 2, $$('polygon[stroke="#8A6400"]', vue.svg).length);
-    verifier('légende : ville de déploiement posée sur une Plaine (Vert, Rouge), ville neutre, tuile de remplissage', /posée sur une Plaine \(haut\)/.test($('#pl-legende').textContent)
-      && /ville neutre \(tuile ajoutée sur un flanc\)/.test($('#pl-legende').textContent) && /tuile de remplissage \(facultative\)/.test($('#pl-legende').textContent));
+    verifier('légende : ville de déploiement posée sur une Plaine (Vert, Rouge), ville neutre, tuile de remplissage', /ville de déploiement de Vert, posée sur une Plaine/.test($('#pl-legende').textContent) && !/\(haut\)|\(bas\)|flanc/.test($('#pl-legende').textContent)
+      && /ville neutre, posée sur une Plaine/.test($('#pl-legende').textContent) && /tuile de remplissage \(facultative\)/.test($('#pl-legende').textContent));
     var image = vp.imageExport().texte;
     verifier('export SVG : les tuiles de ville y sont, toujours sans classe ni style', /stroke="#007A4D"/.test(image) && /stroke="#8A6400"/.test(image) && !/ class=| style=|at-/.test(image));
 
@@ -2388,21 +2346,21 @@
     mode('creer');
     verifier('création à la main, terrain construit sans villes : étape 1 faite, étape 2 en cours, « Passer à l’étape Villes » proposé', $('#cr-reste [data-etape="construction"]').getAttribute('data-etat') === 'faite'
       && $('#cr-reste [data-etape="villes"]').getAttribute('data-etat') === 'en-cours' && visible($('#cr-vers-villes')) && $('#pl-mode-villes').getAttribute('data-propose') === 'oui'
-      && /Villes neutres \(une par flanc\) : 0 \/ 2 — il en manque 2/.test(reste('neutres')) && !$('#cr-termine'), $('#cr-reste').textContent);
+      && /Villes neutres, sur une Plaine \(à poser d’abord\) : 0 \/ 2 — il en manque 2/.test(reste('neutres')) && !$('#cr-termine'), $('#cr-reste').textContent);
     clic($('#pl-annuler'));
     verifier('plateau complet : les deux étapes faites, « Plateau terminé », plus de proposition', $('#cr-reste [data-etape="villes"]').getAttribute('data-etat') === 'faite' && !!$('#cr-termine') && !$('#cr-vers-villes')
       && $('#pl-mode-villes').getAttribute('data-propose') === 'non');
 
     // Inventaire du catalogue 2, par rôle.
     AT.app.montrer('inventaire');
-    verifier('inventaire par rôle : noyau, montagnes, monoblocs de 4, de 3, remplissage facultatif, villes neutres, villes de déploiement', $$('#inv-pieces tr.at-role').map(function (tr) { return tr.getAttribute('data-role'); }).join()
-      === 'noyau,montagne,quatre,trois,remplissage,ville,deploiement' && /Monoblocs de 4 cases : 12 pièces, 48 cases/.test($('#inv-pieces').textContent) && /Monoblocs de 3 cases : 9 pièces, 27 cases/.test($('#inv-pieces').textContent)
+    verifier('inventaire par rôle : noyau, montagnes, monoblocs de 4, de 3, remplissage facultatif, villes (6 tuiles posées par-dessus)', $$('#inv-pieces tr.at-role').map(function (tr) { return tr.getAttribute('data-role'); }).join()
+      === 'noyau,montagne,quatre,trois,remplissage,deploiement' && /Villes : 6 tuiles — tuiles posées PAR-DESSUS une Plaine/.test($('#inv-pieces').textContent) && /Monoblocs de 4 cases : 12 pièces, 48 cases/.test($('#inv-pieces').textContent) && /Monoblocs de 3 cases : 9 pièces, 27 cases/.test($('#inv-pieces').textContent)
       && /Tuiles de remplissage : 2 pièces, 2 cases — facultatives/.test($('#inv-pieces').textContent), $$('#inv-pieces tr.at-role').map(function (tr) { return tr.textContent; }).join(' | '));
     var vdLigne = $('#inv-pieces [data-deploiement="VD"]').querySelectorAll('td.at-nombre');
     verifier('inventaire : villes de déploiement « posées par-dessus une Plaine », 4 tuiles, 4 posées, 0 restante', vdLigne[0].textContent === '4' && vdLigne[1].textContent === '4' && vdLigne[2].textContent === '0'
       && /PAR-DESSUS une Plaine/.test($('#inv-pieces [data-role="deploiement"]').textContent) && $$('#inv-pieces [data-deploiement="VD"] svg').length === 2);
-    verifier('inventaire : totaux du catalogue 2 et répartition justes ; pas de section « ancien catalogue » sur un plateau du catalogue 2', /Catalogue : 28 pièces, 95 cases/.test($('#inv-totaux').textContent)
-      && /26 pièces posées \(93 cases\), 2 restantes/.test($('#inv-totaux').textContent) && /49 plaines \(65,3 %\)/.test($('#inv-repartition').textContent) && /7 villes sur un plateau complet/.test($('#inv-repartition').textContent)
+    verifier('inventaire : totaux du catalogue 2 et répartition justes ; pas de section « ancien catalogue » sur un plateau du catalogue 2', /Catalogue : 26 pièces, 93 cases/.test($('#inv-totaux').textContent)
+      && /24 pièces posées \(91 cases\), 2 restantes/.test($('#inv-totaux').textContent) && /49 plaines \(65,3 %\)/.test($('#inv-repartition').textContent) && /7 villes sur un plateau complet/.test($('#inv-repartition').textContent)
       && !$('#inv-ancien') && !$('#inv-titre-ancien'), $('#inv-totaux').textContent);
 
     // Anciens plateaux (premier catalogue) : bandeau discret, contrôles adaptés, section d'inventaire.
@@ -2411,7 +2369,7 @@
     verifier('plateau du catalogue 2 : pas de bandeau « ancien catalogue »', $('#pl-ancien').hidden);
     mode('pinceau');
     clic($('#pi-terrain-foret'));
-    clicCase(vue, AT.vueVilles.anneau(vp.plateau())[0]);
+    clicCase(vue, anneauVide(vp.plateau())[0]);
     verifier('une forêt peinte au pinceau sur un plateau du catalogue 2 n’en fait pas un « ancien plateau » (ni bandeau, ni mention dans la ligne d’étape)', $('#pl-ancien').hidden
       && vp.plateau().pieces.some(function (p) { return p.modele === 'F'; }) && !/ancien catalogue/.test($('#pl-etape').textContent) && $('#pl-etape-titre').textContent === 'Plateau complet', $('#pl-etape').textContent);
     mode('generer');
@@ -2420,11 +2378,11 @@
       && /Plateau de l’ancien catalogue/.test($('#pl-ancien').textContent) && /ancien catalogue/.test($('#pl-etape').textContent) && $$('#pl-controles .at-regle').length === 7 && P.villes(vp.plateau()).length === 7
       && vp.plateau().camps.vert.length === 2, $('#pl-etape').textContent);
     verifier('ancien plateau : la ligne d’étape ne parle pas de « construction en cours » ni de pièces à poser ; groupe Villes jugé sur ses seules erreurs', $('#pl-etape-titre').textContent === 'Plateau de l’ancien catalogue'
-      && $('#pl-etape').getAttribute('data-etape') === 'ancien' && !/Construction en cours|pièces de terrain à poser/.test($('#pl-etape').textContent) && !/à poser|après la construction/.test($('#pl-groupe-villes').textContent)
-      && /conforme/.test($('#pl-groupe-villes').textContent) && $('#pl-mode-villes').getAttribute('data-propose') === 'non', $('#pl-etape').textContent + ' / ' + $('#pl-groupe-villes').textContent);
+      && $('#pl-etape').getAttribute('data-etape') === 'ancien' && !/Construction en cours|pièces de terrain à poser/.test($('#pl-etape').textContent) && !/villes à poser|après la construction/.test($('#pl-groupe-villes').textContent)
+      && vp.bilan().villes.erreurs === 0 && /Règles précédentes pour les villes : 6 villes en tuile d’une case du premier catalogue/.test($('#pl-controles').textContent) && $('#pl-mode-villes').getAttribute('data-propose') === 'non', $('#pl-etape').textContent + ' / ' + $('#pl-groupe-villes').textContent);
     mode('creer');
     verifier('ancien plateau, « reste à faire » : ni étapes du catalogue 2 ni pièces de terrain à poser ; ses 7 villes et ses 2 + 2 villes de déploiement sont suivies', !!$('#cr-reste-ancien')
-      && !$('#cr-reste [data-etape]') && !$('#cr-reste [data-reste="pieces"]') && /Villes : 7 \/ 7/.test(reste('villes')) && /en haut \(Vert\) : 2 \/ 2/.test(reste('haut')) && !$('#cr-vers-villes'), $('#cr-reste').textContent);
+      && !$('#cr-reste [data-etape]') && !$('#cr-reste [data-reste="pieces"]') && /Villes : 7 \/ 7/.test(reste('villes')) && /Villes de déploiement de Vert : 2 \/ 2/.test(reste('vert')) && !$('#cr-vers-villes'), $('#cr-reste').textContent);
     mode('villes');
     verifier('ancien plateau, étape « Villes » : dit qu’elle est faite pour le catalogue 2, sans « terrain non fini »', /Plateau de l’ancien catalogue/.test($('#vi-etape').textContent) && !/Le terrain n’est pas fini/.test($('#vi-etape').textContent));
     mode('generer');
@@ -2433,7 +2391,7 @@
       $('#inv-hors-catalogue').textContent);
     verifier('inventaire d’un ancien plateau : section « Ancien catalogue (sur ce plateau) » avec ses tuiles d’une case et ses deux monoblocs retirés depuis', !!$('#inv-ancien') && $$('#inv-ancien tbody tr').length === 6
       && /^3 cases : 2 × forêt, 1 × plaine/.test($('#inv-ancien [data-modele="F21"] td:nth-of-type(2)').textContent)
-      && $('#inv-ancien [data-modele="V"] td.at-nombre').textContent === '6' && /Catalogue : 28 pièces, 95 cases/.test($('#inv-totaux').textContent), $('#inv-ancien') && $('#inv-ancien').textContent);
+      && $('#inv-ancien [data-modele="V"] td.at-nombre').textContent === '6' && /Catalogue : 26 pièces, 93 cases/.test($('#inv-totaux').textContent), $('#inv-ancien') && $('#inv-ancien').textContent);
     AT.app.montrer('plateau');
     var bib = vp.bibliotheque;
     bib.enregistrerSous('Ancien plateau');
@@ -2450,7 +2408,7 @@
     $('#pa-graine').value = '4';
     clic($('#pa-nouvelle'));
     var e = vq.etat(), j = e.actif;
-    verifier('partie créée sur un plateau du catalogue 2 : 93 cases dessinées, villes de déploiement = tuiles posées', !!e && casesDessinees(vq.vue) === 93 && e.plateau.deploiements.length === 4
+    verifier('partie créée sur un plateau du catalogue 2 : 93 cases dessinées, villes de déploiement = tuiles posées', !!e && casesDessinees(vq.vue) === 91 && e.plateau.deploiements.length === 6
       && JSON.stringify(e.plateau.camps) === JSON.stringify(vp.plateau().camps) && $$('polygon[stroke="#007A4D"]', vq.vue.svg).length === 2, casesDessinees(vq.vue));
     clic($$('[data-main="' + j + '"] .at-carte')[0]);
     verifier('carte choisie : les 2 villes de déploiement du joueur actif sont proposées', marques(vq.vue, 'at-admissible') === 2);
@@ -2458,17 +2416,17 @@
     e = vq.etat();
     verifier('former un bataillon sur une ville de déploiement posée par-dessus une Plaine', e.bataillons[j][0].case === e.plateau.camps[j][0] && $$('text', vq.vue.svg).some(function (t) { return t.textContent === (j === 'vert' ? 'V1' : 'R1'); }));
     var refusModele = P.peutPoserEvenement(e.plateau, 'E2', e.plateau.camps[j][1]);
-    verifier('modèle : un événement ne se pose jamais sur une ville de déploiement', refusModele.ok === false && /jamais sur une ville de déploiement/.test(refusModele.raison), refusModele.raison);
+    verifier('modèle : un événement ne se pose jamais sur une ville de déploiement', refusModele.ok === false && /jamais sur une ville./.test(refusModele.raison), refusModele.raison);
     clic($('#pa-piocher-evenement'));
     var idEvenement = vq.ui().evenement, autre = e.plateau.camps[j === 'vert' ? 'rouge' : 'vert'][0];
     clicCase(vq.vue, autre);
     e = vq.etat();
     var textesPartie = $('#barre-etat').textContent + ' / ' + (($('#pa-avertissement') || {}).textContent || '');
     verifier('partie : la tuile d’événement piochée est refusée sur une ville de déploiement, avec la raison du modèle ; aucune ville de déploiement parmi les cases proposées', !!idEvenement && e.plateau.recouvrements.length === 0
-      && /jamais sur une ville de déploiement/.test(textesPartie) && e.plateau.camps.vert.concat(e.plateau.camps.rouge).every(function (k) { return AT.vuePlateau.casesAdmissibles(e.plateau, idEvenement, []).indexOf(k) === -1; }), textesPartie);
+      && /jamais sur une ville./.test(textesPartie) && e.plateau.camps.vert.concat(e.plateau.camps.rouge).every(function (k) { return AT.vuePlateau.casesAdmissibles(e.plateau, idEvenement, []).indexOf(k) === -1; }), textesPartie);
     if ($('#pa-renoncer')) clic($('#pa-renoncer'));
     if ($('[data-defausser-evenement="' + idEvenement + '"]')) clic($('[data-defausser-evenement="' + idEvenement + '"]'));
-    verifier('la partie sur un plateau du catalogue 2 s’enregistre et se rouvre', vq.ouvrirTexte(vq.texteEnregistrement()) === true && vq.etat().plateau.deploiements.length === 4);
+    verifier('la partie sur un plateau du catalogue 2 s’enregistre et se rouvre', vq.ouvrirTexte(vq.texteEnregistrement()) === true && vq.etat().plateau.deploiements.length === 6);
     AT.app.montrer('plateau');
     verifier('réglages remis à leur valeur par défaut', reglagesParDefaut());
     plateauDeReference();
@@ -2509,11 +2467,11 @@
     });
     verifier('23 monoblocs posés un à un par glisser-déposer, aucune pose refusée', refus.length === 0 && vp.plateau().pieces.length === 24 && manieres.glisser === 23, JSON.stringify(manieres) + ' ' + refus.slice(0, 3).join(' | '));
     verifier('terrain construit, aucune ville : étape « villes », aucune erreur, et l’étape « Villes » se propose d’elle-même', vp.bilan().etape === 'villes' && vp.bilan().erreurs === 0
-      && /Construction terminée, villes à poser : 2 villes de déploiement pour Vert, 2 villes de déploiement pour Rouge, 2 villes neutres\./.test($('#pl-etape').textContent) && !$('#cr-termine')
+      && /Construction terminée, villes à poser : 2 villes neutres, 2 villes de déploiement pour Vert, 2 villes de déploiement pour Rouge\./.test($('#pl-etape').textContent) && !$('#cr-termine')
       && $('#pl-etape-titre').textContent === 'Construction terminée : posez les villes' && !!$('#cr-vers-villes') && $('#pl-mode-villes').getAttribute('data-propose') === 'oui', $('#pl-etape').textContent);
     clic($('#cr-vers-villes'));
-    verifier('« Passer à l’étape Villes » : mode Villes, outil « déploiement de Vert », places en surbrillance ; la proposition disparaît', vp.mode() === 'villes' && !$('#cr-vers-villes') && visible($('#vi-panneau')) && $('#vi-outil-vert').getAttribute('aria-pressed') === 'true'
-      && marques(vue, 'at-admissible') === AT.vueVilles.places(vp.plateau(), 'vert').length && marques(vue, 'at-admissible') > 0 && $('#pl-mode-villes').getAttribute('data-propose') === 'non', marques(vue, 'at-admissible'));
+    verifier('« Passer à l’étape Villes » : mode Villes, outil « ville neutre » (ordre conseillé), Plaines admissibles en surbrillance ; la proposition disparaît', vp.mode() === 'villes' && !$('#cr-vers-villes') && visible($('#vi-panneau')) && $('#vi-outil-neutre').getAttribute('aria-pressed') === 'true'
+      && marques(vue, 'at-admissible') === AT.vueVilles.places(vp.plateau(), 'neutre').length && marques(vue, 'at-admissible') > 0 && $('#pl-mode-villes').getAttribute('data-propose') === 'non', marques(vue, 'at-admissible'));
     var posesVilles = [];
     P.deploiements(patron).forEach(function (d) {
       clic($('#vi-outil-' + d.camp));
@@ -2522,24 +2480,15 @@
       if (n % 2 === 0) { vue.svg.focus(); allerCurseur(vue, d.cle); touche('Enter', {}, vue.svg); manieres.clavier += 1; } else { clicCase(vue, d.cle); manieres.clic += 1; }
       posesVilles.push(proposee && P.deploiements(vp.plateau()).length === avant + 1 && P.cases(vp.plateau())[d.cle].camp === d.camp);
     });
-    verifier('4 villes de déploiement posées aux places du patron (clic et clavier) : chacune était une place proposée, aucune pose stricte refusée', posesVilles.length === 4 && posesVilles.every(Boolean)
-      && $('#vi-outils [data-compteur="vert"]').textContent === '2 / 2' && $('#vi-outils [data-compteur="rouge"]').textContent === '2 / 2', posesVilles.join() + ' ' + $('#barre-etat').textContent);
-    verifier('l’outil passe de lui-même à la ville suivante : « ville neutre »', vp.villes.outil() === 'neutre' && $('#vi-outil-neutre').getAttribute('aria-pressed') === 'true');
-    posesVilles = [];
-    patron.pieces.filter(function (p) { return p.modele === 'VN'; }).forEach(function (p) {
-      var cle = AT.hex.cle(p.q, p.r), proposee = AT.vueVilles.places(vp.plateau(), 'neutre').indexOf(cle) !== -1, avant = vp.plateau().pieces.length;
-      n += 1;
-      if (n % 2 === 0) { vue.svg.focus(); allerCurseur(vue, cle); touche('Enter', {}, vue.svg); manieres.clavier += 1; } else { clicCase(vue, cle); manieres.clic += 1; }
-      posesVilles.push(proposee && vp.plateau().pieces.length === avant + 1 && pieceEn(vp, cle).modele === 'VN');
-    });
-    verifier('2 villes neutres posées aux places du patron, une par flanc : « Toutes les villes sont posées »', posesVilles.length === 2 && posesVilles.every(Boolean) && $('#vi-outils [data-compteur="neutre"]').textContent === '2 / 2'
+    verifier('6 villes posées aux places du patron (2 neutres, puis 2 par camp ; clic et clavier) : chacune était une place proposée, aucune pose refusée ; « Toutes les villes sont posées »', posesVilles.length === 6 && posesVilles.every(Boolean)
+      && $('#vi-outils [data-compteur="vert"]').textContent === '2 / 2' && $('#vi-outils [data-compteur="rouge"]').textContent === '2 / 2' && $('#vi-outils [data-compteur="neutre"]').textContent === '2 / 2'
       && /Toutes les villes sont posées/.test($('#vi-message').textContent) && manieres.clavier > 0 && manieres.clic > 0 && marques(vue, 'at-admissible') === 0, posesVilles.join() + ' ' + $('#vi-message').textContent);
     mode('creer');
     verifier('plateau construit à la main = plateau du patron, case pour case', terrainsDe(vp.plateau()) === terrainsDe(patron) && JSON.stringify(vp.plateau().camps) === JSON.stringify(patron.camps));
     verifier('« Plateau terminé », aucune erreur, aucune alerte, étape « complet », palette épuisée hors remplissages facultatifs', !!$('#cr-termine') && vp.bilan().erreurs === 0 && vp.bilan().alertes === 0
       && vp.bilan().etape === 'complet' && /Plateau conforme/.test($('#pl-bilan').textContent)
       && $$('#pl-stock [data-modele]').every(function (b) { return b.disabled || b.getAttribute('data-modele') === 'R'; }), $('#pl-bilan').textContent + ' ' + $('#cr-reste').textContent);
-    verifier('une étape d’annulation par pièce et par ville posée (23 + 4 + 2)', vp.etat().rang === rangDepart + 29, vp.etat().rang - rangDepart);
+    verifier('une étape d’annulation par pièce et par ville posée (23 + 6)', vp.etat().rang === rangDepart + 29, vp.etat().rang - rangDepart);
     verifier('le plateau fait à la main s’enregistre et se relit', relisible(vp));
 
     // Stock épuisé : ni clic ni glisser ne posent une pièce de plus.
@@ -2732,7 +2681,7 @@
     if (!$('#mo-valider').disabled) $('#mo-valider').click();
     var apresModif = P.modeles(vp.plateau()).filter(function (m) { return m.id === neuf.id; })[0];
     verifier('pièce chargée dans l’éditeur puis posée entre-temps : sa forme ne change pas (verrou ou refus expliqué)', JSON.stringify(apresModif.cases) === JSON.stringify(neuf.cases)
-      && P.cases(vp.plateau())['7,-7'] && Object.keys(P.cases(vp.plateau())).length === 95 && (JSON.stringify(vp.plateau()) === avantModif || apresModif.cases.length === 2), $('#barre-etat').textContent + ' / ' + $('#mo-avis').textContent);
+      && P.cases(vp.plateau())['7,-7'] && Object.keys(P.cases(vp.plateau())).length === 93 && (JSON.stringify(vp.plateau()) === avantModif || apresModif.cases.length === 2), $('#barre-etat').textContent + ' / ' + $('#mo-avis').textContent);
     clic($('#mo-liste [data-supprimer="' + neuf.id + '"]'));
     verifier('supprimer la pièce posée : refus expliqué', P.modeles(vp.plateau()).some(function (m) { return m.id === neuf.id; }) && /at-etat-erreur/.test(etatBarre()), $('#barre-etat').textContent);
 
@@ -2763,7 +2712,7 @@
     var partie = vq.texteEnregistrement();
     clic($('#pa-nouvelle'));
     verifier('partie sur ce plateau : enregistrée puis rouverte avec les pièces personnelles', !!partie && vq.ouvrirTexte(partie) === true && vq.etat().plateau.modeles.length === 24
-      && JSON.stringify(vq.etat().plateau.pieces) === JSON.stringify(JSON.parse(document1).pieces) && casesDessinees(vq.vue) === 95, $('#barre-etat').textContent);
+      && JSON.stringify(vq.etat().plateau.pieces) === JSON.stringify(JSON.parse(document1).pieces) && casesDessinees(vq.vue) === 93, $('#barre-etat').textContent);
     AT.app.montrer('plateau');
     plateauDeReference();
     AT.app.montrer('partie');
@@ -2924,12 +2873,6 @@
    * Villes de déploiement d'un plateau qui sortent des `p` rangées extrêmes du terrain construit. Calcul refait ici,
    * sans passer par les contrôles de l'outil.
    */
-  function villesHorsExtremite(plateau, p) {
-    var terrain = AT.plateau.cases(plateau, { sansRecouvrements: true, sansVilles: true });
-    var rs = Object.keys(terrain).map(function (k) { return AT.hex.decle(k).r; });
-    var haut = Math.min.apply(null, rs), bas = Math.max.apply(null, rs);
-    return AT.plateau.deploiements(plateau).filter(function (d) { var r = AT.hex.decle(d.cle).r; return d.camp === 'vert' ? r > haut + p - 1 : r < bas - p + 1; });
-  }
   function nombreDe(plateau, modele) { return plateau.pieces.filter(function (p) { return p.modele === modele; }).length; }
   function signatureVilles(plateau) {
     return JSON.stringify([AT.plateau.deploiements(plateau).map(function (d) { return d.camp + ' ' + d.cle; }).sort(), AT.plateau.etatVilles(plateau).neutres.map(function (n) { return n.cle; }).sort()]);
@@ -2950,477 +2893,6 @@
     var r = AT.app.vues.plateau.reprendreTravail();
     return r.repris === true && AT.app.vues.plateau.etat().rang === 0;
   }
-
-  scenario('Testeur C2 : générer 20 graines × profondeur 1 / 2 / 3 × remplissages 0 / 2', async function () {
-    var vp = AT.app.vues.plateau, P = AT.plateau, C = AT.catalogue, vue = vp.vue;
-    plateauDeReference();
-    var fautes = [], sansExplication = [], bilans = [], total = 0, echecsParProfondeur = { 1: 0, 2: 0, 3: 0 }, profondeurDite = 0, plateauLoin = null;
-    [1, 2, 3].forEach(function (prof) {
-      [0, 2].forEach(function (remp) {
-        var reussis = 0, echecs = 0, dites = 0, posees = 0, loin = 0;
-        for (var g = 1; g <= 20; g++) {
-          var ou = 'profondeur ' + prof + ', remplissages ' + remp + ', graine ' + g + ' : ';
-          // Les réglages sont remis avant chaque graine : après un échec, le plateau affiché (et sa profondeur) n'a pas changé.
-          choisir($('#vi-profondeur'), prof);
-          choisir($('#pl-remplissages'), remp);
-          var avant = JSON.stringify(vp.plateau());
-          $('#pl-graine').value = String(g);
-          clic($('#pl-generer'));
-          total += 1;
-          if (!$('#pl-avis').hidden) {
-            echecs += 1;
-            var avis = $('#pl-avis').textContent, enCause = /La profondeur des extrémités \(\d rangées? en haut et en bas\) est en cause/.test(avis);
-            if (JSON.stringify(vp.plateau()) !== avant) fautes.push(ou + 'échec, mais le plateau a changé');
-            if (avis.indexOf('Échec de la génération avec la graine « ' + g + ' »') !== 0 || !/at-etat-erreur/.test(etatBarre())) fautes.push(ou + 'échec mal annoncé : ' + avis.slice(0, 80));
-            if (enCause) {
-              dites += 1;
-              if (prof === 3 || /seuil de contact 2/.test(avis) || !/Changez le réglage « Profondeur des extrémités »/.test(avis)) fautes.push(ou + 'cause « profondeur » incohérente : ' + avis.slice(-160));
-            } else if (!/Essayez la graine suivante, ou le seuil de contact 2\./.test(avis)) sansExplication.push(ou + avis.slice(-120));
-            continue;
-          }
-          reussis += 1;
-          var pl = vp.plateau(), nbR = nombreDe(pl, 'R'), b = vp.bilan(), detail = [];
-          posees += nbR;
-          if (b.erreurs !== 0) detail.push(b.erreurs + ' erreur(s)');
-          if (b.etape !== 'complet') detail.push('étape ' + b.etape);
-          if (P.profondeurExtremite(pl) !== prof || (prof === C.REGLAGES.villes.profondeurExtremite) !== !('profondeurExtremite' in pl)) detail.push('profondeur enregistrée : ' + pl.profondeurExtremite);
-          if ($('#vi-profondeur').value !== String(prof) || vp.reglages().profondeurExtremite !== prof) detail.push('réglage affiché : ' + $('#vi-profondeur').value);
-          if (villesHorsExtremite(pl, prof).length) detail.push('ville hors des ' + prof + ' rangées');
-          if (nbR > remp) detail.push(nbR + ' remplissages');
-          if (pl.pieces.length !== 26 + nbR || casesDessinees(vue) !== 93 + nbR || P.villes(pl).length !== 7 || P.deploiements(pl).length !== 4) detail.push(pl.pieces.length + ' pièces, ' + casesDessinees(vue) + ' cases dessinées');
-          if (String(pl.graine) !== String(g)) detail.push('graine ' + pl.graine);
-          // Enregistrer puis rouvrir : identique, toujours sans erreur, le réglage suit le fichier.
-          var texte = vp.texteEnregistrement();
-          if (!(vp.ouvrirTexte(texte) === true && JSON.stringify(vp.plateau()) === JSON.stringify(pl) && vp.bilan().erreurs === 0 && $('#vi-profondeur').value === String(prof))) detail.push('réouverture');
-          if (villesHorsExtremite(pl, 2).length) { loin += 1; if (prof === 3 && !plateauLoin) plateauLoin = texte; }
-          if (detail.length) fautes.push(ou + detail.join(', '));
-        }
-        echecsParProfondeur[prof] += echecs;
-        profondeurDite += dites;
-        bilans.push('profondeur ' + prof + ', ' + remp + ' remplissage(s) permis : ' + reussis + ' générés, ' + echecs + ' échec(s) dont ' + dites + ' dus à la profondeur ; ' + posees + ' remplissage(s) posé(s) ; '
-          + loin + ' plateau(x) avec une ville hors des 2 rangées');
-      });
-    });
-    bilans.forEach(function (x) { lignes.push('INFO  ' + x); });
-    verifier(total + ' générations par l’interface (20 graines × profondeur 1, 2, 3 × remplissages 0, 2) : tout plateau rendu est complet, sans erreur, à 7 villes, villes dans les rangées de sa profondeur (calcul refait), profondeur enregistrée, rouvert à l’identique',
-      total === 120 && fautes.length === 0, fautes.slice(0, 6).join(' | '));
-    verifier('aucun échec de génération à 2 et à 3 rangées', echecsParProfondeur[2] === 0 && echecsParProfondeur[3] === 0, JSON.stringify(echecsParProfondeur));
-    verifier('à 1 rangée, des générations échouent et le message dit que la profondeur des extrémités est en cause (avec le réglage à changer, sans conseiller autre chose)', echecsParProfondeur[1] > 0 && profondeurDite > 0
-      && profondeurDite === echecsParProfondeur[1] - sansExplication.length, echecsParProfondeur[1] + ' échec(s), ' + profondeurDite + ' dit(s) ; ' + sansExplication.slice(0, 2).join(' | '));
-    verifier('à 3 rangées, un plateau a une ville hors des 2 rangées extrêmes', !!plateauLoin);
-    if (plateauLoin) {
-      var sans = JSON.parse(plateauLoin);
-      sans.profondeurExtremite = undefined;                 // JSON.stringify n'écrit pas un champ indéfini : fichier d'avant la correction
-      verifier('ce plateau privé de son champ (fichier d’avant la correction) : ouvert au réglage par défaut, donc « mal placée » ; avec son champ : aucune erreur', vp.ouvrirTexte(JSON.stringify(sans)) === true
-        && $('#vi-profondeur').value === '2' && vp.bilan().villes.erreurs > 0 && /mal placée : Cette case n’est pas à l’extrémité/.test($('#pl-controles').textContent)
-        && vp.ouvrirTexte(plateauLoin) === true && vp.bilan().erreurs === 0 && $('#vi-profondeur').value === '3', $('#pl-bilan').textContent);
-    }
-    verifier('réglages remis à leur valeur par défaut', reglagesParDefaut());
-    plateauDeReference();
-    AT.app.montrer('partie');
-  });
-
-  scenario('Testeur C2 : plateau construit à la main, puis villes (clic, clavier, refus, pose libre, automatique, autre proposition), retouches, annuler / rétablir', async function () {
-    var vp = AT.app.vues.plateau, P = AT.plateau, V = AT.vueVilles, VC = AT.vueCreation, vue = vp.vue;
-    plateauDeReference();
-    verifier('historique remis à neuf par la reprise du travail en cours', await historiqueNeuf());
-    var patron = AT.generateur.generer(7).plateau, aPoser = patron.pieces.filter(function (p) { return p.modele !== 'N1' && p.modele !== 'VN'; });
-    mode('creer');
-    clic($('#cr-vierge'));
-    var rangDepart = vp.etat().rang, illisibles = [];
-    aPoser.forEach(function (p, i) {
-      clic($('#pl-stock [data-modele="' + p.modele + '"]'));
-      for (var t = 0; t < p.rotation; t++) touche('r');
-      if (i % 3 === 2) { vue.svg.focus(); allerCurseur(vue, AT.hex.cle(p.q, p.r)); touche('Enter', {}, vue.svg); }     // une pièce sur trois au clavier
-      else clicCase(vue, AT.hex.cle(p.q, p.r));
-      touche('Escape');
-      if (!relisible(vp)) illisibles.push(p.modele);
-    });
-    var construit = JSON.stringify(vp.plateau());
-    verifier('terrain entier posé à la main (' + aPoser.length + ' pièces, clic et clavier) : le même terrain que le patron, une étape par pièce, toujours relisible', terrainSeul(vp.plateau()) === terrainSeul(patron)
-      && vp.etat().rang === rangDepart + aPoser.length && illisibles.length === 0 && casesDessinees(vue) === 91, vp.plateau().pieces.length + ' pièces ; ' + illisibles.join());
-    verifier('terrain construit sans villes : aucune erreur, étape « villes », le bouton « Passer à l’étape Villes » et le mode « Villes » sont proposés', vp.bilan().erreurs === 0 && vp.bilan().etape === 'villes'
-      && visible($('#cr-vers-villes')) && $('#pl-mode-villes').getAttribute('data-propose') === 'oui' && !$('#cr-termine'), $('#pl-bilan').textContent);
-    clic($('#cr-vers-villes'));
-    verifier('« Passer à l’étape Villes » : mode « Villes », outil Vert, compteurs à 0', vp.mode() === 'villes' && vp.villes.outil() === 'vert' && compteur('vert') === '0 / 2' && compteur('rouge') === '0 / 2' && compteur('neutre') === '0 / 2'
-      && marques(vue, 'at-admissible') === V.places(vp.plateau(), 'vert').length && marques(vue, 'at-admissible') > 0);
-
-    /** Une place de l'outil qui en laisse au moins une autre au même camp (l'écart de 4 pas en retire). */
-    function placeQuiEnLaisse(outil) {
-      var places = V.places(vp.plateau(), outil);
-      return places.filter(function (k) { var r = V.cliquer(vp.plateau(), outil, k, {}); return r.ok && V.places(r.plateau, outil).length > 0; })[0] || places[0];
-    }
-    // Clic, puis clavier.
-    var rang = vp.etat().rang, v1 = placeQuiEnLaisse('vert');
-    clicCase(vue, v1);
-    verifier('ville de déploiement de Vert posée par un clic : une étape, compteur 1 / 2, aucune erreur de villes', vp.etat().rang === rang + 1 && compteur('vert') === '1 / 2' && vp.plateau().camps.vert.join() === v1 && vp.bilan().villes.erreurs === 0);
-    var v2 = V.places(vp.plateau(), 'vert')[0];
-    vue.svg.focus();
-    allerCurseur(vue, v2);
-    touche('Enter', {}, vue.svg);
-    verifier('seconde ville de Vert posée au clavier (flèches puis Entrée) : compteur 2 / 2, l’outil passe à Rouge', !!v2 && compteur('vert') === '2 / 2' && vp.plateau().camps.vert.indexOf(v2) !== -1 && vp.villes.outil() === 'rouge'
-      && vp.bilan().villes.erreurs === 0, v2 + ' / ' + $('#barre-etat').textContent);
-    // Refus expliqués.
-    var toutes = P.cases(vp.plateau()), refus = [];
-    function refuse(nom, cle, motif) {
-      if (!cle) { refus.push(nom + ' : aucune case à essayer'); return; }
-      var avantRefus = JSON.stringify(vp.plateau()), rangRefus = vp.etat().rang;
-      ctxMessageEfface();
-      clicCase(vue, cle);
-      if (!(cle && JSON.stringify(vp.plateau()) === avantRefus && vp.etat().rang === rangRefus && motif.test($('#barre-etat').textContent) && /at-etat-erreur/.test(etatBarre()))) refus.push(nom + ' (' + cle + ') → ' + $('#barre-etat').textContent);
-    }
-    var foret = Object.keys(toutes).filter(function (k) { return toutes[k].terrain === 'foret'; })[0], montagne = Object.keys(toutes).filter(function (k) { return toutes[k].terrain === 'montagne'; })[0];
-    var enHaut = P.placesDeploiementSurCases(toutes, 'vert', { profondeurExtremite: 2, sansEcart: true })[0];
-    refuse('forêt', foret, /^Pose refusée : Une ville de déploiement se pose sur une case de Plaine \(ici : foret\)\.$/);
-    refuse('montagne', montagne, /^Pose refusée : Une ville de déploiement se pose sur une case de Plaine \(ici : montagne\)\.$/);
-    refuse('noyau', '0,1', /^Pose refusée : Une ville de déploiement ne se pose pas sur le noyau\.$/);
-    refuse('case vide', V.anneau(vp.plateau())[0], /^Pose refusée : Cette case n’est pas sur le plateau\.$/);
-    refuse('extrémité de l’autre camp', enHaut, /^Pose refusée : Cette case n’est pas à l’extrémité du bas : la ville de déploiement de Rouge se pose dans les 2 rangées du bas\.$/);
-    verifier('5 refus de pose d’une ville de déploiement de Rouge (forêt, montagne, noyau, case vide, extrémité de Vert) : chacun expliqué, rien ne change', refus.length === 0, refus.join(' | '));
-    var r1 = placeQuiEnLaisse('rouge');
-    clicCase(vue, r1);
-    // Pose libre : une Plaine hors de l'extrémité.
-    var strictes = V.places(vp.plateau(), 'rouge'), libreSeule = V.places(vp.plateau(), 'rouge', { libre: true }).filter(function (k) { return strictes.indexOf(k) === -1 && enHautOuMilieu(k); })[0];
-    function enHautOuMilieu(k) { return villesHorsExtremite({ pieces: vp.plateau().pieces, deploiements: [{ cle: k, camp: 'rouge' }] }, 2).length === 1; }
-    refuse('pose stricte hors de l’extrémité', libreSeule, /^Pose refusée : /);
-    clic($('#vi-libre'));
-    rang = vp.etat().rang;
-    clicCase(vue, libreSeule);
-    var enLibre = vp.texteEnregistrement();
-    verifier('pose libre : la même Plaine est acceptée (une étape, annoncé en alerte), les contrôles disent « mal placée », et le plateau reste relisible', refus.length === 0 && vp.etat().rang === rang + 1 && compteur('rouge') === '2 / 2'
-      && /Pose libre : les contrôles disent si elle respecte les règles/.test($('#barre-etat').textContent) && /at-etat-alerte/.test(etatBarre()) && vp.bilan().villes.erreurs > 0
-      && /Ville de déploiement de Rouge en \(.*\) mal placée/.test($('#pl-controles').textContent) && relisible(vp), refus.join(' | ') + $('#barre-etat').textContent);
-    verifier('plateau en pose libre enregistré puis rouvert : accepté, la ville mal placée est toujours signalée', vp.ouvrirTexte(enLibre) === true && vp.texteEnregistrement() === enLibre && vp.bilan().villes.erreurs > 0);
-    clic($('#pl-annuler'));
-    clicCase(vue, libreSeule);
-    clic($('#vi-libre'));
-    verifier('la ville mal placée se retire d’un clic ; pose libre décochée', compteur('rouge') === '1 / 2' && vp.bilan().villes.erreurs === 0 && vp.villes.libre() === false && $('#vi-libre').checked === false);
-    clic($('#vi-outil-rouge'));
-    var r2 = V.places(vp.plateau(), 'rouge')[0];
-    clicCase(vue, r2);
-    verifier('seconde ville de Rouge : compteur 2 / 2, l’outil passe à la ville neutre', !!r2 && compteur('rouge') === '2 / 2' && vp.villes.outil() === 'neutre' && marques(vue, 'at-admissible') === V.places(vp.plateau(), 'neutre').length, r2);
-    // Villes neutres : refus, puis une par flanc.
-    refus = [];
-    toutes = P.cases(vp.plateau());
-    var horsFlanc = V.anneau(vp.plateau()).filter(function (k) { return /sur un côté du plateau/.test(P.peutPoserVilleNeutre(vp.plateau(), k).raison || ''); })[0];
-    refuse('ville neutre sur une case occupée', '1,0', /^Pose refusée : Une ville neutre est une tuile ajoutée contre le bord : cette case est déjà occupée\.$/);
-    refuse('ville neutre en haut ou en bas', horsFlanc, /^Pose refusée : Une ville neutre se pose sur un côté du plateau \(flanc gauche ou droit\), pas en haut, en bas ni dans un creux\.$/);
-    var n1 = V.places(vp.plateau(), 'neutre')[0], flanc1 = n1 ? P.peutPoserVilleNeutre(vp.plateau(), n1).flanc : null;
-    if (n1) clicCase(vue, n1);
-    var memeFlanc = P.placesNeutresSurCases(P.cases(vp.plateau()), { sansEcart: true }).filter(function (x) { return x.flanc === flanc1; })[0];
-    if (memeFlanc) refuse('seconde ville neutre sur le même flanc', memeFlanc.cle, /^Pose refusée : Le flanc (gauche|droite) a déjà sa ville neutre : l’autre se pose sur le flanc (droit|gauche)\.$/);
-    verifier('villes neutres : refus expliqués (case occupée, hors des flancs' + (memeFlanc ? ', flanc déjà pourvu' : '') + ') ; la première est posée', !!n1 && !!horsFlanc && refus.length === 0 && compteur('neutre') === '1 / 2', refus.join(' | '));
-    var n2 = V.places(vp.plateau(), 'neutre')[0];
-    if (n2) {
-      clicCase(vue, n2);
-      verifier('toutes les villes posées à la main : « Toutes les villes sont posées », plateau complet, aucune erreur, « Plateau terminé »', /Toutes les villes sont posées\./.test($('#barre-etat').textContent) && vp.bilan().etape === 'complet'
-        && vp.bilan().erreurs === 0 && compteur('neutre') === '2 / 2' && marques(vue, 'at-admissible') === 0 && $('#pl-etape-titre').textContent === 'Plateau complet' && !!$('#cr-termine') && relisible(vp), $('#barre-etat').textContent + ' / ' + $('#pl-bilan').textContent);
-    } else {
-      lignes.push('INFO  après les 5 premières villes posées à la main, aucune place ne reste pour la seconde ville neutre (écart de 4 pas) : ' + ($('#vi-diagnostic').textContent || 'pas d’avis'));
-      verifier('aucune place pour la dernière ville neutre : l’avis le dit avec sa cause', !$('#vi-diagnostic').hidden && /Aucune place pour une ville neutre/.test($('#vi-diagnostic').textContent), $('#vi-diagnostic').textContent);
-    }
-
-    // Poser automatiquement, puis « Autre proposition ».
-    var attendu = V.poserAuto(vp.plateau(), vp.plateau().graine, {});
-    rang = vp.etat().rang;
-    clic($('#vi-auto'));
-    var auto = JSON.stringify(vp.plateau());
-    verifier('« Poser les villes automatiquement » sur le plateau fait main : une étape, complet, aucune erreur, le résultat du calcul pur', vp.etat().rang === rang + 1 && attendu.ok && auto === JSON.stringify(attendu.plateau)
-      && vp.bilan().etape === 'complet' && vp.bilan().erreurs === 0 && terrainSeul(vp.plateau()) === terrainSeul(patron), $('#vi-message').textContent);
-    verifier('bouton « Autre proposition » à côté de « Poser les villes automatiquement »', visible($('#vi-autre')) && $('#vi-autre').parentNode === $('#vi-auto').parentNode && $('#vi-autre').previousElementSibling === $('#vi-auto')
-      && $('#vi-autre').textContent === 'Autre proposition');
-    var propositions = [], fautesP = [], nombre = null;
-    for (var i = 0; i < 5; i++) {
-      var avantP = signatureVilles(vp.plateau());
-      rang = vp.etat().rang;
-      clic($('#vi-autre'));
-      var lu = /^Autre proposition : placement n° (\d+) sur (\d+) des villes de déploiement, du mieux équilibré au moins équilibré \(score (\d+) ; 0 = équilibré\)\. Les villes neutres vont à la meilleure place de chaque flanc ; leurs autres places ne sont pas parcourues\. Annuler pour revenir à la précédente\.$/.exec($('#vi-message').textContent);
-      var s = signatureVilles(vp.plateau());
-      if (!lu || vp.etat().rang !== rang + 1 || s === avantP || propositions.indexOf(s) !== -1 || s === signatureVilles(JSON.parse(auto)) || vp.bilan().etape !== 'complet' || vp.bilan().erreurs !== 0
-        || parseInt(lu[3], 10) !== vp.bilan().equilibre.score || !relisible(vp) || terrainSeul(vp.plateau()) !== terrainSeul(patron) || !/at-etat-info/.test(etatBarre())) fautesP.push('n° ' + (i + 1) + ' : ' + $('#vi-message').textContent);
-      if (lu) nombre = parseInt(lu[2], 10);
-      propositions.push(s);
-    }
-    verifier('« Autre proposition » 5 fois : chaque fois d’autres villes, jamais deux fois les mêmes, une étape chacune, plateau complet sans erreur, rang et score annoncés, et le message dit ce qui est parcouru (M3 : ' + nombre + ' placements des villes de déploiement)', fautesP.length === 0 && nombre > 5,
-      fautesP.join(' | '));
-    clic($('#pl-annuler'));
-    verifier('Annuler : la proposition précédente revient', signatureVilles(vp.plateau()) === propositions[3]);
-    clic($('#vi-autre'));
-    verifier('« Autre proposition » de nouveau : la même cinquième (suite déterministe, aucun tirage)', signatureVilles(vp.plateau()) === propositions[4]);
-    for (var a = 0; a < 5; a++) touche('z', { ctrlKey: true });
-    verifier('5 annulations : retour à la pose automatique', JSON.stringify(vp.plateau()) === auto);
-    clic($('#vi-autre'));
-    verifier('depuis la pose automatique, la première « autre proposition » est la même qu’au premier passage', signatureVilles(vp.plateau()) === propositions[0]);
-    clic($('#pl-annuler'));
-
-    // Retirer, tourner, déplacer la pièce qui porte une ville de déploiement.
-    var complet = JSON.stringify(vp.plateau()), rangComplet = vp.etat().rang;
-    mode('generer');
-    var vd = vp.plateau().camps.vert[0], porteuse = pieceEn(vp, vd);
-    clicCase(vue, vd);
-    touche('Delete');
-    verifier('retirer (Suppr) la pièce qui porte une ville de déploiement : la ville part avec elle, annoncé en alerte ; ni erreur de villes ni fichier illisible', !pieceEn(vp, vd) && P.deploiements(vp.plateau()).length === 3
-      && vp.plateau().camps.vert.length === 1 && /Pièce retirée : elle retourne au stock\. La ville de déploiement de Vert a été retirée avec la Plaine qui la portait : à reposer à l’étape « Villes »\./.test($('#barre-etat').textContent)
-      && /at-etat-alerte/.test(etatBarre()) && vp.bilan().etape === 'construction' && relisible(vp), $('#barre-etat').textContent);
-    clic($('#pl-annuler'));
-    clicCase(vue, vd);
-    var avantTour = P.deploiements(vp.plateau()).length;
-    touche('r');
-    var apresTour = P.deploiements(vp.plateau()).length, dessousTour = P.cases(vp.plateau(), { sansVilles: true });
-    verifier('tourner la pièce qui porte une ville : refus expliqué, ou ville gardée sur sa Plaine, ou ville retirée et annoncée ; jamais de ville hors d’une Plaine, fichier relisible',
-      (/at-etat-erreur/.test(etatBarre()) ? JSON.stringify(vp.plateau()) === complet : (apresTour === avantTour || (apresTour === avantTour - 1 && /ville de déploiement de Vert a été retirée/.test($('#barre-etat').textContent))))
-      && P.deploiements(vp.plateau()).every(function (d) { return dessousTour[d.cle] && dessousTour[d.cle].origine === 'plaine'; }) && relisible(vp), $('#barre-etat').textContent);
-    if (JSON.stringify(vp.plateau()) !== complet) clic($('#pl-annuler'));
-    touche('Escape');
-    // Déplacer en la glissant (mode « Créer à la main ») vers une place libre.
-    mode('creer');
-    var decalage = null;
-    for (var dq = -9; dq <= 9 && !decalage; dq++) for (var dr = -9; dr <= 9 && !decalage; dr++) {
-      var but = AT.hex.decle(vd);
-      if (AT.hex.distance(AT.hex.cle(but.q + dq, but.r + dr), '0,0') > 7) continue;
-      if (VC.essaiPose(vp.plateau(), porteuse.modele, porteuse.q + dq, porteuse.r + dr, porteuse.rotation, porteuse.id).ok && !P.cases(vp.plateau())[AT.hex.cle(but.q + dq, but.r + dr)]) decalage = { q: dq, r: dr };
-    }
-    var arrivee = decalage ? AT.hex.cle(AT.hex.decle(vd).q + decalage.q, AT.hex.decle(vd).r + decalage.r) : null;
-    if (arrivee) glisserCases(vue, [vd, arrivee]);
-    verifier('déplacer en la glissant la pièce qui porte une ville : la pièce part, la ville est retirée et c’est annoncé', !!arrivee && !pieceEn(vp, vd) && !!pieceEn(vp, arrivee) && pieceEn(vp, arrivee).modele === porteuse.modele
-      && P.deploiements(vp.plateau()).length === 3 && /Pièce déplacée\. La ville de déploiement de Vert a été retirée avec la Plaine qui la portait/.test($('#barre-etat').textContent) && /at-etat-alerte/.test(etatBarre()) && relisible(vp),
-      arrivee + ' : ' + $('#barre-etat').textContent);
-    clic($('#pl-annuler'));
-    touche('Escape');
-    verifier('après annulation : le plateau complet, à l’identique', JSON.stringify(vp.plateau()) === complet && vp.etat().rang === rangComplet);
-    // Correction 2, dans les autres modes : glisser, gomme et pinceau sur une ville neutre.
-    var vn = P.etatVilles(vp.plateau()).neutres[0].cle, voisineLibre = V.anneau(vp.plateau()).filter(function (k) { return AT.hex.distance(k, vn) === 1; })[0] || V.anneau(vp.plateau())[0];
-    ctxMessageEfface();
-    glisserCases(vue, [vn, voisineLibre]);
-    verifier('mode « Créer à la main », glisser une ville neutre : refusé, renvoi à l’étape « Villes », rien ne bouge', JSON.stringify(vp.plateau()) === complet && vp.etat().rang === rangComplet
-      && /Une ville neutre ne se déplace, ne se tourne et ne se retire qu’à l’étape « Villes »/.test($('#barre-etat').textContent) && /at-etat-erreur/.test(etatBarre()) && marques(vue, 'at-fantome') === 0, $('#barre-etat').textContent);
-    touche('Escape');
-    mode('pinceau');
-    clic($('#pi-gomme'));
-    clicCase(vue, vn);
-    var messageGomme = $('#pi-message').textContent;
-    clic($('#pi-terrain-foret'));
-    clicCase(vue, vn);
-    verifier('mode « Pinceau », gomme puis forêt sur une ville neutre : refusées, le message renvoie à l’étape « Villes », rien ne change', JSON.stringify(vp.plateau()) === complet && vp.etat().rang === rangComplet
-      && /étape « Villes »/.test(messageGomme) && /étape « Villes »/.test($('#pi-message').textContent), messageGomme + ' / ' + $('#pi-message').textContent);
-    mode('villes');
-    clicCase(vue, vn);
-    verifier('étape « Villes » : la même ville neutre se retire d’un clic', P.etatVilles(vp.plateau()).neutres.length === 1 && /Ville neutre retirée/.test($('#barre-etat').textContent));
-    clic($('#pl-annuler'));
-
-    // Annuler / rétablir à travers les deux étapes : du plateau complet au noyau seul, et retour.
-    mode('generer');
-    var pas = vp.etat().rang - rangDepart, etapes = [vp.bilan().etape], ordre = { complet: 2, villes: 1, construction: 0 }, mauvais = [];
-    for (var z = 0; z < pas; z++) {
-      touche('z', { ctrlKey: true });
-      etapes.push(vp.bilan().etape);
-      if (!relisible(vp)) mauvais.push('annulation ' + z);
-    }
-    var vuConstruit = etapes.indexOf('villes') !== -1 && etapes.indexOf('complet') !== -1 && etapes[etapes.length - 1] === 'construction';
-    verifier(pas + ' annulations (Ctrl+Z), des propositions de villes jusqu’au noyau seul : chaque état relisible, les étapes « complet », « villes » puis « construction » sont traversées', vp.etat().rang === rangDepart
-      && vp.plateau().pieces.length === 1 && vuConstruit && mauvais.length === 0 && etapes.lastIndexOf('complet') < etapes.lastIndexOf('construction'), etapes.join(' ').slice(0, 300));
-    var retour = [];
-    for (var y = 0; y < pas; y++) { touche('y', { ctrlKey: true }); retour.push(ordre[vp.bilan().etape]); if (JSON.stringify(vp.plateau()) === construit) retour.push('construit'); }
-    verifier(pas + ' rétablissements (Ctrl+Y) : le terrain construit est retrouvé en chemin, puis le plateau complet, à l’identique', JSON.stringify(vp.plateau()) === complet && retour.indexOf('construit') !== -1 && vp.etat().rang === rangComplet
-      && vp.bilan().etape === 'complet' && vp.bilan().erreurs === 0);
-
-    // « Autre proposition » sans terrain : impossible, et c'est dit.
-    mode('creer');
-    clic($('#cr-vierge'));
-    mode('villes');
-    rang = vp.etat().rang;
-    clic($('#vi-autre'));
-    verifier('« Autre proposition » sur le noyau seul : impossible, avec la cause, rien ne change', vp.etat().rang === rang && /Autre proposition impossible : Pas assez de places/.test($('#vi-message').textContent) && /at-etat-erreur/.test(etatBarre()),
-      $('#vi-message').textContent);
-    verifier('réglages remis à leur valeur par défaut', reglagesParDefaut());
-    plateauDeReference();
-    AT.app.montrer('partie');
-  });
-
-  scenario('Testeur C2 : profondeur enregistrée (fichier, bibliothèque, partie), anciens fichiers, fichiers hostiles', async function () {
-    var vp = AT.app.vues.plateau, vq = AT.app.vues.partie, P = AT.plateau, B = AT.bibliotheque, bib = vp.bibliotheque, vue = vp.vue;
-    plateauDeReference();
-    verifier('historique remis à neuf par la reprise du travail en cours', await historiqueNeuf());
-    var reference = P.serialiser(AT.generateur.generer(1).plateau), rang = vp.etat().rang;
-    choisir($('#vi-profondeur'), 3);
-    verifier('profondeur des extrémités réglée à 3 : écrite dans le plateau (une étape d’annulation), le message le dit', vp.plateau().profondeurExtremite === 3 && vp.etat().rang === rang + 1 && vp.reglages().profondeurExtremite === 3
-      && /Extrémités : 3 rangées en haut et en bas\. .* enregistré avec le plateau/.test($('#barre-etat').textContent) && /"profondeurExtremite": 3/.test(vp.texteEnregistrement()), $('#barre-etat').textContent);
-    choisir($('#vi-profondeur'), 3);
-    verifier('choisir de nouveau la même valeur : aucune étape de plus', vp.etat().rang === rang + 1);
-    touche('z', { ctrlKey: true });
-    verifier('Ctrl+Z : le réglage revient à 2 (champ absent), la liste le montre', !('profondeurExtremite' in vp.plateau()) && $('#vi-profondeur').value === '2' && vp.reglages().profondeurExtremite === 2);
-    touche('y', { ctrlKey: true });
-    var graineProfonde = null;
-    for (var g = 1; g <= 40 && !graineProfonde; g++) {
-      $('#pl-graine').value = String(g);
-      clic($('#pl-generer'));
-      if ($('#pl-avis').hidden && villesHorsExtremite(vp.plateau(), 2).length) graineProfonde = g;
-    }
-    var profond = JSON.stringify(vp.plateau()), texteProfond = vp.texteEnregistrement();
-    verifier('plateau généré à 3 rangées avec une ville en troisième rangée (graine ' + graineProfonde + ') : aucune erreur, profondeur 3 dans le fichier', !!graineProfonde && vp.bilan().erreurs === 0 && vp.bilan().etape === 'complet'
-      && /"profondeurExtremite": 3/.test(texteProfond) && villesHorsExtremite(vp.plateau(), 3).length === 0);
-    telecharges.length = 0;
-    clic($('#pl-enregistrer'));
-    verifier('« Enregistrer » : fichier produit', telecharges.length === 1 && /\.json$/.test(telecharges[0].nom) && telecharges[0].taille > 1000);
-    // Rouvrir : d'abord un plateau sans le champ, puis le fichier à 3 rangées.
-    verifier('ouvrir un plateau sans le champ : la profondeur revient au réglage par défaut (2)', vp.ouvrirTexte(reference) === true && $('#vi-profondeur').value === '2' && vp.reglages().profondeurExtremite === 2 && vp.bilan().erreurs === 0);
-    verifier('rouvrir le fichier à 3 rangées : identique, le réglage est relu (3), AUCUNE erreur aux contrôles', vp.ouvrirTexte(texteProfond) === true && JSON.stringify(vp.plateau()) === profond && $('#vi-profondeur').value === '3'
-      && vp.reglages().profondeurExtremite === 3 && vp.bilan().erreurs === 0 && vp.bilan().etape === 'complet', $('#pl-bilan').textContent);
-    mode('villes');
-    clic($('#vi-retirer'));
-    clic($('#vi-outil-vert'));
-    var nbPlaces = function (p) { return ['vert', 'rouge'].reduce(function (n, camp) { return n + P.placesDeploiementSurCases(P.cases(vp.plateau()), camp, { profondeurExtremite: p }).length; }, 0); };
-    verifier('étape « Villes » sur ce plateau : les places en surbrillance sont celles des 3 rangées (plus nombreuses qu’à 2 rangées)', marques(vue, 'at-admissible') === P.placesDeploiementSurCases(P.cases(vp.plateau()), 'vert', { profondeurExtremite: 3 }).length
-      && marques(vue, 'at-admissible') > 0 && nbPlaces(3) > nbPlaces(2), marques(vue, 'at-admissible') + ' ; ' + nbPlaces(3) + ' / ' + nbPlaces(2));
-    clic($('#pl-annuler'));
-    rang = vp.etat().rang;
-    choisir($('#vi-profondeur'), 2);
-    verifier('ramener le réglage à 2 sur ce plateau : une étape, la ville de troisième rangée devient « mal placée »', vp.etat().rang === rang + 1 && !('profondeurExtremite' in vp.plateau()) && vp.bilan().villes.erreurs > 0
-      && /mal placée : Cette case n’est pas à l’extrémité du (haut|bas)/.test($('#pl-controles').textContent), $('#pl-bilan').textContent);
-    clic($('#pl-annuler'));
-    verifier('Annuler : 3 rangées de nouveau, plus d’erreur', JSON.stringify(vp.plateau()) === profond && vp.bilan().erreurs === 0 && $('#vi-profondeur').value === '3');
-    mode('generer');
-
-    // Bibliothèque.
-    verifier('enregistré dans la bibliothèque', bib.enregistrerSous('Extrémités de 3 rangées') === true && bib.liste().length === 1 && bib.liste()[0].plateau.profondeurExtremite === 3);
-    vp.ouvrirTexte(reference);
-    mode('bibliotheque');
-    verifier('fiche de la bibliothèque, vue depuis un plateau à 2 rangées : « aucune erreur » (la fiche est jugée avec sa propre profondeur)', /7 villes ; aucune erreur/.test($('#bi-liste').textContent), $('#bi-liste').textContent.slice(0, 200));
-    clic($('#bi-liste [data-ouvrir]'));
-    verifier('fiche rouverte : identique, réglage à 3, aucune erreur, pas « (modifié) »', JSON.stringify(vp.plateau()) === profond && $('#vi-profondeur').value === '3' && vp.bilan().erreurs === 0
-      && /Extrémités de 3 rangées/.test($('#at-nom-plateau').textContent) && !/modifié/.test($('#at-nom-plateau').textContent), $('#at-nom-plateau').textContent);
-    var exporte = B.exporter(bib.liste());
-    verifier('bibliothèque exportée puis importée : la profondeur suit', /"profondeurExtremite":3/.test(exporte) && bib.importerTexte(exporte) === true && bib.liste().length === 2
-      && bib.liste().every(function (e) { return e.plateau.profondeurExtremite === 3; }));
-    await attendre(700);
-    var travail = B.chargerTravail(stockageRecette);
-    verifier('travail en cours sauvegardé : la profondeur y est', travail.ok && !!travail.plateau && travail.plateau.profondeurExtremite === 3 && JSON.stringify(travail.plateau) === profond, travail.raison);
-    mode('generer');
-
-    // Un AUTRE document (fiche, partie) n'est jamais jugé avec la profondeur du plateau affiché.
-    vp.ouvrirTexte(reference);
-    verifier('plateau de référence (2 rangées) enregistré dans la bibliothèque', bib.enregistrerSous('Deux rangées') === true);
-    AT.app.montrer('partie');
-    $('#pa-graine').value = '9';
-    clic($('#pa-nouvelle'));
-    var partieDeuxRangees = vq.texteEnregistrement();
-    AT.app.montrer('plateau');
-    choisir($('#vi-profondeur'), 1);
-    var ficheDeux = bib.liste().filter(function (x) { return x.nom === 'Deux rangées'; }), avantCopie = bib.liste().length;
-    verifier('plateau affiché ramené à 1 rangée : lui-même a des villes « mal placées »', vp.plateau().profondeurExtremite === 1 && vp.bilan().villes.erreurs > 0 && ficheDeux.length === 1, $('#pl-bilan').textContent);
-    mode('bibliotheque');
-    var importe = bib.importerTexte(B.exporter(ficheDeux));
-    var resumes = $('#bi-liste').textContent.match(/7 villes ; aucune erreur/g) || [];
-    verifier('fiches à 2 et à 3 rangées vues depuis un plateau affiché à 1 rangée (dont une fiche importée à l’instant) : toutes « aucune erreur »', importe === true && bib.liste().length === avantCopie + 1
-      && resumes.length === bib.liste().length, resumes.length + ' / ' + bib.liste().length + ' : ' + $('#bi-liste').textContent.slice(0, 300));
-    mode('generer');
-    AT.app.montrer('partie');
-    verifier('partie à 2 rangées ouverte pendant que le plateau affiché est à 1 rangée : aucune erreur de plateau annoncée', vq.ouvrirTexte(partieDeuxRangees) === true
-      && !/erreur\(s\) aux contrôles/.test($('#barre-etat').textContent) && /Partie ouverte/.test($('#barre-etat').textContent), $('#barre-etat').textContent);
-    AT.app.montrer('plateau');
-    vp.ouvrirTexte(texteProfond);
-
-    // Partie fictive sur ce plateau.
-    AT.app.montrer('partie');
-    $('#pa-graine').value = '8';
-    clic($('#pa-nouvelle'));
-    var e = vq.etat();
-    verifier('partie créée sur le plateau à 3 rangées : la profondeur est dans la partie, aucune erreur de plateau annoncée', !!e && e.plateau.profondeurExtremite === 3 && !/erreur\(s\) aux contrôles/.test($('#barre-etat').textContent)
-      && /Nouvelle partie/.test($('#barre-etat').textContent), $('#barre-etat').textContent);
-    var textePartie = vq.texteEnregistrement();
-    verifier('partie enregistrée puis rouverte : profondeur gardée, toujours aucune erreur de plateau', /"profondeurExtremite":\s*3/.test(textePartie) && vq.ouvrirTexte(textePartie) === true && vq.etat().plateau.profondeurExtremite === 3
-      && !/erreur\(s\) aux contrôles/.test($('#barre-etat').textContent), $('#barre-etat').textContent);
-    AT.app.montrer('plateau');
-
-    // Fichiers hostiles : champ `deploiements` et champ `profondeurExtremite`, par les quatre entrées.
-    var casesP = P.cases(JSON.parse(profond), { sansVilles: true });
-    var une = function (terrain) { return Object.keys(casesP).filter(function (k) { return casesP[k].origine === terrain; })[0]; };
-    var html = '<img src=x onerror=alert(1)>';
-    var hostiles = {
-      'profondeur 0': function (o) { o.profondeurExtremite = 0; }, 'profondeur 4': function (o) { o.profondeurExtremite = 4; }, 'profondeur -1': function (o) { o.profondeurExtremite = -1; },
-      'profondeur 2,5': function (o) { o.profondeurExtremite = 2.5; }, 'profondeur 1e9': function (o) { o.profondeurExtremite = 1e9; }, 'profondeur en texte': function (o) { o.profondeurExtremite = '3'; },
-      'profondeur nulle': function (o) { o.profondeurExtremite = null; }, 'profondeur booléenne': function (o) { o.profondeurExtremite = true; }, 'profondeur en liste': function (o) { o.profondeurExtremite = [3]; },
-      'profondeur en objet': function (o) { o.profondeurExtremite = { valeur: 3 }; }, 'profondeur en HTML': function (o) { o.profondeurExtremite = html; },
-      'champ voisin': function (o) { o.profondeurExtremites = 3; }, 'champ pollue': function (o) { o.pollue = true; },
-      'ville hors du plateau': function (o) { o.deploiements[0].cle = '20,20'; }, 'ville au bout des bornes': function (o) { o.deploiements[0].cle = '-30,30'; },
-      'ville hors bornes': function (o) { o.deploiements[0].cle = '31,0'; }, 'ville sur une forêt': function (o) { o.deploiements[0].cle = une('foret'); },
-      'ville sur un marais': function (o) { o.deploiements[0].cle = une('marais'); }, 'ville sur une montagne': function (o) { o.deploiements[0].cle = une('montagne'); },
-      'ville sur la ville du noyau': function (o) { o.deploiements[0].cle = '0,0'; },
-      'ville sur une ville neutre': function (o) { var n = o.pieces.filter(function (p) { return p.modele === 'VN'; })[0]; o.deploiements[0].cle = n.q + ',' + n.r; },
-      'clé __proto__': function (o) { o.deploiements[0].cle = '__proto__'; }, 'clé constructor': function (o) { o.deploiements[0].cle = 'constructor'; }, 'clé en HTML': function (o) { o.deploiements[0].cle = html; },
-      'clé numérique': function (o) { o.deploiements[0].cle = 12; }, 'clé à espace': function (o) { o.deploiements[0].cle = ' ' + o.deploiements[0].cle; }, 'clé à exposant': function (o) { o.deploiements[0].cle = '1e1,2'; },
-      'clé décimale': function (o) { o.deploiements[0].cle = '1.0,2'; }, 'camp inconnu': function (o) { o.deploiements[0].camp = 'bleu'; }, 'camp __proto__': function (o) { o.deploiements[0].camp = '__proto__'; },
-      'camp en HTML': function (o) { o.deploiements[0].camp = html; }, 'champ en trop': function (o) { o.deploiements[0].pollue = true; }, 'camp manquant': function (o) { o.deploiements[0] = { cle: o.deploiements[0].cle }; },
-      'entrée nulle': function (o) { o.deploiements[0] = null; }, 'entrée en texte': function (o) { o.deploiements[0] = 'vert'; }, 'entrée en liste': function (o) { o.deploiements[0] = [o.deploiements[0].cle, 'vert']; },
-      'liste en objet': function (o) { o.deploiements = { 0: o.deploiements[0], length: 1 }; }, 'liste en texte': function (o) { o.deploiements = 'vert'; }, 'liste nulle': function (o) { o.deploiements = null; },
-      '9 villes': function (o) { o.deploiements = new Array(9).fill(o.deploiements[0]); }, 'deux villes sur la même case': function (o) { o.deploiements[1].cle = o.deploiements[0].cle; },
-      '3 villes pour Vert': function (o) { o.deploiements[2].camp = 'vert'; }, 'ville sous une tuile d’événement': function (o) { o.recouvrements = [{ evenement: 'E1', cle: o.deploiements[0].cle }]; }
-    };
-    var acceptes = [], cleTravail = B.cleTravail(), travailBrut = JSON.parse(stockageRecette.getItem(cleTravail));
-    vp.ouvrirTexte(texteProfond);
-    var plateauAvant = JSON.stringify(vp.plateau()), partieAvant = JSON.stringify(vq.etat()), fichesAvant = bib.liste().length, tailleListe = Object.keys(hostiles).length;
-    Object.keys(hostiles).forEach(function (nom) {
-      var o = JSON.parse(texteProfond);
-      hostiles[nom](o);
-      // 1. fichier de plateau
-      if (vp.ouvrirTexte(JSON.stringify(o)) !== false || JSON.stringify(vp.plateau()) !== plateauAvant || !/^Fichier refusé : /.test($('#barre-etat').textContent)) acceptes.push('plateau : ' + nom);
-      // 2. fichier de partie
-      var partie = JSON.parse(textePartie);
-      hostiles[nom](partie.plateau);
-      if (vq.ouvrirTexte(JSON.stringify(partie)) !== false || JSON.stringify(vq.etat()) !== partieAvant) acceptes.push('partie : ' + nom);
-      // 3. import de bibliothèque : la fiche fautive n'entre jamais
-      var lot = JSON.parse(exporte);
-      lot.plateaux = [lot.plateaux[0]];
-      lot.plateaux[0].plateau = o;
-      bib.importerTexte(JSON.stringify(lot));
-      if (bib.liste().length !== fichesAvant) acceptes.push('bibliothèque : ' + nom);
-      // 4. contenu du stockage (travail en cours) : jamais repris
-      var memoire = B.stockageMemoire(), brut = JSON.parse(JSON.stringify(travailBrut));
-      brut.plateau = o;
-      memoire.setItem(cleTravail, JSON.stringify(brut));
-      var repris = B.chargerTravail(memoire);
-      if (repris.ok || repris.plateau) acceptes.push('travail en cours : ' + nom);
-    });
-    verifier(tailleListe + ' fichiers hostiles sur « deploiements » et sur la profondeur, par les quatre entrées (plateau, partie, bibliothèque, travail en cours) : jamais acceptés, états inchangés', tailleListe >= 40 && acceptes.length === 0,
-      acceptes.slice(0, 8).join(' | '));
-    verifier('aucune pollution de Object.prototype, aucun élément injecté', ({}).pollue === undefined && ({}).profondeurExtremite === undefined && ({}).deploiements === undefined && $$('#atelier img, #atelier script').length === 0);
-    // Valeurs permises : 1, 2 et 3, y compris écrites en clair à la valeur par défaut.
-    var permises = [1, 2, 3].map(function (v) { var o = JSON.parse(reference); o.profondeurExtremite = v; return vp.ouvrirTexte(JSON.stringify(o)) === true && $('#vi-profondeur').value === String(v) && vp.reglages().profondeurExtremite === v; });
-    verifier('profondeurs 1, 2 et 3 écrites dans un fichier : acceptées, le réglage affiché suit', permises.every(Boolean), permises.join());
-
-    // Anciens fichiers (premier catalogue) : plateau retouché, bibliothèque, partie.
-    verifier('ancien plateau retouché (fixtures-v1/plateau-retouche.json) : ouvert, 67 pièces, bandeau « ancien catalogue », réglage par défaut, relisible', vp.ouvrirTexte(RECETTE_ANCIEN_RETOUCHE) === true && vp.plateau().pieces.length === 67
-      && !$('#pl-ancien').hidden && $('#vi-profondeur').value === '2' && !('profondeurExtremite' in vp.plateau()) && !('deploiements' in vp.plateau()) && relisible(vp) && P.modeles(vp.plateau()).length === 1, vp.plateau().pieces.length);
-    var texteControles = $('#pl-controles').textContent;
-    verifier('ancien plateau retouché, contrôle 1 : « Plateau de l’ancien catalogue : 56 tuiles d’une case… » ; seule la montagne d’une case reste « à prévoir en plus » ; rien sur des pièces de terrain à poser',
-      /Plateau de l’ancien catalogue : 56 tuiles d’une case de ce catalogue \(40 × Plaine, 5 × Forêt, 5 × Marais, 6 × Ville \(ancien catalogue\)\)/.test(texteControles)
-      && /Tuiles à prévoir en plus du catalogue \(1\) : 1 × Montagne d’une case\./.test(texteControles) && !/Pièces de terrain restantes|pièces? de terrain à poser/.test(texteControles)
-      && $('#pl-etape-titre').textContent === 'Plateau de l’ancien catalogue', texteControles.slice(0, 500));
-    mode('bibliotheque');
-    var avantImport = bib.liste().length;
-    verifier('ancienne bibliothèque (fixtures-v1/bibliotheque.json) importée : ses 2 fiches entrent, avec leur résumé', bib.importerTexte(RECETTE_ANCIENNE_BIBLIOTHEQUE) === true && bib.liste().length === avantImport + 2
-      && /Plateau retouché/.test($('#bi-liste').textContent) && /Plateau généré/.test($('#bi-liste').textContent), $('#barre-etat').textContent);
-    var ficheRetouche = bib.liste().filter(function (x) { return /Plateau retouché/.test(x.nom); })[0];
-    clic($('#bi-liste [data-ouvrir="' + ficheRetouche.id + '"]'));
-    verifier('fiche « Plateau retouché » de l’ancienne bibliothèque : ouverte, 67 pièces, 7 villes, bandeau affiché', vp.plateau().pieces.length === 67 && P.villes(vp.plateau()).length === 7 && !$('#pl-ancien').hidden
-      && vp.plateau().camps.vert.length === 2);
-    mode('generer');
-    AT.app.montrer('partie');
-    verifier('ancienne partie (fixtures-v1/partie.json) : ouverte, 91 cases dessinées, villes de déploiement des rangées extrêmes', vq.ouvrirTexte(RECETTE_ANCIENNE_PARTIE) === true && casesDessinees(vq.vue) === 91
-      && vq.etat().plateau.camps.vert.length === 2 && vq.etat().plateau.camps.rouge.length === 2, $('#barre-etat').textContent);
-    var ancienne = vq.etat(), joueur = ancienne.actif, libreV = ancienne.plateau.camps[joueur].filter(function (k) { return !ancienne.bataillons[joueur].some(function (b) { return b.case === k; }); })[0];
-    if (libreV && $$('[data-main="' + joueur + '"] .at-carte').length) {
-      clic($$('[data-main="' + joueur + '"] .at-carte')[0]);
-      clicCase(vq.vue, libreV);
-      verifier('ancienne partie : on y forme encore un bataillon sur une ville de déploiement', vq.etat().bataillons[joueur].some(function (b) { return b.case === libreV; }), $('#barre-etat').textContent);
-    } else lignes.push('INFO  ancienne partie : aucune ville de déploiement libre ou aucune carte en main pour ' + joueur + ' ; formation non essayée');
-    AT.app.montrer('plateau');
-    verifier('bibliothèque remise à vide', viderBibliotheque());
-    vp.ouvrirTexte(reference);
-    verifier('réglages remis à leur valeur par défaut', reglagesParDefaut());
-    plateauDeReference();
-    AT.app.montrer('partie');
-  });
 
   scenario('Testeur C2 : partie fictive (former sur une ville de déploiement, déplacer, événement refusé, capture), exports avec les villes', async function () {
     var vp = AT.app.vues.plateau, vq = AT.app.vues.partie, P = AT.plateau, vue = vq.vue;
@@ -3473,12 +2945,12 @@
     var textes = $('#barre-etat').textContent + ' / ' + (($('#pa-avertissement') || {}).textContent || '');
     var proposees = AT.vuePlateau.casesAdmissibles(e.plateau, id, []);
     verifier('tuile d’événement ' + id + ' refusée sur une ville de déploiement, avec la raison ; aucune ville (déploiement, neutre, centre) parmi les cases proposées', !!id && e.plateau.recouvrements.length === 0
-      && /jamais sur une ville de déploiement/.test(textes) && P.villes(e.plateau).every(function (k) { return proposees.indexOf(k) === -1; }), textes);
+      && /jamais sur une ville./.test(textes) && P.villes(e.plateau).every(function (k) { return proposees.indexOf(k) === -1; }), textes);
     if ($('#pa-renoncer')) clic($('#pa-renoncer'));
     if (proposees.length) {
       clicCase(vue, proposees[0]);
       e = vq.etat();
-      verifier('la même tuile se pose sur une case permise', e.plateau.recouvrements.length === 1 && e.plateau.recouvrements[0].cle === proposees[0] && e.plateau.deploiements.length === 4, $('#barre-etat').textContent);
+      verifier('la même tuile se pose sur une case permise', e.plateau.recouvrements.length === 1 && e.plateau.recouvrements[0].cle === proposees[0] && e.plateau.deploiements.length === 6, $('#barre-etat').textContent);
     } else if ($('[data-defausser-evenement="' + id + '"]')) clic($('[data-defausser-evenement="' + id + '"]'));
     var textePartie = vq.texteEnregistrement(), etatAvant = JSON.stringify(vq.etat());
     verifier('partie enregistrée puis rouverte : état identique (pions, captures, tuile d’événement, villes de déploiement)', vq.ouvrirTexte(textePartie) === true && JSON.stringify(vq.etat()) === etatAvant && vq.etat().villes[cible] === j);
@@ -3541,7 +3013,7 @@
     var alertesConstruction = $$('#pl-controles [data-groupe="construction"][data-niveau="alerte"]');
     verifier('I1 : une seule alerte de construction, « 14 monoblocs d’un ancien catalogue », cases à montrer', alertesConstruction.length === 1 && /14 monoblocs d’un ancien catalogue sur le plateau/.test(alertesConstruction[0].textContent)
       && !$('#pl-controles [data-niveau="erreur"]'), alertesConstruction.map(function (e) { return e.textContent.slice(0, 80); }).join(' | '));
-    verifier('I1 (et I3) : ses villes neutres tenues par une seule tuile sont une alerte, pas une erreur', /villes? neutres? tenues? par une seule tuile/.test($('#pl-controles').textContent) && vp.bilan().villes.erreurs === 0 && vp.bilan().alertes === 2,
+    verifier('I1 : ses villes neutres en tuiles ajoutées (règles précédentes) sont une alerte, pas une erreur', /Règles précédentes pour les villes : 2 villes neutres en tuiles ajoutées/.test($('#pl-controles').textContent) && vp.bilan().villes.erreurs === 0 && vp.bilan().alertes === 2,
       $('#pl-bilan').textContent);
     mode('creer');
     verifier('I1, « reste à faire » : aucune pièce de terrain à poser, les villes suivies, pas d’étape « construction »', !!$('#cr-reste-precedent') && !$('#cr-reste [data-etape="construction"]') && !$('#cr-reste [data-reste="pieces"]')
@@ -3552,10 +3024,10 @@
     clic($('#vi-retirer'));
     mode('generer');
     verifier('I1 : ses villes retirées, l’étape se juge sur les villes seules (« villes », aucune erreur, mode « Villes » proposé)', vp.bilan().etape === 'villes' && vp.bilan().erreurs === 0 && vp.bilan().construction.restantes === 0
-      && $('#pl-mode-villes').getAttribute('data-propose') === 'oui' && /Villes à poser : 2 villes de déploiement pour Vert/.test($('#pl-etape').textContent) && relisible(vp), $('#pl-etape').textContent);
+      && $('#pl-mode-villes').getAttribute('data-propose') === 'oui' && /Villes à poser : 2 villes neutres, 2 villes de déploiement pour Vert/.test($('#pl-etape').textContent) && relisible(vp), $('#pl-etape').textContent);
     clic($('#pl-annuler'));
     AT.app.montrer('inventaire');
-    verifier('I1, inventaire : pas de section « Ancien catalogue » (ce n’est pas un plateau du premier catalogue), aucune erreur JavaScript', !$('#inv-ancien') && /Catalogue : 28 pièces/.test($('#inv-totaux').textContent));
+    verifier('I1, inventaire : pas de section « Ancien catalogue » (ce n’est pas un plateau du premier catalogue), aucune erreur JavaScript', !$('#inv-ancien') && /Catalogue : 26 pièces/.test($('#inv-totaux').textContent));
     AT.app.montrer('partie');
     $('#pa-graine').value = '3';
     clic($('#pa-nouvelle'));
@@ -3569,7 +3041,7 @@
     mode('pinceau');
     verifier('I2 : l’aide du pinceau dit « hors règles, signalées en erreur par les contrôles »', /HORS RÈGLES, signalées en erreur par les contrôles \(le plateau reste enregistrable\)/.test($('#pi-panneau').textContent));
     clic($('#pi-terrain-foret'));
-    var libre = V.anneau(vp.plateau())[0];
+    var libre = anneauVide(vp.plateau())[0];
     clicCase(vue, libre);
     var horsRegles = $$('#pl-controles [data-groupe="construction"][data-niveau="erreur"]').filter(function (e) { return /Hors règles/.test(e.textContent); })[0];
     verifier('I2 : forêt d’une case peinte sur un plateau complet : posée (une étape), le message du pinceau dit « hors règles »', pieceEn(vp, libre).modele === 'F' && /Hors règles \(le terrain se construit en monoblocs de 3 ou 4 cases\) : signalé par les contrôles/.test($('#pi-message').textContent),
@@ -3612,7 +3084,7 @@
     var perso = P.modeles(vp.plateau())[0];
     mode('creer');
     var place = null;
-    V.anneau(vp.plateau()).forEach(function (k) { var c = AT.hex.decle(k); if (!place && perso && VC.essaiPose(vp.plateau(), perso.id, c.q, c.r, 0, null).ok) place = k; });
+    anneauVide(vp.plateau()).forEach(function (k) { var c = AT.hex.decle(k); if (!place && perso && VC.essaiPose(vp.plateau(), perso.id, c.q, c.r, 0, null).ok) place = k; });
     if (perso && place) { clic($('#pl-stock [data-modele="' + perso.id + '"]')); clicCase(vue, place); touche('Escape'); }
     var constatPre = $$('#pl-controles [data-niveau="erreur"]').filter(function (e) { return /tout en plaine/.test(e.textContent); })[0];
     verifier('I2 : ce monobloc posé : erreur « Hors règles : 1 monobloc tout en plaine (1 monobloc personnel (Grand pré)) », 3 cases à montrer', !!perso && !!place && !!constatPre
@@ -3621,37 +3093,7 @@
     mode('generer');
     vp.ouvrirTexte(conforme);
 
-    // ---- I3 et I4 : la ville neutre.
-    mode('villes');
-    verifier('I4 / M9 : le rappel des règles dit « n’importe où sur le flanc, tenue par au moins 2 tuiles différentes », plus « à mi-hauteur »', /n’importe où sur le flanc, tenue par au moins 2 tuiles différentes/.test($('#vi-panneau').textContent)
-      && !/mi-hauteur/.test($('#vi-panneau').textContent));
-    var neutre = P.etatVilles(vp.plateau()).neutres[0];
-    clicCase(vue, neutre.cle);
-    clic($('#vi-outil-neutre'));
-    var terrainVilles = P.cases(vp.plateau(), { sansVilles: true }), etendue = P.etendueSurCases(terrainVilles), tiers = Math.floor((etendue.bas - etendue.haut + 1) / 3);
-    var horsTiers = function (k) { var r = AT.hex.decle(k).r; return r < etendue.haut + tiers || r > etendue.bas - tiers; };
-    var placesN = V.places(vp.plateau(), 'neutre'), dehors = placesN.filter(horsTiers);
-    var tenues = placesN.every(function (k) { return new Set(AT.hex.voisines(k).filter(function (v) { return terrainVilles[v]; }).map(function (v) { return terrainVilles[v].piece; })).size >= 2; });
-    verifier('I4 : les places en surbrillance couvrent tout le flanc (certaines hors du tiers central des rangées) ; I3 : chacune touche 2 pièces distinctes (calcul refait)', marques(vue, 'at-admissible') === placesN.length
-      && placesN.length > 0 && tenues, placesN.length + ' places, ' + dehors.length + ' hors du tiers central');
-    // Une case de flanc tenue par une seule pièce : refusée avec la raison.
-    var unePiece = P.placesNeutresSurCases(P.cases(vp.plateau()), { contactEnCases: true, sansEcart: true }).filter(function (x) { return x.pieces === 1 && x.flanc === neutre.flanc; })[0];
-    if (unePiece) {
-      ctxMessageEfface();
-      var rangN = vp.etat().rang;
-      clicCase(vue, unePiece.cle);
-      verifier('I3 : ville neutre sur une case qui touche 2 cases d’une seule pièce : refusée (« tenue par au moins 2 tuiles différentes »)', vp.etat().rang === rangN
-        && /^Pose refusée : Cette case ne touche que 1 pièce du plateau \(\d cases\) ; une ville neutre doit être tenue par au moins 2 tuiles différentes\.$/.test($('#barre-etat').textContent), $('#barre-etat').textContent);
-    } else lignes.push('INFO  I3 : aucune case de flanc tenue par une seule pièce sur ce plateau ; refus vérifié par les tests Node');
-    if (dehors.length) {
-      clicCase(vue, dehors[0]);
-      verifier('I4 : ville neutre posée sur le flanc, hors du tiers central : acceptée, plateau complet, AUCUNE erreur', P.etatVilles(vp.plateau()).neutres.length === 2 && vp.bilan().erreurs === 0 && vp.bilan().etape === 'complet'
-        && /Ville neutre posée en/.test($('#barre-etat').textContent) && horsTiers(dehors[0]), $('#barre-etat').textContent + ' / ' + $('#pl-bilan').textContent);
-    } else {
-      lignes.push('INFO  I4 : sur ce plateau, aucune place de flanc hors du tiers central ne reste à 4 pas des autres villes ; vérifié par les tests Node');
-      clicCase(vue, placesN[0]);
-    }
-    vp.ouvrirTexte(conforme);
+    // (I3 et I4, « ville neutre sur un flanc, tenue par 2 tuiles » : règles abandonnées le 2026-11-20, vérifications retirées.)
 
     // ---- M6 : le noyau ne se tourne pas et ne se déplace pas.
     mode('generer');
@@ -3669,11 +3111,11 @@
     verifier('M6 : « Déplacer » le noyau : refusé, aucun déplacement en attente', fixe.test($('#barre-etat').textContent) && vp.etat().aPoser === null && vp.etat().rang === rangM6, $('#barre-etat').textContent);
     ctxMessageEfface();
     touche('Delete');
-    verifier('M6 : touche Suppr sur le noyau : même message', fixe.test($('#barre-etat').textContent) && vp.plateau().pieces.length === 26);
+    verifier('M6 : touche Suppr sur le noyau : même message', fixe.test($('#barre-etat').textContent) && vp.plateau().pieces.length === 24);
     touche('Escape');
     mode('creer');
     ctxMessageEfface();
-    glisserCases(vue, ['1,0', V.anneau(vp.plateau())[0]]);
+    glisserCases(vue, ['1,0', anneauVide(vp.plateau())[0]]);
     verifier('M6 : glisser le noyau en mode « Créer à la main » : refusé, le noyau reste centré, aucune étape', fixe.test($('#barre-etat').textContent) && vp.etat().rang === rangM6 && JSON.stringify(vp.plateau()) === conforme
       && marques(vue, 'at-fantome') === 0, $('#barre-etat').textContent);
     touche('Escape');
@@ -3751,13 +3193,9 @@
       var patron = vp.plateau();
       mode('villes');
       clic($('#vi-retirer'));
-      // Les deux villes de Vert et une ville neutre sont posées ; Rouge choisit : ses places sont en surbrillance.
-      clic($('#vi-outil-vert'));
+      // Les deux villes neutres, celles de Vert et une de Rouge sont posées ; Rouge choisit : les Plaines admissibles sont en surbrillance.
+      AT.plateau.etatVilles(patron).neutres.forEach(function (n) { clicCase(vue, n.cle); });
       patron.camps.vert.forEach(function (k) { clicCase(vue, k); });
-      clic($('#vi-outil-neutre'));
-      var neutre = patron.pieces.filter(function (p) { return p.modele === 'VN'; })[0];
-      clicCase(vue, AT.hex.cle(neutre.q, neutre.r));
-      clic($('#vi-outil-rouge'));
       clicCase(vue, patron.camps.rouge[0]);
       vp.vue.svg.blur();
     },
@@ -3767,7 +3205,7 @@
       touche('Escape');
       mode('pinceau');
       // Quelques tuiles d'une case peintes contre le terrain : hors catalogue, annoncées par le message du pinceau.
-      var libres = AT.vueVilles.anneau(vp.plateau());
+      var libres = anneauVide(vp.plateau());
       clic($('#pi-terrain-marais'));
       glisserCases(vue, libres.slice(0, 3));
       clic($('#pi-terrain-foret'));
@@ -3800,7 +3238,7 @@
       bib.enregistrerSous('Mon plateau fait à la main');
       mode('pinceau');
       clic($('#pi-terrain-plaine'));
-      clicCase(vp.vue, AT.vueVilles.anneau(vp.plateau())[5]);
+      clicCase(vp.vue, anneauVide(vp.plateau())[5]);
       mode('bibliotheque');
     }
   };
@@ -3839,46 +3277,39 @@
     verifier('second lancement : plateau repris dessiné (7 + 5 cases)', casesDessinees(vp.vue) === 12, casesDessinees(vp.vue));
   }
 
-  // Catalogue 2 : un plateau généré à 3 rangées (une ville de déploiement en troisième rangée), gardé en fiche de la
-  // bibliothèque puis retouché (une ville neutre retirée) : le second lancement doit le reprendre SANS erreur.
+  // Villes libres : un plateau généré, gardé en fiche de la bibliothèque puis retouché (une ville neutre retirée) :
+  // le second lancement doit le reprendre SANS erreur, avec ses villes posées par-dessus une Plaine.
   async function persistanceEcrireVilles() {
     var vp = AT.app.vues.plateau, B = AT.bibliotheque, P = AT.plateau, vue = vp.vue;
     var reel = B.stockageNavigateur();
     verifier('stockage réel du navigateur disponible', reel !== null && vp.bibliotheque.stockage() === reel && !vp.bibliotheque.avis(), String(vp.bibliotheque.avis()));
-    choisir($('#vi-profondeur'), 3);
-    var graine = null;
-    for (var g = 1; g <= 40 && !graine; g++) {
-      $('#pl-graine').value = String(g);
-      clic($('#pl-generer'));
-      if ($('#pl-avis').hidden && villesHorsExtremite(vp.plateau(), 2).length) graine = g;
-    }
-    verifier('plateau généré à 3 rangées, une ville en troisième rangée (graine ' + graine + ') : aucune erreur', !!graine && vp.bilan().erreurs === 0 && vp.plateau().profondeurExtremite === 3);
-    verifier('enregistré dans la bibliothèque', vp.bibliotheque.enregistrerSous('Villes profondes ' + vp.bibliotheque.liste().length) === true);
+    $('#pl-graine').value = '1';
+    clic($('#pl-generer'));
+    verifier('plateau généré (graine 1) : 6 villes posées par-dessus une Plaine, aucune erreur', $('#pl-avis').hidden && vp.bilan().erreurs === 0 && P.deploiements(vp.plateau()).length === 6);
+    verifier('enregistré dans la bibliothèque', vp.bibliotheque.enregistrerSous('Villes libres ' + vp.bibliotheque.liste().length) === true);
     mode('villes');
     clicCase(vue, P.etatVilles(vp.plateau()).neutres[0].cle);
     await attendre(1000);
     var travail = B.chargerTravail(reel);
-    verifier('travail en cours écrit dans le stockage réel : 25 pièces, 4 villes de déploiement, profondeur 3', travail.ok && !!travail.plateau && travail.plateau.pieces.length === 25 && travail.plateau.deploiements.length === 4
-      && travail.plateau.profondeurExtremite === 3, travail.raison);
-    lignes.push('PERSISTANCE écriture (villes) : adresse ' + window.location.protocol + '//' + window.location.host + ', graine ' + graine + ', bibliothèque = ' + B.charger(reel).liste.length + ' fiche(s), travail en cours = '
-      + (travail.plateau ? travail.plateau.pieces.length + ' pièces, profondeur ' + travail.plateau.profondeurExtremite : 'aucun'));
+    verifier('travail en cours écrit dans le stockage réel : 24 pièces, 5 villes posées (une ville neutre retirée)', travail.ok && !!travail.plateau && travail.plateau.pieces.length === 24 && travail.plateau.deploiements.length === 5, travail.raison);
+    lignes.push('PERSISTANCE écriture (villes) : adresse ' + window.location.protocol + '//' + window.location.host + ', bibliothèque = ' + B.charger(reel).liste.length + ' fiche(s), travail en cours = '
+      + (travail.plateau ? travail.plateau.pieces.length + ' pièces, ' + travail.plateau.deploiements.length + ' villes posées' : 'aucun'));
   }
 
   function persistanceLireVilles() {
     var vp = AT.app.vues.plateau, B = AT.bibliotheque, P = AT.plateau, reel = B.stockageNavigateur();
-    var liste = reel ? B.charger(reel).liste : [], fiche = liste.filter(function (x) { return /^Villes profondes \d+$/.test(x.nom); })[0];
-    lignes.push('PERSISTANCE lecture (villes) : bibliothèque = ' + liste.length + ' fiche(s) [' + liste.map(function (x) { return x.nom; }).join(' ; ') + '], plateau affiché = ' + vp.plateau().pieces.length + ' pièces, profondeur '
-      + vp.plateau().profondeurExtremite + ', ' + vp.bilan().erreurs + ' erreur(s), étape ' + vp.bilan().etape + ', barre d’état = « ' + $('#barre-etat').textContent + ' », barre du haut = « ' + $('#at-nom-plateau').textContent + ' »');
-    verifier('second lancement : la fiche à 3 rangées est retrouvée avec sa profondeur et ses 4 villes de déploiement', !!fiche && fiche.plateau.profondeurExtremite === 3 && fiche.plateau.deploiements.length === 4
-      && fiche.plateau.pieces.length === 26, liste.length);
-    verifier('second lancement : le travail en cours est repris (25 pièces, 6 villes), avec un message discret', vp.plateau().pieces.length === 25 && P.villes(vp.plateau()).length === 6
+    var liste = reel ? B.charger(reel).liste : [], fiche = liste.filter(function (x) { return /^Villes libres \d+$/.test(x.nom); })[0];
+    lignes.push('PERSISTANCE lecture (villes) : bibliothèque = ' + liste.length + ' fiche(s) [' + liste.map(function (x) { return x.nom; }).join(' ; ') + '], plateau affiché = ' + vp.plateau().pieces.length + ' pièces, '
+      + vp.bilan().erreurs + ' erreur(s), étape ' + vp.bilan().etape + ', barre d’état = « ' + $('#barre-etat').textContent + ' », barre du haut = « ' + $('#at-nom-plateau').textContent + ' »');
+    verifier('second lancement : la fiche est retrouvée avec ses 6 villes (2 neutres, 2 par camp)', !!fiche && fiche.plateau.deploiements.length === 6 && fiche.plateau.pieces.length === 24
+      && fiche.plateau.deploiements.filter(function (d) { return d.camp === 'neutre'; }).length === 2, liste.length);
+    verifier('second lancement : le travail en cours est repris (24 pièces, 6 villes dont celle du centre), avec un message discret', vp.plateau().pieces.length === 24 && P.villes(vp.plateau()).length === 6
       && /Travail en cours repris \(sauvegardé le \d\d\/\d\d\/\d{4} à \d\d:\d\d\)/.test($('#barre-etat').textContent), $('#barre-etat').textContent);
-    verifier('second lancement : la profondeur de 3 rangées est relue (réglage affiché à 3), la ville de troisième rangée n’est PAS en erreur, il reste une ville neutre à poser',
-      vp.plateau().profondeurExtremite === 3 && $('#vi-profondeur').value === '3' && vp.reglages().profondeurExtremite === 3 && villesHorsExtremite(vp.plateau(), 2).length > 0 && vp.bilan().erreurs === 0
-      && vp.bilan().etape === 'villes' && /1 ville neutre/.test($('#pl-etape').textContent), $('#pl-bilan').textContent + ' / ' + $('#pl-etape').textContent);
-    verifier('second lancement : l’entrée ouverte est retrouvée, marquée « modifié »', /^Plateau : « Villes profondes \d+ » \(modifié\)$/.test($('#at-nom-plateau').textContent), $('#at-nom-plateau').textContent);
-    verifier('second lancement : plateau repris dessiné avec ses villes (92 cases, 2 + 2 villes de déploiement au liseré du camp)', casesDessinees(vp.vue) === 92 && $$('polygon[stroke="#007A4D"]', vp.vue.svg).length === 2
-      && $$('polygon[stroke="#D8321C"]', vp.vue.svg).length === 2, casesDessinees(vp.vue));
+    verifier('second lancement : aucune erreur, étape « villes », il reste une ville neutre à poser', vp.bilan().erreurs === 0 && vp.bilan().etape === 'villes' && /1 ville neutre/.test($('#pl-etape').textContent),
+      $('#pl-bilan').textContent + ' / ' + $('#pl-etape').textContent);
+    verifier('second lancement : l’entrée ouverte est retrouvée, marquée « modifié »', /^Plateau : « Villes libres \d+ » \(modifié\)$/.test($('#at-nom-plateau').textContent), $('#at-nom-plateau').textContent);
+    verifier('second lancement : plateau repris dessiné avec ses villes (91 cases, 2 + 2 villes de déploiement au liseré du camp, 1 ville neutre au liseré doré)', casesDessinees(vp.vue) === 91 && $$('polygon[stroke="#007A4D"]', vp.vue.svg).length === 2
+      && $$('polygon[stroke="#D8321C"]', vp.vue.svg).length === 2 && $$('polygon[stroke="#8A6400"]', vp.vue.svg).length === 1, casesDessinees(vp.vue));
   }
 
   // ================================================================== G. état de démonstration (pour les captures d'écran)
