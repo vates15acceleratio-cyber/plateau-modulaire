@@ -89,9 +89,9 @@ function controlerRangement(fragment) {
 }
 
 test('réglages : valeurs par défaut, adresse lue avec une liste de valeurs admises, aller-retour', () => {
-  assert.deepStrictEqual(DEFAUT, { format: 'A3', orientation: 'paysage', fond: true, etiquettes: true, ville: 45, terrain: true, villes: true, evenements: true });
-  const r = PL.lireReglages('#format=A4&orientation=portrait&fond=non&etiquettes=non&ville=40&terrain=non&villes=oui&evenements=non');
-  assert.deepStrictEqual(r, { format: 'A4', orientation: 'portrait', fond: false, etiquettes: false, ville: 40, terrain: false, villes: true, evenements: false });
+  assert.deepStrictEqual(DEFAUT, { format: 'A3', orientation: 'paysage', fond: true, etiquettes: true, ville: 45, terrain: true, villes: true, evenements: true, miroir: false });
+  const r = PL.lireReglages('#format=A4&orientation=portrait&fond=non&etiquettes=non&ville=40&terrain=non&villes=oui&evenements=non&miroir=oui');
+  assert.deepStrictEqual(r, { format: 'A4', orientation: 'portrait', fond: false, etiquettes: false, ville: 40, terrain: false, villes: true, evenements: false, miroir: true });
   assert.deepStrictEqual(PL.lireReglages('#' + PL.ecrireReglages(r)), r);
   assert.deepStrictEqual(PL.lireReglages('format=A5&orientation=<svg>&ville=41&__proto__=oui&constructor=A3&fond=peut-etre&=&x'), DEFAUT);
   assert.deepStrictEqual(PL.feuille(DEFAUT), { l: 420, h: 297 });
@@ -216,6 +216,53 @@ test('rangement : A3 portrait, A4, sans fond perdu, villes de 40 mm, une seule f
   assert.deepStrictEqual([vide.planches.length, vide.borne, vide.horsFormat.length], [0, 0, 0]);
 });
 
+test('miroir : chaque pièce est l’image miroir gauche-droite de la pièce d’origine, sur des planches autonomes', () => {
+  const miroir = PL.lireReglages('miroir=oui'), pieces = PL.listePieces(DEFAUT);
+  const droit = PL.ranger(pieces, DEFAUT), retourne = controlerRangement('miroir=oui');
+  const L = PL.feuille(miroir).l, nom = (s) => Math.round(s.x * 1000) + ':' + Math.round(s.y * 1000);
+  assert.strictEqual(retourne.planches.length, droit.planches.length, 'même nombre de planches');
+  let vues = 0;
+  retourne.planches.forEach((poses, n) => {
+    assert.strictEqual(poses.length, droit.planches[n].length);
+    poses.forEach((m, i) => {
+      const o = droit.planches[n][i];
+      vues += 1;
+      assert.strictEqual(m.piece.ref, o.piece.ref);
+      assert.strictEqual(m.piece.miroir, true);
+      assert.ok(!o.piece.miroir, 'la pièce d’origine n’est pas modifiée');
+      // La pièce : mêmes terrains, cases retournées (q, r) → (−q − r, r), soit x → −x et y inchangé.
+      o.piece.cases.forEach((c, k) => {
+        const a = H.centre(c.q, c.r, 45), b = H.centre(m.piece.cases[k].q, m.piece.cases[k].r, 45);
+        assert.ok(Math.abs(a.x + b.x) < TOLERANCE && Math.abs(a.y - b.y) < TOLERANCE);
+        assert.strictEqual(m.piece.cases[k].terrain, c.terrain);
+      });
+      // Sur la planche : chaque case et chaque terrain à la place symétrique par rapport à l'axe vertical médian.
+      o.cases.forEach((c, k) => {
+        assert.ok(Math.abs(m.cases[k].x - (L - c.x)) < TOLERANCE && Math.abs(m.cases[k].y - c.y) < TOLERANCE);
+        assert.strictEqual(m.cases[k].terrain, c.terrain);
+      });
+      // Le contour (trait de coupe) du miroir est le miroir exact du contour d'origine.
+      const d = PL.contour(o.cases, o.piece.plat)[0].map((s) => nom({ x: L - (o.x + s.x), y: o.y + s.y })).sort();
+      const g = PL.contour(m.cases, m.piece.plat)[0].map((s) => nom({ x: m.x + s.x, y: m.y + s.y })).sort();
+      assert.deepStrictEqual(g, d, o.piece.ref + ' : contour en miroir');
+    });
+  });
+  assert.strictEqual(vues, pieces.length);
+  // Une forme sans symétrie change vraiment : le miroir du coude F12C n'est aucune rotation de F12C, mais c'est F12D.
+  const forme = (cases) => { const pts = cases.map((c) => H.centre(c.q, c.r, 45)), x0 = Math.min(...pts.map((p) => p.x)), y0 = Math.min(...pts.map((p) => p.y)); return pts.map((p, i) => Math.round((p.x - x0) * 100) + ':' + Math.round((p.y - y0) * 100) + ':' + cases[i].terrain).sort().join(' '); };
+  const rotations = (cases) => [0, 1, 2, 3, 4, 5].map((k) => forme(cases.map((c) => Object.assign(H.tourner(c.q, c.r, k), { terrain: c.terrain }))));
+  const f12c = pieces.find((p) => p.id === 'F12C'), f12d = pieces.find((p) => p.id === 'F12D');
+  assert.ok(!rotations(f12c.cases).includes(forme(PL.pieceMiroir(f12c).cases)));
+  assert.ok(rotations(f12d.cases).includes(forme(PL.pieceMiroir(f12c).cases)));
+  // Deux miroirs redonnent la pièce.
+  assert.deepStrictEqual(PL.pieceMiroir(PL.pieceMiroir(f12c)).cases, f12c.cases);
+  // Étiquettes et cartouche.
+  assert.strictEqual(PL.etiquette(PL.pieceMiroir(f12c)), 'F12C Bosquet (miroir)');
+  assert.strictEqual(PL.etiquette(f12c), 'F12C Bosquet');
+  assert.strictEqual(PL.etiquette(PL.pieceMiroir(pieces.find((p) => p.camp === 'vert'))), 'VD · Vert');
+  assert.strictEqual(PL.cartouche(2, 4, miroir, '2026-11-20').titre, 'Planche 2 / 4 — miroir');
+});
+
 test('rangement : une pièce trop grande pour la feuille est signalée, pas imprimée de travers', () => {
   const geante = { ref: 'G#1', id: 'G', nom: 'Géante', genre: 'modele', famille: 'terrain', plat: 45, cases: H.disque(3).map((k) => Object.assign(H.decle(k), { terrain: 'plaine' })) };
   const res = PL.ranger([geante].concat(PL.listePieces(PL.lireReglages('terrain=non&villes=non'))), PL.lireReglages('format=A4'));
@@ -288,6 +335,18 @@ test('dessin d’une planche (faux DOM) : feuille en millimètres, un trait de c
     const sans = PL.lireReglages('etiquettes=non'), r2 = PL.ranger(PL.listePieces(sans), sans), t2 = [];
     r2.planches.forEach((poses, i) => { tous(PL.dessinerPlanche(poses, i + 1, r2.planches.length, sans, '2026-11-20'), (e) => e.nom === 'text').forEach((t) => t2.push(t.textContent)); });
     assert.ok(!t2.includes('F31 Lisière') && t2.includes('Crevasse') && t2.includes('VD · Vert') && t2.includes('Ville neutre'));
+    // Jeu en miroir : planches autonomes, avec trait de coupe, étiquettes « (miroir) » et cartouche « — miroir ».
+    const mi = PL.lireReglages('miroir=oui'), r3 = PL.ranger(PL.listePieces(mi), mi), t3 = [];
+    let coupes3 = 0;
+    r3.planches.forEach((poses, i) => {
+      const svg = PL.dessinerPlanche(poses, i + 1, r3.planches.length, mi, '2026-11-20');
+      coupes3 += tous(svg, (e) => e.attributs.class === 'pl-coupe').length;
+      assert.strictEqual(tous(svg, (e) => e.attributs.class === 'pl-barre').length, 1);
+      tous(svg, (e) => e.nom === 'text').forEach((t) => t3.push(t.textContent));
+    });
+    assert.strictEqual(coupes3, 40);
+    assert.ok(t3.includes('F31 Lisière (miroir)') && !t3.includes('F31 Lisière') && t3.includes('Crevasse') && t3.includes('VD · Rouge'));
+    assert.ok(t3.some((t) => /^Planche 1 \/ \d+ — miroir · A3 paysage · 2026-11-20 · /.test(t)));
   } finally {
     if (avant === undefined) delete globalThis.document; else globalThis.document = avant;
   }
@@ -302,7 +361,7 @@ test('page planches.html : même politique de sécurité que index.html, rien en
   assert.deepStrictEqual(page.match(/<script src="[^"]+"/g).map((s) => s.slice(13, -1)),
     ['src/hex.js', 'src/catalogue.js', 'src/plateau.js', 'src/rendu.js', 'src/planches.js']);
   assert.ok(!/https?:\/\//.test(page), 'aucune ressource distante');
-  ['format', 'orientation', 'ville', 'fond', 'etiquettes', 'terrain', 'villes', 'evenements'].forEach((nom) => {
+  ['format', 'orientation', 'ville', 'fond', 'etiquettes', 'terrain', 'villes', 'evenements', 'miroir'].forEach((nom) => {
     assert.ok(page.includes('name="' + nom + '"'), 'réglage ' + nom);
   });
   assert.ok(/<button type="button" id="pl-imprimer">Imprimer<\/button>/.test(page));

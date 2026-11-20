@@ -34,6 +34,7 @@ Lancer
 Imprimer les tuiles
   Onglet Inventaire, lien "Planches d'impression (A3)" (ou ouvrez planches.html). Imprimez a 100 %,
   sans ajustement a la page, puis verifiez a la regle la barre de 100 mm en bas de chaque planche.
+  La case "Miroir" donne le meme jeu de tuiles retourne gauche-droite, a imprimer a part (au cas ou).
 
 Vos plateaux
   La bibliotheque et le travail en cours sont gardes par le navigateur, sur ce poste.

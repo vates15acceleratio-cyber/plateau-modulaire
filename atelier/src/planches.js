@@ -44,15 +44,19 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   var RACINE3 = Math.sqrt(3);
   var EPSILON = 1e-7;
 
-  /** Réglages par défaut ; `ville` est la taille des tuiles de ville (45 ou 40 mm). */
-  var DEFAUT = { format: 'A3', orientation: 'paysage', fond: true, etiquettes: true, ville: 45, terrain: true, villes: true, evenements: true };
-  /** Valeurs admises dans l'adresse (#format=A3&orientation=paysage&fond=oui&etiquettes=oui&ville=45&terrain=oui&villes=oui&evenements=oui). */
+  /**
+   * Réglages par défaut ; `ville` est la taille des tuiles de ville (45 ou 40 mm) ; `miroir` donne le même jeu de
+   * tuiles retourné gauche-droite (planches autonomes, à imprimer à part).
+   */
+  var DEFAUT = { format: 'A3', orientation: 'paysage', fond: true, etiquettes: true, ville: 45, terrain: true, villes: true, evenements: true, miroir: false };
+  /** Valeurs admises dans l'adresse (#format=A3&orientation=paysage&fond=oui&etiquettes=oui&ville=45&terrain=oui&villes=oui&evenements=oui&miroir=non). */
   var ADMIS = {
     format: { A3: 'A3', A4: 'A4' }, orientation: { paysage: 'paysage', portrait: 'portrait' },
     fond: { oui: true, non: false }, etiquettes: { oui: true, non: false }, ville: { '45': 45, '40': 40 },
-    terrain: { oui: true, non: false }, villes: { oui: true, non: false }, evenements: { oui: true, non: false }
+    terrain: { oui: true, non: false }, villes: { oui: true, non: false }, evenements: { oui: true, non: false },
+    miroir: { oui: true, non: false }
   };
-  var CLES = ['format', 'orientation', 'fond', 'etiquettes', 'ville', 'terrain', 'villes', 'evenements'];
+  var CLES = ['format', 'orientation', 'fond', 'etiquettes', 'ville', 'terrain', 'villes', 'evenements', 'miroir'];
   var possede = Object.prototype.hasOwnProperty;
 
   /** Réglages lus dans le fragment d'adresse ; tout ce qui n'est pas dans la liste admise est ignoré. */
@@ -129,9 +133,38 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   /** Nom du camp d'une tuile de ville, tel qu'il est imprimé. */
   function nomCamp(camp) { return camp === 'neutre' ? 'Neutre' : (R.NOMS_CAMPS[camp] || String(camp)); }
 
-  /** Étiquette d'une pièce : identifiant puis nom (« F31 Lisière ») ; pour une ville, « VD · Vert ». */
+  /**
+   * Étiquette d'une pièce : identifiant puis nom (« F31 Lisière ») ; pour une ville, « VD · Vert ».
+   * Une pièce du catalogue en miroir porte la mention « (miroir) » après son nom.
+   */
   function etiquette(piece) {
-    return piece.genre === 'ville' ? piece.id + ' · ' + nomCamp(piece.camp) : piece.id + ' ' + piece.nom;
+    if (piece.genre === 'ville') return piece.id + ' · ' + nomCamp(piece.camp);
+    return piece.id + ' ' + piece.nom + (piece.miroir && piece.genre === 'modele' ? ' (miroir)' : '');
+  }
+
+  /**
+   * Pièce en miroir gauche-droite : mêmes cases et mêmes terrains, retournés. En coordonnées axiales, pointe en
+   * haut, le miroir d'axe vertical est (q, r) → (−q − r, r). La référence et l'identifiant ne changent pas.
+   */
+  function pieceMiroir(piece) {
+    var res = {};
+    Object.keys(piece).forEach(function (k) { res[k] = piece[k]; });
+    res.miroir = true;
+    res.cases = piece.cases.map(function (c) { return { q: 0 - c.q - c.r, r: c.r, terrain: c.terrain }; });
+    return res;
+  }
+
+  /**
+   * Pose en miroir d'une pose de ranger() : la planche entière est retournée gauche-droite (x → largeur − x).
+   * Le miroir d'une pièce tournée de k sixièmes est la pièce en miroir tournée de −k sixièmes.
+   */
+  function poseMiroir(pose, reglages) {
+    var l = feuille(reglages).l;
+    return {
+      piece: pieceMiroir(pose.piece), rotation: (6 - pose.rotation) % 6, x: l - pose.x, y: pose.y, a: pose.a,
+      cases: pose.cases.map(function (c) { return { q: 0 - c.q - c.r, r: c.r, terrain: c.terrain, x: l - c.x, y: c.y }; }),
+      boite: { x1: l - pose.boite.x2, y1: pose.boite.y1, x2: l - pose.boite.x1, y2: pose.boite.y2 }
+    };
   }
 
   /**
@@ -374,6 +407,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    *   planches: [[{piece, rotation, x, y (ancre, mm), a, cases: [{q, r, terrain, x, y}], boite: {x1, y1, x2, y2}}]],
    *   horsFormat: [pièces trop grandes pour la feuille], strategie, borne (nombre de planches impossible à battre),
    *   zone, feuille }.
+   * Avec le réglage `miroir`, les planches sont celles du rangement ordinaire, retournées gauche-droite (voir poseMiroir).
    * Déterministe : aucune part de hasard. Plusieurs façons de ranger sont essayées ; la première qui atteint la
    * borne est gardée, sinon celle qui donne le moins de planches.
    */
@@ -384,6 +418,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       if (!meilleur || r.planches.length < meilleur.planches.length) meilleur = r;
       return meilleur.planches.length <= borne;
     });
+    if (reglages.miroir) {
+      meilleur.planches = meilleur.planches.map(function (poses) { return poses.map(function (p) { return poseMiroir(p, reglages); }); });
+    }
     meilleur.borne = borne;
     meilleur.zone = zoneUtile(reglages);
     meilleur.feuille = feuille(reglages);
@@ -396,10 +433,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     return d.getFullYear() + '-' + deux(d.getMonth() + 1) + '-' + deux(d.getDate());
   }
 
-  /** Textes du cartouche d'une planche : {titre: « Planche n / N », detail, rappel}. */
+  /** Textes du cartouche d'une planche : {titre: « Planche n / N » (suivi de « — miroir » pour le jeu en miroir), detail, rappel}. */
   function cartouche(n, total, reglages, date) {
     return {
-      titre: 'Planche ' + n + ' / ' + total,
+      titre: 'Planche ' + n + ' / ' + total + (reglages.miroir ? ' — miroir' : ''),
       detail: reglages.format + ' ' + reglages.orientation + ' · ' + date,
       rappel: 'Imprimer à 100 %, sans ajustement à la page'
     };
@@ -548,7 +585,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     var f = feuille(reglages), prefixe = R.nouveauPrefixe();
     var racine = R.svg('svg', {
       classe: 'pl-feuille', width: f.l + 'mm', height: f.h + 'mm', viewBox: '0 0 ' + f.l + ' ' + f.h,
-      role: 'img', 'aria-label': 'Planche ' + n + ' sur ' + total + ' : ' + poses.map(function (p) { return p.piece.id; }).join(', ')
+      role: 'img', 'aria-label': 'Planche ' + n + ' sur ' + total + (reglages.miroir ? ', en miroir' : '') + ' : ' + poses.map(function (p) { return p.piece.id; }).join(', ')
     });
     var defs = R.svg('defs');
     racine.appendChild(defs);
@@ -600,7 +637,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         zone.appendChild(R.el('div', { classe: 'pl-planche' }, dessinerPlanche(poses, i + 1, total, reglages, date)));
       });
       var message = pieces.length
-        ? total + (total > 1 ? ' planches ' : ' planche ') + reglages.format + ' ' + reglages.orientation + ' pour ' + pieces.length + ' pièces.'
+        ? total + (total > 1 ? ' planches ' : ' planche ') + reglages.format + ' ' + reglages.orientation + ' pour ' + pieces.length + ' pièces'
+          + (reglages.miroir ? ', en miroir (tuiles retournées gauche-droite).' : '.')
         : 'Aucune famille de pièces n’est cochée.';
       if (resultat.horsFormat.length) {
         message += ' Trop grandes pour cette feuille, non imprimées : ' + resultat.horsFormat.map(function (p) { return p.id; }).join(', ') + '.';
@@ -633,7 +671,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     DEFAUT: DEFAUT, STRATEGIES: STRATEGIES,
     // logique pure
     lireReglages: lireReglages, ecrireReglages: ecrireReglages, feuille: feuille, zoneUtile: zoneUtile, listePieces: listePieces,
-    etiquette: etiquette, contour: contour, adjacences: adjacences, aireAgrandie: aireAgrandie, borneInferieure: borneInferieure,
+    etiquette: etiquette, pieceMiroir: pieceMiroir, poseMiroir: poseMiroir, contour: contour, adjacences: adjacences, aireAgrandie: aireAgrandie, borneInferieure: borneInferieure,
     orientations: orientations, ecartHexagones: ecartHexagones, ecartPoses: ecartPoses, ranger: ranger, rangerAvec: rangerAvec,
     cartouche: cartouche, dateDuJour: dateDuJour,
     // DOM et SVG
