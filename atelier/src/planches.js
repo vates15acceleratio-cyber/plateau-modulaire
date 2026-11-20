@@ -48,7 +48,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * Réglages par défaut ; `ville` est la taille des tuiles de ville (45 ou 40 mm) ; `miroir` donne le même jeu de
    * tuiles retourné gauche-droite (planches autonomes, à imprimer à part).
    */
-  var DEFAUT = { format: 'A3', orientation: 'paysage', fond: true, etiquettes: true, ville: 45, terrain: true, villes: true, evenements: true, miroir: false, captures: 5 };
+  var DEFAUT = { format: 'A3', orientation: 'paysage', fond: true, etiquettes: true, ville: 45, terrain: true, villes: true, evenements: true, miroir: false, captures: 5, or: 0, rations: 0 };
   /** Valeurs admises dans l'adresse (#format=A3&orientation=paysage&fond=oui&etiquettes=oui&ville=45&terrain=oui&villes=oui&evenements=oui&miroir=non). */
   var ADMIS = {
     format: { A3: 'A3', A4: 'A4' }, orientation: { paysage: 'paysage', portrait: 'portrait' },
@@ -56,7 +56,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     terrain: { oui: true, non: false }, villes: { oui: true, non: false }, evenements: { oui: true, non: false },
     miroir: { oui: true, non: false }, captures: { '0': 0, '3': 3, '5': 5 }
   };
-  var CLES = ['format', 'orientation', 'fond', 'etiquettes', 'ville', 'terrain', 'villes', 'evenements', 'miroir', 'captures'];
+  var CLES = ['format', 'orientation', 'fond', 'etiquettes', 'ville', 'terrain', 'villes', 'evenements', 'miroir', 'captures', 'or', 'rations'];
+  /** Réglages numériques (nombre de jetons) : entier de 0 à la borne. */
+  var NOMBRES = { or: 200, rations: 200 };
   var possede = Object.prototype.hasOwnProperty;
 
   /** Réglages lus dans le fragment d'adresse ; tout ce qui n'est pas dans la liste admise est ignoré. */
@@ -68,6 +70,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       if (i < 1) return;
       var k = morceau.slice(0, i), v = morceau.slice(i + 1);
       if (possede.call(ADMIS, k) && possede.call(ADMIS[k], v)) res[k] = ADMIS[k][v];
+      else if (possede.call(NOMBRES, k) && /^\d{1,3}$/.test(v) && Number(v) <= NOMBRES[k]) res[k] = Number(v);
     });
     return res;
   }
@@ -611,6 +614,98 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     return racine;
   }
 
+  // --------------------------------------------------------------------------------------------- jetons
+  // Jetons d'or et de ration (demande de l'utilisateur du 2026-11-20 ; dessins provisoires). L'or est un jeton ROND
+  // (une pièce frappée d'une couronne), la ration un jeton CARRÉ (un morceau de viande dont l'os dépasse) : les deux se
+  // distinguent à la forme autant qu'à la couleur, y compris en niveaux de gris. Aucun texte dessus.
+  var JETONS = {
+    or: { nom: 'Or', forme: 'rond', taille: 25, fond: '#E3B23C', bord: '#8A5A00' },
+    ration: { nom: 'Ration', forme: 'carre', taille: 22, fond: '#F1E3C4', bord: '#6B4A2B' }
+  };
+  var ORDRE_JETONS = ['or', 'ration'];
+
+  /** Jetons à imprimer : [{type}], l'or d'abord. */
+  function listeJetons(reglages) {
+    var res = [];
+    ORDRE_JETONS.forEach(function (type) {
+      var n = type === 'or' ? reglages.or : reglages.rations;
+      for (var i = 0; i < (n || 0); i++) res.push({ type: type });
+    });
+    return res;
+  }
+
+  /**
+   * Rangement des jetons en lignes, un type après l'autre : [[{type, x, y}]] (une liste par planche ; x, y = centre en
+   * millimètres). Même marge et même écart entre fonds perdus que pour les tuiles.
+   */
+  function rangerJetons(reglages) {
+    var zone = zoneUtile(reglages), d = debord(reglages), planches = [], courante = [], y = zone.y0, dernier = null;
+    var x = zone.x0;
+    listeJetons(reglages).forEach(function (j) {
+      var t = JETONS[j.type], boite = t.taille + 2 * d;
+      if (dernier !== null && dernier !== j.type) { x = zone.x0; y += JETONS[dernier].taille + 2 * d + ECART; }   // nouveau type : nouvelle ligne
+      if (x + boite > zone.x1 + EPSILON) { x = zone.x0; y += boite + ECART; }
+      if (y + boite > zone.y1 + EPSILON) { planches.push(courante); courante = []; x = zone.x0; y = zone.y0; }
+      courante.push({ type: j.type, x: arrondi(x + boite / 2), y: arrondi(y + boite / 2) });
+      x += boite + ECART;
+      dernier = j.type;
+    });
+    if (courante.length) planches.push(courante);
+    return planches;
+  }
+
+  /** Contour d'un jeton agrandi de `plus` millimètres : <circle> ou <rect>. */
+  function formeJeton(t, x, y, plus, attrs) {
+    var a = {}, demi = t.taille / 2 + plus;
+    Object.keys(attrs).forEach(function (k) { a[k] = attrs[k]; });
+    if (t.forme === 'rond') { a.cx = x; a.cy = y; a.r = arrondi(demi); return R.svg('circle', a); }
+    a.x = arrondi(x - demi); a.y = arrondi(y - demi); a.width = arrondi(2 * demi); a.height = arrondi(2 * demi);
+    return R.svg('rect', a);
+  }
+
+  /** Dessin d'un jeton : fond perdu, fond, motif, trait de coupe. */
+  function dessinerJeton(pose, reglages) {
+    var t = JETONS[pose.type], d = debord(reglages), x = pose.x, y = pose.y;
+    var g = R.svg('g', { classe: 'pl-jeton', 'data-jeton': pose.type });
+    g.appendChild(formeJeton(t, x, y, d, { fill: t.fond }));
+    var motif = R.svg('g', { transform: 'translate(' + x + ' ' + y + ')' });
+    if (pose.type === 'or') {
+      // Pièce d'or : listel, puis couronne à trois pointes.
+      motif.appendChild(R.svg('circle', { cx: 0, cy: 0, r: 10.4, fill: 'none', stroke: t.bord, 'stroke-width': 0.5 }));
+      motif.appendChild(R.svg('circle', { cx: 0, cy: 0, r: 9.5, fill: '#F2CF63', stroke: t.bord, 'stroke-width': 0.3 }));
+      motif.appendChild(R.svg('path', { d: 'M-6 3.2L-6 -2.2L-3 1L0 -4.6L3 1L6 -2.2L6 3.2Z', fill: t.bord, stroke: t.bord, 'stroke-width': 0.5, 'stroke-linejoin': 'round' }));
+      motif.appendChild(R.svg('rect', { x: -6, y: 4.1, width: 12, height: 1.7, rx: 0.4, fill: t.bord }));
+      [[-6, -3.1], [0, -5.6], [6, -3.1]].forEach(function (p) { motif.appendChild(R.svg('circle', { cx: p[0], cy: p[1], r: 1, fill: t.bord })); });
+    } else {
+      // Ration : morceau de viande dont l'os dépasse, posé en biais.
+      var viande = R.svg('g', { transform: 'translate(-1 1) rotate(-35) scale(1.3)' });
+      viande.appendChild(R.svg('rect', { x: 2, y: -1, width: 6.4, height: 2, fill: '#FFFFFF', stroke: t.bord, 'stroke-width': 0.45 }));
+      viande.appendChild(R.svg('circle', { cx: 8.6, cy: -1.25, r: 1.45, fill: '#FFFFFF', stroke: t.bord, 'stroke-width': 0.45 }));
+      viande.appendChild(R.svg('circle', { cx: 8.6, cy: 1.25, r: 1.45, fill: '#FFFFFF', stroke: t.bord, 'stroke-width': 0.45 }));
+      viande.appendChild(R.svg('rect', { x: 6.2, y: -0.75, width: 2.4, height: 1.5, fill: '#FFFFFF' }));
+      viande.appendChild(R.svg('ellipse', { cx: -1.6, cy: 0, rx: 5.6, ry: 4.3, fill: '#A8452E', stroke: t.bord, 'stroke-width': 0.5 }));
+      viande.appendChild(R.svg('path', { d: 'M-5.2 -1.6Q-3.6 -3.4 -0.8 -3.2', fill: 'none', stroke: '#E9A28A', 'stroke-width': 0.8, 'stroke-linecap': 'round' }));
+      motif.appendChild(viande);
+    }
+    g.appendChild(motif);
+    g.appendChild(formeJeton(t, x, y, 0, { fill: 'none', stroke: '#FFFFFF', 'stroke-width': 0.8 }));
+    g.appendChild(formeJeton(t, x, y, 0, { classe: 'pl-coupe', fill: 'none', stroke: COUPE, 'stroke-width': 0.3 }));
+    return g;
+  }
+
+  /** Une planche de jetons : même feuille et même cartouche que les planches de tuiles. */
+  function dessinerPlancheJetons(poses, n, total, reglages, date) {
+    var f = feuille(reglages);
+    var racine = R.svg('svg', {
+      classe: 'pl-feuille', width: f.l + 'mm', height: f.h + 'mm', viewBox: '0 0 ' + f.l + ' ' + f.h,
+      role: 'img', 'aria-label': 'Planche ' + n + ' sur ' + total + ' : ' + poses.length + ' jetons d’or et de ration'
+    });
+    racine.appendChild(R.svg('rect', { x: 0, y: 0, width: f.l, height: f.h, fill: '#FFFFFF' }));
+    poses.forEach(function (p) { racine.appendChild(dessinerJeton(p, reglages)); });
+    racine.appendChild(dessinerCartouche(n, total, reglages, date));
+    return racine;
+  }
+
   /** Taille de la page imprimée : feuille de style construite par script (la CSP interdit les styles en ligne, pas le CSSOM). */
   function reglerPage(reglages) {
     var f = feuille(reglages);
@@ -646,16 +741,21 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
     function dessiner(reglages) {
       var pieces = listePieces(reglages), resultat = ranger(pieces, reglages), date = dateDuJour(new Date());
-      var total = resultat.planches.length;
+      var jetons = listeJetons(reglages), planchesJetons = rangerJetons(reglages);
+      var total = resultat.planches.length + planchesJetons.length;
       reglerPage(reglages);
       R.vider(zone);
       resultat.planches.forEach(function (poses, i) {
         zone.appendChild(R.el('div', { classe: 'pl-planche' }, dessinerPlanche(poses, i + 1, total, reglages, date)));
       });
-      var message = pieces.length
+      planchesJetons.forEach(function (poses, i) {
+        zone.appendChild(R.el('div', { classe: 'pl-planche' }, dessinerPlancheJetons(poses, resultat.planches.length + i + 1, total, reglages, date)));
+      });
+      var message = (pieces.length || jetons.length)
         ? total + (total > 1 ? ' planches ' : ' planche ') + reglages.format + ' ' + reglages.orientation + ' pour ' + pieces.length + ' pièces'
           + (reglages.miroir ? ', en miroir (tuiles retournées gauche-droite).' : '.')
         : 'Aucune famille de pièces n’est cochée.';
+      if (jetons.length) message += ' Dont ' + planchesJetons.length + (planchesJetons.length > 1 ? ' planches' : ' planche') + ' de jetons (' + reglages.or + ' d’or, ' + reglages.rations + ' de ration).';
       if (resultat.horsFormat.length) {
         message += ' Trop grandes pour cette feuille, non imprimées : ' + resultat.horsFormat.map(function (p) { return p.id; }).join(', ') + '.';
       }
@@ -689,9 +789,9 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     lireReglages: lireReglages, ecrireReglages: ecrireReglages, feuille: feuille, zoneUtile: zoneUtile, listePieces: listePieces,
     etiquette: etiquette, pieceMiroir: pieceMiroir, poseMiroir: poseMiroir, contour: contour, adjacences: adjacences, aireAgrandie: aireAgrandie, borneInferieure: borneInferieure,
     orientations: orientations, ecartHexagones: ecartHexagones, ecartPoses: ecartPoses, ranger: ranger, rangerAvec: rangerAvec,
-    cartouche: cartouche, dateDuJour: dateDuJour,
+    cartouche: cartouche, dateDuJour: dateDuJour, JETONS: JETONS, listeJetons: listeJetons, rangerJetons: rangerJetons,
     // DOM et SVG
-    dessinerPlanche: dessinerPlanche, demarrer: demarrer
+    dessinerPlanche: dessinerPlanche, dessinerPlancheJetons: dessinerPlancheJetons, demarrer: demarrer
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = AT.planches;

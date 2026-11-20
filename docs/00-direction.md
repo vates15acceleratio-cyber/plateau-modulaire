@@ -69,6 +69,7 @@ Elles priment sur la proposition d'inventaire du 2026-11-18 ci-dessous. Détail 
 - Le **centre du noyau** porte le même dessin que la tuile de ville neutre.
 - Des **tuiles de ville verte et rouge en plus** (5 par joueur, réglable) servent à indiquer une ville capturée.
 - **Aucun texte sur les tuiles de ville** (couleur, liseré et initiale suffisent). Les **tuiles d'événement** gardent leur code et leur nom.
+- **Jetons d'or et de ration** : idées de l'utilisateur retenues pour un premier dessin (couronne pour l'or, morceau de viande avec l'os pour la ration). Ils sont dans l'outil des planches avec un **nombre réglable** ; l'utilisateur ne sait pas encore combien il en veut, et leurs règles (revenu d'or, coût en rations) ne sont pas arrêtées.
 - **À faire une prochaine fois** : des rendus visuels plus jolis ; l'utilisateur a du mal à distinguer les tuiles d'événement entre elles avec le dessin actuel.
 
 ## Proposition d'inventaire (à valider ; dessinée dans `tuiles/sortie/types_de_tuiles.pdf`)

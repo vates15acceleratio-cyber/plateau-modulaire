@@ -89,9 +89,9 @@ function controlerRangement(fragment) {
 }
 
 test('réglages : valeurs par défaut, adresse lue avec une liste de valeurs admises, aller-retour', () => {
-  assert.deepStrictEqual(DEFAUT, { format: 'A3', orientation: 'paysage', fond: true, etiquettes: true, ville: 45, terrain: true, villes: true, evenements: true, miroir: false, captures: 5 });
+  assert.deepStrictEqual(DEFAUT, { format: 'A3', orientation: 'paysage', fond: true, etiquettes: true, ville: 45, terrain: true, villes: true, evenements: true, miroir: false, captures: 5, or: 0, rations: 0 });
   const r = PL.lireReglages('#format=A4&orientation=portrait&fond=non&etiquettes=non&ville=40&terrain=non&villes=oui&evenements=non&miroir=oui');
-  assert.deepStrictEqual(r, { format: 'A4', orientation: 'portrait', fond: false, etiquettes: false, ville: 40, terrain: false, villes: true, evenements: false, miroir: true, captures: 5 });
+  assert.deepStrictEqual(r, { format: 'A4', orientation: 'portrait', fond: false, etiquettes: false, ville: 40, terrain: false, villes: true, evenements: false, miroir: true, captures: 5, or: 0, rations: 0 });
   assert.deepStrictEqual(PL.lireReglages('#' + PL.ecrireReglages(r)), r);
   assert.deepStrictEqual(PL.lireReglages('format=A5&orientation=<svg>&ville=41&__proto__=oui&constructor=A3&fond=peut-etre&=&x'), DEFAUT);
   assert.deepStrictEqual(PL.feuille(DEFAUT), { l: 420, h: 297 });
@@ -386,4 +386,35 @@ test('tuiles de ville capturée : 5 par joueur par défaut, réglables, aux coul
   assert.strictEqual(compte('captures=99').length, 10, 'valeur inconnue : réglage par défaut');
   assert.strictEqual(compte('villes=non').length, 0);
   assert.strictEqual(PL.etiquette(defaut[0]), 'VC · Vert');
+});
+
+test('jetons d’or et de ration : nombre réglable, 0 par défaut, rangés sans se toucher, dans la zone imprimable', () => {
+  assert.strictEqual(PL.listeJetons(DEFAUT).length, 0);
+  assert.strictEqual(PL.rangerJetons(DEFAUT).length, 0);
+  const r = PL.lireReglages('or=30&rations=24');
+  assert.strictEqual(r.or, 30);
+  assert.strictEqual(r.rations, 24);
+  assert.deepStrictEqual(PL.lireReglages('#' + PL.ecrireReglages(r)), r);
+  ['or=-1', 'or=201', 'or=1e2', 'or=3.5', 'rations=<svg>', 'or=', 'rations=9999'].forEach((t) => {
+    const x = PL.lireReglages(t);
+    assert.strictEqual(x.or, 0, t);
+    assert.strictEqual(x.rations, 0, t);
+  });
+  const jetons = PL.listeJetons(r);
+  assert.strictEqual(jetons.filter((j) => j.type === 'or').length, 30);
+  assert.strictEqual(jetons.filter((j) => j.type === 'ration').length, 24);
+  const planches = PL.rangerJetons(r), zone = PL.zoneUtile(r);
+  assert.strictEqual(planches.length, 1, '54 jetons tiennent sur une A3');
+  assert.strictEqual(planches[0].length, 54);
+  const demi = (p) => PL.JETONS[p.type].taille / 2 + PL.FOND_PERDU;
+  planches[0].forEach((p, i) => {
+    assert.ok(p.x - demi(p) >= zone.x0 - 1e-6 && p.x + demi(p) <= zone.x1 + 1e-6 && p.y - demi(p) >= zone.y0 - 1e-6 && p.y + demi(p) <= zone.y1 + 1e-6, 'dans la zone');
+    planches[0].slice(i + 1).forEach((q) => {
+      const libre = Math.max(Math.abs(p.x - q.x), Math.abs(p.y - q.y)) - demi(p) - demi(q);
+      assert.ok(libre >= PL.ECART - 1e-6, 'au moins 4 mm entre deux fonds perdus');
+    });
+  });
+  assert.strictEqual(PL.JETONS.or.forme, 'rond');
+  assert.strictEqual(PL.JETONS.ration.forme, 'carre');
+  assert.ok(PL.rangerJetons(PL.lireReglages('or=200&rations=200')).length > 1, 'beaucoup de jetons : plusieurs planches');
 });
