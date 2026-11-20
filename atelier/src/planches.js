@@ -520,6 +520,18 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     g.appendChild(ge);
 
     var centre = pose.cases[0], k = plat / PLAT_TUILE;
+    // Ville imprimée dans une pièce (le centre du noyau) : même dessin que la tuile de ville neutre, sans le nom
+    // (demande de l'utilisateur du 2026-11-20).
+    if (piece.genre === 'modele') {
+      pose.cases.forEach(function (c, i) {
+        if (c.terrain !== 'ville') return;
+        var rv = 2 * (SECURITE + 1.5) / plat;
+        ge.appendChild(R.polygoneCase(cles[i], { fill: 'none', stroke: COULEUR_NEUTRE, 'stroke-width': mm(1.2), 'stroke-linejoin': 'round' }, rv));
+        ge.appendChild(R.polygoneCase(cles[i], { fill: 'none', stroke: '#FFFFFF', 'stroke-width': mm(0.45), 'stroke-dasharray': mm(1.6) + ' ' + mm(1.2) }, rv));
+        g.appendChild(R.svg('circle', { classe: 'pl-ville-noyau', cx: arrondi(c.x), cy: arrondi(c.y), r: arrondi(4.4 * k), fill: '#FFFFFF', stroke: COULEUR_NEUTRE, 'stroke-width': 0.9 }));
+        g.appendChild(texte(c.x, c.y, 'N', { 'font-size': 5, 'font-weight': 'bold', fill: COULEUR_NEUTRE }));
+      });
+    }
     if (piece.id === 'R') {
       // Tuile de remplissage : liseré pointillé et point central, comme à l'écran.
       ge.appendChild(R.polygoneCase('0,0', { fill: 'none', stroke: '#5E4A12', 'stroke-width': mm(0.6), 'stroke-dasharray': mm(1.2) + ' ' + mm(2), 'stroke-linecap': 'round' }, 2 * (SECURITE + 1) / plat));
