@@ -1,5 +1,8 @@
 # Catalogue 2 : mesures de faisabilité (2026-11-19)
 
+> **Note du 2026-11-20.** Les comptes de places pour les villes neutres et les scores d'équilibre ci-dessous datent d'avant la revue `docs/08` (ville neutre tenue par 2 pièces, permise sur tout le flanc). Mesure refaite sur 300 graines après ces corrections : réussite 300 / 300, 4,3 places par flanc, score d'équilibre moyen 3,27 (2,18 avant), maximal 14 (10 avant). Détail dans `docs/04-recette-atelier.md`.
+
+
 Rapport du cœur du plateau, demandé par `docs/02-atelier-cahier-des-charges.md` §9.3. Ce document a deux parties :
 1. **Catalogue en vigueur** (décision du 2026-11-19, seconde série, point 8) : aucun monobloc tout en plaine, forêt ou marais à une extrémité de chaque pièce. Mesures refaites sur ce catalogue.
 2. **Historique** : les mesures du premier jeu de pièces du catalogue 2 (avec 8 monoblocs tout en plaine), qui ont fondé les réglages (2 tuiles de remplissage, profondeur 2, plateau tenu dans 11 rangées). Son tableau des pièces est remplacé par celui ci-dessous.
