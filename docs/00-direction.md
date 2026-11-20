@@ -68,6 +68,8 @@ Elles priment sur la proposition d'inventaire du 2026-11-18 ci-dessous. Détail 
 - Planches **A3**, 4 feuilles, tuile de 45 mm plat à plat (**52 mm de pointe à pointe**, confirmé) ; un jeu **miroir** sur des feuilles à part (les feuilles seront collées sur du carton) ; étiquettes au choix.
 - Le **centre du noyau** porte le même dessin que la tuile de ville neutre.
 - Des **tuiles de ville verte et rouge en plus** (5 par joueur, réglable) servent à indiquer une ville capturée.
+- **Aucun texte sur les tuiles de ville** (couleur, liseré et initiale suffisent). Les **tuiles d'événement** gardent leur code et leur nom.
+- **À faire une prochaine fois** : des rendus visuels plus jolis ; l'utilisateur a du mal à distinguer les tuiles d'événement entre elles avec le dessin actuel.
 
 ## Proposition d'inventaire (à valider ; dessinée dans `tuiles/sortie/types_de_tuiles.pdf`)
 Décisions de l'utilisateur du 2026-11-18 : **2 montagnes** (au lieu de 3) ; tuiles simples à **70 % de plaines, 15 % de forêts, 15 % de marais** ; **7 villes**, au moins **3 tuiles entre deux villes** voisines.
