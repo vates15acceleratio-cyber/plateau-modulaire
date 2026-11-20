@@ -1,0 +1,37 @@
+/* Planches d'impression (planches.html). Une planche = un <svg> en millimètres, une planche par page imprimée. */
+
+/* Page imprimée : A3 paysage par défaut, sans marge (la marge de 8 mm est dans le dessin).
+   src/planches.js remplace cette taille par celle des réglages (feuille de style construite par script). */
+@page { size: A3 landscape; margin: 0; }
+
+html, body { margin: 0; padding: 0; }
+body { font-family: "Segoe UI", Arial, Helvetica, sans-serif; font-size: 15px; color: #1d1c1a; background: #e9e6dc; }
+
+.pl-entete { padding: 10px 16px; background: #fbfaf7; border-bottom: 1px solid #8b887c; }
+.pl-entete h1 { font-size: 20px; margin: 0 0 4px; }
+.pl-entete p { margin: 4px 0; }
+.pl-aide { color: #55534c; }
+.pl-reglages { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin: 8px 0; }
+.pl-reglages label { display: inline-flex; align-items: center; gap: 6px; }
+.pl-familles { display: inline-flex; flex-wrap: wrap; gap: 4px 14px; border: 1px solid #8b887c; border-radius: 4px; padding: 2px 10px 4px; margin: 0; }
+.pl-reglages select, .pl-reglages button { font: inherit; }
+.pl-reglages button { border: 1px solid #2b4c8c; background: #2b4c8c; color: #fff; border-radius: 4px; padding: 5px 16px; cursor: pointer; font-weight: 600; }
+.pl-reglages button:hover { background: #1f3a6e; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #2b6cd4; outline-offset: 1px; }
+#pl-bilan { font-weight: 600; }
+
+/* À l'écran : chaque planche tient dans la largeur de la fenêtre (l'échelle réelle ne vaut qu'à l'impression). */
+@media screen {
+  .pl-planches { padding: 12px 16px 24px; }
+  .pl-planche { margin: 0 auto 16px; max-width: 1200px; }
+  .pl-feuille { display: block; width: 100%; height: auto; background: #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, .35); }
+}
+
+/* À l'impression : les planches seules, à leur taille en millimètres, une par page. */
+@media print {
+  body { background: #fff; }
+  .pl-entete, noscript { display: none; }
+  .pl-planche { break-after: page; break-inside: avoid; overflow: hidden; }
+  .pl-planche:last-child { break-after: auto; }
+  .pl-feuille { display: block; }
+}

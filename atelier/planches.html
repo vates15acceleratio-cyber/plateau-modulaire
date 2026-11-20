@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <!-- Même politique de sécurité que index.html : aucun script, style ou ressource extérieurs ni en ligne. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; child-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Planches d'impression des tuiles</title>
+  <link rel="stylesheet" href="styles/planches.css">
+</head>
+<body>
+  <!-- Réglages : masqués à l'impression. Les mêmes réglages se donnent dans l'adresse (#format=A3&orientation=paysage…). -->
+  <header class="pl-entete">
+    <h1>Planches d'impression des tuiles</h1>
+    <p><a href="index.html#onglet=inventaire">Retour à l'atelier</a></p>
+    <form id="pl-reglages" class="pl-reglages">
+      <label>Format
+        <select name="format">
+          <option value="A3">A3</option>
+          <option value="A4">A4</option>
+        </select>
+      </label>
+      <label>Orientation
+        <select name="orientation">
+          <option value="paysage">Paysage</option>
+          <option value="portrait">Portrait</option>
+        </select>
+      </label>
+      <label>Tuiles de ville
+        <select name="ville">
+          <option value="45">45 mm</option>
+          <option value="40">40 mm</option>
+        </select>
+      </label>
+      <label class="pl-case"><input type="checkbox" name="fond"> Fond perdu (3 mm)</label>
+      <label class="pl-case"><input type="checkbox" name="etiquettes"> Étiquettes</label>
+      <fieldset class="pl-familles">
+        <legend>Pièces à imprimer</legend>
+        <label class="pl-case"><input type="checkbox" name="terrain"> Terrain</label>
+        <label class="pl-case"><input type="checkbox" name="villes"> Villes</label>
+        <label class="pl-case"><input type="checkbox" name="evenements"> Événements</label>
+      </fieldset>
+      <button type="button" id="pl-imprimer">Imprimer</button>
+    </form>
+    <p id="pl-bilan" role="status"></p>
+    <p class="pl-aide">Imprimer à 100 %, sans ajustement à la page, puis vérifier à la règle que la barre en bas de chaque planche mesure 100 mm. Couper sur le trait noir fin ; la couleur déborde de 3 mm au-delà.</p>
+  </header>
+
+  <main id="planches" class="pl-planches"></main>
+  <noscript>Cette page a besoin de JavaScript.</noscript>
+
+  <script src="src/hex.js"></script>
+  <script src="src/catalogue.js"></script>
+  <script src="src/plateau.js"></script>
+  <script src="src/rendu.js"></script>
+  <script src="src/planches.js"></script>
+</body>
+</html>

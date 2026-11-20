@@ -115,6 +115,16 @@ Tout s'annule (Ctrl+Z), y compris la pose automatique, en une étape.
 
 Le catalogue 2 dessiné **par rôle** : noyau, montagnes, monoblocs de 4 cases, monoblocs de 3 cases, tuiles de remplissage (facultatives), puis les villes (6 tuiles posées par-dessus une Plaine : 2 villes neutres, 2 villes de déploiement par joueur ; elles n'ajoutent aucune case), avec le nombre total, posé et restant sur le plateau courant. En tête : les totaux du catalogue imprimé (26 pièces, 93 cases, jamais modifiés) et la répartition du terrain (49 plaines, 13 forêts, 13 marais sur les 75 cases des monoblocs, soit 65,3 / 17,3 / 17,3 %). À part : la ligne « Tuiles hors catalogue posées » (tuiles d'une case du pinceau), la section « Ancien catalogue » seulement si le plateau ouvert en porte, la section « Mes monoblocs », et la réserve des 8 tuiles d'événement (condition de pose, effet).
 
+## Imprimer les tuiles
+
+Onglet « Inventaire », lien **Planches d'impression (A3)**, ou ouvrir `planches.html`. La page range toutes les pièces du catalogue à l'échelle réelle (case de 45 mm plat à plat), une planche par page : noyau, montagnes, 21 monoblocs, 2 tuiles de remplissage, 6 tuiles de ville, 8 tuiles d'événement. Chaque pièce a un trait de coupe noir fin sur son contour, la couleur débordant de 3 mm au-delà (fond perdu), et son identifiant et son nom en petit.
+
+1. Régler en tête de page : format A3 (par défaut) ou A4, paysage ou portrait, fond perdu, étiquettes, taille des tuiles de ville (45 ou 40 mm), familles à imprimer (terrain, villes, événements).
+2. « Imprimer », à **100 %** (« taille réelle »), sans ajustement à la page, sans en-tête ni pied de page ; le format de papier est celui des réglages.
+3. Vérifier à la règle que la barre graduée en bas de chaque planche mesure **100 mm** avant de coller et de couper.
+
+Les mêmes réglages se donnent dans l'adresse, pour produire un PDF sans interaction : `planches.html#format=A3&orientation=paysage&fond=oui&etiquettes=oui&ville=45&terrain=oui&villes=oui&evenements=oui` (Edge sans fenêtre : `--headless=new --no-pdf-header-footer --print-to-pdf=<fichier>`). Le rangement laisse 8 mm au bord de la feuille et au moins 4 mm entre les fonds perdus de deux pièces ; les pièces sont tournées par sixièmes de tour pour s'emboîter. Avec les réglages par défaut : 4 planches A3.
+
 ## Onglet « Partie fictive »
 
 Une table libre : l'outil compte, mélange, lance les dés et prévient, mais **n'arbitre pas**. Un avertissement peut toujours être passé avec « Faire quand même ».
@@ -184,6 +194,7 @@ Depuis le dossier `atelier/` :
 | `src/alea.js` … `src/generateur.js` | cœur du plateau (lot A) |
 | `src/cartes.js`, `src/paquets.js`, `src/partie.js` | table de jeu (lot B) |
 | `src/bibliotheque.js` | bibliothèque de plateaux et travail en cours : logique et stockage du navigateur injecté |
+| `planches.html`, `src/planches.js`, `styles/planches.css` | planches d'impression des tuiles à l'échelle réelle (A3 ou A4) |
 | `Atelier.bat`, `Atelier.command` | lanceurs Windows et Mac (fenêtre à part) |
 | `outils/empaqueter.py` | fabrique le paquet à transmettre (`dist/atelier-plateau.zip`) |
 | `outils/serveur.js`, `outils/recette.html`, `outils/recette.js`, `outils/recette-ancien.js` | serveur local, recette automatique, anciens fichiers que la recette rouvre (copies de `tests/fixtures-v1/`, `fixtures-v2/` et `fixtures-v3/`) |

@@ -224,6 +224,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
       R.remplacer(zone, [
         el('p', { classe: 'at-bandeau-provisoire', id: 'inv-provisoire', texte: 'Proposition provisoire, à valider : les pièces, leurs quantités, les tuiles d’événement et leurs effets ne sont pas arrêtés.' }),
+        el('p', { id: 'inv-planches', classe: 'at-lien-planches' }, [
+          el('a', { href: 'planches.html', texte: 'Planches d’impression (A3)' }),
+          ' : toutes les pièces à l’échelle réelle, prêtes à imprimer et à découper.'
+        ]),
         el('h2', { texte: 'Pièces du catalogue' }),
         el('p', { id: 'inv-totaux', texte: 'Catalogue : ' + totaux.pieces + ' pièces, ' + totaux.cases + ' cases (dont ' + totaux.construction.pieces + ' pièces de terrain pour ' + totaux.construction.cases + ' cases, et ' + totaux.facultatives + ' tuiles de remplissage facultatives). Sur le plateau courant : ' + poses + ' pièces posées (' + casesPosees + ' cases), ' + b.restantes + ' restantes.' }),
         el('p', { id: 'inv-repartition', texte: 'Répartition du terrain (les ' + tr.cases + ' cases des monoblocs de 3 et 4 cases) : ' + tr.plaine + ' plaines (' + partTerrain(tr.plaine) + '), '

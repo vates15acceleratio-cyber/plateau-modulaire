@@ -1,6 +1,6 @@
 """Fabrique le paquet transportable de l'atelier : dist/atelier-plateau.zip (Windows et Mac).
 
-Contenu : la page, ses scripts et ses styles, les deux lanceurs et un mode d'emploi. Ni tests ni outils.
+Contenu : la page, la page des planches d'impression, leurs scripts et leurs styles, les deux lanceurs et un mode d'emploi. Ni tests ni outils.
 Le lanceur Mac garde son droit d'execution et ses fins de ligne Unix. Lancer depuis la racine du depot :
     python -I atelier/outils/empaqueter.py
 
@@ -20,7 +20,7 @@ RACINE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file_
 SOURCE = os.path.join(RACINE, 'atelier')
 SORTIE = os.path.join(RACINE, 'dist', 'atelier-plateau.zip')
 DOSSIER = 'Atelier du plateau'
-GARDER = ['index.html', 'Atelier.bat', 'Atelier.command', 'src', 'styles']
+GARDER = ['index.html', 'planches.html', 'Atelier.bat', 'Atelier.command', 'src', 'styles']
 LISEZ_MOI = """ATELIER DU PLATEAU (Bannerlord)
 
 Installation : decompressez ce dossier ou vous voulez (disque, cle USB). Rien d'autre a installer,
@@ -30,6 +30,10 @@ Lancer
   Windows : double-clic sur Atelier.bat (ou sur index.html).
   Mac     : double-clic sur index.html. Pour une fenetre a part : clic droit sur Atelier.command,
             puis Ouvrir (la premiere fois, macOS demande une confirmation).
+
+Imprimer les tuiles
+  Onglet Inventaire, lien "Planches d'impression (A3)" (ou ouvrez planches.html). Imprimez a 100 %,
+  sans ajustement a la page, puis verifiez a la regle la barre de 100 mm en bas de chaque planche.
 
 Vos plateaux
   La bibliotheque et le travail en cours sont gardes par le navigateur, sur ce poste.
@@ -90,7 +94,7 @@ def main(arguments=None):
         raise SystemExit('Option inconnue : ' + inconnues[0] + ' (options : --brouillon, --sortie <fichier>).')
 
     noms = fichiers_suivis()
-    manquants = [e for e in ('index.html', 'Atelier.bat', 'Atelier.command') if e not in noms]
+    manquants = [e for e in ('index.html', 'planches.html', 'Atelier.bat', 'Atelier.command') if e not in noms]
     if manquants or not any(n.startswith('src/') for n in noms) or not any(n.startswith('styles/') for n in noms):
         raise SystemExit('Paquet non fabrique : fichiers attendus non suivis par git (' + ', '.join(manquants or ['src/ ou styles/']) + ').')
     modifies = fichiers_modifies()

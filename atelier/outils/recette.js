@@ -377,6 +377,7 @@
   scenario('Inventaire', function () {
     AT.app.montrer('inventaire');
     verifier('onglet Inventaire affiché', !$('#panneau-inventaire').hidden && $('#panneau-plateau').hidden);
+    verifier('inventaire : lien vers les planches d’impression', !!$('#inv-planches a[href="planches.html"]') && $('#inv-planches a').textContent === 'Planches d’impression (A3)');
     verifier('25 modèles de pièces, tous dessinés', $$('#inv-pieces tbody tr[data-modele]').length === 25 && $$('#inv-pieces tbody tr[data-modele] svg').length === 25, $$('#inv-pieces tbody tr[data-modele]').length);
     verifier('catalogue 2 : terrain en monoblocs de 3 ou 4 cases ; seule tuile d’une case : le remplissage (les villes ne sont plus des pièces)', $$('#inv-pieces tbody tr[data-modele]').filter(function (tr) {
       return /^1 case/.test(tr.querySelectorAll('td')[1].textContent);

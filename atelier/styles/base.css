@@ -65,6 +65,10 @@ input[type="text"], input[type="number"], select { border: 1px solid #8b887c; bo
 
 .at-avis { background: #fdeceb; border-left: 4px solid var(--erreur); padding: 4px 6px; margin: 6px 0 0; }
 .at-bandeau-provisoire { background: #fff4cf; border: 1px solid #d8b740; border-radius: 4px; padding: 5px 8px; font-weight: 600; }
+/* Inventaire : lien vers la page des planches d'impression (planches.html). */
+.at-lien-planches { border: 1px solid var(--accent); border-radius: 4px; padding: 6px 10px; }
+.at-lien-planches a { font-weight: 600; font-size: 16px; }
+.at-lien-planches a:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
 .at-etiquette-provisoire { display: inline-block; background: #fff4cf; border: 1px solid #d8b740; border-radius: 3px; padding: 0 4px; font-size: 11px; color: #5c4600; }
 
 .at-niveau-erreur { color: var(--erreur); }
