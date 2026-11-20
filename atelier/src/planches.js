@@ -48,15 +48,15 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * Réglages par défaut ; `ville` est la taille des tuiles de ville (45 ou 40 mm) ; `miroir` donne le même jeu de
    * tuiles retourné gauche-droite (planches autonomes, à imprimer à part).
    */
-  var DEFAUT = { format: 'A3', orientation: 'paysage', fond: true, etiquettes: true, ville: 45, terrain: true, villes: true, evenements: true, miroir: false };
+  var DEFAUT = { format: 'A3', orientation: 'paysage', fond: true, etiquettes: true, ville: 45, terrain: true, villes: true, evenements: true, miroir: false, captures: 5 };
   /** Valeurs admises dans l'adresse (#format=A3&orientation=paysage&fond=oui&etiquettes=oui&ville=45&terrain=oui&villes=oui&evenements=oui&miroir=non). */
   var ADMIS = {
     format: { A3: 'A3', A4: 'A4' }, orientation: { paysage: 'paysage', portrait: 'portrait' },
     fond: { oui: true, non: false }, etiquettes: { oui: true, non: false }, ville: { '45': 45, '40': 40 },
     terrain: { oui: true, non: false }, villes: { oui: true, non: false }, evenements: { oui: true, non: false },
-    miroir: { oui: true, non: false }
+    miroir: { oui: true, non: false }, captures: { '0': 0, '3': 3, '5': 5 }
   };
-  var CLES = ['format', 'orientation', 'fond', 'etiquettes', 'ville', 'terrain', 'villes', 'evenements', 'miroir'];
+  var CLES = ['format', 'orientation', 'fond', 'etiquettes', 'ville', 'terrain', 'villes', 'evenements', 'miroir', 'captures'];
   var possede = Object.prototype.hasOwnProperty;
 
   /** Réglages lus dans le fragment d'adresse ; tout ce qui n'est pas dans la liste admise est ignoré. */
@@ -120,6 +120,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var VN = C.VILLE_NEUTRE, VD = C.VILLE_DEPLOIEMENT, i;
       for (i = 1; i <= VN.nombre; i++) ville(VN, VN.proprietaire, i);
       VD.camps.forEach(function (camp) { for (var j = 1; j <= VD.parCamp; j++) ville(VD, camp, j); });
+      // Tuiles de capture (demande de l’utilisateur du 2026-11-20) : villes à la couleur d’un joueur, en plus, pour
+      // recouvrir une ville qu’il capture (le centre, les 2 neutres, les 2 villes adverses : 5 au plus par joueur).
+      var CAPTURE = { id: 'VC', nom: 'Ville capturée' };
+      VD.camps.forEach(function (camp) { for (var j = 1; j <= (reglages.captures || 0); j++) ville(CAPTURE, camp, j); });
     }
     if (reglages.evenements) {
       C.ORDRE_EVENEMENTS.forEach(function (id) {

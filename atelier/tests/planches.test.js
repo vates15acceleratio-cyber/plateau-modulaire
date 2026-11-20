@@ -89,9 +89,9 @@ function controlerRangement(fragment) {
 }
 
 test('réglages : valeurs par défaut, adresse lue avec une liste de valeurs admises, aller-retour', () => {
-  assert.deepStrictEqual(DEFAUT, { format: 'A3', orientation: 'paysage', fond: true, etiquettes: true, ville: 45, terrain: true, villes: true, evenements: true, miroir: false });
+  assert.deepStrictEqual(DEFAUT, { format: 'A3', orientation: 'paysage', fond: true, etiquettes: true, ville: 45, terrain: true, villes: true, evenements: true, miroir: false, captures: 5 });
   const r = PL.lireReglages('#format=A4&orientation=portrait&fond=non&etiquettes=non&ville=40&terrain=non&villes=oui&evenements=non&miroir=oui');
-  assert.deepStrictEqual(r, { format: 'A4', orientation: 'portrait', fond: false, etiquettes: false, ville: 40, terrain: false, villes: true, evenements: false, miroir: true });
+  assert.deepStrictEqual(r, { format: 'A4', orientation: 'portrait', fond: false, etiquettes: false, ville: 40, terrain: false, villes: true, evenements: false, miroir: true, captures: 5 });
   assert.deepStrictEqual(PL.lireReglages('#' + PL.ecrireReglages(r)), r);
   assert.deepStrictEqual(PL.lireReglages('format=A5&orientation=<svg>&ville=41&__proto__=oui&constructor=A3&fond=peut-etre&=&x'), DEFAUT);
   assert.deepStrictEqual(PL.feuille(DEFAUT), { l: 420, h: 297 });
@@ -102,15 +102,15 @@ test('réglages : valeurs par défaut, adresse lue avec une liste de valeurs adm
 test('pièces à imprimer : tout le catalogue, une entrée par exemplaire, rien de recopié', () => {
   const pieces = PL.listePieces(DEFAUT), parId = {};
   pieces.forEach((p) => { parId[p.id] = (parId[p.id] || 0) + 1; });
-  const attendu = C.totaux().pieces + C.VILLE_NEUTRE.nombre + C.VILLE_DEPLOIEMENT.nombre + C.ORDRE_EVENEMENTS.length;
+  const attendu = C.totaux().pieces + C.VILLE_NEUTRE.nombre + C.VILLE_DEPLOIEMENT.nombre + C.ORDRE_EVENEMENTS.length + 2 * DEFAUT.captures;
   assert.strictEqual(pieces.length, attendu);
-  assert.strictEqual(pieces.length, 40, '26 pièces, 6 tuiles de ville, 8 tuiles d’événement');
+  assert.strictEqual(pieces.length, 50, '26 pièces, 6 tuiles de ville, 10 tuiles de ville capturée, 8 tuiles d’événement');
   C.ORDRE_MODELES.forEach((id) => assert.strictEqual(parId[id], C.MODELES[id].nombre, id));
   C.ORDRE_EVENEMENTS.forEach((id) => assert.strictEqual(parId[id], 1, id));
   assert.strictEqual(parId.VD, 4);
   assert.strictEqual(parId.VNP, 2);
   assert.strictEqual(new Set(pieces.map((p) => p.ref)).size, pieces.length, 'références uniques');
-  const camps = pieces.filter((p) => p.genre === 'ville').map((p) => p.camp).sort();
+  const camps = pieces.filter((p) => p.genre === 'ville' && p.id !== 'VC').map((p) => p.camp).sort();
   assert.deepStrictEqual(camps, ['neutre', 'neutre', 'rouge', 'rouge', 'vert', 'vert']);
   assert.strictEqual(pieces.filter((p) => p.role === 'terrain').length, 21);
   pieces.filter((p) => p.genre === 'modele').forEach((p) => {
@@ -124,7 +124,7 @@ test('pièces à imprimer : tout le catalogue, une entrée par exemplaire, rien 
   assert.ok(pieces.every((p) => p.plat === 45), '45 mm par défaut, villes comprises');
   // Familles et taille des villes.
   assert.strictEqual(PL.listePieces(PL.lireReglages('villes=non&evenements=non')).length, C.totaux().pieces);
-  assert.deepStrictEqual(PL.listePieces(PL.lireReglages('terrain=non&evenements=non')).map((p) => p.id), ['VNP', 'VNP', 'VD', 'VD', 'VD', 'VD']);
+  assert.deepStrictEqual(PL.listePieces(PL.lireReglages('terrain=non&evenements=non&captures=0')).map((p) => p.id), ['VNP', 'VNP', 'VD', 'VD', 'VD', 'VD']);
   assert.strictEqual(PL.listePieces(PL.lireReglages('terrain=non&villes=non')).length, 8);
   assert.strictEqual(PL.listePieces(PL.lireReglages('terrain=non&villes=non&evenements=non')).length, 0);
   const petites = PL.listePieces(PL.lireReglages('ville=40'));
@@ -325,7 +325,7 @@ test('dessin d’une planche (faux DOM) : feuille en millimètres, un trait de c
         assert.ok(Number(e.attributs['stroke-width']) >= 0.25 - 1e-9, 'trait de 0,25 mm au moins');
       });
     });
-    assert.strictEqual(coupes, 40);
+    assert.strictEqual(coupes, 50);
     assert.ok(textes.some((t) => /^Planche 1 \/ \d+ · A3 paysage · 2026-11-20 · Imprimer à 100 %, sans ajustement à la page$/.test(t)));
     PL.listePieces(DEFAUT).forEach((p) => {
       const attendu = p.genre === 'evenement' ? p.nom : PL.etiquette(p);
@@ -344,7 +344,7 @@ test('dessin d’une planche (faux DOM) : feuille en millimètres, un trait de c
       assert.strictEqual(tous(svg, (e) => e.attributs.class === 'pl-barre').length, 1);
       tous(svg, (e) => e.nom === 'text').forEach((t) => t3.push(t.textContent));
     });
-    assert.strictEqual(coupes3, 40);
+    assert.strictEqual(coupes3, 50);
     assert.ok(t3.includes('F31 Lisière (miroir)') && !t3.includes('F31 Lisière') && t3.includes('Crevasse') && t3.includes('VD · Rouge'));
     assert.ok(t3.some((t) => /^Planche 1 \/ \d+ — miroir · A3 paysage · 2026-11-20 · /.test(t)));
   } finally {
@@ -372,4 +372,17 @@ test('page planches.html : même politique de sécurité que index.html, rien en
   assert.ok(/@media print[\s\S]*\.pl-entete[^{]*\{\s*display:\s*none/.test(css), 'réglages masqués à l’impression');
   assert.ok(lire('src/vue-inventaire.js').includes("href: 'planches.html'"), 'lien dans l’onglet Inventaire');
   assert.ok(/GARDER = \[[^\]]*'planches\.html'/.test(lire('outils/empaqueter.py')), 'planches.html dans le paquet');
+});
+
+test('tuiles de ville capturée : 5 par joueur par défaut, réglables, aux couleurs des deux joueurs', () => {
+  const compte = (texte) => PL.listePieces(PL.lireReglages(texte)).filter((p) => p.id === 'VC');
+  const defaut = compte('');
+  assert.strictEqual(defaut.length, 10);
+  assert.strictEqual(defaut.filter((p) => p.camp === 'vert').length, 5);
+  assert.strictEqual(defaut.filter((p) => p.camp === 'rouge').length, 5);
+  assert.strictEqual(compte('captures=3').length, 6);
+  assert.strictEqual(compte('captures=0').length, 0);
+  assert.strictEqual(compte('captures=99').length, 10, 'valeur inconnue : réglage par défaut');
+  assert.strictEqual(compte('villes=non').length, 0);
+  assert.strictEqual(PL.etiquette(defaut[0]), 'VC · Vert');
 });

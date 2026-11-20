@@ -64,6 +64,11 @@ Elles priment sur la proposition d'inventaire du 2026-11-18 ci-dessous. Détail 
 4. **Regrouper forêts et marais à la génération** : une **option à cocher**.
 5. **Trous dans le plateau** : restent en **alerte**. **Contact entre tuiles** : reste à **3**. **Noms et formes des 21 monoblocs** : validés, ne plus y toucher.
 
+## Impression des tuiles (2026-11-20)
+- Planches **A3**, 4 feuilles, tuile de 45 mm plat à plat (**52 mm de pointe à pointe**, confirmé) ; un jeu **miroir** sur des feuilles à part (les feuilles seront collées sur du carton) ; étiquettes au choix.
+- Le **centre du noyau** porte le même dessin que la tuile de ville neutre.
+- Des **tuiles de ville verte et rouge en plus** (5 par joueur, réglable) servent à indiquer une ville capturée.
+
 ## Proposition d'inventaire (à valider ; dessinée dans `tuiles/sortie/types_de_tuiles.pdf`)
 Décisions de l'utilisateur du 2026-11-18 : **2 montagnes** (au lieu de 3) ; tuiles simples à **70 % de plaines, 15 % de forêts, 15 % de marais** ; **7 villes**, au moins **3 tuiles entre deux villes** voisines.
 

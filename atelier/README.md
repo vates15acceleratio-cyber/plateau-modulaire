@@ -117,13 +117,13 @@ Le catalogue 2 dessiné **par rôle** : noyau, montagnes, monoblocs de 4 cases, 
 
 ## Imprimer les tuiles
 
-Onglet « Inventaire », lien **Planches d'impression (A3)**, ou ouvrir `planches.html`. La page range toutes les pièces du catalogue à l'échelle réelle (case de 45 mm plat à plat), une planche par page : noyau, montagnes, 21 monoblocs, 2 tuiles de remplissage, 6 tuiles de ville, 8 tuiles d'événement. Chaque pièce a un trait de coupe noir fin sur son contour, la couleur débordant de 3 mm au-delà (fond perdu), et son identifiant et son nom en petit.
+Onglet « Inventaire », lien **Planches d'impression (A3)**, ou ouvrir `planches.html`. La page range toutes les pièces du catalogue à l'échelle réelle (case de 45 mm plat à plat), une planche par page : noyau, montagnes, 21 monoblocs, 2 tuiles de remplissage, 6 tuiles de ville, 10 tuiles de ville capturée (5 vertes et 5 rouges, pour recouvrir une ville prise par un joueur ; réglage « Villes capturées » : 5, 3 ou aucune), 8 tuiles d'événement. Chaque pièce a un trait de coupe noir fin sur son contour, la couleur débordant de 3 mm au-delà (fond perdu), et son identifiant et son nom en petit.
 
 1. Régler en tête de page : format A3 (par défaut) ou A4, paysage ou portrait, fond perdu, étiquettes, taille des tuiles de ville (45 ou 40 mm), familles à imprimer (terrain, villes, événements), miroir.
 2. « Imprimer », à **100 %** (« taille réelle »), sans ajustement à la page, sans en-tête ni pied de page ; le format de papier est celui des réglages.
 3. Vérifier à la règle que la barre graduée en bas de chaque planche mesure **100 mm** avant de coller et de couper.
 
-Les mêmes réglages se donnent dans l'adresse, pour produire un PDF sans interaction : `planches.html#format=A3&orientation=paysage&fond=oui&etiquettes=oui&ville=45&terrain=oui&villes=oui&evenements=oui&miroir=non` (Edge sans fenêtre : `--headless=new --no-pdf-header-footer --print-to-pdf=<fichier>`). Le rangement laisse 8 mm au bord de la feuille et au moins 4 mm entre les fonds perdus de deux pièces ; les pièces sont tournées par sixièmes de tour pour s'emboîter. Avec les réglages par défaut : 4 planches A3.
+Les mêmes réglages se donnent dans l'adresse, pour produire un PDF sans interaction : `planches.html#format=A3&orientation=paysage&fond=oui&etiquettes=oui&ville=45&terrain=oui&villes=oui&evenements=oui&miroir=non&captures=5` (Edge sans fenêtre : `--headless=new --no-pdf-header-footer --print-to-pdf=<fichier>`). Le rangement laisse 8 mm au bord de la feuille et au moins 4 mm entre les fonds perdus de deux pièces ; les pièces sont tournées par sixièmes de tour pour s'emboîter. Avec les réglages par défaut : 4 planches A3.
 
 **Jeu en miroir** (au cas où) : la case « Miroir » (ou `#miroir=oui`) donne les mêmes tuiles retournées gauche-droite, formes et terrains compris, sur des planches autonomes à imprimer à part : trait de coupe, fond perdu, cartouche « Planche n / N — miroir », et la mention « (miroir) » après le nom de chaque pièce. Les planches sont celles du jeu ordinaire, retournées : même nombre de planches.
 
