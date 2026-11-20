@@ -384,7 +384,11 @@
     }).map(function (tr) { return tr.getAttribute('data-modele'); }).join() === 'R,VN' && !$('#inv-pieces [data-modele="P"]'));
     verifier('totaux : 28 pièces, 95 cases, dont 24 pièces de terrain pour 91 cases', /28 pièces, 95 cases \(dont 24 pièces de terrain pour 91 cases, et 2 tuiles de remplissage facultatives\)/.test($('#inv-totaux').textContent), $('#inv-totaux').textContent);
     verifier('quantités posées sur le plateau courant', /26 pièces posées \(93 cases\), 2 restantes/.test($('#inv-totaux').textContent), $('#inv-totaux').textContent);
-    verifier('répartition affichée', /75 cases des monoblocs/.test($('#inv-repartition').textContent) && /53 plaines \(70,7 %\)/.test($('#inv-repartition').textContent) && /11 forêts \(14,7 %\)/.test($('#inv-repartition').textContent) && /11 marais \(14,7 %\)/.test($('#inv-repartition').textContent), $('#inv-repartition').textContent);
+    verifier('répartition affichée', /75 cases des monoblocs/.test($('#inv-repartition').textContent) && /49 plaines \(65,3 %\)/.test($('#inv-repartition').textContent) && /13 forêts \(17,3 %\)/.test($('#inv-repartition').textContent) && /13 marais \(17,3 %\)/.test($('#inv-repartition').textContent)
+      && /visé : 65 \/ 17,5 \/ 17,5/.test($('#inv-repartition').textContent), $('#inv-repartition').textContent);
+    verifier('catalogue : aucun monobloc de terrain tout en plaine (chaque ligne de monobloc porte une forêt ou un marais)', AT.catalogue.monoblocsToutPlaine().length === 0
+      && $$('#inv-pieces tbody tr[data-modele]').filter(function (tr) { var t = tr.textContent; return /[34] cases : /.test(t) && !/forêt|marais|montagne/.test(t); }).length === 0
+      && !$('#inv-pieces [data-modele="P4A"]') && !!$('#inv-pieces [data-modele="FS4B"]'));
     verifier('villes : 2 villes neutres et 4 tuiles de ville de déploiement, 4 posées', /2 villes neutres/.test($('#inv-villes').textContent) && /4 tuiles de ville de déploiement/.test($('#inv-villes').textContent)
       && /4 posée\(s\) sur le plateau courant/.test($('#inv-villes').textContent), $('#inv-villes').textContent);
     var plaines = $('#inv-pieces [data-modele="R"]').querySelectorAll('td.at-nombre');
@@ -1293,11 +1297,11 @@
     verifier('« Nouveau plateau vierge » : le seul noyau au centre (7 cases)', vp.plateau().pieces.length === 1 && vp.plateau().pieces[0].modele === 'N1' && casesDessinees(vue) === 7 && vp.etat().rang === rangAvant + 1);
     verifier('grille vide : 169 − 7 = 162 cases fantômes cliquables', casesGrilleDessinees(vue) === 162, casesGrilleDessinees(vue));
     verifier('palette du catalogue 2 : 25 pièces par rôle et par taille, remplissages « facultatif », villes absentes (étape « Villes »), noyau épuisé', $$('#pl-stock [data-modele]').length === 25 && $$('#pl-stock [data-modele] svg').length === 25
-      && $('#pl-stock [data-modele="N1"]').disabled && /Pré en losange × 1/.test($('#pl-stock [data-modele="P4A"]').textContent) && !$('#pl-stock [data-modele="VN"]') && !!$('#cr-note-villes')
+      && $('#pl-stock [data-modele="N1"]').disabled && /Haie × 1/.test($('#pl-stock [data-modele="F31C"]').textContent) && !$('#pl-stock [data-modele="VN"]') && !!$('#cr-note-villes')
       && $$('#pl-stock h3[data-groupe]').map(function (h) { return h.getAttribute('data-groupe'); }).join() === 'socle,quatre,trois,remplissage' && /facultatif/.test($('#pl-stock [data-modele="R"]').textContent)
       && /Remplissage × 2/.test($('#pl-stock [data-modele="R"]').textContent) && !$('#pl-stock [data-modele="P"]') && !$('#pl-stock [data-modele="V"]'), $$('#pl-stock [data-modele]').length);
     verifier('reste à faire : 23 pièces de terrain, 6 villes, 2 villes de déploiement en haut et 2 en bas, 2 villes neutres, erreurs en cours',
-      /à poser : 23/.test(reste('pieces')) && /1 × Pré en losange/.test(reste('pieces')) && /Villes : 1 \/ 7 — il en manque 6/.test(reste('villes')) && /Villes neutres \(une par flanc\) : 0 \/ 2 — il en manque 2/.test(reste('neutres'))
+      /à poser : 23/.test(reste('pieces')) && /1 × Haie/.test(reste('pieces')) && /Villes : 1 \/ 7 — il en manque 6/.test(reste('villes')) && /Villes neutres \(une par flanc\) : 0 \/ 2 — il en manque 2/.test(reste('neutres'))
       && /en haut \(Vert\) : 0 \/ 2 — il en manque 2/.test(reste('haut')) && /en bas \(Rouge\) : 0 \/ 2 — il en manque 2/.test(reste('bas'))
       && /Erreurs en cours : [1-9]/.test(reste('erreurs')) && !$('#cr-termine'), $('#cr-reste').textContent);
     clic($('#pl-annuler'));
@@ -2396,7 +2400,7 @@
     verifier('inventaire : villes de déploiement « posées par-dessus une Plaine », 4 tuiles, 4 posées, 0 restante', vdLigne[0].textContent === '4' && vdLigne[1].textContent === '4' && vdLigne[2].textContent === '0'
       && /PAR-DESSUS une Plaine/.test($('#inv-pieces [data-role="deploiement"]').textContent) && $$('#inv-pieces [data-deploiement="VD"] svg').length === 2);
     verifier('inventaire : totaux du catalogue 2 et répartition justes ; pas de section « ancien catalogue » sur un plateau du catalogue 2', /Catalogue : 28 pièces, 95 cases/.test($('#inv-totaux').textContent)
-      && /26 pièces posées \(93 cases\), 2 restantes/.test($('#inv-totaux').textContent) && /53 plaines \(70,7 %\)/.test($('#inv-repartition').textContent) && /7 villes sur un plateau complet/.test($('#inv-repartition').textContent)
+      && /26 pièces posées \(93 cases\), 2 restantes/.test($('#inv-totaux').textContent) && /49 plaines \(65,3 %\)/.test($('#inv-repartition').textContent) && /7 villes sur un plateau complet/.test($('#inv-repartition').textContent)
       && !$('#inv-ancien') && !$('#inv-titre-ancien'), $('#inv-totaux').textContent);
 
     // Anciens plateaux (premier catalogue) : bandeau discret, contrôles adaptés, section d'inventaire.
@@ -2423,9 +2427,10 @@
     verifier('ancien plateau, étape « Villes » : dit qu’elle est faite pour le catalogue 2, sans « terrain non fini »', /Plateau de l’ancien catalogue/.test($('#vi-etape').textContent) && !/Le terrain n’est pas fini/.test($('#vi-etape').textContent));
     mode('generer');
     AT.app.montrer('inventaire');
-    verifier('inventaire d’un ancien plateau : ses tuiles ne sont pas listées « à prévoir en plus », elles sont comptées à part', /Tuiles hors catalogue posées : aucune\. Les 55 tuiles de l’ancien catalogue de ce plateau sont comptées à part/.test($('#inv-hors-catalogue').textContent),
+    verifier('inventaire d’un ancien plateau : ses tuiles ne sont pas listées « à prévoir en plus », elles sont comptées à part', /Tuiles hors catalogue posées : aucune\. Les 57 tuiles de l’ancien catalogue de ce plateau sont comptées à part/.test($('#inv-hors-catalogue').textContent),
       $('#inv-hors-catalogue').textContent);
-    verifier('inventaire d’un ancien plateau : section « Ancien catalogue (sur ce plateau) » avec ses tuiles d’une case', !!$('#inv-ancien') && $$('#inv-ancien tbody tr').length === 4
+    verifier('inventaire d’un ancien plateau : section « Ancien catalogue (sur ce plateau) » avec ses tuiles d’une case et ses deux monoblocs retirés depuis', !!$('#inv-ancien') && $$('#inv-ancien tbody tr').length === 6
+      && /^3 cases : 2 × forêt, 1 × plaine/.test($('#inv-ancien [data-modele="F21"] td:nth-of-type(2)').textContent)
       && $('#inv-ancien [data-modele="V"] td.at-nombre').textContent === '6' && /Catalogue : 28 pièces, 95 cases/.test($('#inv-totaux').textContent), $('#inv-ancien') && $('#inv-ancien').textContent);
     AT.app.montrer('plateau');
     var bib = vp.bibliotheque;

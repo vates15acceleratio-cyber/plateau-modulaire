@@ -122,10 +122,10 @@ test('inventaire : tout posé, pièces restantes, remplissages facultatifs, stoc
   assert.match(tout[1].message, /Tuiles facultatives non posées : 2 × Remplissage/);
 
   const p = complet();
-  const retiree = p.pieces.filter((x) => x.modele === 'P3A')[0];
+  const retiree = p.pieces.filter((x) => x.modele === 'F12A')[0];
   const moins = K.inventaire(P.retirer(p, retiree.id).plateau);
   assert.deepStrictEqual(alertes(moins).length, 1);
-  assert.match(alertes(moins)[0].message, /Pièces de terrain restantes \(1\) : 1 × Pré en triangle/);
+  assert.match(alertes(moins)[0].message, /Pièces de terrain restantes \(1\) : 1 × Bouquet/);
 
   // Les villes neutres restantes ne sont pas l'affaire de l'inventaire.
   assert.strictEqual(alertes(K.inventaire(construit())).length, 0);
@@ -162,7 +162,7 @@ test('continuité : chevauchement, plateau en morceaux, cases franchissables cou
   assert.deepStrictEqual(e1[0].cases, ['1,0']);
 
   const loin = complet();
-  loin.pieces.filter((x) => x.modele === 'P3A')[0].q = 20;
+  loin.pieces.filter((x) => x.modele === 'F12A')[0].q = 20;
   assert.ok(erreurs(K.continuite(loin)).some((x) => /morceaux/.test(x.message)));
 
   // Deux plaines qui ne se rejoignent que par une montagne : un seul tenant, mais pas reliées.
@@ -252,7 +252,7 @@ test('contact : les deux mesures sont calculées ; seule la mesure retenue donne
 
 test('contact : une tuile de remplissage a son propre seuil ; les villes neutres ne comptent pas', () => {
   // Deux monoblocs et un remplissage qui touche les deux : le remplissage touche 2 pièces.
-  const p = monter([['P3A', 0, 0], ['P3C', 2, 0], ['R', 1, 1]]);
+  const p = monter([['F12A', 0, 0], ['F12C', 2, 0], ['R', 1, 1]]);
   const r = K.contacts(p).filter((x) => x.modele === 'R')[0];
   assert.strictEqual(r.pieces, 2);
   const pieces = (options) => K.contact(p, Object.assign({ mesureContact: 'pieces' }, options)).filter((x) => x.donnees.mesure === 'pieces')[0];
@@ -399,11 +399,11 @@ test('équilibre : message et répartition des terrains', () => {
   const complets = K.controleEquilibre(complet());
   assert.strictEqual(erreurs(complets).length, 0);
   assert.match(complets[0].message, /^Équilibre : score \d+ .*Écart vers le centre \d+, vers les villes neutres \d+, vers les villes de déploiement adverses \d+\./);
-  // Terrain construit : 59 plaines (53 des monoblocs + 6 du noyau), 11 forêts, 11 marais.
-  assert.deepStrictEqual(K.repartition(construit()), { total: 81, plaine: 59, foret: 11, marais: 11 });
+  // Terrain construit : 55 plaines (49 des monoblocs + 6 du noyau), 13 forêts, 13 marais.
+  assert.deepStrictEqual(K.repartition(construit()), { total: 81, plaine: 55, foret: 13, marais: 13 });
   // Plateau fini : 4 Plaines portent une ville de déploiement.
-  assert.deepStrictEqual(K.repartition(complet()), { total: 77, plaine: 55, foret: 11, marais: 11 });
-  assert.ok(complets.some((x) => /plaines 71,4 %, forêts 14,3 %, marais 14,3 %/.test(x.message)));
+  assert.deepStrictEqual(K.repartition(complet()), { total: 77, plaine: 51, foret: 13, marais: 13 });
+  assert.ok(complets.some((x) => /plaines 66,2 %, forêts 16,9 %, marais 16,9 % \(visé : 65 \/ 17,5 \/ 17,5\)/.test(x.message)));
 });
 
 test('événements : pose correcte, pose fautive venue d’un fichier, jamais sur une ville de déploiement, coupure', () => {

@@ -162,13 +162,15 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
             }
             if (!libre) continue;
             // Contact : côtés communs et pièces distinctes ; montagnes à distance l'une de l'autre.
-            var cotes = 0, voisinesP = new Set(), tropPres = false, loin = 0;
+            var cotes = 0, voisinesP = new Set(), tropPres = false, loin = 0, accolees = 0;
             for (i = 0; i < liste.length; i++) {
               loin += eloignement(liste[i]);
+              var special = modele.cases[i].terrain === 'foret' || modele.cases[i].terrain === 'marais' ? modele.cases[i].terrain : null;
               for (j = 0; j < 6; j++) {
                 var o = occupe[liste[i] + PAS_VOISINS[j]];
                 if (o === -1) continue;
                 cotes += 1; voisinesP.add(o);
+                if (special && terrain[liste[i] + PAS_VOISINS[j]] === special) accolees += 1;      // forêt contre forêt, marais contre marais
                 if (estMontagne && posees[o].montagne && R.montagnesEcart > 1) tropPres = true;
               }
             }
@@ -189,7 +191,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
             for (i = 0; i < liste.length; i++) occupe[liste[i]] = -1;
             if (refusee || enfermees.length > stockR || (enfermees.length && !assez)) continue;
             var rang = assez ? (enfermees.length ? 1 : 0) : 2;
-            var note = cotes + 1.5 * Math.min(voisinesP.size, 4) - R.compacite * loin / liste.length + R.fantaisie * alea.suivant() - 4 * enfermees.length;
+            var note = cotes + 1.5 * Math.min(voisinesP.size, 4) - R.compacite * loin / liste.length + R.fantaisie * alea.suivant() - 4 * enfermees.length
+              + (R.accolerSpeciales || 0) * accolees;
             if (note > notes[rang]) {
               notes[rang] = note;
               meilleurs[rang] = { q: Math.floor(ancre / LARGEUR) - DECALAGE, r: (ancre % LARGEUR) - DECALAGE, rotation: oi, enfermees: enfermees };

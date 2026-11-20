@@ -93,7 +93,7 @@ test('palette : catalogue imprimé puis pièces personnelles, jamais la montagne
 test('resteAFaire : plateau vierge, plateau en cours, plateau généré terminé', () => {
   const vierge = P.vierge(1), r0 = VC.resteAFaire(vierge, K.tout(vierge));
   assert.strictEqual(r0.nbPieces, 23, '2 montagnes et 21 monoblocs de terrain');
-  assert.deepStrictEqual(r0.pieces.filter((x) => x.id === 'P4A')[0], { id: 'P4A', nom: 'Pré en losange', restant: 1 });
+  assert.deepStrictEqual(r0.pieces.filter((x) => x.id === 'F31C')[0], { id: 'F31C', nom: 'Haie', restant: 1 });
   assert.ok(!r0.pieces.some((x) => x.id === 'R' || x.id === 'VN'), 'ni les remplissages (facultatifs) ni les villes neutres');
   assert.deepStrictEqual(r0.facultatives, [{ id: 'R', nom: 'Remplissage', restant: 2 }]);
   assert.deepStrictEqual(r0.neutres, { posees: 0, voulues: 2, manquantes: 2, enTrop: 0 });

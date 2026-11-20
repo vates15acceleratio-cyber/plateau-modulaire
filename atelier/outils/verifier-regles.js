@@ -90,6 +90,8 @@ function verifier(plateau, seuil, mesure, remplissagesPermis, profondeur) {
     if (!x.terrains.every((t) => TERRAINS.includes(t))) { fautes.push('B1 : pièce ' + id + ' de terrains mêlés'); continue; }
     if (n === 1 && x.modele === 'R' && x.terrains[0] === 'plaine') { remplissages += 1; continue; }
     if (n !== 3 && n !== 4) fautes.push('B1 : pièce de terrain de ' + n + ' case(s) (' + x.modele + ')');
+    // Décision du 2026-11-19 : aucun monobloc tout en plaine (chacun porte au moins une forêt ou un marais).
+    if (x.terrains.every((t) => t === 'plaine')) fautes.push('B1 : monobloc tout en plaine (' + x.modele + ')');
   }
   if (remplissages > remplissagesPermis) fautes.push('B2 : ' + remplissages + ' tuile(s) de remplissage pour ' + remplissagesPermis + ' permise(s)');
   // B3 : toutes les pièces de construction du catalogue, ni plus ni moins.

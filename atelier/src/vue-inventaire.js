@@ -65,7 +65,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    * Inventaire du catalogue 2 PAR RÔLE (fonction pure), à partir de bilan(). Renvoie {
    *   roles: [{id, titre, note, lignes: [lignes de bilan()], pieces, cases, poses}]   (dans l'ordre de ROLES),
    *   deploiements: {total, parCamp, poses, restantes, vert, rouge}   (tuiles posées PAR-DESSUS une Plaine),
-   *   terrain: {cases, plaine, foret, marais}   (monoblocs de terrain seuls : la répartition visée 70 / 15 / 15),
+   *   terrain: {cases, plaine, foret, marais}   (monoblocs de terrain seuls : la répartition visée 65 / 17,5 / 17,5),
    *   remplissage: {pieces, plaine}, montagne: cases, villes: nombre total de villes d'un plateau complet,
    *   ancien: {present, lignes: [{id, nom, cases, poses}], pieces}   (tuiles du premier catalogue sur CE plateau ;
    *            present = le plateau porte une tuile de ville d'une case, marque d'un vrai plateau de l'ancien catalogue) }.
@@ -166,12 +166,12 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         el('h2', { id: 'inv-titre-ancien', texte: 'Ancien catalogue (sur ce plateau)' }),
         el('p', { classe: 'at-aide', texte: 'Ce plateau a été fait avec le premier catalogue : ses tuiles d’une case restent lisibles, mais ne font plus partie du catalogue imprimé.' }),
         el('table', { classe: 'at-table at-table-large', id: 'inv-ancien' }, [
-          entetes(['Dessin', 'Tuile', 'Contenu', 'Posées']),
+          entetes(['Dessin', 'Pièce', 'Contenu', 'Posées']),
           el('tbody', null, roles.ancien.lignes.map(function (x) {
             return el('tr', { 'data-modele': x.id }, [
               el('td', { classe: 'at-cellule-dessin' }, R.dessinModele(x.id, { echelle: 0.3, titre: x.nom })),
               el('th', { scope: 'row' }, [x.nom, el('span', { classe: 'at-identifiant', texte: ' ' + x.id })]),
-              el('td', { texte: '1 case : ' + contenuCases(C.MODELES_HORS_CATALOGUE[x.id]) }),
+              el('td', { texte: C.MODELES_HORS_CATALOGUE[x.id].cases.length + (C.MODELES_HORS_CATALOGUE[x.id].cases.length > 1 ? ' cases : ' : ' case : ') + contenuCases(C.MODELES_HORS_CATALOGUE[x.id]) }),
               el('td', { classe: 'at-nombre', texte: x.poses })
             ]);
           }))
@@ -217,8 +217,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         el('h2', { texte: 'Pièces du catalogue' }),
         el('p', { id: 'inv-totaux', texte: 'Catalogue : ' + totaux.pieces + ' pièces, ' + totaux.cases + ' cases (dont ' + totaux.construction.pieces + ' pièces de terrain pour ' + totaux.construction.cases + ' cases, et ' + totaux.facultatives + ' tuiles de remplissage facultatives). Sur le plateau courant : ' + poses + ' pièces posées (' + casesPosees + ' cases), ' + b.restantes + ' restantes.' }),
         el('p', { id: 'inv-repartition', texte: 'Répartition du terrain (les ' + tr.cases + ' cases des monoblocs de 3 et 4 cases) : ' + tr.plaine + ' plaines (' + partTerrain(tr.plaine) + '), '
-          + tr.foret + ' forêts (' + partTerrain(tr.foret) + '), ' + tr.marais + ' marais (' + partTerrain(tr.marais) + ') ; visé : ' + C.REGLAGES.repartitionVisee.plaine + ' / ' + C.REGLAGES.repartitionVisee.foret + ' / '
-          + C.REGLAGES.repartitionVisee.marais + '. En plus : ' + roles.montagne + ' cases de montagne, les 6 plaines du noyau, ' + roles.remplissage.plaine + ' plaines de remplissage facultatives, et ' + roles.villes
+          + tr.foret + ' forêts (' + partTerrain(tr.foret) + '), ' + tr.marais + ' marais (' + partTerrain(tr.marais) + ') ; visé : ' + ['plaine', 'foret', 'marais'].map(function (t) { return String(C.REGLAGES.repartitionVisee[t]).replace('.', ','); }).join(' / ')
+          + '. En plus : ' + roles.montagne + ' cases de montagne, les 6 plaines du noyau, ' + roles.remplissage.plaine + ' plaines de remplissage facultatives, et ' + roles.villes
           + ' villes sur un plateau complet (celle du noyau, ' + (C.MODELES.VN ? C.MODELES.VN.nombre : 0) + ' neutres, ' + C.VILLE_DEPLOIEMENT.nombre + ' de déploiement).' }),
         el('table', { classe: 'at-table at-table-large', id: 'inv-pieces' }, [
           entetes(['Dessin', 'Pièce', 'Contenu', 'Total', 'Posées', 'Restantes']),

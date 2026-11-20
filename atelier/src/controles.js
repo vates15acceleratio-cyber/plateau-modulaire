@@ -89,6 +89,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     if (inconnues) res.push(constat('inventaire', 'erreur', pluriel(inconnues, 'pièce') + ' hors catalogue sur le plateau.', []));
     var stock = P.stock(plateau), restantes = [], nbRestantes = 0, restantesPerso = [], nbRestantesPerso = 0;
     var enPlus = [], nbEnPlus = 0, casesEnPlus = [], parModele = {}, facultatives = [];
+    var monoblocsAnciens = [], nbMonoblocsAnciens = 0, casesMonoblocsAnciens = [];
     var casesDe = function (liste) {
       var cases = [];
       liste.forEach(function (p) { P.casesPiece(p, plateau).forEach(function (c) { cases.push(c.cle); }); });
@@ -98,7 +99,11 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var s = stock[id], m = P.modele(plateau, id);
       if (s.restant < 0) {
         var posees = pieces.filter(function (p) { return p.modele === id; });
-        if (ancien && m.ancien === true) {
+        if (m.ancien === true && m.cases.length > 1) {
+          // Monobloc retiré du catalogue (relu d'un fichier) : ni faute ni « stock dépassé ». Sur un plateau du premier
+          // catalogue il fait partie de ce catalogue-là ; ailleurs, il est signalé plus bas, en alerte.
+          if (!ancien) { monoblocsAnciens.push(s.poses + ' × ' + m.nom); nbMonoblocsAnciens += s.poses; casesMonoblocsAnciens = casesMonoblocsAnciens.concat(casesDe(posees)); }
+        } else if (ancien && m.ancien === true) {
           detailAnciennes.push(s.poses + ' × ' + m.nom);
           nbAnciennes += s.poses;
         } else if (m.cases.length === 1) {
@@ -133,6 +138,10 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       res.push(constat('inventaire', 'alerte', 'Tuiles à prévoir en plus du catalogue (' + nbEnPlus + ') : ' + enPlus.join(', ') + '.', casesEnPlus,
         { enPlus: nbEnPlus, parModele: parModele }));
     }
+    if (nbMonoblocsAnciens) {
+      res.push(constat('inventaire', 'alerte', pluriel(nbMonoblocsAnciens, 'monobloc') + ' d’un ancien catalogue sur le plateau (' + monoblocsAnciens.join(', ')
+        + ') : ces pièces ne sont plus au catalogue imprimé (aucun monobloc tout en plaine, forêt ou marais à une extrémité).', casesMonoblocsAnciens, { monoblocsAnciens: nbMonoblocsAnciens }));
+    }
     var montagnes = pieces.filter(function (p) {
       var m = P.modele(plateau, p.modele);
       return !!m && m.cases.length === 1 && m.cases[0].terrain === 'montagne';
@@ -146,6 +155,17 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       var m = P.modele(plateau, p.modele);
       return !!m && m.perso === true && montagneHorsBloc(m.cases);
     });
+    // Décision du 2026-11-19 : aucun monobloc tout en plaine. Pour une pièce personnelle, c'est un rappel, pas une faute.
+    var toutPlaine = pieces.filter(function (p) {
+      var m = P.modele(plateau, p.modele);
+      return !!m && m.perso === true && C.toutEnPlaine(m.cases);
+    });
+    if (toutPlaine.length) {
+      var nomsPlaine = [];
+      toutPlaine.forEach(function (p) { var nom = P.modele(plateau, p.modele).nom; if (nomsPlaine.indexOf(nom) === -1) nomsPlaine.push(nom); });
+      res.push(constat('inventaire', 'alerte', pluriel(toutPlaine.length, 'monobloc personnel', 'monoblocs personnels') + ' tout en plaine (' + nomsPlaine.join(', ')
+        + ') : la décision en vigueur est « chaque monobloc de terrain porte au moins une forêt ou un marais ».', casesDe(toutPlaine), { monoblocsToutPlaine: toutPlaine.length }));
+    }
     if (horsBloc.length) {
       var noms = [];
       horsBloc.forEach(function (p) { var nom = P.modele(plateau, p.modele).nom; if (noms.indexOf(nom) === -1) noms.push(nom); });
@@ -198,6 +218,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     var res = [];
     var fautifs = C.monoblocsAvecVille();
     if (fautifs.length) res.push(constat('monoblocs', 'erreur', 'Catalogue : ville dans un monobloc hors noyau (' + fautifs.join(', ') + ').', []));
+    var plats = C.monoblocsToutPlaine();
+    if (plats.length) res.push(constat('monoblocs', 'erreur', 'Catalogue : monobloc de terrain tout en plaine (' + plats.join(', ') + ') ; chaque monobloc porte au moins une forêt ou un marais.', []));
     // Une pièce personnelle validée n'a jamais de ville ; un document monté en mémoire est quand même vérifié.
     var fautifsPerso = P.modeles(plateau).filter(function (m) {
       return !C.modele(m.id) && m.cases.length > 1 && m.cases.some(function (c) { return c.terrain === 'ville'; });
@@ -522,7 +544,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     if (n.total) {
       var v = C.REGLAGES.repartitionVisee;
       res.push(constat('equilibre', 'info', 'Terrains (hors villes et montagnes) : plaines ' + pourcent(100 * n.plaine / n.total) + ', forêts ' + pourcent(100 * n.foret / n.total)
-        + ', marais ' + pourcent(100 * n.marais / n.total) + ' (visé : ' + v.plaine + ' / ' + v.foret + ' / ' + v.marais + ').', [], n));
+        + ', marais ' + pourcent(100 * n.marais / n.total) + ' (visé : ' + [v.plaine, v.foret, v.marais].map(function (x) { return String(x).replace('.', ','); }).join(' / ') + ').', [], n));
     }
     return res;
   }
@@ -567,7 +589,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
    */
   function etape(plateau) {
     var reste = resteConstruction(plateau), etat = P.etatVilles(plateau);
-    var ancien = (plateau.pieces || []).some(function (p) { var m = C.modele(p.modele); return !!m && m.ancien === true; });
+    // « Ancien plateau » : il porte des tuiles d'une case du premier catalogue. Un monobloc retiré depuis ne suffit pas.
+    var ancien = (plateau.pieces || []).some(function (p) { var m = C.modele(p.modele); return !!m && m.ancien === true && m.cases.length === 1; });
     var nom = reste.nombre ? 'construction' : (etat.completes ? 'complet' : 'villes'), message;
     if (nom === 'construction') message = 'Construction en cours : ' + pluriel(reste.nombre, 'pièce') + ' de terrain à poser.';
     else if (nom === 'villes') message = 'Construction terminée, villes à poser : ' + texteVillesManquantes(etat.manquantes) + '.';

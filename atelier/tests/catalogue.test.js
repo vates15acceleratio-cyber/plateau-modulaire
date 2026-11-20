@@ -4,21 +4,22 @@ const assert = require('node:assert');
 const H = require('../src/hex.js');
 const C = require('../src/catalogue.js');
 
-test('totaux du catalogue 2 : 24 pièces de construction pour 91 cases ; 21 monoblocs = 53 plaines / 11 forêts / 11 marais', () => {
+test('totaux du catalogue 2 : 24 pièces de construction pour 91 cases ; 21 monoblocs = 49 plaines / 13 forêts / 13 marais', () => {
   const t = C.totaux();
   assert.deepStrictEqual(t.construction, { pieces: 24, cases: 91 });
   assert.strictEqual(t.pieces, 28, 'avec 2 remplissages et 2 villes neutres');
   assert.strictEqual(t.cases, 95);
   assert.strictEqual(t.facultatives, 2);
   assert.strictEqual(t.parTerrain.montagne, 9);
-  assert.strictEqual(t.parTerrain.foret, 11);
-  assert.strictEqual(t.parTerrain.marais, 11);
+  assert.strictEqual(t.parTerrain.foret, 13);
+  assert.strictEqual(t.parTerrain.marais, 13);
   assert.strictEqual(t.parTerrain.ville, 3, 'le centre et les 2 villes neutres');
   // Les 21 monoblocs de terrain : 75 cases.
   const terrain = C.idsParRole('terrain'), n = { plaine: 0, foret: 0, marais: 0 };
   assert.strictEqual(terrain.length, 21);
   terrain.forEach((id) => C.MODELES[id].cases.forEach((c) => { n[c.terrain] += C.MODELES[id].nombre; }));
-  assert.deepStrictEqual(n, { plaine: 53, foret: 11, marais: 11 });
+  assert.deepStrictEqual(n, { plaine: 49, foret: 13, marais: 13 });
+  assert.deepStrictEqual(C.REGLAGES.repartitionVisee, { plaine: 65, foret: 17.5, marais: 17.5 });
 });
 
 test('catalogue 2 : terrain en monoblocs de 3 ou 4 cases seulement, composition du cahier des charges (§9.2)', () => {
@@ -35,8 +36,8 @@ test('catalogue 2 : terrain en monoblocs de 3 ou 4 cases seulement, composition 
   });
   // « cases:plaines/forêts/marais » → nombre de pièces.
   assert.deepStrictEqual(compte, {
-    '4:4/0/0': 5, '4:3/1/0': 2, '4:3/0/1': 2, '4:2/2/0': 1, '4:2/0/2': 1, '4:2/1/1': 1,
-    '3:3/0/0': 3, '3:0/3/0': 1, '3:0/0/3': 1, '3:1/2/0': 1, '3:1/0/2': 1, '3:2/1/0': 1, '3:2/0/1': 1
+    '4:3/1/0': 5, '4:3/0/1': 6, '4:2/1/1': 1,
+    '3:0/3/0': 1, '3:0/0/3': 1, '3:2/1/0': 4, '3:2/0/1': 3
   });
   // Aucune pièce de terrain d'une case au catalogue, sauf le remplissage (l'exception) ; les montagnes restent des blocs.
   const uneCase = C.ORDRE_MODELES.filter((id) => C.MODELES[id].cases.length === 1);
@@ -48,7 +49,7 @@ test('catalogue 2 : terrain en monoblocs de 3 ou 4 cases seulement, composition 
   assert.strictEqual(C.MODELES.VN.nombre, 2);
   assert.deepStrictEqual(C.idsParRole('montagne'), ['M4', 'M5']);
   assert.deepStrictEqual(C.VILLE_DEPLOIEMENT, { id: 'VD', nom: 'Ville de déploiement', nombre: 4, parCamp: 2, camps: ['vert', 'rouge'] });
-  assert.strictEqual(C.estConstruction(C.MODELES.N1) && C.estConstruction(C.MODELES.M4) && C.estConstruction(C.MODELES.P4A), true);
+  assert.strictEqual(C.estConstruction(C.MODELES.N1) && C.estConstruction(C.MODELES.M4) && C.estConstruction(C.MODELES.F31C), true);
   assert.strictEqual(C.estConstruction(C.MODELES.R) || C.estConstruction(C.MODELES.VN), false);
 });
 
@@ -81,7 +82,7 @@ test('anciens fichiers : les identifiants du premier catalogue gardent exactemen
   assert.strictEqual(cases('F21'), '0,0:foret 1,0:foret 1,1:plaine');
   assert.strictEqual(cases('S21'), '0,0:marais 1,0:marais 1,1:plaine');
   // Tuiles d'une case du premier catalogue : toujours connues, hors catalogue imprimé, quantité 0.
-  assert.deepStrictEqual(C.ORDRE_HORS_CATALOGUE, ['M1', 'P', 'F', 'S', 'V']);
+  assert.deepStrictEqual(C.ORDRE_HORS_CATALOGUE.slice(0, 5), ['M1', 'P', 'F', 'S', 'V']);
   [['P', 'plaine'], ['F', 'foret'], ['S', 'marais'], ['V', 'ville'], ['M1', 'montagne']].forEach(([id, terrain]) => {
     const m = C.modele(id);
     assert.deepStrictEqual(m.cases, [{ q: 0, r: 0, terrain }]);
@@ -119,7 +120,7 @@ test('chaque forme part de (0,0), sans case en double, d’un seul tenant', () =
 });
 
 test('contenu des monoblocs de forêt et de marais ; jumeaux de même forme', () => {
-  const terrains = (id) => C.MODELES[id].cases.map((c) => c.terrain);
+  const terrains = (id) => C.modele(id).cases.map((c) => c.terrain);
   assert.deepStrictEqual(terrains('F3'), ['foret', 'foret', 'foret']);
   assert.deepStrictEqual(terrains('F31'), ['foret', 'plaine', 'plaine', 'plaine']);
   assert.deepStrictEqual(terrains('F21'), ['foret', 'foret', 'plaine']);
@@ -127,7 +128,7 @@ test('contenu des monoblocs de forêt et de marais ; jumeaux de même forme', ()
   assert.deepStrictEqual(terrains('S31'), ['marais', 'plaine', 'plaine', 'plaine']);
   assert.deepStrictEqual(terrains('S21'), ['marais', 'marais', 'plaine']);
   [['F3', 'S3'], ['F31', 'S31'], ['F21', 'S21']].forEach(([f, s]) => {
-    assert.deepStrictEqual(C.MODELES[f].cases.map((c) => [c.q, c.r]), C.MODELES[s].cases.map((c) => [c.q, c.r]));
+    assert.deepStrictEqual(C.modele(f).cases.map((c) => [c.q, c.r]), C.modele(s).cases.map((c) => [c.q, c.r]));
   });
   assert.ok(terrains('M4').concat(terrains('M5')).every((t) => t === 'montagne'));
 });

@@ -26,7 +26,9 @@ test('vérificateur indépendant : un plateau généré est conforme (2 rangées
   assert.deepStrictEqual(fautes(bon()), []);
   const trois = G.generer(2, { profondeurExtremite: 3 }).plateau;
   assert.deepStrictEqual(fautes(trois, { profondeur: 3 }), []);
-  const un = G.generer(2, { profondeurExtremite: 1 }).plateau;
+  let un = null;      // à 1 rangée, toutes les graines ne réussissent pas : la première qui réussit
+  for (let g = 1; g <= 80 && !un; g++) un = G.generer(g, { profondeurExtremite: 1 }).plateau;
+  assert.ok(un, 'une graine de 1 à 80 réussit à 1 rangée');
   assert.deepStrictEqual(fautes(un, { profondeur: 1 }), []);
   let avecR = null;
   for (let g = 1; g <= 40 && !avecR; g++) { const r = G.generer(g, { remplissages: 2 }); if (r.ok && r.plateau.pieces.some((x) => x.modele === 'R')) avecR = r.plateau; }

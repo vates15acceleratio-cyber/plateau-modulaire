@@ -1,0 +1,217 @@
+{
+ "version": 2,
+ "graine": 12,
+ "pieces": [
+  {
+   "id": "p1",
+   "modele": "N1",
+   "q": 0,
+   "r": 0,
+   "rotation": 0
+  },
+  {
+   "id": "p2",
+   "modele": "F12",
+   "q": -2,
+   "r": 2,
+   "rotation": 4
+  },
+  {
+   "id": "p3",
+   "modele": "S22",
+   "q": 2,
+   "r": 0,
+   "rotation": 2
+  },
+  {
+   "id": "p4",
+   "modele": "M5",
+   "q": 3,
+   "r": -3,
+   "rotation": 1
+  },
+  {
+   "id": "p5",
+   "modele": "F3",
+   "q": 1,
+   "r": -2,
+   "rotation": 4
+  },
+  {
+   "id": "p6",
+   "modele": "F31",
+   "q": 0,
+   "r": -2,
+   "rotation": 2
+  },
+  {
+   "id": "p7",
+   "modele": "P4D",
+   "q": -1,
+   "r": -3,
+   "rotation": 4
+  },
+  {
+   "id": "p8",
+   "modele": "FS4",
+   "q": -3,
+   "r": -2,
+   "rotation": 1
+  },
+  {
+   "id": "p9",
+   "modele": "M4",
+   "q": -5,
+   "r": -1,
+   "rotation": 0
+  },
+  {
+   "id": "p10",
+   "modele": "S12",
+   "q": -3,
+   "r": 1,
+   "rotation": 2
+  },
+  {
+   "id": "p11",
+   "modele": "P4A",
+   "q": -3,
+   "r": 2,
+   "rotation": 1
+  },
+  {
+   "id": "p12",
+   "modele": "S3",
+   "q": -2,
+   "r": 4,
+   "rotation": 4
+  },
+  {
+   "id": "p13",
+   "modele": "F31B",
+   "q": -5,
+   "r": 1,
+   "rotation": 1
+  },
+  {
+   "id": "p14",
+   "modele": "P4C",
+   "q": -3,
+   "r": 4,
+   "rotation": 2
+  },
+  {
+   "id": "p15",
+   "modele": "S31B",
+   "q": -5,
+   "r": 0,
+   "rotation": 3
+  },
+  {
+   "id": "p16",
+   "modele": "S31",
+   "q": -2,
+   "r": -4,
+   "rotation": 2
+  },
+  {
+   "id": "p17",
+   "modele": "F21",
+   "q": 1,
+   "r": -4,
+   "rotation": 3
+  },
+  {
+   "id": "p18",
+   "modele": "P3A",
+   "q": 2,
+   "r": -4,
+   "rotation": 5
+  },
+  {
+   "id": "p19",
+   "modele": "F22",
+   "q": 4,
+   "r": 1,
+   "rotation": 4
+  },
+  {
+   "id": "p20",
+   "modele": "P4B",
+   "q": 4,
+   "r": -2,
+   "rotation": 1
+  },
+  {
+   "id": "p21",
+   "modele": "P3B",
+   "q": 2,
+   "r": 1,
+   "rotation": 2
+  },
+  {
+   "id": "p22",
+   "modele": "P3C",
+   "q": -1,
+   "r": 4,
+   "rotation": 2
+  },
+  {
+   "id": "p23",
+   "modele": "S21",
+   "q": 5,
+   "r": -3,
+   "rotation": 3
+  },
+  {
+   "id": "p24",
+   "modele": "P4E",
+   "q": 0,
+   "r": 4,
+   "rotation": 5
+  },
+  {
+   "id": "p25",
+   "modele": "VN",
+   "q": -7,
+   "r": 0,
+   "rotation": 0
+  },
+  {
+   "id": "p26",
+   "modele": "VN",
+   "q": 5,
+   "r": 0,
+   "rotation": 0
+  }
+ ],
+ "recouvrements": [],
+ "camps": {
+  "vert": [
+   "-1,-4",
+   "4,-4"
+  ],
+  "rouge": [
+   "-5,4",
+   "0,4"
+  ]
+ },
+ "deploiements": [
+  {
+   "cle": "-1,-4",
+   "camp": "vert"
+  },
+  {
+   "cle": "4,-4",
+   "camp": "vert"
+  },
+  {
+   "cle": "-5,4",
+   "camp": "rouge"
+  },
+  {
+   "cle": "0,4",
+   "camp": "rouge"
+  }
+ ]
+}

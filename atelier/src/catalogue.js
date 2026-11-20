@@ -4,8 +4,8 @@
  * mesures dans docs/07-mesures-catalogue-2.md.
  *
  * Tout ce qui est ici est PROVISOIRE (à valider par l'utilisateur) :
- *  - MODELES    : le catalogue 2. Noyau, 2 montagnes, 21 monoblocs de terrain de 3 ou 4 cases (75 cases : 53 plaines,
- *                 11 forêts, 11 marais), 2 tuiles de remplissage (facultatives), 2 villes neutres ;
+ *  - MODELES    : le catalogue 2. Noyau, 2 montagnes, 21 monoblocs de terrain de 3 ou 4 cases (75 cases : 49 plaines,
+ *                 13 forêts, 13 marais ; aucun tout en plaine), 2 tuiles de remplissage (facultatives), 2 villes neutres ;
  *  - VILLE_DEPLOIEMENT : la tuile de ville de déploiement, posée par-dessus une Plaine (4 tuiles, 2 par joueur) ;
  *  - MODELES_HORS_CATALOGUE : M1 (pinceau) et les tuiles d'une case du premier catalogue (P, F, S, V), gardées
  *                 lisibles pour les anciens fichiers ;
@@ -68,29 +68,33 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         ['ville', 'plaine', 'plaine', 'plaine', 'plaine', 'plaine', 'plaine']) },
     M4: { id: 'M4', nom: 'Montagne zigzag', nombre: 1, role: 'montagne', cases: forme(ZIGZAG, 'montagne') },
     M5: { id: 'M5', nom: 'Montagne peigne', nombre: 1, role: 'montagne', cases: forme([[0, 0], [1, 0], [2, 0], [0, 1], [1, 1]], 'montagne') },
-    // 12 monoblocs de 4 cases.
-    P4A: { id: 'P4A', nom: 'Pré en losange', nombre: 1, role: 'terrain', cases: forme(LOSANGE, PL) },
-    P4B: { id: 'P4B', nom: 'Pré en zigzag', nombre: 1, role: 'terrain', cases: forme(ZIGZAG, PL) },
-    P4C: { id: 'P4C', nom: 'Pré en arc', nombre: 1, role: 'terrain', cases: forme(ARC, PL) },
-    P4D: { id: 'P4D', nom: 'Pré en étoile', nombre: 1, role: 'terrain', cases: forme(ETOILE, PL) },
-    P4E: { id: 'P4E', nom: 'Pré en crosse', nombre: 1, role: 'terrain', cases: forme(CROSSE, PL) },
+    // Décision du 2026-11-19 (seconde série, point 8) : AUCUN monobloc tout en plaine. Chaque monobloc porte au moins
+    // une forêt ou un marais, placé à une EXTRÉMITÉ de la pièce (jamais au milieu), pour que les joueurs puissent
+    // former un bois ou un marécage en accolant deux ou trois pièces. Deux pièces de même contenu n'ont jamais la
+    // même forme (les deux coudes F12C et F12D sont le miroir l'un de l'autre : le carton n'a qu'un recto).
+    // 12 monoblocs de 4 cases : 5 « 1 forêt + 3 plaines », 6 « 1 marais + 3 plaines », 1 mixte (forêt et marais aux deux bouts).
     F31: { id: 'F31', nom: 'Lisière', nombre: 1, role: 'terrain', cases: forme(LOSANGE, [FO, PL, PL, PL]) },
     F31B: { id: 'F31B', nom: 'Orée', nombre: 1, role: 'terrain', cases: forme(PISTOLET, [PL, PL, PL, FO]) },
+    F31C: { id: 'F31C', nom: 'Haie', nombre: 1, role: 'terrain', cases: forme(ZIGZAG, [FO, PL, PL, PL]) },
+    F31D: { id: 'F31D', nom: 'Taillis', nombre: 1, role: 'terrain', cases: forme(ETOILE, [PL, FO, PL, PL]) },
+    F31E: { id: 'F31E', nom: 'Fourré', nombre: 1, role: 'terrain', cases: forme(CROSSE, [PL, PL, PL, FO]) },
     S31: { id: 'S31', nom: 'Mare', nombre: 1, role: 'terrain', cases: forme(LOSANGE, [MA, PL, PL, PL]) },
     S31B: { id: 'S31B', nom: 'Gué', nombre: 1, role: 'terrain', cases: forme(ARC, [MA, PL, PL, PL]) },
-    F22: { id: 'F22', nom: 'Futaie', nombre: 1, role: 'terrain', cases: forme(ZIGZAG, [FO, FO, PL, PL]) },
-    S22: { id: 'S22', nom: 'Tourbière', nombre: 1, role: 'terrain', cases: forme(CROSSE, [PL, PL, MA, MA]) },
-    FS4: { id: 'FS4', nom: 'Bocage', nombre: 1, role: 'terrain', cases: forme(ETOILE, [PL, FO, MA, PL]) },
-    // 9 monoblocs de 3 cases.
-    P3A: { id: 'P3A', nom: 'Pré en triangle', nombre: 1, role: 'terrain', cases: forme(TRIANGLE, PL) },
-    P3B: { id: 'P3B', nom: 'Pré en ligne', nombre: 1, role: 'terrain', cases: forme(LIGNE, PL) },
-    P3C: { id: 'P3C', nom: 'Pré en coude', nombre: 1, role: 'terrain', cases: forme(COUDE, PL) },
+    S31C: { id: 'S31C', nom: 'Bourbier', nombre: 1, role: 'terrain', cases: forme(ZIGZAG, [PL, PL, PL, MA]) },
+    S31D: { id: 'S31D', nom: 'Fondrière', nombre: 1, role: 'terrain', cases: forme(ETOILE, [PL, PL, MA, PL]) },
+    S31E: { id: 'S31E', nom: 'Vasière', nombre: 1, role: 'terrain', cases: forme(CROSSE, [MA, PL, PL, PL]) },
+    S31F: { id: 'S31F', nom: 'Noue', nombre: 1, role: 'terrain', cases: forme(PISTOLET, [MA, PL, PL, PL]) },
+    FS4B: { id: 'FS4B', nom: 'Bocage', nombre: 1, role: 'terrain', cases: forme(ARC, [FO, PL, PL, MA]) },
+    // 9 monoblocs de 3 cases : 3 forêts, 3 marais, 4 « 1 forêt + 2 plaines », 3 « 1 marais + 2 plaines ».
     F3: { id: 'F3', nom: 'Bois', nombre: 1, role: 'terrain', cases: forme(TRIANGLE, FO) },
     S3: { id: 'S3', nom: 'Marécage', nombre: 1, role: 'terrain', cases: forme(TRIANGLE, MA) },
-    F21: { id: 'F21', nom: 'Bosquet', nombre: 1, role: 'terrain', cases: forme(COUDE, [FO, FO, PL]) },
-    S21: { id: 'S21', nom: 'Roselière', nombre: 1, role: 'terrain', cases: forme(COUDE, [MA, MA, PL]) },
-    F12: { id: 'F12', nom: 'Clairière', nombre: 1, role: 'terrain', cases: forme(LIGNE, [PL, FO, PL]) },
+    F12A: { id: 'F12A', nom: 'Bouquet', nombre: 1, role: 'terrain', cases: forme(TRIANGLE, [FO, PL, PL]) },
+    F12B: { id: 'F12B', nom: 'Allée', nombre: 1, role: 'terrain', cases: forme(LIGNE, [FO, PL, PL]) },
+    F12C: { id: 'F12C', nom: 'Bosquet', nombre: 1, role: 'terrain', cases: forme(COUDE, [FO, PL, PL]) },
+    F12D: { id: 'F12D', nom: 'Remise', nombre: 1, role: 'terrain', cases: forme(COUDE, [PL, PL, FO]) },
     S12: { id: 'S12', nom: 'Étang', nombre: 1, role: 'terrain', cases: forme(TRIANGLE, [MA, PL, PL]) },
+    S12B: { id: 'S12B', nom: 'Fossé', nombre: 1, role: 'terrain', cases: forme(LIGNE, [MA, PL, PL]) },
+    S12C: { id: 'S12C', nom: 'Roselière', nombre: 1, role: 'terrain', cases: forme(COUDE, [MA, PL, PL]) },
     // Tuiles d'une case : remplissage (l'exception, B2) et villes neutres (B5).
     R: { id: 'R', nom: 'Remplissage', nombre: 2, role: 'remplissage', facultatif: true, cases: forme([[0, 0]], PL) },
     VN: { id: 'VN', nom: 'Ville neutre', nombre: 2, role: 'ville', cases: forme([[0, 0]], 'ville') }
@@ -98,8 +102,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
 
   /** Ordre d'affichage des modèles du catalogue imprimé. */
   var ORDRE_MODELES = ['N1', 'M4', 'M5',
-    'P4A', 'P4B', 'P4C', 'P4D', 'P4E', 'F31', 'F31B', 'S31', 'S31B', 'F22', 'S22', 'FS4',
-    'P3A', 'P3B', 'P3C', 'F3', 'S3', 'F21', 'S21', 'F12', 'S12', 'R', 'VN'];
+    'F31', 'F31B', 'F31C', 'F31D', 'F31E', 'S31', 'S31B', 'S31C', 'S31D', 'S31E', 'S31F', 'FS4B',
+    'F3', 'S3', 'F12A', 'F12B', 'F12C', 'F12D', 'S12', 'S12B', 'S12C', 'R', 'VN'];
 
   /**
    * Ville de déploiement (B4) : une tuile posée PAR-DESSUS une case de Plaine, avec un propriétaire. Ce n'est pas une
@@ -119,9 +123,26 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     P: { id: 'P', nom: 'Plaine', nombre: 0, horsCatalogue: true, ancien: true, cases: forme([[0, 0]], PL) },
     F: { id: 'F', nom: 'Forêt', nombre: 0, horsCatalogue: true, ancien: true, cases: forme([[0, 0]], FO) },
     S: { id: 'S', nom: 'Marais', nombre: 0, horsCatalogue: true, ancien: true, cases: forme([[0, 0]], MA) },
-    V: { id: 'V', nom: 'Ville (ancien catalogue)', nombre: 0, horsCatalogue: true, ancien: true, cases: forme([[0, 0]], 'ville') }
+    V: { id: 'V', nom: 'Ville (ancien catalogue)', nombre: 0, horsCatalogue: true, ancien: true, cases: forme([[0, 0]], 'ville') },
+    // Monoblocs du catalogue 2 du 2026-11-19 (première version), retirés par la décision « aucun monobloc tout en
+    // plaine, forêt ou marais à une extrémité ». Leurs cases ne doivent plus changer : des plateaux, des parties et
+    // des fiches de bibliothèque enregistrés ce jour-là les portent (tests/fixtures-v2).
+    P4A: { id: 'P4A', nom: 'Pré en losange (ancien)', nombre: 0, horsCatalogue: true, ancien: true, cases: forme(LOSANGE, PL) },
+    P4B: { id: 'P4B', nom: 'Pré en zigzag (ancien)', nombre: 0, horsCatalogue: true, ancien: true, cases: forme(ZIGZAG, PL) },
+    P4C: { id: 'P4C', nom: 'Pré en arc (ancien)', nombre: 0, horsCatalogue: true, ancien: true, cases: forme(ARC, PL) },
+    P4D: { id: 'P4D', nom: 'Pré en étoile (ancien)', nombre: 0, horsCatalogue: true, ancien: true, cases: forme(ETOILE, PL) },
+    P4E: { id: 'P4E', nom: 'Pré en crosse (ancien)', nombre: 0, horsCatalogue: true, ancien: true, cases: forme(CROSSE, PL) },
+    P3A: { id: 'P3A', nom: 'Pré en triangle (ancien)', nombre: 0, horsCatalogue: true, ancien: true, cases: forme(TRIANGLE, PL) },
+    P3B: { id: 'P3B', nom: 'Pré en ligne (ancien)', nombre: 0, horsCatalogue: true, ancien: true, cases: forme(LIGNE, PL) },
+    P3C: { id: 'P3C', nom: 'Pré en coude (ancien)', nombre: 0, horsCatalogue: true, ancien: true, cases: forme(COUDE, PL) },
+    F22: { id: 'F22', nom: 'Futaie (ancien)', nombre: 0, horsCatalogue: true, ancien: true, cases: forme(ZIGZAG, [FO, FO, PL, PL]) },
+    S22: { id: 'S22', nom: 'Tourbière (ancien)', nombre: 0, horsCatalogue: true, ancien: true, cases: forme(CROSSE, [PL, PL, MA, MA]) },
+    FS4: { id: 'FS4', nom: 'Bocage en étoile (ancien)', nombre: 0, horsCatalogue: true, ancien: true, cases: forme(ETOILE, [PL, FO, MA, PL]) },
+    F21: { id: 'F21', nom: 'Bosquet à deux forêts (ancien)', nombre: 0, horsCatalogue: true, ancien: true, cases: forme(COUDE, [FO, FO, PL]) },
+    S21: { id: 'S21', nom: 'Roselière à deux marais (ancien)', nombre: 0, horsCatalogue: true, ancien: true, cases: forme(COUDE, [MA, MA, PL]) },
+    F12: { id: 'F12', nom: 'Clairière (ancien)', nombre: 0, horsCatalogue: true, ancien: true, cases: forme(LIGNE, [PL, FO, PL]) }
   };
-  var ORDRE_HORS_CATALOGUE = ['M1', 'P', 'F', 'S', 'V'];
+  var ORDRE_HORS_CATALOGUE = ['M1', 'P', 'F', 'S', 'V', 'P4A', 'P4B', 'P4C', 'P4D', 'P4E', 'P3A', 'P3B', 'P3C', 'F22', 'S22', 'FS4', 'F21', 'S21', 'F12'];
 
   /*
    * Réserve d'événements. `sur` = condition de pose sur le terrain d'ORIGINE de la case :
@@ -168,7 +189,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       contactVilleNeutre: 2                 // cases du plateau qu'une ville neutre doit toucher au moins
     },
     // Répartition visée des terrains hors villes et montagnes, en pourcentage (affichage seulement).
-    repartitionVisee: { plaine: 70, foret: 15, marais: 15 },
+    repartitionVisee: { plaine: 65, foret: 17.5, marais: 17.5 },
     // Événements : jamais sur ces terrains d'origine, jamais sur le noyau.
     evenementsInterditsSur: ['ville'],
     evenementsInterditsSurNoyau: true,
@@ -187,7 +208,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
       etirement: 0.25,                      // le plateau est tiré au sort plus large ou plus haut, dans cette proportion
       montagnesEcart: 2,                    // distance minimale entre deux blocs de montagne (2 = une case entre eux)
       reprises: 30,                         // monoblocs repris et reposés au plus, quand ils ne touchent pas assez de pièces
-      remplissageTot: false                 // true : combler tout de suite une case enfermée plutôt que poser sous le seuil
+      remplissageTot: false,                // true : combler tout de suite une case enfermée plutôt que poser sous le seuil
+      accolerSpeciales: 0                   // > 0 : préférer les poses qui accolent forêt à forêt et marais à marais (bois et marécages plus gros) ; 0 : indifférent
     },
     // Bornes de validation d'un plateau lu dans un fichier.
     bornes: { coordonnee: 30, pieces: 200, recouvrements: 16, deploiements: 8, longueurGraine: 64, longueurId: 16, tailleFichier: 200000 },
@@ -263,6 +285,16 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
   /** Identifiants des modèles du catalogue imprimé qui ont ce rôle. */
   function idsParRole(role) { return ORDRE_MODELES.filter(function (id) { return MODELES[id].role === role; }); }
 
+  /** Vrai si une forme [{q, r, terrain}] de plusieurs cases est tout en plaine (interdit pour un monobloc de terrain). */
+  function toutEnPlaine(cases) {
+    return Array.isArray(cases) && cases.length > 1 && cases.every(function (c) { return !!c && c.terrain === 'plaine'; });
+  }
+
+  /** Catalogue imprimé : identifiants des monoblocs de terrain tout en plaine (liste vide = conforme à la décision du 2026-11-19). */
+  function monoblocsToutPlaine() {
+    return ORDRE_MODELES.filter(function (id) { return MODELES[id].role === 'terrain' && toutEnPlaine(MODELES[id].cases); });
+  }
+
   /** Règle A2 sur le catalogue : identifiants des monoblocs hors noyau qui contiennent une ville (liste vide = conforme). */
   function monoblocsAvecVille() {
     return ORDRE_MODELES.filter(function (id) {
@@ -278,7 +310,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
     EVENEMENTS: EVENEMENTS, ORDRE_EVENEMENTS: ORDRE_EVENEMENTS,
     REGLAGES: REGLAGES,
     modele: modele, evenement: evenement, estMonobloc: estMonobloc, coutTerrain: coutTerrain,
-    totaux: totaux, monoblocsAvecVille: monoblocsAvecVille, estConstruction: estConstruction, idsParRole: idsParRole
+    totaux: totaux, monoblocsAvecVille: monoblocsAvecVille, monoblocsToutPlaine: monoblocsToutPlaine, toutEnPlaine: toutEnPlaine, estConstruction: estConstruction, idsParRole: idsParRole
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = AT.catalogue;

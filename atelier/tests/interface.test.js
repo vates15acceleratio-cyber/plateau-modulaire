@@ -148,7 +148,7 @@ test('plateau : étiquettes des cases (contacts, rations, coordonnées)', () => 
   const vert = VP.etiquettes(pl, 'rations-vert'), rouge = VP.etiquettes(pl, 'rations-rouge');
   assert.strictEqual(vert[pl.camps.vert[0]], 0);
   assert.strictEqual(rouge[pl.camps.rouge[1]], 0);
-  assert.strictEqual(vert[H.symetrique(pl.camps.rouge[0])] === undefined, false);
+  assert.ok(vert[pl.camps.rouge[0]] > 0, 'une ville de Rouge est à portée de Vert, à un coût positif');
   assert.strictEqual(Object.keys(vert).length, n - 9, 'toutes les cases sauf les 9 de montagne');
   assert.strictEqual(VP.etiquettes(pl, 'coordonnees')['0,0'], '0,0');
   assert.deepStrictEqual(VP.etiquettes(P.vide(1), 'rations-vert'), {});

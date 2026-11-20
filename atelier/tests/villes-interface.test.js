@@ -229,7 +229,7 @@ test('inventaire du catalogue 2 par rôle : totaux et répartition justes ; sect
   let pieces = 0, cases = 0;
   r.roles.forEach((x) => { pieces += x.pieces; cases += x.cases; });
   assert.deepStrictEqual([pieces, cases], [t.pieces, t.cases], 'les rôles couvrent tout le catalogue imprimé, sans doublon');
-  assert.deepStrictEqual(r.terrain, { cases: 75, plaine: 53, foret: 11, marais: 11 });
+  assert.deepStrictEqual(r.terrain, { cases: 75, plaine: 49, foret: 13, marais: 13 });
   assert.deepStrictEqual([r.montagne, r.remplissage, r.villes], [9, { pieces: 2, plaine: 2 }, 7]);
   assert.deepStrictEqual(r.deploiements, { total: 4, parCamp: 2, poses: 4, restantes: 0, vert: 2, rouge: 2 });
   assert.deepStrictEqual(r.ancien, { present: false, lignes: [], pieces: 0 });
@@ -248,7 +248,8 @@ test('inventaire du catalogue 2 par rôle : totaux et répartition justes ; sect
   assert.strictEqual(VC.estAncien(ancien.plateau), true);
   const a = VI.parRole(ancien.plateau).ancien;
   assert.strictEqual(a.present, true);
-  assert.deepStrictEqual(a.lignes.map((x) => x.id), ['P', 'F', 'S', 'V']);
+  // Avec ses tuiles d'une case, ce plateau porte les deux monoblocs à deux forêts / deux marais, retirés depuis du catalogue.
+  assert.deepStrictEqual(a.lignes.map((x) => x.id), ['P', 'F', 'S', 'V', 'F21', 'S21']);
   assert.strictEqual(a.lignes.filter((x) => x.id === 'V')[0].poses, 6);
   assert.strictEqual(a.pieces, a.lignes.reduce((n, x) => n + x.poses, 0));
 });

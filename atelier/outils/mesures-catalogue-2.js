@@ -224,3 +224,33 @@ FORMES.forEach(([nom, demiHauteur]) => {
 tableau(['Forme', 'Plateaux', 'Symétriques par demi-tour', 'Score d’équilibre moyen', 'médian', 'maximal', 'Score 0', 'Score 2 ou moins',
   'Écart moyen vers le centre', 'vers les 2 villes neutres', 'vers les villes de déploiement adverses'], lignesD);
 tableau(['Forme', 'Plateaux', 'Formes distinctes', 'Hauteur en rangées : moyenne (étendue ; écart-type)', 'Rangée la plus large (cases)', 'Cases de bord', 'Cases de la rangée du haut', 'Cases de la rangée du bas'], lignesE);
+
+// ------------------------------------------------------------------ (f) bois et marécages : zones d'un seul tenant
+
+console.log('### (f) Zones de forêt et de marais d’un seul tenant, sur les plateaux du générateur complet (11 rangées, sans remplissage)');
+console.log('');
+/** Zones d'un seul tenant d'un terrain : tailles, de la plus grande à la plus petite. */
+function zones(cases, terrain) {
+  return P.composantes(Object.keys(cases).filter((k) => cases[k].terrain === terrain)).map((g) => g.length);
+}
+const lignesF = [];
+[0, 1, 2, 4].forEach((accoler) => {
+  const temps = [], scores = [], essais = [], nbZones = [], plusGrande = [], isolees = [], moyennes = [], grandes = [];
+  let reussis = 0;
+  for (let g = 1; g <= N; g++) {
+    const c = complet(g, { accolerSpeciales: accoler });
+    temps.push(c.temps); essais.push(c.res.essais);
+    if (!c.res.ok) continue;
+    reussis += 1;
+    scores.push(c.res.score);
+    const terrain = P.cases(c.res.plateau, { sansVilles: true });
+    ['foret', 'marais'].forEach((t) => {
+      const z = zones(terrain, t);
+      nbZones.push(z.length); plusGrande.push(z[0]); isolees.push(z.filter((x) => x === 1).length); moyennes.push(moyenne(z)); grandes.push(z.filter((x) => x >= 3).length);
+    });
+  }
+  lignesF.push([accoler === 0 ? '0 (réglage livré)' : accoler, reussis + ' / ' + N, fr(moyenne(essais), 2), fr(moyenne(temps), 0), fr(Math.max(...temps), 0), fr(moyenne(scores), 2),
+    fr(moyenne(nbZones), 2), fr(moyenne(moyennes), 2), fr(moyenne(plusGrande), 2), Math.max(...plusGrande), fr(moyenne(grandes), 2), fr(moyenne(isolees), 2), pct(Math.round(moyenne(isolees) * 100), 1300)]);
+});
+tableau(['Réglage accolerSpeciales', 'Générateur réussi', 'Essais (moyenne)', 'Temps moyen (ms)', 'Temps maximal (ms)', 'Score d’équilibre moyen',
+  'Zones par terrain (moyenne)', 'Taille moyenne d’une zone', 'Plus grande zone (moyenne)', 'Plus grande zone (maximum)', 'Zones de 3 cases ou plus par terrain', 'Cases isolées par terrain (moyenne)', 'Part des 13 cases du terrain qui restent isolées'], lignesF);

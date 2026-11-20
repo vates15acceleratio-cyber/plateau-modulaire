@@ -662,7 +662,7 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
           el('th', { scope: 'row' }, [R.pastilleTerrain(t), ' ' + R.nomTerrain(t)]),
           el('td', { texte: n[t] }),
           el('td', { texte: part.toFixed(1).replace('.', ',') + ' %' }),
-          el('td', { texte: visee[t] + ' %' })
+          el('td', { texte: String(visee[t]).replace('.', ',') + ' %' })
         ]);
       });
       blocs.push(el('table', { classe: 'at-table', id: 'pl-terrains' }, [

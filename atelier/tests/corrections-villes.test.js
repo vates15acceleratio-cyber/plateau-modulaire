@@ -232,8 +232,9 @@ test('correction 2 : une ville neutre posée ne se déplace, ne se tourne, ne se
 
 test('correction 3 : un échec de « Générer » dû à la profondeur des extrémités le dit, avec la profondeur qui aurait suffi', () => {
   let echec = null;
-  for (let g = 1; g <= 12 && !echec; g++) { const r = G.generer(g, { profondeurExtremite: 1 }); if (!r.ok) echec = { graine: g, r: r }; }
-  assert.ok(echec, 'une graine de 1 à 12 échoue à 1 rangée');
+  // Une graine qui échoue à 1 rangée ALORS qu'un de ses terrains construits aurait eu ses villes avec 2 rangées.
+  for (let g = 1; g <= 40 && !echec; g++) { const r = G.generer(g, { profondeurExtremite: 1 }); if (!r.ok && r.echecs.profondeur >= 1) echec = { graine: g, r: r }; }
+  assert.ok(echec, 'une graine de 1 à 40 échoue à 1 rangée à cause de la profondeur');
   const r = echec.r;
   assert.match(r.raison, /La profondeur des extrémités \(1 rangée en haut et en bas\) est en cause : \d+ terrains? construits? aurai(en)?t eu (leurs|ses) villes avec 2 rangées\./);
   assert.match(r.raison, /Changez le réglage « Profondeur des extrémités » \(étape « Villes »\)/);
@@ -251,7 +252,10 @@ test('correction 3 : un échec de « Générer » dû à la profondeur des extr�
   assert.strictEqual(autre.profondeur, undefined);
   assert.ok(!/profondeur des extrémités/i.test(autre.raison), autre.raison);
   // Une génération réussie n'a pas de champ `profondeur`, même si des essais ont manqué de places en chemin.
-  for (const g of [2, 4]) { const x = G.generer(g, { profondeurExtremite: 1 }); assert.ok(x.ok, x.raison); if (x.ok) { assert.strictEqual(x.profondeur, undefined); assert.strictEqual(x.plateau.profondeurExtremite, 1); assert.deepStrictEqual(erreurs(K.tout(x.plateau)), []); } }
+  const reussies = [];
+  for (let g = 1; g <= 80 && reussies.length < 2; g++) if (G.generer(g, { profondeurExtremite: 1 }).ok) reussies.push(g);
+  assert.strictEqual(reussies.length, 2, 'deux graines de 1 à 80 réussissent à 1 rangée');
+  for (const g of reussies) { const x = G.generer(g, { profondeurExtremite: 1 }); assert.ok(x.ok, x.raison); if (x.ok) { assert.strictEqual(x.profondeur, undefined); assert.strictEqual(x.plateau.profondeurExtremite, 1); assert.deepStrictEqual(erreurs(K.tout(x.plateau)), []); } }
 });
 
 // ------------------------------------------------------------------ 4. « Autre proposition »

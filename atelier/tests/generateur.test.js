@@ -270,14 +270,14 @@ test('catalogue hors de ce que le générateur sait faire : échec immédiat qui
 });
 
 test('le générateur pose ce que le catalogue contient : un monobloc de plus est posé lui aussi', () => {
-  const nombre = C.MODELES.P3A.nombre;
+  const nombre = C.MODELES.F12A.nombre;
   try {
-    C.MODELES.P3A.nombre = 2;
+    C.MODELES.F12A.nombre = 2;
     const res = G.generer(4);
     assert.ok(res.ok, res.raison);
-    assert.strictEqual(res.plateau.pieces.filter((x) => x.modele === 'P3A').length, 2);
+    assert.strictEqual(res.plateau.pieces.filter((x) => x.modele === 'F12A').length, 2);
     assert.strictEqual(Object.keys(P.cases(res.plateau, { sansVilles: true })).length, 94);
   } finally {
-    C.MODELES.P3A.nombre = nombre;
+    C.MODELES.F12A.nombre = nombre;
   }
 });
