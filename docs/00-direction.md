@@ -57,6 +57,13 @@ Elles priment sur la proposition d'inventaire du 2026-11-18 ci-dessous. Détail 
 7. **Écart entre villes confirmé** : au moins **4 pas (comptés en cases)** entre deux villes, même si une tuile fait maintenant 3 ou 4 cases. Choix par défaut acceptés : ville neutre tenue par 2 tuiles, extrémités = 2 rangées (réglable), anciens plateaux toujours ouvrables.
 8. **Pas de monobloc tout en plaine** : chaque monobloc de terrain porte au moins une forêt ou un marais. Un bloc tout en forêt ou tout en marais reste permis (il y en a moins). Conséquence arithmétique à faire valider : 21 monoblocs demandent au moins 21 cases de forêt ou de marais, donc la part des plaines descend sous 70 %.
 
+## Décisions du 2026-11-20 (troisième série ; priment sur les précédentes quand elles les contredisent)
+1. **Toutes les villes se posent librement sur une Plaine.** Après la formation du plateau, les joueurs posent d'abord les **2 villes neutres** sur deux cases de Plaine, puis chacun ses **2 villes de déploiement** sur deux cases de Plaine. **Aucune contrainte de côté ni de bord** : seule compte la **distance minimale entre villes** (4 pas, en cases). Les points 3 et 4 de la seconde série (bord haut / bas, villes neutres en tuiles sur les côtés) et la règle « ville neutre tenue par 2 tuiles » sont **abandonnés**.
+2. **Former sur une ville de déploiement** : c'est bien la règle voulue ; la phrase « jamais directement sur une ville » des règles V2.3 §6 est révisée (à reporter dans le texte des règles quand il sera repris).
+3. **Équilibre** : le générateur ne refuse aucun plateau pour déséquilibre, mais il **l'indique** clairement.
+4. **Regrouper forêts et marais à la génération** : une **option à cocher**.
+5. **Trous dans le plateau** : restent en **alerte**. **Contact entre tuiles** : reste à **3**. **Noms et formes des 21 monoblocs** : validés, ne plus y toucher.
+
 ## Proposition d'inventaire (à valider ; dessinée dans `tuiles/sortie/types_de_tuiles.pdf`)
 Décisions de l'utilisateur du 2026-11-18 : **2 montagnes** (au lieu de 3) ; tuiles simples à **70 % de plaines, 15 % de forêts, 15 % de marais** ; **7 villes**, au moins **3 tuiles entre deux villes** voisines.
 
