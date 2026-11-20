@@ -555,8 +555,8 @@ var AT = (typeof globalThis !== 'undefined' ? globalThis : window).AT = ((typeof
         g.appendChild(R.svg('circle', { cx: arrondi(centre.x), cy: arrondi(centre.y), r: arrondi(4.8 * k), fill: couleur, stroke: '#FFFFFF', 'stroke-width': 0.6 }));
         g.appendChild(texte(centre.x, centre.y, nomCamp(piece.camp).charAt(0), { 'font-size': 5, 'font-weight': 'bold', fill: '#FFFFFF' }));
       }
-      g.appendChild(texte(centre.x, centre.y - 8.3 * k, piece.nom, { 'font-size': 2.2 }));
-      g.appendChild(texte(centre.x, centre.y + 8.6 * k, etiquette(piece), { 'font-size': 2.6, 'font-weight': 'bold' }));
+      // Aucun texte sur une tuile de ville (demande de l’utilisateur du 2026-11-20) : la couleur, le liseré et
+      // l’initiale de la pastille suffisent.
     } else if (piece.genre === 'evenement') {
       // Tuile d'événement : hexagone intérieur en tirets et identifiant, comme à l'écran ; nom en dessous.
       ge.appendChild(R.polygoneCase('0,0', { fill: 'none', stroke: '#111111', 'stroke-width': mm(0.7), 'stroke-dasharray': mm(2.2) + ' ' + mm(1.5) }, 2 * (SECURITE + 0.6) / plat));

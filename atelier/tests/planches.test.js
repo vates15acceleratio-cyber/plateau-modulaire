@@ -327,14 +327,15 @@ test('dessin d’une planche (faux DOM) : feuille en millimètres, un trait de c
     });
     assert.strictEqual(coupes, 50);
     assert.ok(textes.some((t) => /^Planche 1 \/ \d+ · A3 paysage · 2026-11-20 · Imprimer à 100 %, sans ajustement à la page$/.test(t)));
-    PL.listePieces(DEFAUT).forEach((p) => {
+    PL.listePieces(DEFAUT).filter((p) => p.genre !== 'ville').forEach((p) => {
       const attendu = p.genre === 'evenement' ? p.nom : PL.etiquette(p);
       assert.ok(textes.includes(attendu), 'étiquette « ' + attendu + ' »');
     });
     // Sans étiquettes : les pièces du catalogue n'en portent plus ; villes et événements gardent leur nom.
     const sans = PL.lireReglages('etiquettes=non'), r2 = PL.ranger(PL.listePieces(sans), sans), t2 = [];
     r2.planches.forEach((poses, i) => { tous(PL.dessinerPlanche(poses, i + 1, r2.planches.length, sans, '2026-11-20'), (e) => e.nom === 'text').forEach((t) => t2.push(t.textContent)); });
-    assert.ok(!t2.includes('F31 Lisière') && t2.includes('Crevasse') && t2.includes('VD · Vert') && t2.includes('Ville neutre'));
+    assert.ok(!t2.includes('F31 Lisière') && t2.includes('Crevasse'));
+    assert.ok(!t2.some((x) => /Ville|VD ·|VC ·|VNP ·/.test(x)), 'aucun texte sur les tuiles de ville');
     // Jeu en miroir : planches autonomes, avec trait de coupe, étiquettes « (miroir) » et cartouche « — miroir ».
     const mi = PL.lireReglages('miroir=oui'), r3 = PL.ranger(PL.listePieces(mi), mi), t3 = [];
     let coupes3 = 0;
@@ -345,7 +346,7 @@ test('dessin d’une planche (faux DOM) : feuille en millimètres, un trait de c
       tous(svg, (e) => e.nom === 'text').forEach((t) => t3.push(t.textContent));
     });
     assert.strictEqual(coupes3, 50);
-    assert.ok(t3.includes('F31 Lisière (miroir)') && !t3.includes('F31 Lisière') && t3.includes('Crevasse') && t3.includes('VD · Rouge'));
+    assert.ok(t3.includes('F31 Lisière (miroir)') && !t3.includes('F31 Lisière') && t3.includes('Crevasse') && !t3.some((x) => /Ville|VD ·|VC ·/.test(x)));
     assert.ok(t3.some((t) => /^Planche 1 \/ \d+ — miroir · A3 paysage · 2026-11-20 · /.test(t)));
   } finally {
     if (avant === undefined) delete globalThis.document; else globalThis.document = avant;
